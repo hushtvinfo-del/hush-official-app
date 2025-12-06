@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Plus, Grid3x3, User, LogOut, Code } from "lucide-react";
+import { Tv2, Plus, Grid3x3, User, LogOut } from "lucide-react";
+import { base44 } from "@/api/base44Client";
 import {
   Sidebar,
   SidebarContent,
@@ -110,11 +111,6 @@ export default function Layout({ children, currentPageName }) {
       title: "Add Account",
       url: createPageUrl("AddAccount"),
       icon: Plus,
-    },
-    {
-      title: "Build Native Apps",
-      url: createPageUrl("CapacitorSetup"),
-      icon: Code,
     },
   ];
 
