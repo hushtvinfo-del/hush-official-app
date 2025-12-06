@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ const fetchChannels = async (playlistId, categoryId) => {
 
 export default function Channels() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const urlParams = new URLSearchParams(window.location.search);
   const playlistId = urlParams.get('playlistId');
   const categoryId = urlParams.get('categoryId');
@@ -61,6 +62,40 @@ export default function Channels() {
   });
 
   const favoriteChannelIds = React.useMemo(() => new Set(favoriteChannels.map(fav => fav.channel_id)), [favoriteChannels]);
+
+  const toggleFavoriteMutation = useMutation({
+    mutationFn: async ({ channel, isFavorite }) => {
+      if (isFavorite) {
+        const existing = favoriteChannels.find(fav => fav.channel_id === channel.stream_id.toString());
+        if (existing) {
+          await base44.entities.FavoriteChannel.delete(existing.id);
+        }
+      } else {
+        await base44.entities.FavoriteChannel.create({
+          user_email: userIdentifier,
+          channel_id: channel.stream_id.toString(),
+          playlist_id: playlistId,
+          channel_info: {
+            name: channel.name,
+            icon: channel.stream_icon || '',
+            category_id: categoryId,
+            category_name: categoryName,
+            epg_channel_id: channel.epg_channel_id || ''
+          }
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['favoriteChannels', userIdentifier, playlistId] });
+    }
+  });
+
+  const handleToggleFavorite = (e, channel) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isFavorite = favoriteChannelIds.has(channel.stream_id.toString());
+    toggleFavoriteMutation.mutate({ channel, isFavorite });
+  };
 
   // Fetch enhanced logos for sports channels
   const [channelsWithLogos, setChannelsWithLogos] = useState([]);
@@ -245,6 +280,7 @@ export default function Channels() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {filteredChannels.map((channel, index) => {
                 const streamUrl = constructStreamUrl(playlist.host, playlist.username, playlist.password, channel.stream_id);
+                const isFavorite = favoriteChannelIds.has(channel.stream_id.toString());
                 return (
                   <Link
                     key={channel.stream_id}
@@ -259,6 +295,12 @@ export default function Channels() {
                     >
                       <Card className="bg-gray-800/50 backdrop-blur-xl border-orange-500/30 hover:border-orange-500/60 transition-all cursor-pointer group overflow-hidden h-full flex flex-col">
                         <CardContent className="p-3 relative flex-grow flex flex-col">
+                          <button
+                            onClick={(e) => handleToggleFavorite(e, channel)}
+                            className="absolute top-2 right-2 z-10 w-8 h-8 bg-gray-900/80 hover:bg-gray-800 rounded-full flex items-center justify-center transition-all"
+                          >
+                            <Star className={`w-4 h-4 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                          </button>
                           <div className="aspect-video bg-gray-900/50 rounded-md mb-3 flex items-center justify-center overflow-hidden relative">
                               <img
                                 src={channel.stream_icon}
@@ -277,7 +319,7 @@ export default function Channels() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            {favoriteChannelIds.has(channel.stream_id.toString()) && (
+                            {isFavorite && (
                               <Star className="w-3 h-3 fill-yellow-400 text-yellow-400 flex-shrink-0" />
                             )}
                             <h3 className="text-sm font-semibold text-white truncate leading-tight">{channel.name}</h3>
