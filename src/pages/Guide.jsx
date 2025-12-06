@@ -8,6 +8,7 @@ import { ArrowLeft, Tv, Star, ChevronLeft, ChevronRight, Menu, Cast } from "luci
 import { useEpg } from "../components/useEpg";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { detectDevice } from "@/components/deviceDetection";
 
 const getPlaylistFromLocal = (playlistId) => {
     try {
@@ -118,7 +119,7 @@ const MiniPlayer = ({ channelUrl }) => {
 };
 
 // Channel List Component (reusable for mobile and desktop)
-const ChannelList = ({ channelsData, isLoading, currentStreamId, handleChannelSelect, epgData, isLoadingEpg, user, toggleFavorite, favoriteChannelIds, isMutating }) => (
+const ChannelList = ({ channelsData, isLoading, currentStreamId, handleChannelSelect, epgData, isLoadingEpg, user, toggleFavorite, favoriteChannelIds, isMutating, isTV }) => (
   <ScrollArea className="flex-1">
     {isLoading && <div className="p-4 text-gray-400">Loading channels...</div>}
     {channelsData && channelsData.map(channel => {
@@ -129,8 +130,15 @@ const ChannelList = ({ channelsData, isLoading, currentStreamId, handleChannelSe
         <div 
           key={channel.stream_id} 
           onClick={() => handleChannelSelect(channel)}
-          className={`flex items-center gap-3 p-3 border-b border-gray-800 cursor-pointer transition-all ${
-            isActive ? 'bg-orange-500/30 border-l-4 border-l-orange-500' : 'hover:bg-gray-800'
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleChannelSelect(channel);
+            }
+          }}
+          className={`flex items-center gap-3 ${isTV ? 'p-4' : 'p-3'} border-b border-gray-800 cursor-pointer transition-all ${isTV ? 'tv-focusable' : ''} ${
+            isActive ? 'bg-orange-500/30 border-l-4 border-l-orange-500' : 'hover:bg-orange-500/20 focus:bg-orange-500/30 focus:outline-none'
           }`}
         >
           <div className="flex-shrink-0 w-12 h-12 bg-black rounded overflow-hidden flex items-center justify-center">
@@ -178,6 +186,7 @@ export default function Guide() {
   const [mobileChannelsOpen, setMobileChannelsOpen] = useState(false);
   const [castAvailable, setCastAvailable] = useState(false);
   const [casting, setCasting] = useState(false);
+  const { isTV } = detectDevice();
 
   const getUrlParams = () => new URLSearchParams(location.search);
   const [params, setParams] = useState(getUrlParams());
@@ -480,6 +489,7 @@ export default function Guide() {
                   toggleFavorite={toggleFavorite}
                   favoriteChannelIds={favoriteChannelIds}
                   isMutating={isMutating}
+                  isTV={isTV}
                 />
               </div>
             </SheetContent>
@@ -552,6 +562,7 @@ export default function Guide() {
             toggleFavorite={toggleFavorite}
             favoriteChannelIds={favoriteChannelIds}
             isMutating={isMutating}
+            isTV={isTV}
           />
         </div>
 
