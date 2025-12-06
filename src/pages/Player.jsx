@@ -432,15 +432,46 @@ export default function Player() {
 
         if (deviceIsIOS && isHLS) {
             const videoElement = videoRef.current;
+            
+            // Log the stream URL for debugging
+            console.log('🎬 Loading stream:', channelUrl);
+            
             videoElement.src = channelUrl;
             videoElement.controls = true;
             videoElement.playsInline = true;
-            videoElement.setAttribute('webkit-playsinline', 'true');
+            
+            // Add error event listener before trying to play
+            const handleError = (e) => {
+                console.error('❌ Video error:', {
+                    error: videoElement.error,
+                    code: videoElement.error?.code,
+                    message: videoElement.error?.message,
+                    networkState: videoElement.networkState,
+                    readyState: videoElement.readyState
+                });
+            };
+            videoElement.addEventListener('error', handleError);
+            nativeEventListenersRef.current.push({ event: 'error', handler: handleError });
+            
+            // Add load event listener to confirm stream is loading
+            const handleLoadStart = () => {
+                console.log('📡 Stream loading started...');
+            };
+            videoElement.addEventListener('loadstart', handleLoadStart);
+            nativeEventListenersRef.current.push({ event: 'loadstart', handler: handleLoadStart });
+            
+            const handleLoadedMetadata = () => {
+                console.log('✅ Stream metadata loaded successfully');
+            };
+            videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+            nativeEventListenersRef.current.push({ event: 'loadedmetadata', handler: handleLoadedMetadata });
             
             const playPromise = videoElement.play();
             if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.log('Autoplay prevented, user interaction required:', error);
+                playPromise.then(() => {
+                    console.log('▶️ Playback started successfully');
+                }).catch(error => {
+                    console.log('⚠️ Autoplay prevented, user interaction required:', error);
                 });
             }
 
@@ -572,7 +603,21 @@ export default function Player() {
 
         player.on('error', (e) => {
             const error = player.error();
-            console.error('Player error:', error);
+            console.error('❌ VideoJS Player error:', {
+                code: error?.code,
+                message: error?.message,
+                type: error?.type,
+                networkState: player.networkState,
+                readyState: player.readyState
+            });
+        });
+
+        player.on('loadstart', () => {
+            console.log('📡 VideoJS: Stream loading started...');
+        });
+
+        player.on('loadedmetadata', () => {
+            console.log('✅ VideoJS: Stream metadata loaded successfully');
         });
 
         if (isVOD && userIdentifier) {
