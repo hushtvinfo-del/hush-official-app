@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, AlertCircle, Cast, Download } from "lucide-react";
+import { ArrowLeft, AlertCircle, Cast, Download, Settings } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
@@ -848,7 +849,6 @@ export default function Player() {
             ref={videoRef}
             className={deviceIsIOS && isHLS ? "w-full h-full" : "video-js vjs-big-play-centered w-full h-full"}
             playsInline
-            webkit-playsinline="true"
             autoPlay
           />
         </div>
