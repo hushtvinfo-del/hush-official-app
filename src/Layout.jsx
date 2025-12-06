@@ -11,6 +11,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import IntroPlayer from "@/components/IntroPlayer";
+import { detectDevice, getPerformanceConfig } from "@/utils/deviceDetection";
 
 const INTRO_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-abstract-circular-light-trails-34208-large.mp4";
 
@@ -21,13 +22,23 @@ export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const [user, setUser] = React.useState(null);
   const [showIntro, setShowIntro] = useState(false);
+  const [deviceInfo, setDeviceInfo] = useState(null);
+  const [perfConfig, setPerfConfig] = useState(null);
 
   useEffect(() => {
+    // Detect device and set performance config
+    const device = detectDevice();
+    const config = getPerformanceConfig(device.deviceType);
+    setDeviceInfo(device);
+    setPerfConfig(config);
+    
+    console.log('🖥️ Device detected:', device.deviceType, device.isTV ? '(TV Mode Enabled)' : '');
+    
     // Public app - no Base44 authentication needed
     setUser(null);
     
     const introHasPlayed = sessionStorage.getItem('introPlayed') === 'true';
-    if (!introHasPlayed) {
+    if (!introHasPlayed && !device.isTV) {
         setShowIntro(true);
     }
 
@@ -126,9 +137,13 @@ export default function Layout({ children, currentPageName }) {
     return children;
   }
 
+  const isTV = deviceInfo?.isTV || false;
+  const enableAnimations = perfConfig?.enableAnimations !== false;
+  const enableBlur = perfConfig?.enableBlur !== false;
+
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-black via-orange-950 to-black">
+      <div className={`min-h-screen flex w-full ${isTV ? 'bg-gradient-to-br from-black to-gray-900' : 'bg-gradient-to-br from-black via-orange-950 to-black'}`}>
         <style>{`
           :root {
             --background: 0 0% 0%;
@@ -152,9 +167,28 @@ export default function Layout({ children, currentPageName }) {
             --ring: 24 95% 53%;
             --radius: 0.5rem;
           }
+          ${isTV ? `
+            * {
+              -webkit-transform: translateZ(0);
+              transform: translateZ(0);
+              -webkit-backface-visibility: hidden;
+              backface-visibility: hidden;
+            }
+            .tv-focusable {
+              cursor: pointer;
+              transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease !important;
+            }
+            .tv-focusable:focus,
+            .tv-focusable:hover {
+              transform: scale(1.08);
+              box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.5);
+              border-color: rgb(251, 146, 60);
+              outline: none;
+            }
+          ` : ''}
         `}</style>
         
-        <Sidebar className="border-r border-orange-500/20 bg-gray-900/95 backdrop-blur-xl">
+        <Sidebar className={`border-r border-orange-500/20 ${enableBlur ? 'bg-gray-900/95 backdrop-blur-xl' : 'bg-gray-900'}`}>
           <SidebarHeader className="border-b border-orange-500/20 p-6">
             <div className="flex items-center justify-center">
               <div className="w-full bg-black rounded-xl p-4 shadow-lg shadow-orange-500/20 relative">
@@ -181,12 +215,12 @@ export default function Layout({ children, currentPageName }) {
               <Link
                 to={item.url}
                 key={item.title} 
-                className={`flex items-center gap-3 px-4 py-3 hover:bg-orange-500/20 hover:text-orange-300 transition-all duration-200 rounded-lg mb-1 ${
+                className={`flex items-center gap-3 px-4 ${isTV ? 'py-4' : 'py-3'} hover:bg-orange-500/20 hover:text-orange-300 ${enableAnimations ? 'transition-all duration-200' : ''} rounded-lg mb-1 ${isTV ? 'tv-focusable' : ''} ${
                   location.pathname === item.url ? 'bg-orange-500/30 text-orange-300 shadow-lg shadow-orange-500/20' : 'text-gray-300'
                 }`}
               >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium">{item.title}</span>
+                <item.icon className={`${isTV ? 'w-6 h-6' : 'w-5 h-5'}`} />
+                <span className={`font-medium ${isTV ? 'text-lg' : ''}`}>{item.title}</span>
               </Link>
             ))}
           </SidebarContent>
@@ -214,7 +248,7 @@ export default function Layout({ children, currentPageName }) {
         </Sidebar>
 
         <main className="flex-1 flex flex-col overflow-x-hidden">
-          <header className="bg-gray-900/50 backdrop-blur-xl border-b border-orange-500/20 px-6 py-4 md:hidden">
+          <header className={`${enableBlur ? 'bg-gray-900/50 backdrop-blur-xl' : 'bg-gray-900'} border-b border-orange-500/20 px-6 py-4 md:hidden`}>
             <div className="flex items-center gap-4">
               <SidebarTrigger className="hover:bg-orange-500/20 p-2 rounded-lg transition-colors" />
               <div className="h-8 w-32 relative">
