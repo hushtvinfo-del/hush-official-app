@@ -11,7 +11,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import IntroPlayer from "@/components/IntroPlayer";
-import { detectDevice, getPerformanceConfig } from "@/utils/deviceDetection";
+import { detectDevice, getPerformanceConfig } from "@/components/deviceDetection";
 
 const INTRO_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-abstract-circular-light-trails-34208-large.mp4";
 
