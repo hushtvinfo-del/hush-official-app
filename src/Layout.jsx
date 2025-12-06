@@ -141,6 +141,61 @@ export default function Layout({ children, currentPageName }) {
   const enableAnimations = perfConfig?.enableAnimations !== false;
   const enableBlur = perfConfig?.enableBlur !== false;
 
+  // On TV devices, render without sidebar for full screen experience
+  if (isTV) {
+    return (
+      <div className="min-h-screen flex w-full bg-gradient-to-br from-black to-gray-900">
+        <style>{`
+          :root {
+            --background: 0 0% 0%;
+            --foreground: 210 40% 98%;
+            --card: 0 0% 0%;
+            --card-foreground: 210 40% 98%;
+            --popover: 0 0% 0%;
+            --popover-foreground: 210 40% 98%;
+            --primary: 24 95% 53%;
+            --primary-foreground: 210 40% 98%;
+            --secondary: 24 50% 20%;
+            --secondary-foreground: 210 40% 98%;
+            --muted: 24 30% 15%;
+            --muted-foreground: 25 20% 65%;
+            --accent: 24 50% 20%;
+            --accent-foreground: 210 40% 98%;
+            --destructive: 0 62.8% 30.6%;
+            --destructive-foreground: 210 40% 98%;
+            --border: 24 30% 15%;
+            --input: 24 30% 15%;
+            --ring: 24 95% 53%;
+            --radius: 0.5rem;
+          }
+          * {
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+          }
+          .tv-focusable {
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease !important;
+          }
+          .tv-focusable:focus,
+          .tv-focusable:hover {
+            transform: scale(1.08);
+            box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.5);
+            border-color: rgb(251, 146, 60);
+            outline: none;
+          }
+        `}</style>
+        
+        <main className="flex-1 flex flex-col overflow-x-hidden">
+          <div className="flex-1 overflow-auto">
+            {children}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <div className={`min-h-screen flex w-full ${isTV ? 'bg-gradient-to-br from-black to-gray-900' : 'bg-gradient-to-br from-black via-orange-950 to-black'}`}>
