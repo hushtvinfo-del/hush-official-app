@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Tv, Star, ChevronLeft, ChevronRight, Menu, Cast } from "lucide-react";
 import { useEpg } from "../components/useEpg";
@@ -21,6 +22,8 @@ const MiniPlayer = ({ channelUrl }) => {
   const playerRef = useRef(null);
 
   useEffect(() => {
+    console.log('🎬 MiniPlayer: New channel URL:', channelUrl);
+    
     const cssId = 'videojs-css';
     if (!document.getElementById(cssId)) {
         const link = document.createElement('link');
@@ -31,20 +34,53 @@ const MiniPlayer = ({ channelUrl }) => {
     }
     
     const initializePlayer = () => {
-        if (videoRef.current) {
-            if (playerRef.current) {
-                playerRef.current.src({ src: channelUrl });
-                playerRef.current.play();
-            } else {
-                const options = {
-                    autoplay: true,
-                    controls: true,
-                    responsive: true,
-                    fluid: true,
-                    sources: [{ src: channelUrl }],
-                };
-                playerRef.current = window.videojs(videoRef.current, options);
+        if (!videoRef.current) {
+            console.warn('⚠️ Video ref not available');
+            return;
+        }
+
+        if (playerRef.current && !playerRef.current.isDisposed()) {
+            console.log('🔄 Updating existing player source');
+            try {
+                playerRef.current.src({ src: channelUrl, type: 'application/x-mpegURL' });
+                playerRef.current.load();
+                playerRef.current.play().catch(e => console.log('Autoplay prevented:', e));
+            } catch (e) {
+                console.error('❌ Error updating player:', e);
+                // Dispose and recreate on error
+                playerRef.current.dispose();
+                playerRef.current = null;
+                initializePlayer();
             }
+        } else {
+            console.log('✨ Creating new player instance');
+            const options = {
+                autoplay: true,
+                controls: true,
+                responsive: true,
+                fluid: true,
+                preload: 'auto',
+                sources: [{ src: channelUrl, type: 'application/x-mpegURL' }],
+                html5: {
+                    vhs: {
+                        overrideNative: true
+                    }
+                }
+            };
+            playerRef.current = window.videojs(videoRef.current, options);
+            
+            playerRef.current.on('error', () => {
+                const error = playerRef.current.error();
+                console.error('❌ Player error:', error);
+            });
+            
+            playerRef.current.on('loadstart', () => {
+                console.log('📡 Loading stream...');
+            });
+            
+            playerRef.current.on('loadedmetadata', () => {
+                console.log('✅ Stream loaded successfully');
+            });
         }
     };
     
@@ -60,15 +96,17 @@ const MiniPlayer = ({ channelUrl }) => {
             document.body.appendChild(script);
             script.onload = initializePlayer;
         } else {
-             document.getElementById(scriptId).addEventListener('load', initializePlayer);
+             const existingScript = document.getElementById(scriptId);
+             if (existingScript.readyState === 'complete') {
+                 initializePlayer();
+             } else {
+                 existingScript.addEventListener('load', initializePlayer);
+             }
         }
     }
 
     return () => {
-        if (playerRef.current && !playerRef.current.isDisposed()) {
-            playerRef.current.dispose();
-            playerRef.current = null;
-        }
+        // Don't dispose on channel change, only on unmount
     };
   }, [channelUrl]);
 
