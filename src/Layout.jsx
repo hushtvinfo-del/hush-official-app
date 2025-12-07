@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import IntroPlayer from "@/components/IntroPlayer";
 import { detectDevice, getPerformanceConfig } from "@/components/deviceDetection";
+import DemoTrialTimer from "@/components/DemoTrialTimer";
 
 const INTRO_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-abstract-circular-light-trails-34208-large.mp4";
 
@@ -41,6 +42,57 @@ export default function Layout({ children, currentPageName }) {
     if (!introHasPlayed && !device.isTV) {
         setShowIntro(true);
     }
+
+    // Check demo trial status
+    const checkDemoTrial = async () => {
+      try {
+        const { data } = await base44.functions.invoke('checkDemoTrial');
+        
+        if (data.trial_active && !data.trial_expired) {
+          // Trial is active - ensure demo account exists
+          const localPlaylists = JSON.parse(localStorage.getItem('playlists') || '[]');
+          const demoExists = localPlaylists.some(p => p.username === 'Testline1');
+          
+          if (!demoExists || data.new_trial) {
+            const demoAccount = {
+              id: 'demo-account',
+              name: 'Demo',
+              username: 'Testline1',
+              password: 'Testline1',
+              host: 'http://nzlive.net',
+              epgUrl: 'http://nzlive.net/xmltv.php?username=Testline1&password=Testline1'
+            };
+            
+            const updatedPlaylists = demoExists 
+              ? localPlaylists 
+              : [...localPlaylists, demoAccount];
+            
+            localStorage.setItem('playlists', JSON.stringify(updatedPlaylists));
+            
+            // Store trial info
+            sessionStorage.setItem('demoTrialRemaining', data.remaining_seconds);
+          }
+          
+          // Update remaining time in session
+          sessionStorage.setItem('demoTrialRemaining', data.remaining_seconds);
+          
+        } else if (data.trial_expired) {
+          // Trial expired - remove demo account and redirect
+          const localPlaylists = JSON.parse(localStorage.getItem('playlists') || '[]');
+          const filtered = localPlaylists.filter(p => p.username !== 'Testline1');
+          localStorage.setItem('playlists', JSON.stringify(filtered));
+          sessionStorage.removeItem('demoTrialRemaining');
+          
+          if (currentPageName !== 'Welcome') {
+            navigate(createPageUrl('Welcome'), { replace: true });
+          }
+        }
+      } catch (error) {
+        console.error('Error checking demo trial:', error);
+      }
+    };
+
+    checkDemoTrial();
 
     // Check if user should be redirected to Welcome page
     // Only redirect on initial load and if not already on Welcome/SignUp pages
@@ -134,7 +186,12 @@ export default function Layout({ children, currentPageName }) {
 
   // If on Welcome or SignUp page, render without sidebar
   if (pagesWithoutSidebar.includes(currentPageName)) {
-    return children;
+    return (
+      <>
+        <DemoTrialTimer />
+        {children}
+      </>
+    );
   }
 
   const isTV = deviceInfo?.isTV || false;
@@ -144,8 +201,10 @@ export default function Layout({ children, currentPageName }) {
   // On TV devices, render without sidebar for full screen experience
   if (isTV) {
     return (
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-black to-gray-900">
-        <style>{`
+      <>
+        <DemoTrialTimer />
+        <div className="min-h-screen flex w-full bg-gradient-to-br from-black to-gray-900">
+          <style>{`
           :root {
             --background: 0 0% 0%;
             --foreground: 210 40% 98%;
@@ -192,13 +251,16 @@ export default function Layout({ children, currentPageName }) {
             {children}
           </div>
         </main>
-      </div>
+        </div>
+      </>
     );
   }
 
   return (
-    <SidebarProvider>
-      <div className={`min-h-screen flex w-full ${isTV ? 'bg-gradient-to-br from-black to-gray-900' : 'bg-gradient-to-br from-black via-orange-950 to-black'}`}>
+    <>
+      <DemoTrialTimer />
+      <SidebarProvider>
+        <div className={`min-h-screen flex w-full ${isTV ? 'bg-gradient-to-br from-black to-gray-900' : 'bg-gradient-to-br from-black via-orange-950 to-black'}`}>
         <style>{`
           :root {
             --background: 0 0% 0%;
@@ -325,7 +387,8 @@ export default function Layout({ children, currentPageName }) {
             {children}
           </div>
         </main>
-      </div>
-    </SidebarProvider>
+        </div>
+      </SidebarProvider>
+    </>
   );
 }
