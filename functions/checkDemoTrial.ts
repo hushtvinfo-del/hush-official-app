@@ -26,15 +26,18 @@ Deno.serve(async (req) => {
       const elapsed = now - trialStart;
       const remaining = oneHourInMs - elapsed;
 
-      if (remaining <= 0) {
-        // Trial expired
-        await base44.asServiceRole.entities.DemoTrial.update(trial.id, {
-          trial_expired: true
-        });
+      if (remaining <= 0 || trial.trial_expired) {
+        // Trial expired or used - mark as expired
+        if (!trial.trial_expired) {
+          await base44.asServiceRole.entities.DemoTrial.update(trial.id, {
+            trial_expired: true
+          });
+        }
         
         return Response.json({
           trial_active: false,
           trial_expired: true,
+          trial_used: true,
           remaining_seconds: 0
         });
       }
@@ -43,24 +46,19 @@ Deno.serve(async (req) => {
       return Response.json({
         trial_active: true,
         trial_expired: false,
+        trial_used: false,
         remaining_seconds: Math.floor(remaining / 1000),
         trial_id: trial.id
       });
     }
 
-    // No trial exists, create new one
-    const newTrial = await base44.asServiceRole.entities.DemoTrial.create({
-      ip_address: ip,
-      trial_start_time: now.toISOString(),
-      trial_expired: false
-    });
-
+    // No trial exists for this IP - can create new one
     return Response.json({
-      trial_active: true,
+      trial_active: false,
       trial_expired: false,
-      remaining_seconds: 3600,
-      trial_id: newTrial.id,
-      new_trial: true
+      trial_used: false,
+      can_start_trial: true,
+      remaining_seconds: 0
     });
 
   } catch (error) {

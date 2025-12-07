@@ -43,61 +43,38 @@ export default function Layout({ children, currentPageName }) {
         setShowIntro(true);
     }
 
-    // Check demo trial status
-    const checkDemoTrial = async () => {
-      try {
-        const { data } = await base44.functions.invoke('checkDemoTrial');
-        
-        if (data.trial_active && !data.trial_expired) {
-          // Trial is active - ensure demo account exists
-          const localPlaylists = JSON.parse(localStorage.getItem('playlists') || '[]');
-          const demoExists = localPlaylists.some(p => p.username === 'Testline1');
+    // Check if in demo mode
+    const isDemoMode = sessionStorage.getItem('demoMode') === 'true';
+    
+    if (isDemoMode) {
+      const checkDemoExpiry = async () => {
+        try {
+          const { data } = await base44.functions.invoke('checkDemoTrial');
           
-          if (!demoExists || data.new_trial) {
-            const demoAccount = {
-              id: 'demo-account',
-              name: 'Demo',
-              username: 'Testline1',
-              password: 'Testline1',
-              host: 'http://nzlive.net',
-              epgUrl: 'http://nzlive.net/xmltv.php?username=Testline1&password=Testline1'
-            };
+          if (data.trial_expired) {
+            localStorage.removeItem('playlists');
+            sessionStorage.removeItem('demoTrialRemaining');
+            sessionStorage.removeItem('demoMode');
             
-            const updatedPlaylists = demoExists 
-              ? localPlaylists 
-              : [...localPlaylists, demoAccount];
-            
-            localStorage.setItem('playlists', JSON.stringify(updatedPlaylists));
-            
-            // Store trial info
+            if (currentPageName !== 'Welcome') {
+              navigate(createPageUrl('Welcome'), { replace: true });
+            }
+          } else if (data.trial_active) {
             sessionStorage.setItem('demoTrialRemaining', data.remaining_seconds);
           }
-          
-          // Update remaining time in session
-          sessionStorage.setItem('demoTrialRemaining', data.remaining_seconds);
-          
-        } else if (data.trial_expired) {
-          // Trial expired - remove demo account and redirect
-          const localPlaylists = JSON.parse(localStorage.getItem('playlists') || '[]');
-          const filtered = localPlaylists.filter(p => p.username !== 'Testline1');
-          localStorage.setItem('playlists', JSON.stringify(filtered));
-          sessionStorage.removeItem('demoTrialRemaining');
-          
-          if (currentPageName !== 'Welcome') {
-            navigate(createPageUrl('Welcome'), { replace: true });
-          }
+        } catch (error) {
+          console.error('Error checking demo trial:', error);
         }
-      } catch (error) {
-        console.error('Error checking demo trial:', error);
-      }
-    };
+      };
 
-    checkDemoTrial();
+      checkDemoExpiry();
+    }
 
     // Check if user should be redirected to Welcome page
-    // Only redirect on initial load and if not already on Welcome/SignUp pages
     const pagesWithoutRedirect = ['Welcome', 'SignUp', 'AddAccount'];
-    if (!pagesWithoutRedirect.includes(currentPageName)) {
+    const isDemoMode = sessionStorage.getItem('demoMode') === 'true';
+    
+    if (!pagesWithoutRedirect.includes(currentPageName) && !isDemoMode) {
       try {
         const localPlaylists = JSON.parse(localStorage.getItem('playlists') || '[]');
         if (localPlaylists.length === 0 && currentPageName !== 'Welcome') {
