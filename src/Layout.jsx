@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/sidebar";
 import IntroPlayer from "@/components/IntroPlayer";
 import { detectDevice, getPerformanceConfig } from "@/components/deviceDetection";
-import DemoTrialTimer from "@/components/DemoTrialTimer";
 
 const INTRO_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-abstract-circular-light-trails-34208-large.mp4";
 
@@ -43,38 +42,10 @@ export default function Layout({ children, currentPageName }) {
         setShowIntro(true);
     }
 
-    // Check if in demo mode
-    const isDemoMode = sessionStorage.getItem('demoMode') === 'true';
-    
-    if (isDemoMode) {
-      const checkDemoExpiry = async () => {
-        try {
-          const { data } = await base44.functions.invoke('checkDemoTrial');
-          
-          if (data.trial_expired) {
-            localStorage.removeItem('playlists');
-            sessionStorage.removeItem('demoTrialRemaining');
-            sessionStorage.removeItem('demoMode');
-            
-            if (currentPageName !== 'Welcome') {
-              navigate(createPageUrl('Welcome'), { replace: true });
-            }
-          } else if (data.trial_active) {
-            sessionStorage.setItem('demoTrialRemaining', data.remaining_seconds);
-          }
-        } catch (error) {
-          console.error('Error checking demo trial:', error);
-        }
-      };
-
-      checkDemoExpiry();
-    }
-
     // Check if user should be redirected to Welcome page
+    // Only redirect on initial load and if not already on Welcome/SignUp pages
     const pagesWithoutRedirect = ['Welcome', 'SignUp', 'AddAccount'];
-    const isDemoMode = sessionStorage.getItem('demoMode') === 'true';
-    
-    if (!pagesWithoutRedirect.includes(currentPageName) && !isDemoMode) {
+    if (!pagesWithoutRedirect.includes(currentPageName)) {
       try {
         const localPlaylists = JSON.parse(localStorage.getItem('playlists') || '[]');
         if (localPlaylists.length === 0 && currentPageName !== 'Welcome') {
@@ -163,12 +134,7 @@ export default function Layout({ children, currentPageName }) {
 
   // If on Welcome or SignUp page, render without sidebar
   if (pagesWithoutSidebar.includes(currentPageName)) {
-    return (
-      <>
-        <DemoTrialTimer />
-        {children}
-      </>
-    );
+    return children;
   }
 
   const isTV = deviceInfo?.isTV || false;
@@ -178,10 +144,8 @@ export default function Layout({ children, currentPageName }) {
   // On TV devices, render without sidebar for full screen experience
   if (isTV) {
     return (
-      <>
-        <DemoTrialTimer />
-        <div className="min-h-screen flex w-full bg-gradient-to-br from-black to-gray-900">
-          <style>{`
+      <div className="min-h-screen flex w-full bg-gradient-to-br from-black to-gray-900">
+        <style>{`
           :root {
             --background: 0 0% 0%;
             --foreground: 210 40% 98%;
@@ -228,16 +192,13 @@ export default function Layout({ children, currentPageName }) {
             {children}
           </div>
         </main>
-        </div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <DemoTrialTimer />
-      <SidebarProvider>
-        <div className={`min-h-screen flex w-full ${isTV ? 'bg-gradient-to-br from-black to-gray-900' : 'bg-gradient-to-br from-black via-orange-950 to-black'}`}>
+    <SidebarProvider>
+      <div className={`min-h-screen flex w-full ${isTV ? 'bg-gradient-to-br from-black to-gray-900' : 'bg-gradient-to-br from-black via-orange-950 to-black'}`}>
         <style>{`
           :root {
             --background: 0 0% 0%;
@@ -364,8 +325,7 @@ export default function Layout({ children, currentPageName }) {
             {children}
           </div>
         </main>
-        </div>
-      </SidebarProvider>
-    </>
+      </div>
+    </SidebarProvider>
   );
 }
