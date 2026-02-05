@@ -17,6 +17,14 @@ const INTRO_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-abstract
 
 const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68eeb940cdab39e5b8668523/ea04a0d3e_HushTVLogo.png";
 
+// HushTV Brand Colors from hushtv.com
+const BRAND_COLORS = {
+  primary: '#3B82F6', // Bright blue
+  primaryDark: '#1E3A8A', // Dark blue
+  accent: '#06B6D4', // Cyan
+  background: '#0F172A', // Dark navy
+};
+
 export default function Layout({ children, currentPageName }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -73,8 +81,8 @@ export default function Layout({ children, currentPageName }) {
       ],
       start_url: ".",
       display: "standalone",
-      theme_color: "#EA580C",
-      background_color: "#000000"
+      theme_color: "#3B82F6",
+      background_color: "#0F172A"
     };
 
     const manifestString = JSON.stringify(manifest);
@@ -144,7 +152,7 @@ export default function Layout({ children, currentPageName }) {
   // On TV devices, render without sidebar for full screen experience
   if (isTV) {
     return (
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-black to-gray-900">
+      <div className="min-h-screen flex w-full bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
         <style>{`
           :root {
             --background: 0 0% 0%;
@@ -181,8 +189,8 @@ export default function Layout({ children, currentPageName }) {
           .tv-focusable:focus,
           .tv-focusable:hover {
             transform: scale(1.08);
-            box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.5);
-            border-color: rgb(251, 146, 60);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+            border-color: rgb(59, 130, 246);
             outline: none;
           }
         `}</style>
@@ -198,7 +206,7 @@ export default function Layout({ children, currentPageName }) {
 
   return (
     <SidebarProvider>
-      <div className={`min-h-screen flex w-full ${isTV ? 'bg-gradient-to-br from-black to-gray-900' : 'bg-gradient-to-br from-black via-orange-950 to-black'}`}>
+      <div className={`min-h-screen flex w-full ${isTV ? 'bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900' : 'bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900'}`}>
         <style>{`
           :root {
             --background: 0 0% 0%;
@@ -236,17 +244,17 @@ export default function Layout({ children, currentPageName }) {
             .tv-focusable:focus,
             .tv-focusable:hover {
               transform: scale(1.08);
-              box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.5);
-              border-color: rgb(251, 146, 60);
+              box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+              border-color: rgb(59, 130, 246);
               outline: none;
             }
           ` : ''}
         `}</style>
         
-        <Sidebar className={`border-r border-orange-500/20 ${enableBlur ? 'bg-gray-900/95 backdrop-blur-xl' : 'bg-gray-900'}`}>
-          <SidebarHeader className="border-b border-orange-500/20 p-6">
+        <Sidebar className={`border-r border-blue-500/20 ${enableBlur ? 'bg-slate-900/95 backdrop-blur-xl' : 'bg-slate-900'}`}>
+          <SidebarHeader className="border-b border-blue-500/20 p-6">
             <div className="flex items-center justify-center">
-              <div className="w-full bg-black rounded-xl p-4 shadow-lg shadow-orange-500/20 relative">
+              <div className="w-full bg-slate-950 rounded-xl p-4 shadow-lg shadow-blue-500/20 relative">
                 <img src={LOGO_URL} alt="HushTV" className="w-full h-auto" />
                 {/* Christmas Hat */}
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 -rotate-12">
@@ -270,8 +278,8 @@ export default function Layout({ children, currentPageName }) {
               <Link
                 to={item.url}
                 key={item.title} 
-                className={`flex items-center gap-3 px-4 ${isTV ? 'py-4' : 'py-3'} hover:bg-orange-500/20 hover:text-orange-300 ${enableAnimations ? 'transition-all duration-200' : ''} rounded-lg mb-1 ${isTV ? 'tv-focusable' : ''} ${
-                  location.pathname === item.url ? 'bg-orange-500/30 text-orange-300 shadow-lg shadow-orange-500/20' : 'text-gray-300'
+                className={`flex items-center gap-3 px-4 ${isTV ? 'py-4' : 'py-3'} hover:bg-blue-500/20 hover:text-cyan-300 ${enableAnimations ? 'transition-all duration-200' : ''} rounded-lg mb-1 ${isTV ? 'tv-focusable' : ''} ${
+                  location.pathname === item.url ? 'bg-blue-500/30 text-cyan-300 shadow-lg shadow-blue-500/20' : 'text-gray-300'
                 }`}
               >
                 <item.icon className={`${isTV ? 'w-6 h-6' : 'w-5 h-5'}`} />
@@ -280,20 +288,20 @@ export default function Layout({ children, currentPageName }) {
             ))}
           </SidebarContent>
 
-          <div className="border-t border-orange-500/20 p-4">
+          <div className="border-t border-blue-500/20 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-700 rounded-full flex items-center justify-center shadow-lg">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center shadow-lg">
                   <User className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-white text-sm">Guest User</p>
-                  <p className="text-xs text-orange-300">HushTV Player</p>
+                  <p className="text-xs text-cyan-300">HushTV Player</p>
                 </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="p-2 hover:bg-orange-500/20 rounded-lg transition-colors"
+                className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors"
                 title="Clear all data"
               >
                 <LogOut className="w-4 h-4 text-gray-400" />
@@ -303,9 +311,9 @@ export default function Layout({ children, currentPageName }) {
         </Sidebar>
 
         <main className="flex-1 flex flex-col overflow-x-hidden">
-          <header className={`${enableBlur ? 'bg-gray-900/50 backdrop-blur-xl' : 'bg-gray-900'} border-b border-orange-500/20 px-6 py-4 md:hidden`}>
+          <header className={`${enableBlur ? 'bg-slate-900/50 backdrop-blur-xl' : 'bg-slate-900'} border-b border-blue-500/20 px-6 py-4 md:hidden`}>
             <div className="flex items-center gap-4">
-              <SidebarTrigger className="hover:bg-orange-500/20 p-2 rounded-lg transition-colors" />
+              <SidebarTrigger className="hover:bg-blue-500/20 p-2 rounded-lg transition-colors" />
               <div className="h-8 w-32 relative">
                 <img src={LOGO_URL} alt="HushTV" className="h-full w-auto" />
                 {/* Christmas Hat for mobile */}
