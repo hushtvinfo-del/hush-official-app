@@ -6,11 +6,37 @@ Deno.serve(async (req) => {
         const { action, sectionId, ratingKey } = await req.json();
         
         const plexUrl = Deno.env.get("PLEX_SERVER_URL");
-        const plexToken = Deno.env.get("PLEX_TOKEN");
+        const plexUsername = Deno.env.get("PLEX_USERNAME");
+        const plexPassword = Deno.env.get("PLEX_PASSWORD");
 
-        if (!plexUrl || !plexToken) {
+        if (!plexUrl || !plexUsername || !plexPassword) {
             return Response.json({ error: 'Plex credentials not configured' }, { status: 500 });
         }
+
+        // Authenticate with Plex to get token
+        const authResponse = await fetch('https://plex.tv/users/sign_in.json', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Plex-Client-Identifier': 'hushtv-app',
+                'X-Plex-Product': 'HushTV',
+                'X-Plex-Version': '1.0'
+            },
+            body: new URLSearchParams({
+                'user[login]': plexUsername,
+                'user[password]': plexPassword
+            })
+        });
+
+        if (!authResponse.ok) {
+            return Response.json({ 
+                error: 'Failed to authenticate with Plex',
+                details: await authResponse.text()
+            }, { status: 401 });
+        }
+
+        const authData = await authResponse.json();
+        const plexToken = authData.user.authToken;
 
         const baseUrl = plexUrl.replace(/\/$/, '');
 
