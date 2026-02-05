@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
@@ -95,7 +94,7 @@ export default function Movies() {
                 <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">{categoryName}</h1>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                     {[...Array(12)].map((_, i) => (
-                    <Card key={i} className="bg-gray-800/50 backdrop-blur-xl border-orange-500/30 animate-pulse">
+                    <Card key={i} className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 animate-pulse">
                         <CardContent className="p-3">
                         <div className="aspect-[2/3] bg-gray-700 rounded mb-3" />
                         <div className="h-4 bg-gray-700 rounded w-3/4" />
@@ -110,7 +109,7 @@ export default function Movies() {
 
   if (error) return (
       <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
-        <Card className="bg-gray-800/50 backdrop-blur-xl border-red-500/30">
+        <Card className="bg-slate-800/50 backdrop-blur-xl border-red-500/30">
           <CardContent className="p-12 text-center">
             <WifiOff className="w-16 h-16 text-red-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-white mb-2">Error Loading Movies</h3>
@@ -126,7 +125,7 @@ export default function Movies() {
         <Button
           variant="ghost"
           onClick={() => navigate(createPageUrl(`MovieCategories?playlistId=${playlistId}`))}
-          className="mb-6 text-orange-300 hover:text-white hover:bg-orange-500/20"
+          className="mb-6 text-cyan-300 hover:text-white hover:bg-blue-500/20"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Movie Categories
@@ -134,7 +133,7 @@ export default function Movies() {
 
         <div className="mb-8">
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{categoryName}</h1>
-          <p className="text-orange-300">{movies?.length || 0} movies available</p>
+          <p className="text-cyan-300">{movies?.length || 0} movies available</p>
         </div>
 
         <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between">
@@ -145,17 +144,17 @@ export default function Movies() {
               placeholder="Search movies..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-gray-800/50 border-orange-500/30 text-white placeholder:text-gray-500 focus:border-orange-500"
+              className="pl-10 bg-slate-800/50 border-blue-500/30 text-white placeholder:text-gray-500 focus:border-blue-500"
             />
           </div>
           <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-full sm:w-48 bg-gray-800/50 border-orange-500/30 text-white">
+            <SelectTrigger className="w-full sm:w-48 bg-slate-800/50 border-blue-500/30 text-white">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
-            <SelectContent className="bg-gray-900 border-orange-500/30">
-              <SelectItem value="newest" className="text-white hover:bg-orange-500/20">Newest First</SelectItem>
-              <SelectItem value="az" className="text-white hover:bg-orange-500/20">A-Z</SelectItem>
-              <SelectItem value="default" className="text-white hover:bg-orange-500/20">Default</SelectItem>
+            <SelectContent className="bg-slate-900 border-blue-500/30">
+              <SelectItem value="newest" className="text-white hover:bg-blue-500/20">Newest First</SelectItem>
+              <SelectItem value="az" className="text-white hover:bg-blue-500/20">A-Z</SelectItem>
+              <SelectItem value="default" className="text-white hover:bg-blue-500/20">Default</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -184,7 +183,7 @@ export default function Movies() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      <Card className="bg-gray-800/50 backdrop-blur-xl border-orange-500/30 hover:border-orange-500/60 transition-all cursor-pointer group overflow-hidden h-full flex flex-col">
+                      <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all cursor-pointer group overflow-hidden h-full flex flex-col">
                         <CardContent className="p-3 relative flex-grow flex flex-col">
                           <div className="aspect-[2/3] bg-gray-900/50 rounded-md mb-3 flex items-center justify-center overflow-hidden relative">
                               <img
@@ -195,10 +194,10 @@ export default function Movies() {
                                 onError={(e) => { e.target.onerror = null; e.target.style.display='none'; e.target.nextSibling.style.display='flex' }}
                               />
                             <div style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
-                              <Film className="w-12 h-12 text-orange-400" />
+                              <Film className="w-12 h-12 text-cyan-400" />
                             </div>
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center">
+                              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
                                 <Play className="w-6 h-6 text-white ml-1" />
                               </div>
                             </div>
