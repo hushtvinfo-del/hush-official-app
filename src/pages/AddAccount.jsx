@@ -92,33 +92,33 @@ export default function AddAccount() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-black via-orange-950 to-black flex items-center justify-center">
+    <div className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center">
       <div className="max-w-xl w-full">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="bg-gray-800/50 backdrop-blur-xl border-orange-500/30">
+          <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30">
             <CardHeader>
               <CardTitle className="text-2xl text-white flex items-center gap-2">
-                <UserPlus className="w-6 h-6 text-orange-400" />
+                <UserPlus className="w-6 h-6 text-cyan-400" />
                 Sign In to HushTV Web Player
               </CardTitle>
-              <CardDescription className="text-orange-300">Enter your HushTV credentials to get started.</CardDescription>
+              <CardDescription className="text-cyan-300">Enter your HushTV credentials to get started.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="username" className="text-white">Username</Label>
-                  <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Your HushTV username" className="bg-gray-900/50 border-orange-500/30 text-white" disabled={isLoading} />
+                  <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Your HushTV username" className="bg-slate-900/50 border-blue-500/30 text-white" disabled={isLoading} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password" className="text-white">Password</Label>
-                  <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your HushTV password" className="bg-gray-900/50 border-orange-500/30 text-white" disabled={isLoading} />
+                  <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your HushTV password" className="bg-slate-900/50 border-blue-500/30 text-white" disabled={isLoading} />
                 </div>
                  <div className="space-y-2">
                   <Label htmlFor="name" className="text-white">Account Nickname</Label>
-                  <Input id="name" value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="e.g., Home TV" className="bg-gray-900/50 border-orange-500/30 text-white" disabled={isLoading} />
+                  <Input id="name" value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="e.g., Home TV" className="bg-slate-900/50 border-blue-500/30 text-white" disabled={isLoading} />
                 </div>
                 {error && <Alert variant="destructive" className="bg-red-900/20 border-red-500/30"><AlertCircle className="h-4 w-4" /><AlertDescription className="text-red-400">{error}</AlertDescription></Alert>}
-                <Button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg shadow-orange-500/50">
+                <Button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white shadow-lg shadow-blue-500/50">
                   {isLoading ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Verifying & Saving...</> : 'Sign In'}
                 </Button>
               </form>
@@ -127,7 +127,7 @@ export default function AddAccount() {
         </motion.div>
         
         <div className="mt-6">
-          <Button variant="ghost" onClick={handleBack} className="w-full text-orange-300 hover:text-white hover:bg-orange-500/20">
+          <Button variant="ghost" onClick={handleBack} className="w-full text-cyan-300 hover:text-white hover:bg-blue-500/20">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>

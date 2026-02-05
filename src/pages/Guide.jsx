@@ -138,14 +138,14 @@ const ChannelList = ({ channelsData, isLoading, currentStreamId, handleChannelSe
             }
           }}
           className={`flex items-center gap-3 ${isTV ? 'p-4' : 'p-3'} border-b border-gray-800 cursor-pointer transition-all ${isTV ? 'tv-focusable' : ''} ${
-            isActive ? 'bg-orange-500/30 border-l-4 border-l-orange-500' : 'hover:bg-orange-500/20 focus:bg-orange-500/30 focus:outline-none'
+            isActive ? 'bg-blue-500/30 border-l-4 border-l-cyan-400' : 'hover:bg-blue-500/20 focus:bg-blue-500/30 focus:outline-none'
           }`}
         >
           <div className="flex-shrink-0 w-12 h-12 bg-black rounded overflow-hidden flex items-center justify-center">
             {channel.stream_icon ? (
               <img src={channel.stream_icon} alt={channel.name} className="w-full h-full object-contain"/>
             ) : (
-              <Tv className="w-6 h-6 text-orange-400"/>
+              <Tv className="w-6 h-6 text-cyan-400"/>
             )}
           </div>
           <div className="flex-1 min-w-0">
@@ -459,23 +459,23 @@ export default function Guide() {
 
   return (
     <div className="h-screen flex flex-col bg-black">
-      {/* Top Bar */}
-      <div className="bg-gradient-to-r from-gray-900 to-black border-b border-orange-500/30 px-4 md:px-6 py-2 flex items-center justify-between flex-shrink-0">
+      {/* Top Bar - TiVimate Style */}
+      <div className="bg-slate-900/95 border-b border-blue-500/20 px-4 md:px-6 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2 md:gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-orange-300 hover:text-white hover:bg-orange-500/20">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-cyan-300 hover:text-white hover:bg-blue-500/20">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           
           {/* Mobile: Channel Menu Button */}
           <Sheet open={mobileChannelsOpen} onOpenChange={setMobileChannelsOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden text-orange-300 hover:text-white hover:bg-orange-500/20">
+              <Button variant="ghost" size="icon" className="md:hidden text-cyan-300 hover:text-white hover:bg-blue-500/20">
                 <Menu className="w-5 h-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-80 bg-gray-900 p-0 border-r border-orange-500/20">
+            <SheetContent side="left" className="w-80 bg-slate-900 p-0 border-r border-blue-500/20">
               <div className="flex flex-col h-full">
-                <div className="p-4 border-b border-orange-500/20">
+                <div className="p-4 border-b border-blue-500/20 bg-slate-950">
                   <h3 className="text-white font-bold">{decodeURIComponent(params.get('categoryName') || 'Channels')}</h3>
                 </div>
                 <ChannelList 
@@ -496,9 +496,7 @@ export default function Guide() {
           </Sheet>
 
           <div className="flex items-center gap-2 md:gap-3">
-            <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 text-orange-400 hidden md:block" />
             <h2 className="text-base md:text-lg font-bold text-white truncate">{decodeURIComponent(params.get('categoryName') || 'LIVE TV')}</h2>
-            <ChevronRight className="w-4 h-4 md:w-5 md:h-5 text-orange-400 hidden md:block" />
           </div>
         </div>
         
@@ -509,7 +507,7 @@ export default function Guide() {
               variant="outline"
               size="sm"
               onClick={handleCast}
-              className="border-orange-500/30 hover:bg-orange-500/20 text-orange-300"
+              className="border-blue-500/30 hover:bg-blue-500/20 text-cyan-300"
               title="Cast to TV"
             >
               <Cast className="w-4 h-4 md:mr-2" />
@@ -547,10 +545,10 @@ export default function Guide() {
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content Area - TiVimate Style Layout */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Desktop: Left Sidebar - Channel List */}
-        <div className="hidden md:flex w-80 bg-gray-900 border-r border-orange-500/20 flex-col flex-shrink-0">
+        {/* Desktop: Left Sidebar - Channel List (TiVimate Style) */}
+        <div className="hidden md:flex w-80 bg-slate-950 border-r border-blue-500/20 flex-col flex-shrink-0">
           <ChannelList 
             channelsData={channelsData}
             isLoading={isLoading}
@@ -574,22 +572,22 @@ export default function Guide() {
               <MiniPlayer channelUrl={currentChannelUrl} />
             </div>
 
-            {/* EPG Guide Section - Compact Card */}
-            <div className="bg-gradient-to-br from-gray-900 to-black border-t border-orange-500/30">
+            {/* EPG Guide Section - TiVimate Style */}
+            <div className="bg-slate-950 border-t border-blue-500/20">
               {currentEpg ? (
-                <div className="px-3 md:px-4 py-3">
+                <div className="px-3 md:px-6 py-4">
                   {/* Current Program Info */}
-                  <div className="mb-3">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded">LIVE NOW</span>
-                      <p className="text-sm text-gray-400 truncate">{currentChannelInfo?.name}</p>
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded">LIVE</span>
+                      <p className="text-sm text-cyan-400 font-semibold truncate">{currentChannelInfo?.name}</p>
                     </div>
-                    <h4 className="text-orange-300 text-lg md:text-xl font-bold mb-1 leading-tight">
+                    <h4 className="text-white text-lg md:text-2xl font-bold mb-1 leading-tight">
                       {currentEpg.title}
                     </h4>
                     <p className="text-gray-400 text-xs md:text-sm mb-2">
                       {formatTime(currentEpg.start)} - {formatTime(currentEpg.stop)}
-                      {currentEpg.episode && <span className="ml-2 text-orange-400">Episode {currentEpg.episode}</span>}
+                      {currentEpg.episode && <span className="ml-2 text-cyan-400">Episode {currentEpg.episode}</span>}
                     </p>
                     {currentEpg.desc && (
                       <p className="text-gray-300 text-sm md:text-base leading-relaxed">
@@ -599,9 +597,9 @@ export default function Guide() {
                   </div>
 
                   {/* Up Next */}
-                  <div className="pt-3 border-t border-gray-800">
-                    <div className="flex items-center gap-2 text-gray-500 mb-1">
-                      <span className="text-xs font-semibold uppercase">Up Next</span>
+                  <div className="pt-3 border-t border-blue-500/20">
+                    <div className="flex items-center gap-2 text-gray-400 mb-1.5">
+                      <span className="text-xs font-semibold uppercase tracking-wider">Up Next</span>
                       <span className="text-xs">{nextEpg ? formatTime(nextEpg.start) : formatTime(currentEpg.stop)}</span>
                     </div>
                     {nextEpg ? (
@@ -609,7 +607,7 @@ export default function Guide() {
                         <h5 className="text-white font-semibold text-sm md:text-base">{nextEpg.title}</h5>
                         <p className="text-gray-400 text-xs md:text-sm mt-0.5">
                           {formatTime(nextEpg.start)} - {formatTime(nextEpg.stop)}
-                          {nextEpg.episode && <span className="ml-2 text-orange-400">Episode {nextEpg.episode}</span>}
+                          {nextEpg.episode && <span className="ml-2 text-cyan-400">Episode {nextEpg.episode}</span>}
                         </p>
                       </>
                     ) : (

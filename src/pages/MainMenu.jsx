@@ -100,11 +100,11 @@ function ContinueWatchingCard({ playlistId }) {
                 transition={{ delay: 0 }}
                 className="mb-6"
             >
-                <Card className="bg-gray-800/50 backdrop-blur-xl border-orange-500/30 overflow-hidden">
+                <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 overflow-hidden">
                     <CardContent className="p-4">
                         <div className="flex items-center justify-between mb-3">
                             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                                <Play className="w-5 h-5 text-orange-400" />
+                                <Play className="w-5 h-5 text-cyan-400" />
                                 Continue Watching
                             </h2>
                             <div className="flex gap-1">
@@ -112,7 +112,7 @@ function ContinueWatchingCard({ playlistId }) {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => scroll('left')}
-                                    className="h-8 w-8 text-orange-400 hover:bg-orange-500/20"
+                                    className="h-8 w-8 text-cyan-400 hover:bg-blue-500/20"
                                 >
                                     <ChevronLeft className="w-4 h-4" />
                                 </Button>
@@ -120,7 +120,7 @@ function ContinueWatchingCard({ playlistId }) {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => scroll('right')}
-                                    className="h-8 w-8 text-orange-400 hover:bg-orange-500/20"
+                                    className="h-8 w-8 text-cyan-400 hover:bg-blue-500/20"
                                 >
                                     <ChevronRight className="w-4 h-4" />
                                 </Button>
@@ -164,20 +164,20 @@ function ContinueWatchingCard({ playlistId }) {
                                                                     />
                                                                 ) : null}
                                                                 <div className={`w-full h-full ${cover_image ? 'hidden' : 'flex'} items-center justify-center absolute inset-0 bg-gray-800`}>
-                                                                    <Film className="w-10 h-10 text-orange-400" />
+                                                                   <Film className="w-10 h-10 text-cyan-400" />
                                                                 </div>
                                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                    <div className="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center">
-                                                                        <Play className="w-5 h-5 text-white ml-0.5" />
-                                                                    </div>
+                                                                   <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                                                                       <Play className="w-5 h-5 text-white ml-0.5" />
+                                                                   </div>
                                                                 </div>
-                                                            </div>
-                                                            <div className="p-2">
+                                                                </div>
+                                                                <div className="p-2">
                                                                 <p className="text-xs font-semibold text-white truncate">{name}</p>
                                                                 <div className="w-full bg-gray-700 rounded-full h-1 mt-1">
-                                                                    <div className="bg-orange-600 h-1 rounded-full" style={{ width: `${progressPercent}%` }}></div>
+                                                                   <div className="bg-blue-600 h-1 rounded-full" style={{ width: `${progressPercent}%` }}></div>
                                                                 </div>
-                                                            </div>
+                                                                </div>
                                                         </div>
                                                     </motion.div>
                                                 </Link>
@@ -205,7 +205,7 @@ function ContinueWatchingCard({ playlistId }) {
             </motion.div>
 
             <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
-                <AlertDialogContent className="bg-gray-900 border-orange-500/30">
+                <AlertDialogContent className="bg-slate-900 border-blue-500/30">
                     <AlertDialogHeader>
                         <AlertDialogTitle className="text-white">Clear Watch Progress?</AlertDialogTitle>
                         <AlertDialogDescription className="text-gray-400">
@@ -238,7 +238,7 @@ function RefreshToast({ message, show }) {
                     exit={{ opacity: 0, y: -50 }}
                     className="fixed top-8 left-1/2 transform -translate-x-1/2 z-50"
                 >
-                    <div className="bg-orange-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
+                    <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
                         <Loader2 className="w-5 h-5 animate-spin" />
                         <span className="font-medium">{message}</span>
                     </div>
@@ -309,13 +309,13 @@ export default function MainMenu() {
       />
       
       <div className="max-w-7xl mx-auto">
-        <Button variant="ghost" onClick={() => navigate(createPageUrl("Dashboard"))} className="mb-6 text-orange-300 hover:text-white hover:bg-orange-500/20">
+        <Button variant="ghost" onClick={() => navigate(createPageUrl("Dashboard"))} className="mb-6 text-cyan-300 hover:text-white hover:bg-blue-500/20">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Accounts
         </Button>
         <div className="mb-8 text-left">
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome, {accountInfo?.username || 'User'}!</h1>
-          <p className="text-orange-300">Expiry: <span className="font-semibold text-orange-200">{expiryDate}</span></p>
+          <p className="text-cyan-300">Expiry: <span className="font-semibold text-cyan-200">{expiryDate}</span></p>
         </div>
         
         <ContinueWatchingCard playlistId={playlistId} />
@@ -364,10 +364,10 @@ export default function MainMenu() {
             className="md:col-span-2"
           >
             <Link to={searchItem.link}>
-                <Card className="bg-gray-800/50 backdrop-blur-xl border-orange-500/30 hover:border-orange-500/60 transition-all group overflow-hidden text-center h-full flex flex-col">
+                <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all group overflow-hidden text-center h-full flex flex-col">
                     <CardContent className="p-8 flex flex-col items-center justify-center flex-grow">
                         <motion.div whileHover={{ scale: 1.05 }} className="flex flex-col items-center">
-                            <searchItem.icon className="w-24 h-24 text-orange-400 group-hover:text-orange-300 transition-colors duration-300" />
+                            <searchItem.icon className="w-24 h-24 text-cyan-400 group-hover:text-cyan-300 transition-colors duration-300" />
                             <h2 className="text-3xl font-bold text-white mt-6 mb-2">{searchItem.name}</h2>
                         </motion.div>
                     </CardContent>
