@@ -20,13 +20,33 @@ const fetchCategories = async (playlistId) => {
     const playlist = getPlaylistFromLocal(playlistId);
     if (!playlist) throw new Error("Playlist not found");
 
-    const { data } = await base44.functions.invoke('xtreamProxy', {
+    // Fetch Xtream categories
+    const { data: xtreamData } = await base44.functions.invoke('xtreamProxy', {
         host: playlist.host,
         username: playlist.username,
         password: playlist.password,
         params: { action: 'get_vod_categories' }
     });
-    return Array.isArray(data) ? data : [];
+    const xtreamCategories = Array.isArray(xtreamData) ? xtreamData : [];
+
+    // Fetch Plex libraries
+    try {
+        const { data: plexData } = await base44.functions.invoke('plexProxy', {
+            action: 'get_libraries'
+        });
+        
+        const plexCategories = (plexData?.movies || []).map(lib => ({
+            category_id: `plex_${lib.key}`,
+            category_name: `📦 ${lib.title}`,
+            source: 'plex',
+            plexSectionId: lib.key
+        }));
+
+        return [...plexCategories, ...xtreamCategories];
+    } catch (plexError) {
+        console.log('Plex not available:', plexError);
+        return xtreamCategories;
+    }
 }
 
 export default function MovieCategories() {

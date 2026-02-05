@@ -22,6 +22,26 @@ const fetchMovies = async (playlistId, categoryId) => {
     const playlist = getPlaylistFromLocal(playlistId);
     if (!playlist) throw new Error("Playlist not found");
 
+    // Handle Plex libraries
+    if (categoryId.startsWith('plex_')) {
+        const plexSectionId = categoryId.replace('plex_', '');
+        const { data } = await base44.functions.invoke('plexProxy', {
+            action: 'get_library_items',
+            sectionId: plexSectionId
+        });
+        
+        return (data || []).map(item => ({
+            stream_id: `plex_${item.ratingKey}`,
+            name: item.title,
+            stream_icon: item.thumb ? `${Deno.env.get("PLEX_SERVER_URL")}${item.thumb}?X-Plex-Token=${Deno.env.get("PLEX_TOKEN")}` : '',
+            rating: item.rating,
+            year: item.year,
+            source: 'plex',
+            plexRatingKey: item.ratingKey,
+            category_id: categoryId
+        }));
+    }
+
     if (categoryId === 'recently_added') {
         const { data } = await base44.functions.invoke('xtreamProxy', {
             host: playlist.host,
