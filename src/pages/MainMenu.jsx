@@ -330,10 +330,10 @@ export default function MainMenu() {
               className="relative"
             >
               <Link to={item.link}>
-                  <Card className="bg-gray-800/50 backdrop-blur-xl border-orange-500/30 hover:border-orange-500/60 transition-all group overflow-hidden text-center h-full flex flex-col">
+                  <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all group overflow-hidden text-center h-full flex flex-col">
                       <CardContent className="p-8 flex flex-col items-center justify-center flex-grow">
                           <motion.div whileHover={{ scale: 1.05 }} className="flex flex-col items-center">
-                              <item.icon className="w-24 h-24 text-orange-400 group-hover:text-orange-300 transition-colors duration-300" />
+                              <item.icon className="w-24 h-24 text-cyan-400 group-hover:text-cyan-300 transition-colors duration-300" />
                               <h2 className="text-3xl font-bold text-white mt-6 mb-2">{item.name}</h2>
                           </motion.div>
                       </CardContent>
@@ -343,7 +343,7 @@ export default function MainMenu() {
                 <Button 
                   size="icon" 
                   variant="ghost" 
-                  className="absolute top-4 right-4 text-orange-400 hover:text-white hover:bg-orange-500/20 z-10"
+                  className="absolute top-4 right-4 text-cyan-400 hover:text-white hover:bg-blue-500/20 z-10"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleRefresh(item.refreshKey);
