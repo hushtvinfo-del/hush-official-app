@@ -104,6 +104,42 @@ Deno.serve(async (req) => {
                 if (metadata.art) {
                     metadata.art = `${baseUrl}${metadata.art}?X-Plex-Token=${plexToken}`;
                 }
+                
+                // Add stream URL if it's a movie
+                if (metadata.type === 'movie' && metadata.Media?.[0]?.Part?.[0]?.key) {
+                    metadata.streamUrl = `${baseUrl}${metadata.Media[0].Part[0].key}?X-Plex-Token=${plexToken}`;
+                }
+                
+                // Add episode stream URLs if it's a show
+                if (metadata.type === 'show') {
+                    // Fetch seasons for this show
+                    const seasonsResponse = await fetch(`${baseUrl}/library/metadata/${ratingKey}/children?X-Plex-Token=${plexToken}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    const seasonsData = await seasonsResponse.json();
+                    const seasons = seasonsData.MediaContainer.Metadata || [];
+                    
+                    metadata.seasons = [];
+                    for (const season of seasons) {
+                        // Fetch episodes for each season
+                        const episodesResponse = await fetch(`${baseUrl}/library/metadata/${season.ratingKey}/children?X-Plex-Token=${plexToken}`, {
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        const episodesData = await episodesResponse.json();
+                        const episodes = episodesData.MediaContainer.Metadata || [];
+                        
+                        metadata.seasons.push({
+                            seasonNumber: season.index,
+                            episodes: episodes.map(ep => ({
+                                ratingKey: ep.ratingKey,
+                                title: ep.title,
+                                index: ep.index,
+                                thumb: ep.thumb ? `${baseUrl}${ep.thumb}?X-Plex-Token=${plexToken}` : null,
+                                streamUrl: ep.Media?.[0]?.Part?.[0]?.key ? `${baseUrl}${ep.Media[0].Part[0].key}?X-Plex-Token=${plexToken}` : null
+                            }))
+                        });
+                    }
+                }
             }
             
             return Response.json(metadata);

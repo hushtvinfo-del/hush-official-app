@@ -32,6 +32,24 @@ const fetchSeriesInfo = async (playlistId, seriesId) => {
         });
         
         // Convert Plex format to Xtream-like format for compatibility
+        const episodes = {};
+        
+        if (data.seasons) {
+            for (const season of data.seasons) {
+                episodes[season.seasonNumber] = season.episodes.map(ep => ({
+                    id: `plex_${ep.ratingKey}`,
+                    episode_num: ep.index,
+                    title: ep.title,
+                    container_extension: 'mp4',
+                    info: {
+                        movie_image: ep.thumb
+                    },
+                    stream_url: ep.streamUrl,
+                    source: 'plex'
+                }));
+            }
+        }
+        
         return {
             info: {
                 name: data.title,
@@ -41,7 +59,8 @@ const fetchSeriesInfo = async (playlistId, seriesId) => {
                 releaseDate: data.originallyAvailableAt,
                 backdrop: data.art
             },
-            episodes: {}
+            episodes,
+            source: 'plex'
         };
     }
 
@@ -388,7 +407,12 @@ export default function SeriesDetails() {
     }
   };
 
-  const constructEpisodeUrl = (host, username, password, streamId, extension) => {
+  const constructEpisodeUrl = (host, username, password, streamId, extension, episode) => {
+    // Use Plex stream URL if available
+    if (episode?.stream_url) {
+      return episode.stream_url;
+    }
+    
     let fullHost = host;
     if (!/^https?:\/\//i.test(host)) {
       fullHost = `http://${host}`;
@@ -493,7 +517,7 @@ export default function SeriesDetails() {
     }
 
     const cast = window.chrome.cast;
-    const episodeUrl = constructEpisodeUrl(playlist.host, playlist.username, playlist.password, episode.id, episode.container_extension);
+    const episodeUrl = constructEpisodeUrl(playlist.host, playlist.username, playlist.password, episode.id, episode.container_extension, episode);
     
     console.log('🎬 Starting cast for episode:', { title: episode.title, url: episodeUrl });
     
@@ -693,47 +717,47 @@ export default function SeriesDetails() {
 
         <Accordion type="single" collapsible className="w-full" defaultValue="season-1">
           {Object.entries(seasons).sort(([a], [b]) => parseInt(a) - parseInt(b)).map(([seasonNum, episodes]) => (
-            <AccordionItem key={seasonNum} value={`season-${seasonNum}`} className="border-blue-500/20">
-              <AccordionTrigger className="hover:no-underline text-2xl font-semibold text-white py-6">Season {seasonNum}</AccordionTrigger>
-              <AccordionContent>
-                <div className="flex flex-col gap-2">
-                  {episodes.map((ep, index) => {
-                    const episodeUrl = constructEpisodeUrl(playlist.host, playlist.username, playlist.password, ep.id, ep.container_extension);
-                    const episodePlayerUrl = createPageUrl(`Player?playlistId=${playlistId}&channelUrl=${encodeURIComponent(episodeUrl)}&channelName=${encodeURIComponent(ep.title)}&containerExtension=${ep.container_extension}&contentType=episode&seriesId=${seriesId}${displayData.poster ? `&coverImage=${encodeURIComponent(displayData.poster)}` : ''}`);
-                    
-                    return (
-                        <motion.div 
-                          key={index}
-                          whileHover={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }} 
-                          className="flex items-center justify-between p-4 rounded-lg transition-colors group"
-                        >
-                          <Link to={episodePlayerUrl} className="flex-1">
-                            <p className="text-gray-300">{ep.title}</p>
-                          </Link>
-                          <div className="flex items-center gap-2">
-                            <Link to={episodePlayerUrl}>
-                              <Button variant="ghost" size="icon" className="text-cyan-400 hover:bg-blue-500/20">
-                                <Play className="w-5 h-5"/>
-                              </Button>
-                            </Link>
-                            {castAvailable && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                onClick={() => handleCastEpisode(ep)}
-                                className="text-cyan-400 hover:bg-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Cast to TV"
-                              >
-                                <Cast className="w-5 h-5"/>
-                              </Button>
-                            )}
-                          </div>
-                        </motion.div>
-                    )
-                  })}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
+          <AccordionItem key={seasonNum} value={`season-${seasonNum}`} className="border-blue-500/20">
+          <AccordionTrigger className="hover:no-underline text-2xl font-semibold text-white py-6">Season {seasonNum}</AccordionTrigger>
+          <AccordionContent>
+          <div className="flex flex-col gap-2">
+          {episodes.map((ep, index) => {
+            const episodeUrl = constructEpisodeUrl(playlist.host, playlist.username, playlist.password, ep.id, ep.container_extension, ep);
+            const episodePlayerUrl = createPageUrl(`Player?playlistId=${playlistId}&channelUrl=${encodeURIComponent(episodeUrl)}&channelName=${encodeURIComponent(ep.title)}&containerExtension=${ep.container_extension}&contentType=episode&seriesId=${seriesId}${displayData.poster ? `&coverImage=${encodeURIComponent(displayData.poster)}` : ''}`);
+
+            return (
+                <motion.div 
+                  key={index}
+                  whileHover={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }} 
+                  className="flex items-center justify-between p-4 rounded-lg transition-colors group"
+                >
+                  <Link to={episodePlayerUrl} className="flex-1">
+                    <p className="text-gray-300">{ep.title}</p>
+                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link to={episodePlayerUrl}>
+                      <Button variant="ghost" size="icon" className="text-cyan-400 hover:bg-blue-500/20">
+                        <Play className="w-5 h-5"/>
+                      </Button>
+                    </Link>
+                    {castAvailable && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleCastEpisode(ep)}
+                        className="text-cyan-400 hover:bg-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Cast to TV"
+                      >
+                        <Cast className="w-5 h-5"/>
+                      </Button>
+                    )}
+                  </div>
+                </motion.div>
+            )
+          })}
+          </div>
+          </AccordionContent>
+          </AccordionItem>
           ))}
         </Accordion>
 

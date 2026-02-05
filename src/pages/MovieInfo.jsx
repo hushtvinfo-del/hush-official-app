@@ -45,8 +45,10 @@ const fetchVodInfo = async (playlistId, vodId) => {
             },
             movie_data: {
                 stream_id: vodId,
-                container_extension: 'mp4'
-            }
+                container_extension: 'mp4',
+                stream_url: data.streamUrl
+            },
+            source: 'plex'
         };
     }
 
@@ -391,13 +393,16 @@ export default function MovieInfo() {
     return `${u.protocol}//${u.host}/movie/${username}/${password}/${streamId}.${containerExtension}`;
   };
 
-  const streamUrl = constructStreamUrl(
-    playlist.host,
-    playlist.username,
-    playlist.password,
-    vodId,
-    vodInfo.movie_data?.container_extension || vodInfo.info.container_extension
-  );
+  // Use Plex stream URL if available, otherwise construct Xtream URL
+  const streamUrl = vodInfo.source === 'plex' && vodInfo.movie_data?.stream_url
+    ? vodInfo.movie_data.stream_url
+    : constructStreamUrl(
+        playlist.host,
+        playlist.username,
+        playlist.password,
+        vodId,
+        vodInfo.movie_data?.container_extension || vodInfo.info.container_extension
+      );
 
   const displayData = {
       name: tmdbData?.title || vodInfo.info.name,
