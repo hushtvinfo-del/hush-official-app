@@ -22,25 +22,34 @@ const fetchMovies = async (playlistId, categoryId) => {
     const playlist = getPlaylistFromLocal(playlistId);
     if (!playlist) throw new Error("Playlist not found");
 
-    // Handle Plex libraries
-    if (categoryId.startsWith('plex_')) {
-        const plexSectionId = categoryId.replace('plex_', '');
-        const { data } = await base44.functions.invoke('plexProxy', {
-            action: 'get_library_items',
-            sectionId: plexSectionId
+    // Handle Plex VIP category (all libraries combined)
+    if (categoryId === 'plex_all') {
+        const { data: plexData } = await base44.functions.invoke('plexProxy', {
+            action: 'get_libraries'
         });
         
-        // Backend already returns full URLs with tokens
-        return (data || []).map(item => ({
-            stream_id: `plex_${item.ratingKey}`,
-            name: item.title,
-            stream_icon: item.thumb,
-            rating: item.rating,
-            year: item.year,
-            source: 'plex',
-            plexRatingKey: item.ratingKey,
-            category_id: categoryId
-        }));
+        const allMovies = [];
+        for (const lib of plexData.movies || []) {
+            const { data } = await base44.functions.invoke('plexProxy', {
+                action: 'get_library_items',
+                sectionId: lib.key
+            });
+            
+            const movies = (data || []).map(item => ({
+                stream_id: `plex_${item.ratingKey}`,
+                name: item.title,
+                stream_icon: item.thumb,
+                rating: item.rating,
+                year: item.year,
+                source: 'plex',
+                plexRatingKey: item.ratingKey,
+                category_id: categoryId
+            }));
+            
+            allMovies.push(...movies);
+        }
+        
+        return allMovies;
     }
 
     if (categoryId === 'recently_added') {
