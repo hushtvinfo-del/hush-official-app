@@ -32,7 +32,7 @@ const fetchSeries = async (playlistId, categoryId) => {
         return (data || []).map(item => ({
             series_id: `plex_${item.ratingKey}`,
             name: item.title,
-            cover: item.thumb ? `${Deno.env.get("PLEX_SERVER_URL")}${item.thumb}?X-Plex-Token=${Deno.env.get("PLEX_TOKEN")}` : '',
+            cover: item.thumb || '',
             rating: item.rating,
             year: item.year,
             source: 'plex',
