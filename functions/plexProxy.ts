@@ -105,10 +105,11 @@ Deno.serve(async (req) => {
                     metadata.art = `${baseUrl}${metadata.art}?X-Plex-Token=${plexToken}`;
                 }
                 
-                // Add transcode stream URL if it's a movie
-                if (metadata.type === 'movie' && metadata.Media?.[0]?.Part?.[0]?.key) {
-                    // Use Plex transcode API for web player compatibility
-                    metadata.streamUrl = `${baseUrl}/video/:/transcode/universal/start.m3u8?path=${encodeURIComponent(metadata.Media[0].Part[0].key)}&mediaIndex=0&partIndex=0&protocol=hls&fastSeek=1&directPlay=0&directStream=0&subtitleSize=100&audioBoost=100&location=lan&X-Plex-Token=${plexToken}`;
+                // Add stream URL if it's a movie
+                if (metadata.type === 'movie' && metadata.Media?.[0]?.Part?.[0]) {
+                    const part = metadata.Media[0].Part[0];
+                    metadata.streamUrl = `${baseUrl}${part.key}?download=1&X-Plex-Token=${plexToken}`;
+                    console.log('Movie stream URL:', metadata.streamUrl.replace(plexToken, 'TOKEN'));
                 }
                 
                 // Add episode stream URLs if it's a show
@@ -138,8 +139,7 @@ Deno.serve(async (req) => {
                                     title: ep.title,
                                     index: ep.index,
                                     thumb: ep.thumb ? `${baseUrl}${ep.thumb}?X-Plex-Token=${plexToken}` : null,
-                                    streamUrl: part?.key ? `${baseUrl}${part.key}?X-Plex-Token=${plexToken}` : null,
-                                    directFileUrl: part?.id ? `${baseUrl}/library/parts/${part.id}/file.mkv?X-Plex-Token=${plexToken}` : null
+                                    streamUrl: part?.key ? `${baseUrl}${part.key}?download=1&X-Plex-Token=${plexToken}` : null
                                 };
                             })
                         });
