@@ -15,7 +15,13 @@ import { detectDevice, getPerformanceConfig } from "@/components/deviceDetection
 
 const INTRO_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-abstract-circular-light-trails-34208-large.mp4";
 
-const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68eeb940cdab39e5b8668523/ea04a0d3e_HushTVLogo.png";
+// HushTV text logo component - matches hushtv.com branding
+const HushTVLogo = ({ className = "" }) => (
+  <div className={`font-bold text-3xl ${className}`}>
+    <span className="text-white">hush</span>
+    <span className="text-cyan-400">tv.</span>
+  </div>
+);
 
 // HushTV Brand Colors from hushtv.com
 const BRAND_COLORS = {
@@ -254,22 +260,7 @@ export default function Layout({ children, currentPageName }) {
         <Sidebar className={`border-r border-blue-500/20 ${enableBlur ? 'bg-slate-900/95 backdrop-blur-xl' : 'bg-slate-900'}`}>
           <SidebarHeader className="border-b border-blue-500/20 p-6">
             <div className="flex items-center justify-center">
-              <div className="w-full bg-slate-950 rounded-xl p-4 shadow-lg shadow-blue-500/20 relative">
-                <img src={LOGO_URL} alt="HushTV" className="w-full h-auto" />
-                {/* Christmas Hat */}
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 -rotate-12">
-                  <svg width="60" height="50" viewBox="0 0 60 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    {/* Hat body */}
-                    <path d="M10 35 L30 5 L50 35 Z" fill="#DC2626" />
-                    {/* Hat trim */}
-                    <ellipse cx="30" cy="35" rx="22" ry="4" fill="#FFFFFF" />
-                    {/* Pom-pom */}
-                    <circle cx="30" cy="5" r="6" fill="#FFFFFF" />
-                    {/* Hat shadow/details */}
-                    <path d="M10 35 L30 5 L50 35 Z" fill="#B91C1C" opacity="0.3" />
-                  </svg>
-                </div>
-              </div>
+              <HushTVLogo className="text-4xl" />
             </div>
           </SidebarHeader>
           
@@ -314,18 +305,7 @@ export default function Layout({ children, currentPageName }) {
           <header className={`${enableBlur ? 'bg-slate-900/50 backdrop-blur-xl' : 'bg-slate-900'} border-b border-blue-500/20 px-6 py-4 md:hidden`}>
             <div className="flex items-center gap-4">
               <SidebarTrigger className="hover:bg-blue-500/20 p-2 rounded-lg transition-colors" />
-              <div className="h-8 w-32 relative">
-                <img src={LOGO_URL} alt="HushTV" className="h-full w-auto" />
-                {/* Christmas Hat for mobile */}
-                <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 -rotate-12">
-                  <svg width="30" height="25" viewBox="0 0 60 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10 35 L30 5 L50 35 Z" fill="#DC2626" />
-                    <ellipse cx="30" cy="35" rx="22" ry="4" fill="#FFFFFF" />
-                    <circle cx="30" cy="5" r="6" fill="#FFFFFF" />
-                    <path d="M10 35 L30 5 L50 35 Z" fill="#B91C1C" opacity="0.3" />
-                  </svg>
-                </div>
-              </div>
+              <HushTVLogo className="text-2xl" />
             </div>
           </header>
 

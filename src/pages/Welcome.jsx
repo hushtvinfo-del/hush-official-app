@@ -5,7 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { UserPlus, LogIn } from "lucide-react";
 import { motion } from "framer-motion";
 
-const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68eeb940cdab39e5b8668523/ea04a0d3e_HushTVLogo.png";
+const HushTVLogo = ({ className = "" }) => (
+  <div className={`font-bold ${className}`}>
+    <span className="text-white">hush</span>
+    <span className="text-cyan-400">tv.</span>
+  </div>
+);
 
 export default function Welcome() {
   return (
@@ -17,8 +22,8 @@ export default function Welcome() {
           transition={{ duration: 0.6 }}
           className="text-center mb-12"
         >
-          <div className="w-full max-w-md mx-auto mb-6 bg-slate-950 rounded-xl p-8 shadow-2xl shadow-blue-500/20">
-            <img src={LOGO_URL} alt="HushTV" className="w-full h-auto" />
+          <div className="w-full max-w-md mx-auto mb-6 flex items-center justify-center">
+            <HushTVLogo className="text-6xl md:text-7xl" />
           </div>
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Web Player</h2>
         </motion.div>
