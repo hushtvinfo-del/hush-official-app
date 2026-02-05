@@ -155,25 +155,25 @@ export default function Layout({ children, currentPageName }) {
       <div className="min-h-screen flex w-full bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
         <style>{`
           :root {
-            --background: 0 0% 0%;
+            --background: 222 47% 11%;
             --foreground: 210 40% 98%;
-            --card: 0 0% 0%;
+            --card: 222 47% 11%;
             --card-foreground: 210 40% 98%;
-            --popover: 0 0% 0%;
+            --popover: 222 47% 11%;
             --popover-foreground: 210 40% 98%;
-            --primary: 24 95% 53%;
+            --primary: 217 91% 60%;
             --primary-foreground: 210 40% 98%;
-            --secondary: 24 50% 20%;
+            --secondary: 221 83% 53%;
             --secondary-foreground: 210 40% 98%;
-            --muted: 24 30% 15%;
-            --muted-foreground: 25 20% 65%;
-            --accent: 24 50% 20%;
+            --muted: 217 33% 17%;
+            --muted-foreground: 215 20% 65%;
+            --accent: 188 94% 43%;
             --accent-foreground: 210 40% 98%;
             --destructive: 0 62.8% 30.6%;
             --destructive-foreground: 210 40% 98%;
-            --border: 24 30% 15%;
-            --input: 24 30% 15%;
-            --ring: 24 95% 53%;
+            --border: 217 33% 17%;
+            --input: 217 33% 17%;
+            --ring: 217 91% 60%;
             --radius: 0.5rem;
           }
           * {

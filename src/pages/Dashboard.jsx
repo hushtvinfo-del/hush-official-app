@@ -100,7 +100,7 @@ export default function Dashboard() {
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">My Accounts</h1>
-          <p className="text-orange-300">Manage your HushTV accounts</p>
+          <p className="text-cyan-300">Manage your HushTV accounts</p>
         </div>
 
         <div className="mb-6">
@@ -113,7 +113,7 @@ export default function Dashboard() {
             animate={{ opacity: 1, scale: 1 }}
             className="text-center py-16"
           >
-            <div className="w-24 h-24 bg-gradient-to-br from-orange-500 to-orange-700 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl">
+            <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl">
               <User2 className="w-12 h-12 text-white" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-2">No Accounts Yet</h3>
@@ -121,7 +121,7 @@ export default function Dashboard() {
             <Link to={createPageUrl('AddAccount')}>
               <Button 
                 size="lg" 
-                className="bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg"
+                className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white shadow-lg"
               >
                 <Plus className="w-5 h-5 mr-2" />
                 Add Your First Account
@@ -138,13 +138,13 @@ export default function Dashboard() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
                 >
-                  <Card className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl border-orange-500/30 hover:border-orange-500/60 transition-all group overflow-hidden">
+                  <Card className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all group overflow-hidden">
                     <CardContent className="p-0">
                       <div className="flex flex-col md:flex-row md:items-center">
                         {/* Account Info Section */}
                         <div className="flex-1 p-4 md:p-6">
                           <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-700 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
                               <User2 className="w-6 h-6 text-white" />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -158,9 +158,9 @@ export default function Dashboard() {
                         </div>
 
                         {/* Actions Section */}
-                        <div className="flex items-center gap-2 p-4 md:p-6 border-t md:border-t-0 md:border-l border-orange-500/20">
+                        <div className="flex items-center gap-2 p-4 md:p-6 border-t md:border-t-0 md:border-l border-blue-500/20">
                           <Link to={createPageUrl(`MainMenu?playlistId=${playlist.id}`)} className="flex-1 md:flex-none">
-                            <Button className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg">
+                            <Button className="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white shadow-lg">
                               <Play className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                               <span className="whitespace-nowrap">Watch Now</span>
                             </Button>
@@ -185,7 +185,7 @@ export default function Dashboard() {
             <Link to={createPageUrl('AddAccount')}>
               <Button 
                 size="lg" 
-                className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg group"
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white shadow-lg group"
               >
                 <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" />
                 Add New Account
@@ -196,7 +196,7 @@ export default function Dashboard() {
       </div>
 
       <AlertDialog open={!!playlistToDelete} onOpenChange={(open) => !open && setPlaylistToDelete(null)}>
-        <AlertDialogContent className="bg-gray-900 border-orange-500/30 max-w-md mx-4">
+        <AlertDialogContent className="bg-slate-900 border-blue-500/30 max-w-md mx-4">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white text-xl">Delete Account?</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
