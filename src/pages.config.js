@@ -69,6 +69,7 @@ import SeriesCategories from './pages/SeriesCategories';
 import SeriesDetails from './pages/SeriesDetails';
 import SeriesGrid from './pages/SeriesGrid';
 import Welcome from './pages/Welcome';
+import ServerBuildGuide from './pages/ServerBuildGuide';
 import __Layout from './Layout.jsx';
 
 
@@ -95,6 +96,7 @@ export const PAGES = {
     "SeriesDetails": SeriesDetails,
     "SeriesGrid": SeriesGrid,
     "Welcome": Welcome,
+    "ServerBuildGuide": ServerBuildGuide,
 }
 
 export const pagesConfig = {
