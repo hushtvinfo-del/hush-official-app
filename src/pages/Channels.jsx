@@ -294,7 +294,7 @@ export default function Channels() {
                       whileTap={{ scale: 0.95 }}
                     >
                       <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all cursor-pointer group overflow-hidden h-full flex flex-col">
-                        <CardContent className="p-3 relative flex-grow flex-col">
+                        <CardContent className="p-3 relative flex-grow flex flex-col">
                           <button
                             onClick={(e) => handleToggleFavorite(e, channel)}
                             className="absolute top-2 right-2 z-10 w-8 h-8 bg-gray-900/80 hover:bg-gray-800 rounded-full flex items-center justify-center transition-all"

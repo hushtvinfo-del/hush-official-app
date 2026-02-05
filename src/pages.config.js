@@ -68,8 +68,8 @@ import Player from './pages/Player';
 import SeriesCategories from './pages/SeriesCategories';
 import SeriesDetails from './pages/SeriesDetails';
 import SeriesGrid from './pages/SeriesGrid';
-import Welcome from './pages/Welcome';
 import ServerBuildGuide from './pages/ServerBuildGuide';
+import Welcome from './pages/Welcome';
 import __Layout from './Layout.jsx';
 
 
@@ -95,8 +95,8 @@ export const PAGES = {
     "SeriesCategories": SeriesCategories,
     "SeriesDetails": SeriesDetails,
     "SeriesGrid": SeriesGrid,
-    "Welcome": Welcome,
     "ServerBuildGuide": ServerBuildGuide,
+    "Welcome": Welcome,
 }
 
 export const pagesConfig = {
