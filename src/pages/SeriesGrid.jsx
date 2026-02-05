@@ -29,10 +29,11 @@ const fetchSeries = async (playlistId, categoryId) => {
             sectionId: plexSectionId
         });
         
+        // Backend already returns full URLs with tokens
         return (data || []).map(item => ({
             series_id: `plex_${item.ratingKey}`,
             name: item.title,
-            cover: item.thumb || '',
+            cover: item.thumb,
             rating: item.rating,
             year: item.year,
             source: 'plex',
