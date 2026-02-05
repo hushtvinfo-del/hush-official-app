@@ -77,7 +77,15 @@ Deno.serve(async (req) => {
                 headers: { 'Accept': 'application/json' }
             });
             const data = await response.json();
-            return Response.json(data.MediaContainer.Metadata || []);
+            const items = data.MediaContainer.Metadata || [];
+            
+            // Add full URLs for thumbnails
+            const itemsWithUrls = items.map(item => ({
+                ...item,
+                thumb: item.thumb ? `${baseUrl}${item.thumb}?X-Plex-Token=${plexToken}` : null
+            }));
+            
+            return Response.json(itemsWithUrls);
         }
 
         // Get metadata for a specific item
@@ -86,7 +94,19 @@ Deno.serve(async (req) => {
                 headers: { 'Accept': 'application/json' }
             });
             const data = await response.json();
-            return Response.json(data.MediaContainer.Metadata?.[0] || null);
+            const metadata = data.MediaContainer.Metadata?.[0] || null;
+            
+            if (metadata) {
+                // Add full URLs for thumbnails and art
+                if (metadata.thumb) {
+                    metadata.thumb = `${baseUrl}${metadata.thumb}?X-Plex-Token=${plexToken}`;
+                }
+                if (metadata.art) {
+                    metadata.art = `${baseUrl}${metadata.art}?X-Plex-Token=${plexToken}`;
+                }
+            }
+            
+            return Response.json(metadata);
         }
 
         return Response.json({ error: 'Invalid action' }, { status: 400 });
