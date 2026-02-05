@@ -21,14 +21,18 @@ const fetchSeries = async (playlistId, categoryId) => {
     const playlist = getPlaylistFromLocal(playlistId);
     if (!playlist) throw new Error("Playlist not found");
 
-    // Handle Plex VIP category (all libraries combined)
-    if (categoryId === 'plex_all') {
+    // Handle Plex categories
+    if (categoryId.startsWith('plex_') || categoryId === 'plex_all') {
         const { data: plexData } = await base44.functions.invoke('plexProxy', {
             action: 'get_libraries'
         });
         
         const allSeries = [];
-        for (const lib of plexData.shows || []) {
+        const libraries = categoryId === 'plex_all' 
+            ? plexData.shows || []
+            : (plexData.shows || []).filter(lib => `plex_${lib.key}` === categoryId);
+        
+        for (const lib of libraries) {
             const { data } = await base44.functions.invoke('plexProxy', {
                 action: 'get_library_items',
                 sectionId: lib.key
