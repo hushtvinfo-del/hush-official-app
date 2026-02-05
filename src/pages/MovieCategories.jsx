@@ -29,20 +29,13 @@ const fetchCategories = async (playlistId) => {
     });
     const xtreamCategories = Array.isArray(xtreamData) ? xtreamData : [];
 
-    // Add VIP category + individual Plex library categories
+    // Add individual Plex library categories
     try {
         const { data: plexData } = await base44.functions.invoke('plexProxy', {
             action: 'get_libraries'
         });
         
         if (plexData?.movies && plexData.movies.length > 0) {
-            const vipCategory = {
-                category_id: 'plex_all',
-                category_name: 'VIP',
-                source: 'plex',
-                isVip: true
-            };
-            
             const plexCategories = plexData.movies.map(lib => ({
                 category_id: `plex_${lib.key}`,
                 category_name: lib.title,
@@ -50,7 +43,7 @@ const fetchCategories = async (playlistId) => {
                 plexSectionId: lib.key
             }));
             
-            return [vipCategory, ...plexCategories, ...xtreamCategories];
+            return [...plexCategories, ...xtreamCategories];
         }
     } catch (plexError) {
         console.log('Plex not available:', plexError);
@@ -146,9 +139,9 @@ export default function MovieCategories() {
                 <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all cursor-pointer group overflow-hidden">
                   <CardContent className="p-6 flex items-center justify-between relative">
                     <div className="flex items-center gap-4 overflow-hidden">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${category.isVip ? 'bg-gradient-to-br from-amber-500/30 to-yellow-600/30' : category.source === 'plex' ? 'bg-gradient-to-br from-amber-500/20 to-yellow-600/20' : 'bg-gradient-to-br from-blue-500/20 to-blue-800/20'}`}>
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${category.source === 'plex' ? 'bg-gradient-to-br from-amber-500/20 to-yellow-600/20' : 'bg-gradient-to-br from-blue-500/20 to-blue-800/20'}`}>
                         {category.source === 'plex' ? (
-                          <span className={`text-xs font-bold ${category.isVip ? 'text-amber-400' : 'text-amber-500'}`}>VIP</span>
+                          <span className="text-xs font-bold text-amber-500">VIP</span>
                         ) : (
                           <Film className="w-6 h-6 text-cyan-400" />
                         )}

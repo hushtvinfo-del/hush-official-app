@@ -22,37 +22,23 @@ const fetchSeries = async (playlistId, categoryId) => {
     if (!playlist) throw new Error("Playlist not found");
 
     // Handle Plex categories
-    if (categoryId.startsWith('plex_') || categoryId === 'plex_all') {
-        const { data: plexData } = await base44.functions.invoke('plexProxy', {
-            action: 'get_libraries'
+    if (categoryId.startsWith('plex_')) {
+        const plexSectionId = categoryId.replace('plex_', '');
+        const { data } = await base44.functions.invoke('plexProxy', {
+            action: 'get_library_items',
+            sectionId: plexSectionId
         });
         
-        const allSeries = [];
-        const libraries = categoryId === 'plex_all' 
-            ? plexData.shows || []
-            : (plexData.shows || []).filter(lib => `plex_${lib.key}` === categoryId);
-        
-        for (const lib of libraries) {
-            const { data } = await base44.functions.invoke('plexProxy', {
-                action: 'get_library_items',
-                sectionId: lib.key
-            });
-            
-            const series = (data || []).map(item => ({
-                series_id: `plex_${item.ratingKey}`,
-                name: item.title,
-                cover: item.thumb,
-                rating: item.rating,
-                year: item.year,
-                source: 'plex',
-                plexRatingKey: item.ratingKey,
-                category_id: categoryId
-            }));
-            
-            allSeries.push(...series);
-        }
-        
-        return allSeries;
+        return (data || []).map(item => ({
+            series_id: `plex_${item.ratingKey}`,
+            name: item.title,
+            cover: item.thumb,
+            rating: item.rating,
+            year: item.year,
+            source: 'plex',
+            plexRatingKey: item.ratingKey,
+            category_id: categoryId
+        }));
     }
 
     if (categoryId === 'recently_added') {
