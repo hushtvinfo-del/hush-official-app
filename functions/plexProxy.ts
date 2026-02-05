@@ -131,13 +131,16 @@ Deno.serve(async (req) => {
                         
                         metadata.seasons.push({
                             seasonNumber: season.index,
-                            episodes: episodes.map(ep => ({
-                                ratingKey: ep.ratingKey,
-                                title: ep.title,
-                                index: ep.index,
-                                thumb: ep.thumb ? `${baseUrl}${ep.thumb}?X-Plex-Token=${plexToken}` : null,
-                                streamUrl: ep.Media?.[0]?.Part?.[0]?.key ? `${baseUrl}/video/:/transcode/universal/start.m3u8?path=${encodeURIComponent(ep.Media[0].Part[0].key)}&mediaIndex=0&partIndex=0&protocol=hls&fastSeek=1&directPlay=0&directStream=0&subtitleSize=100&audioBoost=100&location=lan&X-Plex-Token=${plexToken}` : null
-                            }))
+                            episodes: episodes.map(ep => {
+                                const partKey = ep.Media?.[0]?.Part?.[0]?.key;
+                                return {
+                                    ratingKey: ep.ratingKey,
+                                    title: ep.title,
+                                    index: ep.index,
+                                    thumb: ep.thumb ? `${baseUrl}${ep.thumb}?X-Plex-Token=${plexToken}` : null,
+                                    streamUrl: partKey ? `${baseUrl}${partKey}?X-Plex-Token=${plexToken}` : null
+                                };
+                            })
                         });
                     }
                 }
