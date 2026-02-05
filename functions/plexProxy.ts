@@ -16,10 +16,28 @@ Deno.serve(async (req) => {
 
         // Get all library sections
         if (action === 'get_libraries') {
-            const response = await fetch(`${baseUrl}/library/sections?X-Plex-Token=${plexToken}`, {
-                headers: { 'Accept': 'application/json' }
+            const url = `${baseUrl}/library/sections?X-Plex-Token=${plexToken}`;
+            console.log('Fetching Plex libraries from:', url.replace(plexToken, 'TOKEN'));
+            
+            const response = await fetch(url, {
+                headers: { 
+                    'Accept': 'application/json',
+                    'X-Plex-Token': plexToken
+                }
             });
-            const data = await response.json();
+            
+            const text = await response.text();
+            console.log('Response status:', response.status);
+            console.log('Response preview:', text.substring(0, 200));
+            
+            if (!response.ok) {
+                return Response.json({ 
+                    error: `Plex server returned status ${response.status}`,
+                    details: text.substring(0, 500)
+                }, { status: 500 });
+            }
+            
+            const data = JSON.parse(text);
             
             return Response.json({
                 movies: data.MediaContainer.Directory?.filter(d => d.type === 'movie') || [],
