@@ -24,6 +24,32 @@ const fetchVodInfo = async (playlistId, vodId) => {
     const playlist = getPlaylistFromLocal(playlistId);
     if (!playlist) throw new Error("Playlist not found");
 
+    // Handle Plex content
+    if (vodId.startsWith('plex_')) {
+        const plexRatingKey = vodId.replace('plex_', '');
+        const { data } = await base44.functions.invoke('plexProxy', {
+            action: 'get_metadata',
+            ratingKey: plexRatingKey
+        });
+        
+        // Convert Plex format to Xtream-like format for compatibility
+        return {
+            info: {
+                name: data.title,
+                movie_image: data.thumb,
+                plot: data.summary,
+                rating: data.rating,
+                releaseDate: data.originallyAvailableAt,
+                duration_secs: Math.round((data.duration || 0) / 1000),
+                backdrop: data.art
+            },
+            movie_data: {
+                stream_id: vodId,
+                container_extension: 'mp4'
+            }
+        };
+    }
+
     const { data } = await base44.functions.invoke('xtreamProxy', {
         host: playlist.host,
         username: playlist.username,

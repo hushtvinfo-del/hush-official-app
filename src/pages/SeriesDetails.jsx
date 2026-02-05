@@ -23,6 +23,28 @@ const fetchSeriesInfo = async (playlistId, seriesId) => {
     const playlist = getPlaylistFromLocal(playlistId);
     if (!playlist) throw new Error("Playlist not found");
 
+    // Handle Plex content
+    if (seriesId.startsWith('plex_')) {
+        const plexRatingKey = seriesId.replace('plex_', '');
+        const { data } = await base44.functions.invoke('plexProxy', {
+            action: 'get_metadata',
+            ratingKey: plexRatingKey
+        });
+        
+        // Convert Plex format to Xtream-like format for compatibility
+        return {
+            info: {
+                name: data.title,
+                cover: data.thumb,
+                plot: data.summary,
+                rating: data.rating,
+                releaseDate: data.originallyAvailableAt,
+                backdrop: data.art
+            },
+            episodes: {}
+        };
+    }
+
     const { data } = await base44.functions.invoke('xtreamProxy', {
         host: playlist.host,
         username: playlist.username,
