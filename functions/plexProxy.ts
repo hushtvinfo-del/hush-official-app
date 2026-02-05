@@ -132,13 +132,14 @@ Deno.serve(async (req) => {
                         metadata.seasons.push({
                             seasonNumber: season.index,
                             episodes: episodes.map(ep => {
-                                const partKey = ep.Media?.[0]?.Part?.[0]?.key;
+                                const part = ep.Media?.[0]?.Part?.[0];
                                 return {
                                     ratingKey: ep.ratingKey,
                                     title: ep.title,
                                     index: ep.index,
                                     thumb: ep.thumb ? `${baseUrl}${ep.thumb}?X-Plex-Token=${plexToken}` : null,
-                                    streamUrl: partKey ? `${baseUrl}${partKey}?X-Plex-Token=${plexToken}` : null
+                                    streamUrl: part?.key ? `${baseUrl}${part.key}?X-Plex-Token=${plexToken}` : null,
+                                    directFileUrl: part?.id ? `${baseUrl}/library/parts/${part.id}/file.mkv?X-Plex-Token=${plexToken}` : null
                                 };
                             })
                         });
