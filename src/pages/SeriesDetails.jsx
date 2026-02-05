@@ -1,4 +1,3 @@
-
 import React from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -137,10 +136,10 @@ Return ONLY the exact series names that best match, in order of relevance.`;
     if (isLoadingRecs) {
         return (
             <div className="mt-6">
-                <Card className="bg-gray-800/30 border-orange-500/30 overflow-hidden">
+                <Card className="bg-slate-800/30 border-blue-500/30 overflow-hidden">
                     <CardContent className="p-4">
                         <div className="flex items-center justify-center py-8">
-                            <Loader2 className="w-6 h-6 animate-spin text-orange-400 mr-2" />
+                            <Loader2 className="w-6 h-6 animate-spin text-cyan-400 mr-2" />
                             <span className="text-white">Finding similar series...</span>
                         </div>
                     </CardContent>
@@ -165,11 +164,11 @@ Return ONLY the exact series names that best match, in order of relevance.`;
 
     return (
         <div className="mt-6">
-            <Card className="bg-gray-800/30 border-orange-500/30 overflow-hidden">
+            <Card className="bg-slate-800/30 border-blue-500/30 overflow-hidden">
                 <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                            <Star className="w-5 h-5 text-orange-400" />
+                            <Star className="w-5 h-5 text-cyan-400" />
                             More like this...
                         </h3>
                         <div className="flex gap-1">
@@ -177,7 +176,7 @@ Return ONLY the exact series names that best match, in order of relevance.`;
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => scroll('left')}
-                                className="h-8 w-8 text-orange-400 hover:bg-orange-500/20"
+                                className="h-8 w-8 text-cyan-400 hover:bg-blue-500/20"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                             </Button>
@@ -185,7 +184,7 @@ Return ONLY the exact series names that best match, in order of relevance.`;
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => scroll('right')}
-                                className="h-8 w-8 text-orange-400 hover:bg-orange-500/20"
+                                className="h-8 w-8 text-cyan-400 hover:bg-blue-500/20"
                             >
                                 <ChevronRight className="w-4 h-4" />
                             </Button>
@@ -219,10 +218,10 @@ Return ONLY the exact series names that best match, in order of relevance.`;
                                                                 />
                                                             ) : null}
                                                             <div className={`w-full h-full ${item.cover ? 'hidden' : 'flex'} items-center justify-center absolute inset-0 bg-gray-800`}>
-                                                                <Clapperboard className="w-10 h-10 text-orange-400" />
+                                                                <Clapperboard className="w-10 h-10 text-cyan-400" />
                                                             </div>
                                                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                <div className="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center">
+                                                                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                                                                     <Play className="w-5 h-5 text-white ml-0.5" />
                                                                 </div>
                                                             </div>
@@ -548,7 +547,7 @@ export default function SeriesDetails() {
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <Button variant="ghost" onClick={() => navigate(-1)} className="text-orange-300 hover:text-white hover:bg-orange-500/20">
+          <Button variant="ghost" onClick={() => navigate(-1)} className="text-cyan-300 hover:text-white hover:bg-blue-500/20">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
@@ -586,7 +585,7 @@ export default function SeriesDetails() {
         <div className="flex flex-col md:flex-row gap-8 items-start mb-8">
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="w-full md:w-1/3 relative">
                 <div className="aspect-[2/3] bg-gray-800 rounded-xl overflow-hidden shadow-lg relative">
-                    {displayData.poster ? <img src={displayData.poster} alt={displayData.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Tv className="w-24 h-24 text-orange-500"/></div>}
+                    {displayData.poster ? <img src={displayData.poster} alt={displayData.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Tv className="w-24 h-24 text-cyan-500"/></div>}
                     {displayData.rating && (
                       <div className="absolute top-3 right-3">
                         <RatingBadge rating={displayData.rating} size="lg" />
@@ -596,12 +595,12 @@ export default function SeriesDetails() {
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{delay: 0.1}} className="w-full md:w-2/3">
                 <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">{displayData.name}</h1>
-                <p className="text-orange-300 text-lg mb-4">{Object.keys(seasons).length} seasons</p>
+                <p className="text-cyan-300 text-lg mb-4">{Object.keys(seasons).length} seasons</p>
                 <Button
                   size="lg"
                   variant="outline"
                   onClick={toggleFavorite}
-                  className={`border-orange-500/30 hover:bg-orange-500/20 mb-4 w-full sm:w-auto transition-all ${isFavorite ? 'text-yellow-400 border-yellow-400/40' : 'text-orange-300'}`}
+                  className={`border-blue-500/30 hover:bg-blue-500/20 mb-4 w-full sm:w-auto transition-all ${isFavorite ? 'text-yellow-400 border-yellow-400/40' : 'text-cyan-300'}`}
                   disabled={isMutating}
                 >
                   <Star className={`w-5 h-5 mr-2 transition-all ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />
@@ -611,8 +610,8 @@ export default function SeriesDetails() {
 
                 {(rpdbData || tmdbData) && (
                   <Accordion type="single" collapsible className="my-6">
-                    <AccordionItem value="ratings" className="border-orange-500/20">
-                      <AccordionTrigger className="text-white hover:text-orange-300 py-3">
+                    <AccordionItem value="ratings" className="border-blue-500/20">
+                      <AccordionTrigger className="text-white hover:text-cyan-300 py-3">
                         <div className="flex items-center gap-2">
                           <Star className="w-4 h-4" />
                           <span>Rating Details</span>
@@ -659,7 +658,7 @@ export default function SeriesDetails() {
                         <div className="flex flex-wrap gap-2">
                             {displayData.cast.slice(0,10).map(actor => (
                                 <Link key={actor.id} to={createPageUrl(`CastSearch?playlistId=${playlistId}&actorName=${encodeURIComponent(actor.name.trim())}&actorId=${actor.id}`)}>
-                                    <Badge variant="secondary" className="cursor-pointer hover:bg-orange-500/30 transition-colors">{actor.name.trim()}</Badge>
+                                    <Badge variant="secondary" className="cursor-pointer hover:bg-blue-500/30 transition-colors">{actor.name.trim()}</Badge>
                                 </Link>
                             ))}
                         </div>
@@ -672,7 +671,7 @@ export default function SeriesDetails() {
 
         <Accordion type="single" collapsible className="w-full" defaultValue="season-1">
           {Object.entries(seasons).sort(([a], [b]) => parseInt(a) - parseInt(b)).map(([seasonNum, episodes]) => (
-            <AccordionItem key={seasonNum} value={`season-${seasonNum}`} className="border-orange-500/20">
+            <AccordionItem key={seasonNum} value={`season-${seasonNum}`} className="border-blue-500/20">
               <AccordionTrigger className="hover:no-underline text-2xl font-semibold text-white py-6">Season {seasonNum}</AccordionTrigger>
               <AccordionContent>
                 <div className="flex flex-col gap-2">
@@ -683,7 +682,7 @@ export default function SeriesDetails() {
                     return (
                         <motion.div 
                           key={index}
-                          whileHover={{ backgroundColor: 'rgba(234, 88, 12, 0.2)' }} 
+                          whileHover={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }} 
                           className="flex items-center justify-between p-4 rounded-lg transition-colors group"
                         >
                           <Link to={episodePlayerUrl} className="flex-1">
@@ -691,7 +690,7 @@ export default function SeriesDetails() {
                           </Link>
                           <div className="flex items-center gap-2">
                             <Link to={episodePlayerUrl}>
-                              <Button variant="ghost" size="icon" className="text-orange-400 hover:bg-orange-500/20">
+                              <Button variant="ghost" size="icon" className="text-cyan-400 hover:bg-blue-500/20">
                                 <Play className="w-5 h-5"/>
                               </Button>
                             </Link>
@@ -700,7 +699,7 @@ export default function SeriesDetails() {
                                 variant="ghost" 
                                 size="icon" 
                                 onClick={() => handleCastEpisode(ep)}
-                                className="text-orange-400 hover:bg-orange-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="text-cyan-400 hover:bg-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
                                 title="Cast to TV"
                               >
                                 <Cast className="w-5 h-5"/>

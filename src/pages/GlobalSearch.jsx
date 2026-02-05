@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -799,11 +798,11 @@ export default function GlobalSearch() {
                         )}
                         
                         {searchResults.searchType === 'topic' && searchResults.topics && (
-                            <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-lg">
-                                <p className="text-orange-200 text-lg">
+                            <div className="bg-cyan-500/10 border border-cyan-500/30 p-4 rounded-lg">
+                                <p className="text-cyan-200 text-lg">
                                     Found {totalResults} titles related to <span className="font-bold">{searchResults.topics.join(', ')}</span>
                                 </p>
-                                <p className="text-orange-300 text-sm mt-1">
+                                <p className="text-cyan-300 text-sm mt-1">
                                     AI-powered topic search
                                 </p>
                             </div>

@@ -155,7 +155,7 @@ export default function CastSearch() {
                 <Button 
                     variant="ghost" 
                     onClick={() => navigate(-1)} 
-                    className="mb-6 text-orange-300 hover:text-white hover:bg-orange-500/20"
+                    className="mb-6 text-cyan-300 hover:text-white hover:bg-blue-500/20"
                 >
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back
@@ -163,16 +163,16 @@ export default function CastSearch() {
 
                 <div className="mb-8">
                     <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 flex items-center gap-3">
-                        <User className="text-orange-400" />
+                        <User className="text-cyan-400" />
                         {results?.actorName || actorName}
                     </h1>
-                    <p className="text-orange-300">
+                    <p className="text-cyan-300">
                         Content featuring this actor in your library
                     </p>
                 </div>
 
                 {isLoading && (
-                    <div className="flex flex-col items-center gap-3 text-orange-300 py-16">
+                    <div className="flex flex-col items-center gap-3 text-cyan-300 py-16">
                         <Loader2 className="w-12 h-12 animate-spin" />
                         <span className="text-lg">Searching filmography...</span>
                         <span className="text-sm text-gray-400">Checking TMDB and matching with your library</span>
@@ -198,8 +198,8 @@ export default function CastSearch() {
                             </div>
                         ) : (
                             <div className="space-y-8">
-                                <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-lg">
-                                    <p className="text-orange-200 text-lg">
+                                <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-lg">
+                                    <p className="text-cyan-200 text-lg">
                                         Found <span className="font-bold">{totalResults}</span> titles featuring {results.actorName || actorName}
                                     </p>
                                 </div>
@@ -207,7 +207,7 @@ export default function CastSearch() {
                                 {results.movies && results.movies.length > 0 && (
                                     <div>
                                         <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                                            <Film className="text-orange-400" />
+                                            <Film className="text-cyan-400" />
                                             Movies ({results.movies.length})
                                         </h2>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -217,7 +217,7 @@ export default function CastSearch() {
                                                         whileHover={{ scale: 1.05 }}
                                                         className="h-full"
                                                     >
-                                                        <Card className="bg-gray-800/50 hover:border-orange-500/60 transition-all">
+                                                        <Card className="bg-slate-800/50 hover:border-blue-500/60 transition-all">
                                                             <CardContent className="p-2">
                                                                 <div className="aspect-[2/3] bg-gray-900 mb-2 rounded overflow-hidden relative">
                                                                     {movie.stream_icon ? (
@@ -232,7 +232,7 @@ export default function CastSearch() {
                                                                         />
                                                                     ) : null}
                                                                     <div className="w-full h-full absolute inset-0 bg-gray-800 flex items-center justify-center">
-                                                                        <Film className="w-10 h-10 text-orange-400" />
+                                                                        <Film className="w-10 h-10 text-cyan-400" />
                                                                     </div>
                                                                 </div>
                                                                 <p className="text-white text-sm truncate">{movie.name}</p>
@@ -248,7 +248,7 @@ export default function CastSearch() {
                                 {results.series && results.series.length > 0 && (
                                     <div>
                                         <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                                            <Clapperboard className="text-orange-400" />
+                                            <Clapperboard className="text-cyan-400" />
                                             Series ({results.series.length})
                                         </h2>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -258,7 +258,7 @@ export default function CastSearch() {
                                                         whileHover={{ scale: 1.05 }}
                                                         className="h-full"
                                                     >
-                                                        <Card className="bg-gray-800/50 hover:border-orange-500/60 transition-all">
+                                                        <Card className="bg-slate-800/50 hover:border-blue-500/60 transition-all">
                                                             <CardContent className="p-2">
                                                                 <div className="aspect-[2/3] bg-gray-900 mb-2 rounded overflow-hidden relative">
                                                                     {series.cover ? (
@@ -273,7 +273,7 @@ export default function CastSearch() {
                                                                         />
                                                                     ) : null}
                                                                     <div className="w-full h-full absolute inset-0 bg-gray-800 flex items-center justify-center">
-                                                                        <Clapperboard className="w-10 h-10 text-orange-400" />
+                                                                        <Clapperboard className="w-10 h-10 text-cyan-400" />
                                                                     </div>
                                                                 </div>
                                                                 <p className="text-white text-sm truncate">{series.name}</p>

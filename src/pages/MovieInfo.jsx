@@ -137,10 +137,10 @@ Return ONLY the exact movie names that best match, in order of relevance.`;
     if (isLoadingRecs) {
         return (
             <div className="mt-6">
-                <Card className="bg-gray-800/30 border-orange-500/30 overflow-hidden">
+                <Card className="bg-slate-800/30 border-blue-500/30 overflow-hidden">
                     <CardContent className="p-4">
                         <div className="flex items-center justify-center py-8">
-                            <Loader2 className="w-6 h-6 animate-spin text-orange-400 mr-2" />
+                            <Loader2 className="w-6 h-6 animate-spin text-cyan-400 mr-2" />
                             <span className="text-white">Finding similar movies...</span>
                         </div>
                     </CardContent>
@@ -165,11 +165,11 @@ Return ONLY the exact movie names that best match, in order of relevance.`;
 
     return (
         <div className="mt-6">
-            <Card className="bg-gray-800/30 border-orange-500/30 overflow-hidden">
+            <Card className="bg-slate-800/30 border-blue-500/30 overflow-hidden">
                 <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                            <Star className="w-5 h-5 text-orange-400" />
+                            <Star className="w-5 h-5 text-cyan-400" />
                             More like this...
                         </h3>
                         <div className="flex gap-1">
@@ -177,7 +177,7 @@ Return ONLY the exact movie names that best match, in order of relevance.`;
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => scroll('left')}
-                                className="h-8 w-8 text-orange-400 hover:bg-orange-500/20"
+                                className="h-8 w-8 text-cyan-400 hover:bg-blue-500/20"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                             </Button>
@@ -185,7 +185,7 @@ Return ONLY the exact movie names that best match, in order of relevance.`;
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => scroll('right')}
-                                className="h-8 w-8 text-orange-400 hover:bg-orange-500/20"
+                                className="h-8 w-8 text-cyan-400 hover:bg-blue-500/20"
                             >
                                 <ChevronRight className="w-4 h-4" />
                             </Button>
@@ -219,10 +219,10 @@ Return ONLY the exact movie names that best match, in order of relevance.`;
                                                                 />
                                                             ) : null}
                                                             <div className={`w-full h-full ${item.stream_icon ? 'hidden' : 'flex'} items-center justify-center absolute inset-0 bg-gray-800`}>
-                                                                <Film className="w-10 h-10 text-orange-400" />
+                                                                <Film className="w-10 h-10 text-cyan-400" />
                                                             </div>
                                                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                <div className="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center">
+                                                                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                                                                     <Play className="w-5 h-5 text-white ml-0.5" />
                                                                 </div>
                                                             </div>
@@ -398,7 +398,7 @@ export default function MovieInfo() {
       
       <div className="relative p-4 md:p-8">
         <div className="max-w-6xl mx-auto">
-          <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 text-orange-300 hover:text-white hover:bg-orange-500/20">
+          <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 text-cyan-300 hover:text-white hover:bg-blue-500/20">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
@@ -410,7 +410,7 @@ export default function MovieInfo() {
                   <img src={displayData.poster} alt={displayData.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <Film className="w-24 h-24 text-orange-500"/>
+                    <Film className="w-24 h-24 text-cyan-500"/>
                   </div>
                 )}
                 {displayData.rating && (
@@ -436,7 +436,7 @@ export default function MovieInfo() {
                   </Badge>
                 )}
                 {displayData.genres.map(genre => (
-                  <Badge key={genre.id} variant="outline" className="border-orange-500/30 text-orange-300">
+                  <Badge key={genre.id} variant="outline" className="border-blue-500/30 text-cyan-300">
                     {genre.name}
                   </Badge>
                 ))}
@@ -444,7 +444,7 @@ export default function MovieInfo() {
 
               <div className="flex gap-3 mb-6 flex-wrap">
                 <Link to={playerUrl}>
-                  <Button size="lg" className="bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 shadow-lg">
+                  <Button size="lg" className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 shadow-lg">
                     <Play className="w-5 h-5 mr-2" />
                     Play Movie
                   </Button>
@@ -453,7 +453,7 @@ export default function MovieInfo() {
                   size="lg"
                   variant="outline"
                   onClick={toggleFavorite}
-                  className={`border-orange-500/30 hover:bg-orange-500/20 transition-all ${isFavorite ? 'text-yellow-400 border-yellow-400/40' : 'text-orange-300'}`}
+                  className={`border-blue-500/30 hover:bg-blue-500/20 transition-all ${isFavorite ? 'text-yellow-400 border-yellow-400/40' : 'text-cyan-300'}`}
                   disabled={isMutating}
                 >
                   <Star className={`w-5 h-5 mr-2 transition-all ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />
@@ -465,8 +465,8 @@ export default function MovieInfo() {
 
               {(rpdbData || tmdbData) && (
                 <Accordion type="single" collapsible className="mb-6">
-                  <AccordionItem value="ratings" className="border-orange-500/20">
-                    <AccordionTrigger className="text-white hover:text-orange-300 py-3">
+                  <AccordionItem value="ratings" className="border-blue-500/20">
+                    <AccordionTrigger className="text-white hover:text-cyan-300 py-3">
                       <div className="flex items-center gap-2">
                         <Star className="w-4 h-4" />
                         <span>Rating Details</span>
@@ -513,7 +513,7 @@ export default function MovieInfo() {
                   <div className="flex flex-wrap gap-2">
                     {displayData.cast.slice(0, 10).map(actor => (
                       <Link key={actor.id} to={createPageUrl(`CastSearch?playlistId=${playlistId}&actorName=${encodeURIComponent(actor.name.trim())}&actorId=${actor.id}`)}>
-                        <Badge variant="secondary" className="cursor-pointer hover:bg-orange-500/30 transition-colors text-sm">
+                        <Badge variant="secondary" className="cursor-pointer hover:bg-blue-500/30 transition-colors text-sm">
                           {actor.name.trim()}
                         </Badge>
                       </Link>
