@@ -72,7 +72,7 @@ export default function Layout({ children, currentPageName }) {
 
     const manifest = {
       short_name: "HushTV",
-      name: "HushTV Web Player",
+      name: "HushTV Official App",
       icons: [
         {
           src: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/apps/68eeb940-cdab-39e5-b866-85235b0baac9/res/tv-icon-192.png",

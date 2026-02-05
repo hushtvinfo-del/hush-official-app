@@ -25,7 +25,7 @@ export default function Welcome() {
           <div className="w-full max-w-md mx-auto mb-6 flex items-center justify-center">
             <HushTVLogo className="text-6xl md:text-7xl" />
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Web Player</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Official App</h2>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
