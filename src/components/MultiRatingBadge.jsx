@@ -21,8 +21,8 @@ export default function MultiRatingBadge({ ratings, size = "sm" }) {
                 </div>
             )}
             {ratings.audience && (
-                <div className="flex items-center gap-1 bg-orange-500/20 px-2 py-1 rounded-md">
-                    <Popcorn className={`${iconSize} text-orange-400 fill-orange-400`} />
+                <div className="flex items-center gap-1 bg-cyan-500/20 px-2 py-1 rounded-md">
+                    <Popcorn className={`${iconSize} text-cyan-400 fill-cyan-400`} />
                     <span className="text-white font-semibold">{ratings.audience}%</span>
                 </div>
             )}

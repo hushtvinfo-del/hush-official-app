@@ -206,10 +206,10 @@ export default function FranchiseBoxSet({ playlistId, currentMovieId, currentMov
                 animate={{ opacity: 1, y: 0 }} 
                 className="mt-6"
             >
-                <Card className="bg-gradient-to-r from-orange-900/30 to-amber-900/30 backdrop-blur-xl border-orange-500/30 overflow-hidden">
+                <Card className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 backdrop-blur-xl border-blue-500/30 overflow-hidden">
                     <CardContent className="p-4">
                         <div className="flex items-center justify-center py-8">
-                            <Loader2 className="w-6 h-6 animate-spin text-orange-400 mr-2" />
+                            <Loader2 className="w-6 h-6 animate-spin text-cyan-400 mr-2" />
                             <span className="text-white">Searching movie database for box sets...</span>
                         </div>
                     </CardContent>
@@ -229,14 +229,14 @@ export default function FranchiseBoxSet({ playlistId, currentMovieId, currentMov
             transition={{ delay: 0.2 }}
             className="mt-6"
         >
-            <Card className="bg-gradient-to-r from-orange-900/30 to-amber-900/30 backdrop-blur-xl border-orange-500/30 overflow-hidden">
+            <Card className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 backdrop-blur-xl border-blue-500/30 overflow-hidden">
                 <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex-1">
                             <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-1">
                                 {franchiseData.franchise_name}
                             </h2>
-                            <p className="text-xs text-orange-200/80">
+                            <p className="text-xs text-cyan-200/80">
                                 Watch the complete collection in chronological order
                             </p>
                         </div>
@@ -245,7 +245,7 @@ export default function FranchiseBoxSet({ playlistId, currentMovieId, currentMov
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => scroll('left')}
-                                className="h-8 w-8 text-orange-400 hover:bg-orange-500/20"
+                                className="h-8 w-8 text-cyan-400 hover:bg-blue-500/20"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                             </Button>
@@ -253,7 +253,7 @@ export default function FranchiseBoxSet({ playlistId, currentMovieId, currentMov
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => scroll('right')}
-                                className="h-8 w-8 text-orange-400 hover:bg-orange-500/20"
+                                className="h-8 w-8 text-cyan-400 hover:bg-blue-500/20"
                             >
                                 <ChevronRight className="w-4 h-4" />
                             </Button>
@@ -277,7 +277,7 @@ export default function FranchiseBoxSet({ playlistId, currentMovieId, currentMov
                                                     whileHover={{ scale: 1.05 }} 
                                                     className="h-full"
                                                 >
-                                                    <div className="bg-gray-900/50 rounded-lg overflow-hidden group-hover:bg-gray-900/70 transition-all shadow-lg hover:shadow-orange-500/20 border border-orange-500/20">
+                                                    <div className="bg-gray-900/50 rounded-lg overflow-hidden group-hover:bg-gray-900/70 transition-all shadow-lg hover:shadow-blue-500/20 border border-blue-500/20">
                                                         <div className="aspect-[2/3] bg-gray-900 relative">
                                                             {poster ? (
                                                                 <img 
@@ -292,26 +292,26 @@ export default function FranchiseBoxSet({ playlistId, currentMovieId, currentMov
                                                                     }}
                                                                 />
                                                             ) : null}
-                                                            <div style={{ display: poster ? 'none' : 'flex' }} className="w-full h-full items-center justify-center absolute inset-0 bg-gradient-to-br from-orange-800 to-amber-800">
+                                                            <div style={{ display: poster ? 'none' : 'flex' }} className="w-full h-full items-center justify-center absolute inset-0 bg-gradient-to-br from-blue-800 to-cyan-800">
                                                                 <Film className="w-10 h-10 text-white" />
                                                             </div>
                                                             
-                                                            <div className="absolute top-2 left-2 bg-orange-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
+                                                            <div className="absolute top-2 left-2 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
                                                                 #{index + 1}
                                                             </div>
                                                             
                                                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                <div className="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center">
+                                                                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                                                                     <Play className="w-5 h-5 text-white ml-0.5" />
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div className="p-2 bg-gradient-to-r from-orange-900/50 to-amber-900/50">
+                                                        <div className="p-2 bg-gradient-to-r from-blue-900/50 to-cyan-900/50">
                                                             <p className="text-xs font-semibold text-white truncate" title={movie.tmdb?.title || movie.name}>
                                                                 {movie.tmdb?.title || movie.name}
                                                             </p>
                                                             {releaseYear && (
-                                                                <p className="text-[10px] text-orange-300">
+                                                                <p className="text-[10px] text-cyan-300">
                                                                     {releaseYear}
                                                                 </p>
                                                             )}
@@ -327,10 +327,10 @@ export default function FranchiseBoxSet({ playlistId, currentMovieId, currentMov
                         </ScrollArea>
                     </div>
                     <div className="flex items-center justify-between mt-3">
-                        <p className="text-xs text-orange-300">
+                        <p className="text-xs text-cyan-300">
                             ✨ {franchiseData.movies.length} {franchiseData.movies.length === 1 ? 'movie' : 'movies'} • Sorted chronologically
                         </p>
-                        <p className="text-[10px] text-orange-400/70">
+                        <p className="text-[10px] text-cyan-400/70">
                             Powered by TMDb
                         </p>
                     </div>
