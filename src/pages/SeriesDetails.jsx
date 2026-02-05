@@ -40,7 +40,7 @@ const fetchSeriesInfo = async (playlistId, seriesId) => {
                     id: `plex_${ep.ratingKey}`,
                     episode_num: ep.index,
                     title: ep.title,
-                    container_extension: 'mp4',
+                    container_extension: 'm3u8',
                     info: {
                         movie_image: ep.thumb
                     },

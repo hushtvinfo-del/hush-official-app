@@ -105,9 +105,10 @@ Deno.serve(async (req) => {
                     metadata.art = `${baseUrl}${metadata.art}?X-Plex-Token=${plexToken}`;
                 }
                 
-                // Add stream URL if it's a movie
+                // Add transcode stream URL if it's a movie
                 if (metadata.type === 'movie' && metadata.Media?.[0]?.Part?.[0]?.key) {
-                    metadata.streamUrl = `${baseUrl}${metadata.Media[0].Part[0].key}?X-Plex-Token=${plexToken}`;
+                    // Use Plex transcode API for web player compatibility
+                    metadata.streamUrl = `${baseUrl}/video/:/transcode/universal/start.m3u8?path=${encodeURIComponent(metadata.Media[0].Part[0].key)}&mediaIndex=0&partIndex=0&protocol=hls&fastSeek=1&directPlay=0&directStream=0&subtitleSize=100&audioBoost=100&location=lan&X-Plex-Token=${plexToken}`;
                 }
                 
                 // Add episode stream URLs if it's a show
@@ -135,7 +136,7 @@ Deno.serve(async (req) => {
                                 title: ep.title,
                                 index: ep.index,
                                 thumb: ep.thumb ? `${baseUrl}${ep.thumb}?X-Plex-Token=${plexToken}` : null,
-                                streamUrl: ep.Media?.[0]?.Part?.[0]?.key ? `${baseUrl}${ep.Media[0].Part[0].key}?X-Plex-Token=${plexToken}` : null
+                                streamUrl: ep.Media?.[0]?.Part?.[0]?.key ? `${baseUrl}/video/:/transcode/universal/start.m3u8?path=${encodeURIComponent(ep.Media[0].Part[0].key)}&mediaIndex=0&partIndex=0&protocol=hls&fastSeek=1&directPlay=0&directStream=0&subtitleSize=100&audioBoost=100&location=lan&X-Plex-Token=${plexToken}` : null
                             }))
                         });
                     }

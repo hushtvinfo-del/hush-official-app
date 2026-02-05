@@ -45,7 +45,7 @@ const fetchVodInfo = async (playlistId, vodId) => {
             },
             movie_data: {
                 stream_id: vodId,
-                container_extension: 'mp4',
+                container_extension: 'm3u8',
                 stream_url: data.streamUrl
             },
             source: 'plex'
