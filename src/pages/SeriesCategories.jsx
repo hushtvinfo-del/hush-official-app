@@ -87,47 +87,47 @@ export default function SeriesCategories() {
   );
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
+    <div className="min-h-screen p-3 sm:p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         <Button
           variant="ghost"
           onClick={() => navigate(createPageUrl(`MainMenu?playlistId=${playlistId}`))}
-          className="mb-6 text-cyan-300 hover:text-white hover:bg-blue-500/20"
+          className="mb-4 sm:mb-6 text-cyan-300 hover:text-white hover:bg-blue-500/20 text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Main Menu
         </Button>
 
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">Series Categories</h1>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-6 sm:mb-8">Series Categories</h1>
 
-        <form onSubmit={handleSearch} className="mb-6">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <form onSubmit={handleSearch} className="mb-4 sm:mb-6">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
             <Input
               type="text"
               placeholder="Search for series..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-slate-800/50 border-blue-500/30 text-white placeholder:text-gray-500 focus:border-blue-500"
+              className="pl-9 sm:pl-10 text-sm sm:text-base bg-slate-800/50 border-blue-500/30 text-white placeholder:text-gray-500 focus:border-blue-500 w-full"
             />
           </div>
         </form>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
           <Link to={createPageUrl(`SeriesGrid?playlistId=${playlistId}&categoryId=recently_added&categoryName=${encodeURIComponent('Recently Added')}`)}>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Card className="bg-gradient-to-br from-blue-600/30 to-cyan-600/30 backdrop-blur-xl border-blue-500/50 hover:border-cyan-400/70 transition-all cursor-pointer group overflow-hidden">
-                <CardContent className="p-6 flex items-center justify-between relative">
-                  <div className="flex items-center gap-4 overflow-hidden">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                      <Sparkles className="w-6 h-6 text-white" />
+                <CardContent className="p-4 sm:p-6 flex items-center justify-between relative">
+                  <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
+                      <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
                     <div className="overflow-hidden">
-                      <h3 className="text-lg font-semibold text-white mb-1 truncate">Recently Added</h3>
+                      <h3 className="text-base sm:text-lg font-semibold text-white mb-0.5 sm:mb-1 truncate">Recently Added</h3>
                       <p className="text-xs text-cyan-200">Latest 30 series</p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-cyan-300 group-hover:translate-x-1 transition-transform flex-shrink-0 ml-2" />
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-300 group-hover:translate-x-1 transition-transform flex-shrink-0 ml-2" />
                 </CardContent>
               </Card>
             </motion.div>
@@ -137,20 +137,20 @@ export default function SeriesCategories() {
             <Link key={category.category_id} to={createPageUrl(`SeriesGrid?playlistId=${playlistId}&categoryId=${category.category_id}&categoryName=${encodeURIComponent(category.category_name)}`)}>
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: (index + 1) * 0.05 }} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all cursor-pointer group overflow-hidden">
-                  <CardContent className="p-6 flex items-center justify-between relative">
-                    <div className="flex items-center gap-4 overflow-hidden">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${category.source === 'plex' ? 'bg-gradient-to-br from-amber-500/20 to-yellow-600/20' : 'bg-gradient-to-br from-blue-500/20 to-blue-800/20'}`}>
+                  <CardContent className="p-4 sm:p-6 flex items-center justify-between relative">
+                    <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+                      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${category.source === 'plex' ? 'bg-gradient-to-br from-amber-500/20 to-yellow-600/20' : 'bg-gradient-to-br from-blue-500/20 to-blue-800/20'}`}>
                         {category.source === 'plex' ? (
-                          <span className="text-xs font-bold text-amber-500">VIP</span>
+                          <span className="text-xs sm:text-sm font-bold text-amber-500">VIP</span>
                         ) : (
-                          <Clapperboard className="w-6 h-6 text-cyan-400" />
+                          <Clapperboard className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400" />
                         )}
                       </div>
                       <div className="overflow-hidden">
-                        <h3 className="text-lg font-semibold text-white mb-1 truncate">{category.category_name}</h3>
+                        <h3 className="text-base sm:text-lg font-semibold text-white mb-0.5 sm:mb-1 truncate">{category.category_name}</h3>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-cyan-400 group-hover:translate-x-1 transition-transform flex-shrink-0 ml-2" />
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 group-hover:translate-x-1 transition-transform flex-shrink-0 ml-2" />
                   </CardContent>
                 </Card>
               </motion.div>

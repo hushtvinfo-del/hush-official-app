@@ -140,46 +140,46 @@ export default function Movies() {
   );
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
+    <div className="min-h-screen p-3 sm:p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         <Button
           variant="ghost"
           onClick={() => navigate(createPageUrl(`MovieCategories?playlistId=${playlistId}`))}
-          className="mb-6 text-cyan-300 hover:text-white hover:bg-blue-500/20"
+          className="mb-4 sm:mb-6 text-cyan-300 hover:text-white hover:bg-blue-500/20 text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Movie Categories
         </Button>
 
-        <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{categoryName}</h1>
-          <p className="text-cyan-300">{movies?.length || 0} movies available</p>
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2">{categoryName}</h1>
+          <p className="text-sm sm:text-base text-cyan-300">{movies?.length || 0} movies available</p>
         </div>
 
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between">
-          <div className="relative max-w-md flex-grow">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between">
+          <div className="relative w-full max-w-md flex-grow">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
             <Input
               type="text"
               placeholder="Search movies..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-slate-800/50 border-blue-500/30 text-white placeholder:text-gray-500 focus:border-blue-500"
+              className="pl-9 sm:pl-10 text-sm sm:text-base bg-slate-800/50 border-blue-500/30 text-white placeholder:text-gray-500 focus:border-blue-500 w-full"
             />
           </div>
           <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-full sm:w-48 bg-slate-800/50 border-blue-500/30 text-white">
+            <SelectTrigger className="w-full sm:w-48 text-sm sm:text-base bg-slate-800/50 border-blue-500/30 text-white">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent className="bg-slate-900 border-blue-500/30">
-              <SelectItem value="newest" className="text-white hover:bg-blue-500/20">Newest First</SelectItem>
-              <SelectItem value="az" className="text-white hover:bg-blue-500/20">A-Z</SelectItem>
-              <SelectItem value="default" className="text-white hover:bg-blue-500/20">Default</SelectItem>
+              <SelectItem value="newest" className="text-white hover:bg-blue-500/20 text-sm sm:text-base">Newest First</SelectItem>
+              <SelectItem value="az" className="text-white hover:bg-blue-500/20 text-sm sm:text-base">A-Z</SelectItem>
+              <SelectItem value="default" className="text-white hover:bg-blue-500/20 text-sm sm:text-base">Default</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
             {sortedMovies.map((movie, index) => {
                 const ratings = movie.rating ? {
                   imdb: (parseFloat(movie.rating) || 0).toFixed(1),
@@ -204,8 +204,8 @@ export default function Movies() {
                       whileTap={{ scale: 0.95 }}
                     >
                       <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all cursor-pointer group overflow-hidden h-full flex flex-col">
-                        <CardContent className="p-3 relative flex-grow flex flex-col">
-                          <div className="aspect-[2/3] bg-gray-900/50 rounded-md mb-3 flex items-center justify-center overflow-hidden relative">
+                        <CardContent className="p-2 sm:p-3 relative flex-grow flex flex-col">
+                          <div className="aspect-[2/3] bg-gray-900/50 rounded-md mb-2 sm:mb-3 flex items-center justify-center overflow-hidden relative">
                               <img
                                 src={movie.stream_icon}
                                 alt={movie.name}
@@ -217,12 +217,12 @@ export default function Movies() {
                               <Film className="w-12 h-12 text-cyan-400" />
                             </div>
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                                <Play className="w-6 h-6 text-white ml-1" />
+                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                                <Play className="w-5 h-5 sm:w-6 sm:h-6 text-white ml-0.5 sm:ml-1" />
                               </div>
                             </div>
                           </div>
-                          <h3 className="text-sm font-semibold text-white truncate leading-tight mb-2">{movie.name}</h3>
+                          <h3 className="text-xs sm:text-sm font-semibold text-white truncate leading-tight mb-1 sm:mb-2">{movie.name}</h3>
                           {ratings && <MultiRatingBadge ratings={ratings} size="sm" />}
                         </CardContent>
                       </Card>
