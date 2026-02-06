@@ -3,16 +3,21 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 Deno.serve(async (req) => {
     try {
         const base44 = createClientFromRequest(req);
-        const { action, sectionId, ratingKey, plexUrl, plexUsername, plexPassword, plexToken } = await req.json();
+        const body = await req.json();
+        const { action, sectionId, ratingKey, plexUrl, plexUsername, plexPassword, plexToken } = body;
         
-        if (!plexUrl) {
-            return Response.json({ error: 'Plex URL not provided' }, { status: 400 });
+        // Use provided credentials or fall back to environment variables
+        const serverUrl = plexUrl || Deno.env.get('PLEX_SERVER_URL');
+        const username = plexUsername || Deno.env.get('PLEX_USERNAME');
+        const password = plexPassword || Deno.env.get('PLEX_PASSWORD');
+        let authToken = plexToken || Deno.env.get('PLEX_TOKEN');
+
+        if (!serverUrl) {
+            return Response.json({ error: 'Plex server URL not configured' }, { status: 400 });
         }
 
-        let authToken = plexToken;
-
         // Authenticate with Plex to get token if not provided
-        if (!authToken && plexUsername && plexPassword) {
+        if (!authToken && username && password) {
             const authResponse = await fetch('https://plex.tv/users/sign_in.json', {
                 method: 'POST',
                 headers: {
@@ -22,8 +27,8 @@ Deno.serve(async (req) => {
                     'X-Plex-Version': '1.0'
                 },
                 body: new URLSearchParams({
-                    'user[login]': plexUsername,
-                    'user[password]': plexPassword
+                    'user[login]': username,
+                    'user[password]': password
                 })
             });
 
@@ -42,7 +47,7 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'Plex token or credentials required' }, { status: 400 });
         }
 
-        const baseUrl = plexUrl.replace(/\/$/, '');
+        const baseUrl = serverUrl.replace(/\/$/, '');
 
         // Get all library sections
         if (action === 'get_libraries') {
