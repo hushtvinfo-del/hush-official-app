@@ -26,7 +26,12 @@ Deno.serve(async (req) => {
         }
         
         const response = await fetch(url.toString(), {
-            headers: { 'User-Agent': 'VLC/3.0.0' } // Some providers block requests without a user agent
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache'
+            }
         });
 
         if (!response.ok) {
