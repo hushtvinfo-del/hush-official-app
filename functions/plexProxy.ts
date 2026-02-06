@@ -16,8 +16,8 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'Plex server URL not configured' }, { status: 400 });
         }
 
-        // Authenticate with Plex to get token if not provided
-        if (!authToken && username && password) {
+        // Always try to authenticate with username/password if available (to get fresh token)
+        if (username && password) {
             const authResponse = await fetch('https://plex.tv/users/sign_in.json', {
                 method: 'POST',
                 headers: {
@@ -32,19 +32,19 @@ Deno.serve(async (req) => {
                 })
             });
 
-            if (!authResponse.ok) {
+            if (authResponse.ok) {
+                const authData = await authResponse.json();
+                authToken = authData.user.authToken;
+            } else if (!authToken) {
                 return Response.json({ 
                     error: 'Failed to authenticate with Plex',
                     details: await authResponse.text()
                 }, { status: 401 });
             }
-
-            const authData = await authResponse.json();
-            authToken = authData.user.authToken;
         }
 
         if (!authToken) {
-            return Response.json({ error: 'Plex token or credentials required' }, { status: 400 });
+            return Response.json({ error: 'Plex credentials required' }, { status: 400 });
         }
 
         const baseUrl = serverUrl.replace(/\/$/, '');
