@@ -99,7 +99,7 @@ export default function AddAccount() {
             <CardHeader>
               <CardTitle className="text-2xl text-white flex items-center gap-2">
                 <UserPlus className="w-6 h-6 text-cyan-400" />
-                Sign In to HushTV Web Player
+                Sign In to HushTV - Official App
               </CardTitle>
               <CardDescription className="text-cyan-300">Enter your HushTV credentials to get started.</CardDescription>
             </CardHeader>
