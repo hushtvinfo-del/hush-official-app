@@ -435,6 +435,7 @@ export default function Player() {
             
             // Log the stream URL for debugging
             console.log('🎬 Loading stream:', channelUrl);
+            console.log('📝 Container extension:', containerExtension);
             
             videoElement.src = channelUrl;
             videoElement.controls = true;
@@ -574,12 +575,22 @@ export default function Player() {
         const player = window.videojs(videoRef.current, options);
         playerRef.current = player;
 
+        // Determine source type based on URL and container extension
         let sourceType = 'video/mp4';
         if (isHLS) {
             sourceType = 'application/x-mpegURL';
+        } else if (containerExtension === 'mkv') {
+            sourceType = 'video/x-matroska';
+        } else if (containerExtension === 'avi') {
+            sourceType = 'video/x-msvideo';
+        } else if (containerExtension === 'webm') {
+            sourceType = 'video/webm';
         } else if (deviceIsIOS) {
             sourceType = 'video/mp4';
         }
+
+        console.log('🎬 Loading video with type:', sourceType);
+        console.log('📺 Stream URL:', channelUrl.substring(0, 100) + '...');
 
         player.src({
             src: channelUrl,
