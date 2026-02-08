@@ -13,9 +13,7 @@ const isIOS = () => {
          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 };
 
-const isAndroid = () => {
-  return /Android/i.test(navigator.userAgent);
-};
+
 
 const getPlaylistFromLocal = (playlistId) => {
   try {
@@ -64,12 +62,7 @@ export default function Player() {
 
   const isVOD = containerExtension !== 'm3u8' && containerExtension !== null;
   const deviceIsIOS = isIOS();
-  const deviceIsAndroid = isAndroid();
   const isHLS = containerExtension === 'm3u8';
-  const isPlexContent = channelUrl.includes('X-Plex-Token');
-  
-  // For Plex content on mobile, use external player
-  const shouldUseExternalPlayer = isPlexContent && (deviceIsIOS || deviceIsAndroid);
 
   const [castAvailable, setCastAvailable] = useState(false);
   const [casting, setCasting] = useState(false);
@@ -79,20 +72,7 @@ export default function Player() {
   const playlist = React.useMemo(() => getPlaylistFromLocal(playlistId), [playlistId]);
   const userIdentifier = playlist?.username;
 
-  const recommendedPlayers = deviceIsAndroid ? [
-    {
-      name: 'VLC',
-      urlScheme: 'vlc://',
-      playStoreUrl: 'https://play.google.com/store/apps/details?id=org.videolan.vlc',
-      description: 'Free & Open Source'
-    },
-    {
-      name: 'MX Player',
-      urlScheme: 'intent://',
-      playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mxtech.videoplayer.ad',
-      description: 'Popular Android Player'
-    },
-  ] : [
+  const recommendedPlayers = [
     {
       name: 'VLC',
       urlScheme: 'vlc-x-callback://x-callback-url/stream?url=',
@@ -123,17 +103,6 @@ export default function Player() {
       return null;
     }
 
-    // Android MX Player intent
-    if (deviceIsAndroid && player.name === 'MX Player') {
-      return `intent:${normalizedUrl}#Intent;package=com.mxtech.videoplayer.ad;S.title=${encodeURIComponent(channelName)};end`;
-    }
-    
-    // Android VLC
-    if (deviceIsAndroid && player.name === 'VLC') {
-      return `vlc://${normalizedUrl}`;
-    }
-
-    // iOS VLC
     return player.urlScheme + encodeURIComponent(normalizedUrl);
   };
 
@@ -142,18 +111,15 @@ export default function Player() {
   };
 
   useEffect(() => {
-    if (shouldRedirectToExternalPlayer || shouldUseExternalPlayer) {
-      // Try to auto-open VLC first
-      const vlcPlayer = recommendedPlayers[0]; // VLC is first in array
+    if (shouldRedirectToExternalPlayer) {
+      // Always try to auto-open VLC first for iOS
+      const vlcPlayer = recommendedPlayers[0];
       const playerUrl = buildPlayerUrl(vlcPlayer, channelUrl);
       
       if (playerUrl) {
-        console.log(`✅ Auto-opening ${vlcPlayer.name} player`);
-        
-        // Try to open VLC
+        console.log(`✅ Auto-opening VLC player`);
         window.location.href = playerUrl;
         
-        // After a short delay, check if we're still on the page
         setTimeout(() => {
           setVlcNotInstalled(true);
           setShowPlayerChoice(true);
@@ -162,7 +128,7 @@ export default function Player() {
         setShowPlayerChoice(true);
       }
     }
-  }, [shouldRedirectToExternalPlayer, shouldUseExternalPlayer, channelUrl]);
+  }, [shouldRedirectToExternalPlayer, channelUrl]);
 
   const getStreamIdFromUrl = (url) => {
     try {
@@ -443,7 +409,7 @@ export default function Player() {
       return;
     }
 
-    if (shouldRedirectToExternalPlayer || shouldUseExternalPlayer) {
+    if (shouldRedirectToExternalPlayer) {
       return;
     }
 
@@ -461,22 +427,15 @@ export default function Player() {
     const initializePlayer = () => {
         if (!videoRef.current || playerRef.current) return;
 
-        // For Plex content or iOS HLS, use native HTML5 video player
-        if ((deviceIsIOS && isHLS) || isPlexContent) {
+        // For iOS HLS, use native HTML5 video player
+        if (deviceIsIOS && isHLS) {
             const videoElement = videoRef.current;
             
-            // Log the stream URL for debugging
-            console.log('🎬 Loading stream:', isPlexContent ? 'Plex content' : 'iOS HLS');
-            console.log('📝 Container extension:', containerExtension);
+            console.log('🎬 Loading iOS HLS stream');
             
             videoElement.src = channelUrl;
             videoElement.controls = true;
             videoElement.playsInline = true;
-            
-            // For Plex content, ensure proper video type attribute
-            if (isPlexContent) {
-                videoElement.setAttribute('type', 'video/mp4');
-            }
             
             // Add error event listener before trying to play
             const handleError = (e) => {
@@ -600,34 +559,35 @@ export default function Player() {
             },
             html5: {
                 vhs: {
-                    overrideNative: !deviceIsIOS
+                    overrideNative: !deviceIsIOS,
+                    withCredentials: false
                 },
                 nativeVideoTracks: true,
                 nativeAudioTracks: true,
                 nativeTextTracks: true
             },
+            sources: [],
             textTrackSettings: false
         };
 
         const player = window.videojs(videoRef.current, options);
         playerRef.current = player;
 
-        // Determine source type based on URL and container extension
+        // Determine source type - for most formats, let the browser handle it
         let sourceType = 'video/mp4';
         if (isHLS) {
             sourceType = 'application/x-mpegURL';
         } else if (containerExtension === 'mkv') {
-            sourceType = 'video/x-matroska';
+            sourceType = 'video/mp4'; // Transcode MKV as MP4
         } else if (containerExtension === 'avi') {
-            sourceType = 'video/x-msvideo';
+            sourceType = 'video/mp4'; // Transcode AVI as MP4
         } else if (containerExtension === 'webm') {
             sourceType = 'video/webm';
-        } else if (deviceIsIOS) {
-            sourceType = 'video/mp4';
         }
 
-        console.log('🎬 Loading video with type:', sourceType);
-        console.log('📺 Stream URL:', channelUrl.substring(0, 100) + '...');
+        console.log('🎬 VideoJS: Loading video');
+        console.log('📝 Container:', containerExtension);
+        console.log('🎥 Source type:', sourceType);
 
         player.src({
             src: channelUrl,
@@ -719,7 +679,7 @@ export default function Player() {
         }
     };
 
-    if ((deviceIsIOS && isHLS) || isPlexContent) {
+    if (deviceIsIOS && isHLS) {
         initializePlayer();
     } else if (window.videojs) {
         initializePlayer();
@@ -747,7 +707,7 @@ export default function Player() {
         if (player && player.isDisposed && !player.isDisposed()) {
             player.dispose();
             playerRef.current = null;
-        } else if (videoRef.current && ((deviceIsIOS && isHLS) || isPlexContent)) {
+        } else if (videoRef.current && deviceIsIOS && isHLS) {
             videoRef.current.pause();
             videoRef.current.src = '';
             nativeEventListenersRef.current.forEach(({ event, handler }) => {
@@ -757,11 +717,12 @@ export default function Player() {
             playerRef.current = null;
         }
     };
-  }, [channelUrl, containerExtension, userIdentifier, playlistId, startTime, isVOD, channelName, contentType, coverImage, seriesId, deviceIsIOS, isHLS, shouldRedirectToExternalPlayer, shouldUseExternalPlayer, isPlexContent]);
+  }, [channelUrl, containerExtension, userIdentifier, playlistId, startTime, isVOD, channelName, contentType, coverImage, seriesId, deviceIsIOS, isHLS, shouldRedirectToExternalPlayer]);
 
   if (showPlayerChoice) {
     const normalizedUrl = normalizeUrl(channelUrl);
-    const storeUrl = deviceIsAndroid ? 'Play Store' : 'App Store';
+    const vlcPlayer = recommendedPlayers[0];
+    const playerUrl = buildPlayerUrl(vlcPlayer, normalizedUrl);
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-orange-950 to-black flex items-center justify-center p-6">
@@ -769,18 +730,20 @@ export default function Player() {
           <Alert className="mb-6 border-orange-500/30 bg-gray-800/50">
             <AlertCircle className="h-5 w-5 text-orange-400" />
             <AlertTitle className="text-white text-lg">
-              {vlcNotInstalled ? 'External Player Required' : 'Opening Player...'}
+              {vlcNotInstalled ? 'VLC Not Installed' : 'External Player Required'}
             </AlertTitle>
             <AlertDescription className="text-gray-300 mt-2">
               {vlcNotInstalled ? (
                 <>
-                  {isPlexContent ? 'Plex content' : 'This video format'} requires an external player like VLC or MX Player.
+                  VLC is not installed on your device. This video format ({containerExtension?.toUpperCase()}) requires VLC to play.
                   <br /><br />
-                  Please install a player from the {storeUrl} to watch this content.
+                  Please install VLC from the App Store to watch this content.
                 </>
               ) : (
                 <>
-                  Opening video in external player...
+                  Your iOS device does not natively support this video format ({containerExtension?.toUpperCase()}).
+                  <br /><br />
+                  Opening in VLC...
                 </>
               )}
             </AlertDescription>
@@ -788,82 +751,69 @@ export default function Player() {
 
           {vlcNotInstalled ? (
             <>
-              {/* Players Not Installed - Show Install Buttons */}
-              {recommendedPlayers.map((player, index) => (
-                <a
-                  key={index}
-                  href={player.playStoreUrl || player.appStoreUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block mb-4"
+              <a
+                href={vlcPlayer.appStoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block mb-4"
+              >
+                <Button
+                  size="lg"
+                  className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg h-auto py-6"
                 >
-                  <Button
-                    size="lg"
-                    className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg h-auto py-6"
-                  >
-                    <div className="flex flex-col items-center w-full">
-                      <div className="flex items-center mb-2">
-                        <Download className="w-6 h-6 mr-2" />
-                        <span className="text-xl font-bold">Download {player.name}</span>
-                      </div>
-                      <span className="text-sm text-orange-100">{player.description}</span>
+                  <div className="flex flex-col items-center w-full">
+                    <div className="flex items-center mb-2">
+                      <Download className="w-6 h-6 mr-2" />
+                      <span className="text-xl font-bold">Download VLC Player</span>
                     </div>
-                  </Button>
-                </a>
-              ))}
+                    <span className="text-sm text-orange-100">Free from the App Store</span>
+                  </div>
+                </Button>
+              </a>
 
               <div className="bg-gray-800/50 rounded-lg p-5 mb-6 border border-orange-500/20">
-                <p className="text-white font-semibold mb-3 text-center">After installing a player:</p>
+                <p className="text-white font-semibold mb-3 text-center">After installing VLC:</p>
                 <ol className="list-decimal list-inside space-y-2 text-gray-300 text-sm">
-                  <li>Open the player from your home screen</li>
-                  <li>Return to HushTV</li>
+                  <li>Open VLC from your home screen</li>
+                  <li>Return to HushTV Player</li>
                   <li>Try playing this content again</li>
                 </ol>
               </div>
 
-              {recommendedPlayers.map((player, index) => {
-                const playerUrl = buildPlayerUrl(player, normalizedUrl);
-                if (!playerUrl) return null;
-                return (
-                  <a key={index} href={playerUrl} className="block mb-2">
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      className="w-full border-orange-500/30 text-orange-300 hover:bg-orange-500/20"
-                    >
-                      I have {player.name} - Try Opening
-                    </Button>
-                  </a>
-                );
-              })}
+              {playerUrl && (
+                <a href={playerUrl} className="block mb-4">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="w-full border-orange-500/30 text-orange-300 hover:bg-orange-500/20"
+                  >
+                    I already have VLC - Try Opening
+                  </Button>
+                </a>
+              )}
             </>
           ) : (
             <>
-              {/* Player Should Be Opening - Show Retry Buttons */}
               <div className="bg-gray-800/50 rounded-lg p-5 mb-6 border border-orange-500/20">
                 <div className="flex items-center justify-center mb-3">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
                 </div>
                 <p className="text-gray-300 text-center text-sm">
-                  If the player doesn't open automatically, tap a button below:
+                  If VLC doesn't open automatically, tap the button below:
                 </p>
               </div>
 
-              {recommendedPlayers.map((player, index) => {
-                const playerUrl = buildPlayerUrl(player, normalizedUrl);
-                if (!playerUrl) return null;
-                return (
-                  <a key={index} href={playerUrl} className="block mb-3">
-                    <Button
-                      size="lg"
-                      className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg"
-                    >
-                      <Download className="w-5 h-5 mr-2" />
-                      Open in {player.name}
-                    </Button>
-                  </a>
-                );
-              })}
+              {playerUrl && (
+                <a href={playerUrl} className="block mb-4">
+                  <Button
+                    size="lg"
+                    className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg"
+                  >
+                    <Download className="w-5 h-5 mr-2" />
+                    Open in VLC Player
+                  </Button>
+                </a>
+              )}
 
               <Button
                 variant="outline"
@@ -871,7 +821,7 @@ export default function Player() {
                 onClick={() => setVlcNotInstalled(true)}
                 className="w-full border-orange-500/30 text-gray-400 hover:text-white hover:bg-orange-500/20 mb-4"
               >
-                Player Not Installed? Get a Player
+                VLC Not Installed? Get VLC
               </Button>
             </>
           )}
@@ -948,7 +898,7 @@ export default function Player() {
         <div data-vjs-player className="w-full max-w-7xl aspect-video bg-black">
           <video
             ref={videoRef}
-            className={(deviceIsIOS && isHLS) || isPlexContent ? "w-full h-full" : "video-js vjs-big-play-centered w-full h-full"}
+            className={deviceIsIOS && isHLS ? "w-full h-full" : "video-js vjs-big-play-centered w-full h-full"}
             playsInline
             autoPlay
             crossOrigin="anonymous"
