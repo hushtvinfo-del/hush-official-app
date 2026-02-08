@@ -3,8 +3,26 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 Deno.serve(async (req) => {
     try {
         const base44 = createClientFromRequest(req);
-        const body = await req.json();
-        const { action, sectionId, ratingKey, plexUrl, plexUsername, plexPassword, plexToken } = body;
+        
+        // Handle both POST (JSON body) and GET (URL params) requests
+        let action, sectionId, ratingKey, plexUrl, plexUsername, plexPassword, plexToken, partKey, offset, limit;
+        
+        if (req.method === 'GET') {
+            const url = new URL(req.url);
+            action = url.searchParams.get('action');
+            sectionId = url.searchParams.get('sectionId');
+            ratingKey = url.searchParams.get('ratingKey');
+            plexUrl = url.searchParams.get('plexUrl');
+            plexUsername = url.searchParams.get('plexUsername');
+            plexPassword = url.searchParams.get('plexPassword');
+            plexToken = url.searchParams.get('plexToken');
+            partKey = url.searchParams.get('partKey');
+            offset = parseInt(url.searchParams.get('offset') || '0');
+            limit = parseInt(url.searchParams.get('limit') || '50');
+        } else {
+            const body = await req.json();
+            ({ action, sectionId, ratingKey, plexUrl, plexUsername, plexPassword, plexToken, partKey, offset, limit } = body);
+        }
         
         // Use provided credentials or fall back to environment variables
         const serverUrl = plexUrl || Deno.env.get('PLEX_SERVER_URL');
@@ -82,7 +100,8 @@ Deno.serve(async (req) => {
 
         // Get all items in a library section
         if (action === 'get_library_items') {
-            const { offset = 0, limit = 50 } = body;
+            offset = offset || 0;
+            limit = limit || 50;
 
             const response = await fetch(`${baseUrl}/library/sections/${sectionId}/all?X-Plex-Token=${authToken}`, {
                 headers: { 
@@ -171,7 +190,6 @@ Deno.serve(async (req) => {
 
         // Proxy video stream to avoid CORS issues
         if (action === 'stream') {
-            const { partKey } = body;
             if (!partKey) {
                 return Response.json({ error: 'Part key required' }, { status: 400 });
             }
