@@ -13,6 +13,10 @@ const isIOS = () => {
          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 };
 
+const isAndroid = () => {
+  return /Android/i.test(navigator.userAgent);
+};
+
 const getPlaylistFromLocal = (playlistId) => {
   try {
     const localPlaylists = JSON.parse(localStorage.getItem('playlists') || '[]');
@@ -60,8 +64,12 @@ export default function Player() {
 
   const isVOD = containerExtension !== 'm3u8' && containerExtension !== null;
   const deviceIsIOS = isIOS();
+  const deviceIsAndroid = isAndroid();
   const isHLS = containerExtension === 'm3u8';
   const isPlexContent = channelUrl.includes('X-Plex-Token');
+  
+  // For Plex content on mobile, use external player
+  const shouldUseExternalPlayer = isPlexContent && (deviceIsIOS || deviceIsAndroid);
 
   const [castAvailable, setCastAvailable] = useState(false);
   const [casting, setCasting] = useState(false);
@@ -71,7 +79,20 @@ export default function Player() {
   const playlist = React.useMemo(() => getPlaylistFromLocal(playlistId), [playlistId]);
   const userIdentifier = playlist?.username;
 
-  const recommendedPlayers = [
+  const recommendedPlayers = deviceIsAndroid ? [
+    {
+      name: 'VLC',
+      urlScheme: 'vlc://',
+      playStoreUrl: 'https://play.google.com/store/apps/details?id=org.videolan.vlc',
+      description: 'Free & Open Source'
+    },
+    {
+      name: 'MX Player',
+      urlScheme: 'intent://',
+      playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mxtech.videoplayer.ad',
+      description: 'Popular Android Player'
+    },
+  ] : [
     {
       name: 'VLC',
       urlScheme: 'vlc-x-callback://x-callback-url/stream?url=',
@@ -102,6 +123,17 @@ export default function Player() {
       return null;
     }
 
+    // Android MX Player intent
+    if (deviceIsAndroid && player.name === 'MX Player') {
+      return `intent:${normalizedUrl}#Intent;package=com.mxtech.videoplayer.ad;S.title=${encodeURIComponent(channelName)};end`;
+    }
+    
+    // Android VLC
+    if (deviceIsAndroid && player.name === 'VLC') {
+      return `vlc://${normalizedUrl}`;
+    }
+
+    // iOS VLC
     return player.urlScheme + encodeURIComponent(normalizedUrl);
   };
 
@@ -110,21 +142,19 @@ export default function Player() {
   };
 
   useEffect(() => {
-    if (shouldRedirectToExternalPlayer) {
-      // Always try to auto-open VLC first for iOS
+    if (shouldRedirectToExternalPlayer || shouldUseExternalPlayer) {
+      // Try to auto-open VLC first
       const vlcPlayer = recommendedPlayers[0]; // VLC is first in array
       const playerUrl = buildPlayerUrl(vlcPlayer, channelUrl);
       
       if (playerUrl) {
-        console.log(`✅ Auto-opening VLC player`);
+        console.log(`✅ Auto-opening ${vlcPlayer.name} player`);
         
         // Try to open VLC
         window.location.href = playerUrl;
         
         // After a short delay, check if we're still on the page
-        // If we are, VLC probably isn't installed
         setTimeout(() => {
-          // If we're still here after 2 seconds, VLC likely isn't installed
           setVlcNotInstalled(true);
           setShowPlayerChoice(true);
         }, 2000);
@@ -132,7 +162,7 @@ export default function Player() {
         setShowPlayerChoice(true);
       }
     }
-  }, [shouldRedirectToExternalPlayer, channelUrl]);
+  }, [shouldRedirectToExternalPlayer, shouldUseExternalPlayer, channelUrl]);
 
   const getStreamIdFromUrl = (url) => {
     try {
@@ -413,7 +443,7 @@ export default function Player() {
       return;
     }
 
-    if (shouldRedirectToExternalPlayer) {
+    if (shouldRedirectToExternalPlayer || shouldUseExternalPlayer) {
       return;
     }
 
@@ -727,12 +757,11 @@ export default function Player() {
             playerRef.current = null;
         }
     };
-  }, [channelUrl, containerExtension, userIdentifier, playlistId, startTime, isVOD, channelName, contentType, coverImage, seriesId, deviceIsIOS, isHLS, shouldRedirectToExternalPlayer, isPlexContent]);
+  }, [channelUrl, containerExtension, userIdentifier, playlistId, startTime, isVOD, channelName, contentType, coverImage, seriesId, deviceIsIOS, isHLS, shouldRedirectToExternalPlayer, shouldUseExternalPlayer, isPlexContent]);
 
   if (showPlayerChoice) {
     const normalizedUrl = normalizeUrl(channelUrl);
-    const vlcPlayer = recommendedPlayers[0];
-    const playerUrl = buildPlayerUrl(vlcPlayer, normalizedUrl);
+    const storeUrl = deviceIsAndroid ? 'Play Store' : 'App Store';
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-orange-950 to-black flex items-center justify-center p-6">
@@ -740,20 +769,18 @@ export default function Player() {
           <Alert className="mb-6 border-orange-500/30 bg-gray-800/50">
             <AlertCircle className="h-5 w-5 text-orange-400" />
             <AlertTitle className="text-white text-lg">
-              {vlcNotInstalled ? 'VLC Not Installed' : 'External Player Required'}
+              {vlcNotInstalled ? 'External Player Required' : 'Opening Player...'}
             </AlertTitle>
             <AlertDescription className="text-gray-300 mt-2">
               {vlcNotInstalled ? (
                 <>
-                  VLC is not installed on your device. This video format ({containerExtension?.toUpperCase()}) requires VLC to play.
+                  {isPlexContent ? 'Plex content' : 'This video format'} requires an external player like VLC or MX Player.
                   <br /><br />
-                  Please install VLC from the App Store to watch this content.
+                  Please install a player from the {storeUrl} to watch this content.
                 </>
               ) : (
                 <>
-                  Your iOS device does not natively support this video format ({containerExtension?.toUpperCase()}).
-                  <br /><br />
-                  Opening in VLC...
+                  Opening video in external player...
                 </>
               )}
             </AlertDescription>
@@ -761,71 +788,82 @@ export default function Player() {
 
           {vlcNotInstalled ? (
             <>
-              {/* VLC Not Installed - Show Install Button */}
-              <a
-                href={vlcPlayer.appStoreUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block mb-4"
-              >
-                <Button
-                  size="lg"
-                  className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg h-auto py-6"
+              {/* Players Not Installed - Show Install Buttons */}
+              {recommendedPlayers.map((player, index) => (
+                <a
+                  key={index}
+                  href={player.playStoreUrl || player.appStoreUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block mb-4"
                 >
-                  <div className="flex flex-col items-center w-full">
-                    <div className="flex items-center mb-2">
-                      <Download className="w-6 h-6 mr-2" />
-                      <span className="text-xl font-bold">Download VLC Player</span>
+                  <Button
+                    size="lg"
+                    className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg h-auto py-6"
+                  >
+                    <div className="flex flex-col items-center w-full">
+                      <div className="flex items-center mb-2">
+                        <Download className="w-6 h-6 mr-2" />
+                        <span className="text-xl font-bold">Download {player.name}</span>
+                      </div>
+                      <span className="text-sm text-orange-100">{player.description}</span>
                     </div>
-                    <span className="text-sm text-orange-100">Free from the App Store</span>
-                  </div>
-                </Button>
-              </a>
+                  </Button>
+                </a>
+              ))}
 
               <div className="bg-gray-800/50 rounded-lg p-5 mb-6 border border-orange-500/20">
-                <p className="text-white font-semibold mb-3 text-center">After installing VLC:</p>
+                <p className="text-white font-semibold mb-3 text-center">After installing a player:</p>
                 <ol className="list-decimal list-inside space-y-2 text-gray-300 text-sm">
-                  <li>Open VLC from your home screen</li>
-                  <li>Return to HushTV Player</li>
+                  <li>Open the player from your home screen</li>
+                  <li>Return to HushTV</li>
                   <li>Try playing this content again</li>
                 </ol>
               </div>
 
-              {playerUrl && (
-                <a href={playerUrl} className="block mb-4">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="w-full border-orange-500/30 text-orange-300 hover:bg-orange-500/20"
-                  >
-                    I already have VLC - Try Opening
-                  </Button>
-                </a>
-              )}
+              {recommendedPlayers.map((player, index) => {
+                const playerUrl = buildPlayerUrl(player, normalizedUrl);
+                if (!playerUrl) return null;
+                return (
+                  <a key={index} href={playerUrl} className="block mb-2">
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="w-full border-orange-500/30 text-orange-300 hover:bg-orange-500/20"
+                    >
+                      I have {player.name} - Try Opening
+                    </Button>
+                  </a>
+                );
+              })}
             </>
           ) : (
             <>
-              {/* VLC Should Be Opening - Show Retry Button */}
+              {/* Player Should Be Opening - Show Retry Buttons */}
               <div className="bg-gray-800/50 rounded-lg p-5 mb-6 border border-orange-500/20">
                 <div className="flex items-center justify-center mb-3">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
                 </div>
                 <p className="text-gray-300 text-center text-sm">
-                  If VLC doesn't open automatically, tap the button below:
+                  If the player doesn't open automatically, tap a button below:
                 </p>
               </div>
 
-              {playerUrl && (
-                <a href={playerUrl} className="block mb-4">
-                  <Button
-                    size="lg"
-                    className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg"
-                  >
-                    <Download className="w-5 h-5 mr-2" />
-                    Open in VLC Player
-                  </Button>
-                </a>
-              )}
+              {recommendedPlayers.map((player, index) => {
+                const playerUrl = buildPlayerUrl(player, normalizedUrl);
+                if (!playerUrl) return null;
+                return (
+                  <a key={index} href={playerUrl} className="block mb-3">
+                    <Button
+                      size="lg"
+                      className="w-full bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900 text-white shadow-lg"
+                    >
+                      <Download className="w-5 h-5 mr-2" />
+                      Open in {player.name}
+                    </Button>
+                  </a>
+                );
+              })}
 
               <Button
                 variant="outline"
@@ -833,7 +871,7 @@ export default function Player() {
                 onClick={() => setVlcNotInstalled(true)}
                 className="w-full border-orange-500/30 text-gray-400 hover:text-white hover:bg-orange-500/20 mb-4"
               >
-                VLC Not Installed? Get VLC
+                Player Not Installed? Get a Player
               </Button>
             </>
           )}
