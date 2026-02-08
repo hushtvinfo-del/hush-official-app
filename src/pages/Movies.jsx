@@ -30,7 +30,8 @@ const fetchMovies = async (playlistId, categoryId) => {
             sectionId: plexSectionId
         });
         
-        return (data || []).map(item => ({
+        const items = data?.items || data || [];
+        return items.map(item => ({
             stream_id: `plex_${item.ratingKey}`,
             name: item.title,
             stream_icon: item.thumb,
