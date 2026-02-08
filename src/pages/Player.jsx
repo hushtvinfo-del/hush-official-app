@@ -566,33 +566,27 @@ export default function Player() {
                 nativeAudioTracks: true,
                 nativeTextTracks: true
             },
-            sources: [],
             textTrackSettings: false
         };
 
         const player = window.videojs(videoRef.current, options);
         playerRef.current = player;
 
-        // Determine source type - for most formats, let the browser handle it
-        let sourceType = 'video/mp4';
-        if (isHLS) {
-            sourceType = 'application/x-mpegURL';
-        } else if (containerExtension === 'mkv') {
-            sourceType = 'video/mp4'; // Transcode MKV as MP4
-        } else if (containerExtension === 'avi') {
-            sourceType = 'video/mp4'; // Transcode AVI as MP4
-        } else if (containerExtension === 'webm') {
-            sourceType = 'video/webm';
-        }
-
         console.log('🎬 VideoJS: Loading video');
         console.log('📝 Container:', containerExtension);
-        console.log('🎥 Source type:', sourceType);
+        console.log('📺 URL:', channelUrl);
 
-        player.src({
-            src: channelUrl,
-            type: sourceType
-        });
+        // For HLS streams
+        if (isHLS) {
+            player.src({
+                src: channelUrl,
+                type: 'application/x-mpegURL'
+            });
+        } else {
+            // For all other formats (MP4, MKV, AVI, etc.), don't specify type
+            // Let the browser auto-detect based on the actual file
+            player.src(channelUrl);
+        }
 
         player.on('ready', () => {
             setTimeout(() => {
@@ -616,8 +610,22 @@ export default function Player() {
                 message: error?.message,
                 type: error?.type,
                 networkState: player.networkState,
-                readyState: player.readyState
+                readyState: player.readyState,
+                currentSrc: player.currentSrc()
             });
+            
+            // Try native HTML5 fallback for direct file streams
+            if (error?.code === 4 || error?.code === 2) {
+                console.log('⚠️ VideoJS failed, trying native HTML5...');
+                const videoElement = videoRef.current;
+                if (videoElement) {
+                    videoElement.src = channelUrl;
+                    videoElement.load();
+                    videoElement.play().catch(err => {
+                        console.error('❌ Native playback also failed:', err);
+                    });
+                }
+            }
         });
 
         player.on('loadstart', () => {
