@@ -51,7 +51,7 @@ export default function Player() {
   const queryClient = useQueryClient();
   const urlParams = new URLSearchParams(window.location.search);
 
-  const channelUrl = decodeURIComponent(urlParams.get('channelUrl') || '');
+  let channelUrl = decodeURIComponent(urlParams.get('channelUrl') || '');
   const channelName = decodeURIComponent(urlParams.get('channelName') || '');
   const containerExtension = urlParams.get('containerExtension');
   const playlistId = urlParams.get('playlistId');
@@ -59,6 +59,29 @@ export default function Player() {
   const contentType = urlParams.get('contentType');
   const coverImage = urlParams.get('coverImage') ? decodeURIComponent(urlParams.get('coverImage')) : '';
   const seriesId = urlParams.get('seriesId');
+  
+  // Check if this is Plex content and needs proxying through backend
+  const isPlexContent = channelUrl.includes('X-Plex-Token');
+  if (isPlexContent && containerExtension !== 'm3u8') {
+    try {
+      const urlObj = new URL(channelUrl);
+      const partKey = urlObj.pathname;
+      const plexToken = urlObj.searchParams.get('X-Plex-Token');
+      const plexUrl = `${urlObj.protocol}//${urlObj.host}`;
+      
+      // Build proxy URL using our backend function
+      const proxyUrl = new URL(window.location.origin + '/api/plexProxy');
+      proxyUrl.searchParams.set('action', 'stream');
+      proxyUrl.searchParams.set('partKey', partKey);
+      proxyUrl.searchParams.set('plexUrl', plexUrl);
+      proxyUrl.searchParams.set('plexToken', plexToken);
+      
+      channelUrl = proxyUrl.toString();
+      console.log('🔄 Using Plex proxy for:', partKey);
+    } catch (e) {
+      console.error('Failed to create Plex proxy URL:', e);
+    }
+  }
 
   const isVOD = containerExtension !== 'm3u8' && containerExtension !== null;
   const deviceIsIOS = isIOS();
