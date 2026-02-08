@@ -29,7 +29,8 @@ const fetchSeries = async (playlistId, categoryId) => {
             sectionId: plexSectionId
         });
         
-        return (data || []).map(item => ({
+        const items = data?.items || data || [];
+        return items.map(item => ({
             series_id: `plex_${item.ratingKey}`,
             name: item.title,
             cover: item.thumb,
