@@ -82,11 +82,18 @@ Deno.serve(async (req) => {
 
         // Get all items in a library section
         if (action === 'get_library_items') {
+            const { offset = 0, limit = 50 } = body;
+            
             const response = await fetch(`${baseUrl}/library/sections/${sectionId}/all?X-Plex-Token=${authToken}`, {
-                headers: { 'Accept': 'application/json' }
+                headers: { 
+                    'Accept': 'application/json',
+                    'X-Plex-Container-Start': offset.toString(),
+                    'X-Plex-Container-Size': limit.toString()
+                }
             });
             const data = await response.json();
             const items = data.MediaContainer.Metadata || [];
+            const totalSize = data.MediaContainer.totalSize || 0;
             
             // Add full URLs for thumbnails
             const itemsWithUrls = items.map(item => ({
@@ -94,7 +101,12 @@ Deno.serve(async (req) => {
                 thumb: item.thumb ? `${baseUrl}${item.thumb}?X-Plex-Token=${authToken}` : null
             }));
             
-            return Response.json(itemsWithUrls);
+            return Response.json({
+                items: itemsWithUrls,
+                totalSize,
+                offset,
+                limit
+            });
         }
 
         // Get metadata for a specific item
