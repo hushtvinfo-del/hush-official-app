@@ -174,19 +174,34 @@ Deno.serve(async (req) => {
             return Response.json(metadata);
         }
 
-        // Get direct stream session for better performance
-        if (action === 'get_stream_url') {
+        // Proxy video stream to avoid CORS issues
+        if (action === 'stream') {
             const { partKey } = body;
             if (!partKey) {
                 return Response.json({ error: 'Part key required' }, { status: 400 });
             }
 
-            // Use direct play - let the client handle the file directly
-            const directUrl = `${baseUrl}${partKey}?X-Plex-Token=${authToken}`;
+            const videoUrl = `${baseUrl}${partKey}?X-Plex-Token=${authToken}`;
 
-            return Response.json({ 
-                streamUrl: directUrl,
-                type: 'direct'
+            // Fetch the video from Plex and stream it through our proxy
+            const videoResponse = await fetch(videoUrl);
+
+            if (!videoResponse.ok) {
+                return Response.json({ error: 'Failed to fetch video from Plex' }, { status: videoResponse.status });
+            }
+
+            // Return the video stream with proper headers
+            return new Response(videoResponse.body, {
+                status: videoResponse.status,
+                headers: {
+                    'Content-Type': videoResponse.headers.get('Content-Type') || 'video/mp4',
+                    'Content-Length': videoResponse.headers.get('Content-Length') || '',
+                    'Accept-Ranges': videoResponse.headers.get('Accept-Ranges') || 'bytes',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Range',
+                    'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+                }
             });
         }
 
