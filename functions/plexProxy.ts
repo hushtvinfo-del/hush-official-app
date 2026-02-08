@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
             });
             const data = await response.json();
             const metadata = data.MediaContainer.Metadata?.[0] || null;
-            
+
             if (metadata) {
                 // Add full URLs for thumbnails and art
                 if (metadata.thumb) {
@@ -113,14 +113,16 @@ Deno.serve(async (req) => {
                 if (metadata.art) {
                     metadata.art = `${baseUrl}${metadata.art}?X-Plex-Token=${authToken}`;
                 }
-                
+
                 // Add stream URL if it's a movie
                 if (metadata.type === 'movie' && metadata.Media?.[0]?.Part?.[0]) {
                     const part = metadata.Media[0].Part[0];
-                    metadata.streamUrl = `${baseUrl}${part.key}?download=1&X-Plex-Token=${authToken}`;
-                    console.log('Movie stream URL:', metadata.streamUrl.replace(authToken, 'TOKEN'));
+                    // Use direct play URL for better performance
+                    metadata.streamUrl = `${baseUrl}${part.key}?X-Plex-Token=${authToken}`;
+                    metadata.directPlayUrl = `${baseUrl}${part.key}?X-Plex-Token=${authToken}`;
+                    console.log('Movie direct play URL:', metadata.streamUrl.replace(authToken, 'TOKEN'));
                 }
-                
+
                 // Add episode stream URLs if it's a show
                 if (metadata.type === 'show') {
                     // Fetch seasons for this show
@@ -129,7 +131,7 @@ Deno.serve(async (req) => {
                     });
                     const seasonsData = await seasonsResponse.json();
                     const seasons = seasonsData.MediaContainer.Metadata || [];
-                    
+
                     metadata.seasons = [];
                     for (const season of seasons) {
                         // Fetch episodes for each season
@@ -138,7 +140,7 @@ Deno.serve(async (req) => {
                         });
                         const episodesData = await episodesResponse.json();
                         const episodes = episodesData.MediaContainer.Metadata || [];
-                        
+
                         metadata.seasons.push({
                             seasonNumber: season.index,
                             episodes: episodes.map(ep => {
@@ -148,15 +150,32 @@ Deno.serve(async (req) => {
                                     title: ep.title,
                                     index: ep.index,
                                     thumb: ep.thumb ? `${baseUrl}${ep.thumb}?X-Plex-Token=${authToken}` : null,
-                                    streamUrl: part?.key ? `${baseUrl}${part.key}?download=1&X-Plex-Token=${authToken}` : null
+                                    streamUrl: part?.key ? `${baseUrl}${part.key}?X-Plex-Token=${authToken}` : null,
+                                    directPlayUrl: part?.key ? `${baseUrl}${part.key}?X-Plex-Token=${authToken}` : null
                                 };
                             })
                         });
                     }
                 }
             }
-            
+
             return Response.json(metadata);
+        }
+
+        // Get direct stream session for better performance
+        if (action === 'get_stream_url') {
+            const { partKey } = body;
+            if (!partKey) {
+                return Response.json({ error: 'Part key required' }, { status: 400 });
+            }
+
+            // Use direct play - let the client handle the file directly
+            const directUrl = `${baseUrl}${partKey}?X-Plex-Token=${authToken}`;
+
+            return Response.json({ 
+                streamUrl: directUrl,
+                type: 'direct'
+            });
         }
 
         return Response.json({ error: 'Invalid action' }, { status: 400 });
