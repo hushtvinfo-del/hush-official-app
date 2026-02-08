@@ -61,6 +61,7 @@ export default function Player() {
   const isVOD = containerExtension !== 'm3u8' && containerExtension !== null;
   const deviceIsIOS = isIOS();
   const isHLS = containerExtension === 'm3u8';
+  const isPlexContent = channelUrl.includes('X-Plex-Token');
 
   const [castAvailable, setCastAvailable] = useState(false);
   const [casting, setCasting] = useState(false);
@@ -430,16 +431,22 @@ export default function Player() {
     const initializePlayer = () => {
         if (!videoRef.current || playerRef.current) return;
 
-        if (deviceIsIOS && isHLS) {
+        // For Plex content or iOS HLS, use native HTML5 video player
+        if ((deviceIsIOS && isHLS) || isPlexContent) {
             const videoElement = videoRef.current;
             
             // Log the stream URL for debugging
-            console.log('🎬 Loading stream:', channelUrl);
+            console.log('🎬 Loading stream:', isPlexContent ? 'Plex content' : 'iOS HLS');
             console.log('📝 Container extension:', containerExtension);
             
             videoElement.src = channelUrl;
             videoElement.controls = true;
             videoElement.playsInline = true;
+            
+            // For Plex content, ensure proper video type attribute
+            if (isPlexContent) {
+                videoElement.setAttribute('type', 'video/mp4');
+            }
             
             // Add error event listener before trying to play
             const handleError = (e) => {
@@ -682,7 +689,7 @@ export default function Player() {
         }
     };
 
-    if (deviceIsIOS && isHLS) {
+    if ((deviceIsIOS && isHLS) || isPlexContent) {
         initializePlayer();
     } else if (window.videojs) {
         initializePlayer();
@@ -710,7 +717,7 @@ export default function Player() {
         if (player && player.isDisposed && !player.isDisposed()) {
             player.dispose();
             playerRef.current = null;
-        } else if (videoRef.current && deviceIsIOS && isHLS) {
+        } else if (videoRef.current && ((deviceIsIOS && isHLS) || isPlexContent)) {
             videoRef.current.pause();
             videoRef.current.src = '';
             nativeEventListenersRef.current.forEach(({ event, handler }) => {
@@ -720,7 +727,7 @@ export default function Player() {
             playerRef.current = null;
         }
     };
-  }, [channelUrl, containerExtension, userIdentifier, playlistId, startTime, isVOD, channelName, contentType, coverImage, seriesId, deviceIsIOS, isHLS, shouldRedirectToExternalPlayer]);
+  }, [channelUrl, containerExtension, userIdentifier, playlistId, startTime, isVOD, channelName, contentType, coverImage, seriesId, deviceIsIOS, isHLS, shouldRedirectToExternalPlayer, isPlexContent]);
 
   if (showPlayerChoice) {
     const normalizedUrl = normalizeUrl(channelUrl);
@@ -903,9 +910,10 @@ export default function Player() {
         <div data-vjs-player className="w-full max-w-7xl aspect-video bg-black">
           <video
             ref={videoRef}
-            className={deviceIsIOS && isHLS ? "w-full h-full" : "video-js vjs-big-play-centered w-full h-full"}
+            className={(deviceIsIOS && isHLS) || isPlexContent ? "w-full h-full" : "video-js vjs-big-play-centered w-full h-full"}
             playsInline
             autoPlay
+            crossOrigin="anonymous"
           />
         </div>
       </div>
