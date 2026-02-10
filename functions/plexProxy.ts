@@ -195,26 +195,50 @@ Deno.serve(async (req) => {
             }
 
             const videoUrl = `${baseUrl}${partKey}?X-Plex-Token=${authToken}`;
+            console.log('🎬 Proxying Plex stream:', videoUrl.replace(authToken, 'TOKEN'));
 
-            // Fetch the video from Plex and stream it through our proxy
-            const videoResponse = await fetch(videoUrl);
+            // Forward Range header if present for video seeking
+            const headers = {
+                'X-Plex-Token': authToken
+            };
+            
+            const rangeHeader = req.headers.get('Range');
+            if (rangeHeader) {
+                headers['Range'] = rangeHeader;
+                console.log('📍 Range request:', rangeHeader);
+            }
+
+            // Fetch the video from Plex with proper headers
+            const videoResponse = await fetch(videoUrl, { headers });
 
             if (!videoResponse.ok) {
+                console.error('❌ Plex fetch failed:', videoResponse.status);
                 return Response.json({ error: 'Failed to fetch video from Plex' }, { status: videoResponse.status });
             }
 
-            // Return the video stream with proper headers
+            console.log('✅ Plex response:', videoResponse.status, 'Content-Type:', videoResponse.headers.get('Content-Type'));
+
+            // Return the video stream with proper headers for browser playback
+            const responseHeaders = {
+                'Content-Type': videoResponse.headers.get('Content-Type') || 'video/mp4',
+                'Accept-Ranges': 'bytes',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                'Access-Control-Allow-Headers': 'Range',
+                'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+            };
+
+            // Forward Content-Length and Content-Range if present
+            if (videoResponse.headers.get('Content-Length')) {
+                responseHeaders['Content-Length'] = videoResponse.headers.get('Content-Length');
+            }
+            if (videoResponse.headers.get('Content-Range')) {
+                responseHeaders['Content-Range'] = videoResponse.headers.get('Content-Range');
+            }
+
             return new Response(videoResponse.body, {
                 status: videoResponse.status,
-                headers: {
-                    'Content-Type': videoResponse.headers.get('Content-Type') || 'video/mp4',
-                    'Content-Length': videoResponse.headers.get('Content-Length') || '',
-                    'Accept-Ranges': videoResponse.headers.get('Accept-Ranges') || 'bytes',
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-                    'Access-Control-Allow-Headers': 'Range',
-                    'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
-                }
+                headers: responseHeaders
             });
         }
 
