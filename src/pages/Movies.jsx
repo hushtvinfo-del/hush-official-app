@@ -22,15 +22,17 @@ const fetchMovies = async (playlistId, categoryId) => {
     const playlist = getPlaylistFromLocal(playlistId);
     if (!playlist) throw new Error("Playlist not found");
 
-    // Handle Plex categories
+    // Handle Plex categories - fetch all with increased limit
     if (categoryId.startsWith('plex_')) {
         const plexSectionId = categoryId.replace('plex_', '');
         const { data } = await base44.functions.invoke('plexProxy', {
             action: 'get_library_items',
-            sectionId: plexSectionId
+            sectionId: plexSectionId,
+            offset: 0,
+            limit: 500
         });
         
-        const items = data?.items || data || [];
+        const items = Array.isArray(data) ? data : [];
         return items.map(item => ({
             stream_id: `plex_${item.ratingKey}`,
             name: item.title,
