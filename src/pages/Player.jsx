@@ -60,27 +60,10 @@ export default function Player() {
   const coverImage = urlParams.get('coverImage') ? decodeURIComponent(urlParams.get('coverImage')) : '';
   const seriesId = urlParams.get('seriesId');
   
-  // Check if this is Plex content and needs proxying through backend
+  // Plex content should use direct URLs now - proxy handles CORS
   const isPlexContent = channelUrl.includes('X-Plex-Token');
-  if (isPlexContent && containerExtension !== 'm3u8') {
-    try {
-      const urlObj = new URL(channelUrl);
-      const partKey = urlObj.pathname;
-      const plexToken = urlObj.searchParams.get('X-Plex-Token');
-      const plexUrl = `${urlObj.protocol}//${urlObj.host}`;
-      
-      // Build proxy URL using our backend function
-      const proxyUrl = new URL(window.location.origin + '/api/plexProxy');
-      proxyUrl.searchParams.set('action', 'stream');
-      proxyUrl.searchParams.set('partKey', partKey);
-      proxyUrl.searchParams.set('plexUrl', plexUrl);
-      proxyUrl.searchParams.set('plexToken', plexToken);
-      
-      channelUrl = proxyUrl.toString();
-      console.log('🔄 Using Plex proxy for:', partKey);
-    } catch (e) {
-      console.error('Failed to create Plex proxy URL:', e);
-    }
+  if (isPlexContent) {
+    console.log('🎬 Playing Plex content directly');
   }
 
   const isVOD = containerExtension !== 'm3u8' && containerExtension !== null;
