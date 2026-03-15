@@ -314,8 +314,8 @@ export default function MainMenu() {
           Back to Accounts
         </Button>
         <div className="mb-8 text-left">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome, {accountInfo?.username || 'User'}!</h1>
-          <p className="text-cyan-300">Expiry: <span className="font-semibold text-cyan-200">{expiryDate}</span></p>
+          <h1 className="text-3xl md:text-4xl xl:text-6xl 2xl:text-7xl font-bold text-white mb-2">Welcome, {accountInfo?.username || 'User'}!</h1>
+          <p className="text-cyan-300 xl:text-xl 2xl:text-2xl">Expiry: <span className="font-semibold text-cyan-200">{expiryDate}</span></p>
         </div>
         
         <ContinueWatchingCard playlistId={playlistId} />
