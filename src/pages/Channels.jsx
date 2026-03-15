@@ -260,24 +260,24 @@ export default function Channels() {
         </Button>
 
         <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{categoryName}</h1>
-          <p className="text-cyan-300">{channels?.length || 0} channels available</p>
+          <h1 className="text-3xl md:text-4xl xl:text-6xl 2xl:text-7xl font-bold text-white mb-2">{categoryName}</h1>
+          <p className="text-cyan-300 xl:text-xl">{channels?.length || 0} channels available</p>
         </div>
 
         <div className="mb-6">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <div className="relative max-w-md xl:max-w-2xl">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 xl:w-7 xl:h-7 text-gray-400" />
             <Input
               type="text"
               placeholder="Search channels..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-slate-800/50 border-blue-500/30 text-white placeholder:text-gray-500 focus:border-blue-500"
+              className="pl-10 xl:pl-12 xl:h-14 xl:text-xl bg-slate-800/50 border-blue-500/30 text-white placeholder:text-gray-500 focus:border-blue-500"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 gap-4 xl:gap-6">
             {filteredChannels.map((channel, index) => {
                 const streamUrl = constructStreamUrl(playlist.host, playlist.username, playlist.password, channel.stream_id);
                 const isFavorite = favoriteChannelIds.has(channel.stream_id.toString());
