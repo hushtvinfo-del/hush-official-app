@@ -207,27 +207,27 @@ export default function Movies() {
                       whileTap={{ scale: 0.95 }}
                     >
                       <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all cursor-pointer group overflow-hidden h-full flex flex-col">
-                        <CardContent className="p-2 sm:p-3 relative flex-grow flex flex-col">
-                          <div className="aspect-[2/3] bg-gray-900/50 rounded-md mb-2 sm:mb-3 flex items-center justify-center overflow-hidden relative">
-                              <img
-                                src={movie.stream_icon}
-                                alt={movie.name}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                onError={(e) => { e.target.onerror = null; e.target.style.display='none'; e.target.nextSibling.style.display='flex' }}
-                              />
-                            <div style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
-                              <Film className="w-12 h-12 text-cyan-400" />
-                            </div>
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                                <Play className="w-5 h-5 sm:w-6 sm:h-6 text-white ml-0.5 sm:ml-1" />
-                              </div>
-                            </div>
-                          </div>
-                          <h3 className="text-xs sm:text-sm font-semibold text-white truncate leading-tight mb-1 sm:mb-2">{movie.name}</h3>
-                          {ratings && <MultiRatingBadge ratings={ratings} size="sm" />}
-                        </CardContent>
+                       <CardContent className="p-2 sm:p-3 xl:p-4 relative flex-grow flex flex-col">
+                         <div className="aspect-[2/3] bg-gray-900/50 rounded-md mb-2 sm:mb-3 flex items-center justify-center overflow-hidden relative">
+                             <img
+                               src={movie.stream_icon}
+                               alt={movie.name}
+                               className="w-full h-full object-cover"
+                               loading="lazy"
+                               onError={(e) => { e.target.onerror = null; e.target.style.display='none'; e.target.nextSibling.style.display='flex' }}
+                             />
+                           <div style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
+                             <Film className="w-12 h-12 xl:w-16 xl:h-16 text-cyan-400" />
+                           </div>
+                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                             <div className="w-10 h-10 sm:w-12 sm:h-12 xl:w-16 xl:h-16 bg-blue-600 rounded-full flex items-center justify-center">
+                               <Play className="w-5 h-5 sm:w-6 sm:h-6 xl:w-8 xl:h-8 text-white ml-0.5 sm:ml-1" />
+                             </div>
+                           </div>
+                         </div>
+                         <h3 className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-semibold text-white truncate leading-tight mb-1 sm:mb-2">{movie.name}</h3>
+                         {ratings && <MultiRatingBadge ratings={ratings} size="sm" />}
+                       </CardContent>
                       </Card>
                     </motion.div>
                   </Link>
