@@ -302,7 +302,7 @@ export default function MainMenu() {
   const expiryDate = accountInfo?.exp_date ? new Date(accountInfo.exp_date * 1000).toLocaleDateString() : 'Not available';
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8 xl:p-16">
       <RefreshToast 
         message="Refreshing categories..." 
         show={refreshingKey !== null} 
