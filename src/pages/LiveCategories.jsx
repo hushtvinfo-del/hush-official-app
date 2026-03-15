@@ -81,7 +81,7 @@ export default function LiveCategories() {
   );
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8 xl:p-16">
       <div className="max-w-7xl mx-auto">
         <Button variant="ghost" onClick={() => navigate(createPageUrl(`LiveTVMain?playlistId=${playlistId}`))} className="mb-6 text-cyan-300 hover:text-white hover:bg-blue-500/20">
           <ArrowLeft className="w-4 h-4 mr-2" />
