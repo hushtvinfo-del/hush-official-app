@@ -320,7 +320,7 @@ export default function MainMenu() {
         
         <ContinueWatchingCard playlistId={playlistId} />
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 xl:gap-10">
           {menuItems.map((item, index) => (
             <motion.div 
               key={item.name}
@@ -331,10 +331,10 @@ export default function MainMenu() {
             >
               <Link to={item.link}>
                   <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all group overflow-hidden text-center h-full flex flex-col">
-                      <CardContent className="p-8 flex flex-col items-center justify-center flex-grow">
+                      <CardContent className="p-8 xl:p-14 2xl:p-20 flex flex-col items-center justify-center flex-grow">
                           <motion.div whileHover={{ scale: 1.05 }} className="flex flex-col items-center">
-                              <item.icon className="w-24 h-24 text-cyan-400 group-hover:text-cyan-300 transition-colors duration-300" />
-                              <h2 className="text-3xl font-bold text-white mt-6 mb-2">{item.name}</h2>
+                              <item.icon className="w-24 h-24 xl:w-36 xl:h-36 2xl:w-44 2xl:h-44 text-cyan-400 group-hover:text-cyan-300 transition-colors duration-300" />
+                              <h2 className="text-3xl xl:text-5xl 2xl:text-6xl font-bold text-white mt-6 mb-2">{item.name}</h2>
                           </motion.div>
                       </CardContent>
                   </Card>
@@ -343,14 +343,14 @@ export default function MainMenu() {
                 <Button 
                   size="icon" 
                   variant="ghost" 
-                  className="absolute top-4 right-4 text-cyan-400 hover:text-white hover:bg-blue-500/20 z-10"
+                  className="absolute top-4 right-4 xl:top-6 xl:right-6 xl:w-12 xl:h-12 text-cyan-400 hover:text-white hover:bg-blue-500/20 z-10"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleRefresh(item.refreshKey);
                   }}
                   disabled={refreshingKey === item.refreshKey}
                 >
-                  <RefreshCw className={`w-5 h-5 ${refreshingKey === item.refreshKey ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-5 h-5 xl:w-7 xl:h-7 ${refreshingKey === item.refreshKey ? 'animate-spin' : ''}`} />
                 </Button>
               )}
             </motion.div>
@@ -365,10 +365,10 @@ export default function MainMenu() {
           >
             <Link to={searchItem.link}>
                 <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all group overflow-hidden text-center h-full flex flex-col">
-                    <CardContent className="p-8 flex flex-col items-center justify-center flex-grow">
+                    <CardContent className="p-8 xl:p-14 2xl:p-16 flex flex-col items-center justify-center flex-grow">
                         <motion.div whileHover={{ scale: 1.05 }} className="flex flex-col items-center">
-                            <searchItem.icon className="w-24 h-24 text-cyan-400 group-hover:text-cyan-300 transition-colors duration-300" />
-                            <h2 className="text-3xl font-bold text-white mt-6 mb-2">{searchItem.name}</h2>
+                            <searchItem.icon className="w-24 h-24 xl:w-36 xl:h-36 2xl:w-44 2xl:h-44 text-cyan-400 group-hover:text-cyan-300 transition-colors duration-300" />
+                            <h2 className="text-3xl xl:text-5xl 2xl:text-6xl font-bold text-white mt-6 mb-2">{searchItem.name}</h2>
                         </motion.div>
                     </CardContent>
                 </Card>
