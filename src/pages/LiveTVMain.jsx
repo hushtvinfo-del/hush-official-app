@@ -77,10 +77,10 @@ export default function LiveTVMain() {
           Back to Main Menu
         </Button>
         <div className="mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Live TV</h1>
-            <p className="text-cyan-300">Select a main category to browse</p>
+            <h1 className="text-3xl md:text-4xl xl:text-6xl 2xl:text-7xl font-bold text-white mb-2">Live TV</h1>
+            <p className="text-cyan-300 xl:text-xl 2xl:text-2xl">Select a main category to browse</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 xl:gap-10">
             {orderedCategoryKeys.map((key, index) => {
                 const config = mainCategoryConfig[key];
                 if (!config) return null; 
@@ -89,10 +89,13 @@ export default function LiveTVMain() {
                     <Link to={createPageUrl(`LiveCategories?playlistId=${playlistId}&group=${key}`)} key={key}>
                         <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}>
                             <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all group overflow-hidden text-center h-full flex flex-col">
-                                <CardContent className="p-8 flex flex-col items-center justify-center flex-grow">
+                                <CardContent className="p-8 xl:p-14 2xl:p-20 flex flex-col items-center justify-center flex-grow">
                                     <motion.div whileHover={{ scale: 1.05 }} className="flex flex-col items-center">
-                                        {typeof config.icon === 'function' ? config.icon() : <config.icon className="w-20 h-20 text-cyan-400 group-hover:text-cyan-300 transition-colors" />}
-                                        <h2 className="text-3xl font-bold text-white mt-6 mb-2">{config.name}</h2>
+                                        {typeof config.icon === 'function'
+                                            ? <span className="text-5xl xl:text-8xl 2xl:text-9xl">{key === 'US' ? '🇺🇸' : key === 'UK' ? '🇬🇧' : '🇨🇦'}</span>
+                                            : <config.icon className="w-20 h-20 xl:w-32 xl:h-32 2xl:w-40 2xl:h-40 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
+                                        }
+                                        <h2 className="text-3xl xl:text-5xl 2xl:text-6xl font-bold text-white mt-6 mb-2">{config.name}</h2>
                                     </motion.div>
                                 </CardContent>
                             </Card>
