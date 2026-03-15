@@ -142,15 +142,15 @@ export default function Dashboard() {
                     <CardContent className="p-0">
                       <div className="flex flex-col md:flex-row md:items-center">
                         {/* Account Info Section */}
-                        <div className="flex-1 p-4 md:p-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
-                              <User2 className="w-6 h-6 text-white" />
+                        <div className="flex-1 p-4 md:p-6 xl:p-10">
+                          <div className="flex items-center gap-3 xl:gap-6">
+                            <div className="w-12 h-12 xl:w-20 xl:h-20 2xl:w-24 2xl:h-24 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                              <User2 className="w-6 h-6 xl:w-10 xl:h-10 2xl:w-12 2xl:h-12 text-white" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h3 className="text-lg md:text-xl font-bold text-white truncate">{playlist.name}</h3>
-                              <p className="text-gray-400 text-xs md:text-sm flex items-center gap-2">
-                                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                              <h3 className="text-lg md:text-xl xl:text-3xl 2xl:text-4xl font-bold text-white truncate">{playlist.name}</h3>
+                              <p className="text-gray-400 text-xs md:text-sm xl:text-lg flex items-center gap-2">
+                                <span className="w-2 h-2 xl:w-3 xl:h-3 bg-green-400 rounded-full"></span>
                                 Active Account
                               </p>
                             </div>
@@ -158,10 +158,10 @@ export default function Dashboard() {
                         </div>
 
                         {/* Actions Section */}
-                        <div className="flex items-center gap-2 p-4 md:p-6 border-t md:border-t-0 md:border-l border-blue-500/20">
+                        <div className="flex items-center gap-2 xl:gap-4 p-4 md:p-6 xl:p-10 border-t md:border-t-0 md:border-l border-blue-500/20">
                           <Link to={createPageUrl(`MainMenu?playlistId=${playlist.id}`)} className="flex-1 md:flex-none">
-                            <Button className="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white shadow-lg">
-                              <Play className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+                            <Button className="w-full xl:h-16 xl:px-10 xl:text-xl bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white shadow-lg">
+                              <Play className="w-4 h-4 md:w-5 md:h-5 xl:w-7 xl:h-7 mr-2" />
                               <span className="whitespace-nowrap">Watch Now</span>
                             </Button>
                           </Link>
@@ -170,9 +170,9 @@ export default function Dashboard() {
                             variant="ghost"
                             size="icon"
                             onClick={() => setPlaylistToDelete(playlist)}
-                            className="text-gray-400 hover:text-red-400 hover:bg-red-500/20 flex-shrink-0"
+                            className="text-gray-400 hover:text-red-400 hover:bg-red-500/20 flex-shrink-0 xl:w-14 xl:h-14"
                           >
-                            <Trash2 className="w-5 h-5" />
+                            <Trash2 className="w-5 h-5 xl:w-7 xl:h-7" />
                           </Button>
                         </div>
                       </div>
