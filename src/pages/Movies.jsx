@@ -155,34 +155,34 @@ export default function Movies() {
         </Button>
 
         <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2">{categoryName}</h1>
-          <p className="text-sm sm:text-base text-cyan-300">{movies?.length || 0} movies available</p>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl xl:text-6xl 2xl:text-7xl font-bold text-white mb-2">{categoryName}</h1>
+          <p className="text-sm sm:text-base xl:text-xl text-cyan-300">{movies?.length || 0} movies available</p>
         </div>
 
         <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between">
-          <div className="relative w-full max-w-md flex-grow">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+          <div className="relative w-full max-w-md xl:max-w-2xl flex-grow">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 xl:w-6 xl:h-6 text-gray-400" />
             <Input
               type="text"
               placeholder="Search movies..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 sm:pl-10 text-sm sm:text-base bg-slate-800/50 border-blue-500/30 text-white placeholder:text-gray-500 focus:border-blue-500 w-full"
+              className="pl-9 sm:pl-10 xl:pl-12 xl:h-14 xl:text-xl text-sm sm:text-base bg-slate-800/50 border-blue-500/30 text-white placeholder:text-gray-500 focus:border-blue-500 w-full"
             />
           </div>
           <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-full sm:w-48 text-sm sm:text-base bg-slate-800/50 border-blue-500/30 text-white">
+            <SelectTrigger className="w-full sm:w-48 xl:w-64 xl:h-14 xl:text-xl text-sm sm:text-base bg-slate-800/50 border-blue-500/30 text-white">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent className="bg-slate-900 border-blue-500/30">
-              <SelectItem value="newest" className="text-white hover:bg-blue-500/20 text-sm sm:text-base">Newest First</SelectItem>
-              <SelectItem value="az" className="text-white hover:bg-blue-500/20 text-sm sm:text-base">A-Z</SelectItem>
-              <SelectItem value="default" className="text-white hover:bg-blue-500/20 text-sm sm:text-base">Default</SelectItem>
+              <SelectItem value="newest" className="text-white hover:bg-blue-500/20 text-sm sm:text-base xl:text-lg">Newest First</SelectItem>
+              <SelectItem value="az" className="text-white hover:bg-blue-500/20 text-sm sm:text-base xl:text-lg">A-Z</SelectItem>
+              <SelectItem value="default" className="text-white hover:bg-blue-500/20 text-sm sm:text-base xl:text-lg">Default</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 sm:gap-4 xl:gap-6">
             {sortedMovies.map((movie, index) => {
                 const ratings = movie.rating ? {
                   imdb: (parseFloat(movie.rating) || 0).toFixed(1),
