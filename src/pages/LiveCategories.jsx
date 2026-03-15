@@ -89,29 +89,29 @@ export default function LiveCategories() {
         </Button>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
             <div>
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{pageTitle}</h1>
-                <p className="text-cyan-300">Browse channels by category</p>
+                <h1 className="text-3xl md:text-4xl xl:text-6xl 2xl:text-7xl font-bold text-white mb-2">{pageTitle}</h1>
+                <p className="text-cyan-300 xl:text-xl">Browse channels by category</p>
             </div>
-            <div className="relative flex-grow md:max-w-xs w-full">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <Input type="text" placeholder="Search categories..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 bg-slate-800/50 border-blue-500/30 text-white" />
+            <div className="relative flex-grow md:max-w-xs xl:max-w-md w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 xl:w-6 xl:h-6 text-gray-400" />
+                <Input type="text" placeholder="Search categories..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 xl:pl-12 xl:h-14 xl:text-xl bg-slate-800/50 border-blue-500/30 text-white" />
             </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 xl:gap-6">
           {filteredCategories.map((category, index) => (
             <Link key={category.category_id} to={createPageUrl(`Channels?playlistId=${playlistId}&categoryId=${category.category_id}&categoryName=${encodeURIComponent(category.category_name)}&group=${group || ''}`)}>
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all cursor-pointer group overflow-hidden">
-                  <CardContent className="p-6 flex items-center justify-between relative">
-                    <div className="flex items-center gap-4 overflow-hidden">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500/20 to-blue-800/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <Tv className="w-6 h-6 text-cyan-400" />
+                  <CardContent className="p-6 xl:p-8 flex items-center justify-between relative">
+                    <div className="flex items-center gap-4 xl:gap-6 overflow-hidden">
+                      <div className="w-12 h-12 xl:w-16 xl:h-16 bg-gradient-to-br from-blue-500/20 to-blue-800/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Tv className="w-6 h-6 xl:w-8 xl:h-8 text-cyan-400" />
                       </div>
                       <div className="overflow-hidden">
-                        <h3 className="text-lg font-semibold text-white mb-1 truncate">{category.category_name}</h3>
+                        <h3 className="text-lg xl:text-2xl font-semibold text-white mb-1 truncate">{category.category_name}</h3>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-cyan-400 group-hover:translate-x-1 transition-transform flex-shrink-0 ml-2" />
+                    <ChevronRight className="w-5 h-5 xl:w-7 xl:h-7 text-cyan-400 group-hover:translate-x-1 transition-transform flex-shrink-0 ml-2" />
                   </CardContent>
                 </Card>
               </motion.div>
