@@ -294,37 +294,37 @@ export default function Channels() {
                       whileTap={{ scale: 0.95 }}
                     >
                       <Card className="bg-slate-800/50 backdrop-blur-xl border-blue-500/30 hover:border-blue-500/60 transition-all cursor-pointer group overflow-hidden h-full flex flex-col">
-                        <CardContent className="p-3 relative flex-grow flex flex-col">
-                          <button
-                            onClick={(e) => handleToggleFavorite(e, channel)}
-                            className="absolute top-2 right-2 z-10 w-8 h-8 bg-gray-900/80 hover:bg-gray-800 rounded-full flex items-center justify-center transition-all"
-                          >
-                            <Star className={`w-4 h-4 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-                          </button>
-                          <div className="aspect-video bg-gray-900/50 rounded-md mb-3 flex items-center justify-center overflow-hidden relative">
-                              <img
-                                src={channel.stream_icon}
-                                alt={channel.name}
-                                className="w-full h-full object-contain"
-                                loading="lazy"
-                                onError={(e) => { e.target.onerror = null; e.target.style.display='none'; e.target.nextSibling.style.display='flex' }}
-                              />
-                            <div style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
-                              <Tv className="w-8 h-8 text-cyan-400" />
-                            </div>
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                                <Play className="w-6 h-6 text-white ml-1" />
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {isFavorite && (
-                              <Star className="w-3 h-3 fill-yellow-400 text-yellow-400 flex-shrink-0" />
-                            )}
-                            <h3 className="text-sm font-semibold text-white truncate leading-tight">{channel.name}</h3>
-                          </div>
-                        </CardContent>
+                       <CardContent className="p-3 xl:p-4 relative flex-grow flex flex-col">
+                         <button
+                           onClick={(e) => handleToggleFavorite(e, channel)}
+                           className="absolute top-2 right-2 z-10 w-8 h-8 xl:w-10 xl:h-10 bg-gray-900/80 hover:bg-gray-800 rounded-full flex items-center justify-center transition-all"
+                         >
+                           <Star className={`w-4 h-4 xl:w-5 xl:h-5 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                         </button>
+                         <div className="aspect-video bg-gray-900/50 rounded-md mb-3 flex items-center justify-center overflow-hidden relative">
+                             <img
+                               src={channel.stream_icon}
+                               alt={channel.name}
+                               className="w-full h-full object-contain"
+                               loading="lazy"
+                               onError={(e) => { e.target.onerror = null; e.target.style.display='none'; e.target.nextSibling.style.display='flex' }}
+                             />
+                           <div style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
+                             <Tv className="w-8 h-8 xl:w-12 xl:h-12 text-cyan-400" />
+                           </div>
+                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                             <div className="w-12 h-12 xl:w-16 xl:h-16 bg-blue-600 rounded-full flex items-center justify-center">
+                               <Play className="w-6 h-6 xl:w-8 xl:h-8 text-white ml-1" />
+                             </div>
+                           </div>
+                         </div>
+                         <div className="flex items-center gap-1">
+                           {isFavorite && (
+                             <Star className="w-3 h-3 xl:w-4 xl:h-4 fill-yellow-400 text-yellow-400 flex-shrink-0" />
+                           )}
+                           <h3 className="text-sm xl:text-base 2xl:text-lg font-semibold text-white truncate leading-tight">{channel.name}</h3>
+                         </div>
+                       </CardContent>
                       </Card>
                     </motion.div>
                   </Link>
