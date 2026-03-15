@@ -96,11 +96,11 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen p-4 md:p-8 xl:p-16">
+      <div className="max-w-4xl xl:max-w-5xl 2xl:max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">My Accounts</h1>
-          <p className="text-cyan-300">Manage your HushTV accounts</p>
+          <h1 className="text-3xl md:text-4xl xl:text-6xl 2xl:text-7xl font-bold text-white mb-2">My Accounts</h1>
+          <p className="text-cyan-300 xl:text-xl 2xl:text-2xl">Manage your HushTV accounts</p>
         </div>
 
         <div className="mb-6">
