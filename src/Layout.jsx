@@ -258,44 +258,44 @@ export default function Layout({ children, currentPageName }) {
         `}</style>
         
         <Sidebar className={`border-r border-blue-500/20 ${enableBlur ? 'bg-slate-900/95 backdrop-blur-xl' : 'bg-slate-900'}`}>
-          <SidebarHeader className="border-b border-blue-500/20 p-6">
+          <SidebarHeader className="border-b border-blue-500/20 p-6 xl:p-8">
             <div className="flex items-center justify-center">
-              <HushTVLogo className="text-4xl" />
+              <HushTVLogo className="text-4xl xl:text-5xl 2xl:text-6xl" />
             </div>
           </SidebarHeader>
           
-          <SidebarContent className="p-3 flex-grow">
+          <SidebarContent className="p-3 xl:p-4 flex-grow">
             {navigationItems.map((item) => (
               <Link
                 to={item.url}
                 key={item.title} 
-                className={`flex items-center gap-3 px-4 ${isTV ? 'py-4' : 'py-3'} hover:bg-blue-500/20 hover:text-cyan-300 ${enableAnimations ? 'transition-all duration-200' : ''} rounded-lg mb-1 ${isTV ? 'tv-focusable' : ''} ${
+                className={`flex items-center gap-3 xl:gap-5 px-4 xl:px-6 ${isTV ? 'py-4 xl:py-6' : 'py-3 xl:py-5'} hover:bg-blue-500/20 hover:text-cyan-300 ${enableAnimations ? 'transition-all duration-200' : ''} rounded-lg mb-1 xl:mb-2 ${isTV ? 'tv-focusable' : ''} ${
                   location.pathname === item.url ? 'bg-blue-500/30 text-cyan-300 shadow-lg shadow-blue-500/20' : 'text-gray-300'
                 }`}
               >
-                <item.icon className={`${isTV ? 'w-6 h-6' : 'w-5 h-5'}`} />
-                <span className={`font-medium ${isTV ? 'text-lg' : ''}`}>{item.title}</span>
+                <item.icon className={`${isTV ? 'w-6 h-6 xl:w-8 xl:h-8' : 'w-5 h-5 xl:w-7 xl:h-7'}`} />
+                <span className={`font-medium ${isTV ? 'text-lg xl:text-2xl' : 'xl:text-xl'}`}>{item.title}</span>
               </Link>
             ))}
           </SidebarContent>
 
-          <div className="border-t border-blue-500/20 p-4">
+          <div className="border-t border-blue-500/20 p-4 xl:p-6">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center shadow-lg">
-                  <User className="w-5 h-5 text-white" />
+              <div className="flex items-center gap-3 xl:gap-4">
+                <div className="w-10 h-10 xl:w-14 xl:h-14 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center shadow-lg">
+                  <User className="w-5 h-5 xl:w-7 xl:h-7 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-white text-sm">Guest User</p>
-                  <p className="text-xs text-cyan-300">HushTV Player</p>
+                  <p className="font-medium text-white text-sm xl:text-lg">Guest User</p>
+                  <p className="text-xs xl:text-base text-cyan-300">HushTV Player</p>
                 </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors"
+                className="p-2 xl:p-3 hover:bg-blue-500/20 rounded-lg transition-colors"
                 title="Clear all data"
               >
-                <LogOut className="w-4 h-4 text-gray-400" />
+                <LogOut className="w-4 h-4 xl:w-6 xl:h-6 text-gray-400" />
               </button>
             </div>
           </div>
