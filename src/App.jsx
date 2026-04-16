@@ -9,6 +9,10 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import Admin from './pages/Admin';
+import BroadcastBanner from './components/BroadcastBanner';
+import { useBroadcast } from './hooks/useBroadcast';
+import { useSessionTracker } from './hooks/useSessionTracker';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -66,14 +70,29 @@ const AuthenticatedApp = () => {
 };
 
 
-function App() {
+function AppWithBroadcast() {
+  const { newMessage, dismissMessage } = useBroadcast();
+  useSessionTracker();
 
+  return (
+    <>
+      <BroadcastBanner message={newMessage} onDismiss={dismissMessage} />
+      <NavigationTracker />
+      <AuthenticatedApp />
+    </>
+  );
+}
+
+function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
-          <NavigationTracker />
-          <AuthenticatedApp />
+          <Routes>
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/*" element={<Admin />} />
+            <Route path="*" element={<AppWithBroadcast />} />
+          </Routes>
         </Router>
         <Toaster />
         <VisualEditAgent />
