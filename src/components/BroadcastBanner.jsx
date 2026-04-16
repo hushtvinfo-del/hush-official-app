@@ -35,7 +35,7 @@ export default function BroadcastBanner({ message, onDismiss }) {
                         <span className={`text-sm ${config.text}`}>{message.message}</span>
                     </div>
                     <button
-                        onClick={onDismiss}
+                        onClick={() => onDismiss(message.id)}
                         className="flex-shrink-0 p-1 rounded hover:bg-black/20 transition-colors"
                     >
                         <X className="w-4 h-4 text-white" />

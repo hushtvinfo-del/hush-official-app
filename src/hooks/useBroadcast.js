@@ -22,8 +22,6 @@ export function useBroadcast() {
                 const unseen = valid.find(m => !seenIds.current.has(m.id));
                 if (unseen) {
                     setNewMessage(unseen);
-                    seenIds.current.add(unseen.id);
-                    sessionStorage.setItem('seenBroadcasts', JSON.stringify([...seenIds.current]));
                 }
             } catch (e) {
                 // Silently fail
@@ -31,11 +29,17 @@ export function useBroadcast() {
         };
 
         check();
-        const interval = setInterval(check, 30000); // Poll every 30s
+        const interval = setInterval(check, 10000); // Poll every 10s
         return () => clearInterval(interval);
     }, []);
 
-    const dismissMessage = () => setNewMessage(null);
+    const dismissMessage = (id) => {
+        if (id) {
+            seenIds.current.add(id);
+            sessionStorage.setItem('seenBroadcasts', JSON.stringify([...seenIds.current]));
+        }
+        setNewMessage(null);
+    };
 
     return { activeBroadcasts, newMessage, dismissMessage };
 }
