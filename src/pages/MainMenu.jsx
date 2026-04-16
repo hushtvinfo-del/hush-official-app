@@ -299,7 +299,12 @@ export default function MainMenu() {
       return <div className="text-white p-8 text-center">Loading Menu...</div>
   }
   
-  const expiryDate = accountInfo?.exp_date ? new Date(accountInfo.exp_date * 1000).toLocaleDateString() : 'Not available';
+  const expiryTimestamp = accountInfo?.exp_date ? parseInt(accountInfo.exp_date) : null;
+  const expiryDate = expiryTimestamp ? new Date(expiryTimestamp * 1000) : null;
+  const expiryDateStr = expiryDate ? expiryDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
+  const daysLeft = expiryDate ? Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24)) : null;
+  const isExpiringSoon = daysLeft !== null && daysLeft <= 7;
+  const isExpired = daysLeft !== null && daysLeft <= 0;
 
   return (
     <div className="min-h-screen p-4 md:p-8 xl:p-16">
@@ -315,7 +320,22 @@ export default function MainMenu() {
         </Button>
         <div className="mb-8 text-left">
           <h1 className="text-3xl md:text-4xl xl:text-6xl 2xl:text-7xl font-bold text-white mb-2">Welcome, {accountInfo?.username || 'User'}!</h1>
-          <p className="text-cyan-300 xl:text-xl 2xl:text-2xl">Expiry: <span className="font-semibold text-cyan-200">{expiryDate}</span></p>
+          {expiryDateStr ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-cyan-300 xl:text-xl 2xl:text-2xl">
+                Account expires: <span className="font-semibold text-cyan-200">{expiryDateStr}</span>
+              </p>
+              {isExpired ? (
+                <span className="px-3 py-1 rounded-full text-sm font-bold bg-red-600 text-white">Expired</span>
+              ) : isExpiringSoon ? (
+                <span className="px-3 py-1 rounded-full text-sm font-bold bg-yellow-500 text-black">Expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}</span>
+              ) : (
+                <span className="px-3 py-1 rounded-full text-sm font-semibold bg-green-600/30 border border-green-500/50 text-green-300">{daysLeft} days left</span>
+              )}
+            </div>
+          ) : (
+            <p className="text-cyan-300 xl:text-xl 2xl:text-2xl">Account expires: <span className="text-gray-400">Loading...</span></p>
+          )}
         </div>
         
         <ContinueWatchingCard playlistId={playlistId} />
