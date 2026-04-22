@@ -2,331 +2,319 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Smartphone, Download, CheckCircle, Copy, Terminal, Package, Play, Code } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Copy, AlertTriangle, Tv, Download, Terminal, Package, ExternalLink } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-const CodeBlock = ({ children, language = 'bash' }) => {
+// The live URL of your HushTV web app
+const APP_URL = window.location.origin;
+const TV_URL = `${APP_URL}/tv`;
+
+const CodeBlock = ({ children }) => {
   const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(children);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
-    <div className="relative group">
-      <pre className="bg-gray-950 p-4 rounded-lg overflow-x-auto border border-orange-500/20">
-        <code className="text-sm text-green-300">{children}</code>
+    <div className="relative group my-3">
+      <pre className="bg-gray-950 p-4 rounded-lg overflow-x-auto border border-cyan-500/20 text-sm">
+        <code className="text-green-300 whitespace-pre-wrap break-all">{children}</code>
       </pre>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={handleCopy}
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/80 hover:bg-gray-700"
+      <button
+        onClick={() => { navigator.clipboard.writeText(children); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+        className="absolute top-2 right-2 flex items-center gap-1 px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity"
       >
-        {copied ? (
-          <>
-            <CheckCircle className="w-4 h-4 mr-2 text-green-400" />
-            <span className="text-green-400">Copied!</span>
-          </>
-        ) : (
-          <>
-            <Copy className="w-4 h-4 mr-2" />
-            Copy
-          </>
-        )}
-      </Button>
+        {copied ? <><CheckCircle className="w-3 h-3 text-green-400" /> Copied!</> : <><Copy className="w-3 h-3" /> Copy</>}
+      </button>
     </div>
   );
 };
 
-const Step = ({ number, title, children, icon: Icon }) => (
-  <Card className="bg-gray-800/50 border-orange-500/30 mb-6">
-    <CardHeader>
-      <CardTitle className="flex items-center gap-3 text-white">
-        <div className="w-10 h-10 bg-gradient-to-br from-orange-600 to-orange-800 rounded-full flex items-center justify-center font-bold text-lg">
-          {number}
-        </div>
-        <div className="flex items-center gap-2">
-          {Icon && <Icon className="w-5 h-5 text-orange-400" />}
+const Step = ({ number, title, children, color = 'blue' }) => {
+  const colors = {
+    blue: 'from-blue-600 to-cyan-600 border-blue-500/30',
+    green: 'from-green-600 to-emerald-600 border-green-500/30',
+    purple: 'from-purple-600 to-pink-600 border-purple-500/30',
+    orange: 'from-orange-600 to-red-600 border-orange-500/30',
+  };
+  return (
+    <Card className={`bg-gray-900/60 border mb-6 ${colors[color].split(' ')[2]}`}>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-3 text-white text-lg">
+          <div className={`w-9 h-9 bg-gradient-to-br ${colors[color].split(' ')[0]} ${colors[color].split(' ')[1]} rounded-full flex items-center justify-center font-black text-base flex-shrink-0`}>
+            {number}
+          </div>
           {title}
-        </div>
-      </CardTitle>
-    </CardHeader>
-    <CardContent className="text-gray-300 space-y-4">
-      {children}
-    </CardContent>
-  </Card>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="text-gray-300 space-y-3 text-sm leading-relaxed">
+        {children}
+      </CardContent>
+    </Card>
+  );
+};
+
+const Pill = ({ children }) => (
+  <span className="inline-block bg-gray-800 border border-gray-600 text-cyan-300 px-2 py-0.5 rounded font-mono text-xs">{children}</span>
 );
 
 export default function CapacitorSetup() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-5xl mx-auto">
-        <Button 
-          variant="ghost" 
-          onClick={() => navigate(-1)} 
-          className="mb-6 text-orange-300 hover:text-white hover:bg-orange-500/20"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
+    <div className="min-h-screen p-4 md:p-8 bg-gray-950">
+      <div className="max-w-3xl mx-auto">
+        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 text-cyan-300 hover:text-white hover:bg-cyan-500/20">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back
         </Button>
 
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-            <Smartphone className="w-10 h-10 text-orange-400" />
-            Capacitor Setup Guide
+            <Tv className="w-10 h-10 text-cyan-400" />
+            Build Android TV APK
           </h1>
-          <p className="text-orange-300 text-lg">Convert HushTV Web Player to Native iOS & Android Apps</p>
+          <p className="text-cyan-300 text-lg">Step-by-step guide — no coding experience needed</p>
         </div>
 
-        <Alert className="mb-6 bg-orange-900/20 border-orange-500/30">
-          <AlertDescription className="text-orange-200">
-            <strong>📱 What You'll Get:</strong> Native iOS and Android apps that can be published to App Store and Google Play Store, 
-            with full access to device features and better performance than PWA.
+        <Alert className="mb-8 bg-cyan-900/20 border-cyan-500/40">
+          <AlertDescription className="text-cyan-200 text-sm">
+            <strong>📺 What you'll end up with:</strong> An APK file you can sideload onto your NVIDIA Shield, Fire Stick, or any Android TV device. The app will open directly to the TV interface at <span className="font-mono text-cyan-400">/tv</span>.
           </AlertDescription>
         </Alert>
 
-        <Step number={1} title="Prerequisites" icon={Package}>
-          <p>Before starting, make sure you have the following installed on your development machine:</p>
-          <ul className="list-disc list-inside space-y-2 pl-4 text-gray-300">
-            <li><strong className="text-white">Node.js</strong> (v16 or higher) - <a href="https://nodejs.org" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">Download here</a></li>
-            <li><strong className="text-white">Android Studio</strong> (for Android builds) - <a href="https://developer.android.com/studio" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">Download here</a></li>
-            <li><strong className="text-white">Xcode</strong> (for iOS builds, Mac only) - <a href="https://apps.apple.com/app/xcode/id497799835" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">Download here</a></li>
-            <li><strong className="text-white">Git</strong> - <a href="https://git-scm.com" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">Download here</a></li>
-          </ul>
-        </Step>
-
-        <Step number={2} title="Download Your App Code" icon={Download}>
-          <p>First, you need to export your app code from Base44:</p>
-          <ol className="list-decimal list-inside space-y-3 pl-4">
-            <li className="text-white">
-              Go to your Base44 Dashboard → <strong>Code</strong> → <strong>Export</strong>
-            </li>
-            <li className="text-white">
-              Click <strong>"Download Source Code"</strong> to get a ZIP file
-            </li>
-            <li className="text-white">
-              Extract the ZIP file to a folder on your computer (e.g., <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">~/Projects/hushtv-app</code>)
-            </li>
-          </ol>
-          <Alert className="mt-4 bg-blue-900/20 border-blue-500/30">
-            <AlertDescription className="text-blue-200">
-              💡 <strong>Tip:</strong> Choose a location without spaces in the path for better compatibility.
-            </AlertDescription>
-          </Alert>
-        </Step>
-
-        <Step number={3} title="Install Capacitor CLI" icon={Terminal}>
-          <p>Open Terminal (Mac/Linux) or Command Prompt (Windows) and navigate to your app folder:</p>
-          <CodeBlock>cd ~/Projects/hushtv-app</CodeBlock>
-          
-          <p className="mt-4">Install Capacitor and required dependencies:</p>
-          <CodeBlock>{`npm install @capacitor/core @capacitor/cli
-npm install @capacitor/android @capacitor/ios
-npm install @capacitor/splash-screen @capacitor/status-bar`}</CodeBlock>
-        </Step>
-
-        <Step number={4} title="Initialize Capacitor" icon={Code}>
-          <p>Initialize Capacitor in your project:</p>
-          <CodeBlock>npx cap init "HushTV Player" "com.hushtv.player" --web-dir=build</CodeBlock>
-          
-          <p className="mt-4">This creates a <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">capacitor.config.json</code> file. Replace its contents with the optimized config:</p>
-          <div className="bg-gray-900 p-4 rounded-lg border border-orange-500/20">
-            <p className="text-sm text-gray-400 mb-2">📄 capacitor.config.json (already created in your project)</p>
-            <p className="text-orange-300">✅ This file is already configured in your exported code!</p>
-          </div>
-        </Step>
-
-        <Step number={5} title="Build Your Web App" icon={Package}>
-          <p>Build the React app for production:</p>
-          <CodeBlock>npm run build</CodeBlock>
-          
-          <Alert className="mt-4 bg-yellow-900/20 border-yellow-500/30">
-            <AlertDescription className="text-yellow-200">
-              ⚠️ <strong>Important:</strong> You must run <code className="bg-gray-900 px-2 py-1 rounded">npm run build</code> every time you make changes to your app code.
-            </AlertDescription>
-          </Alert>
-        </Step>
-
-        <Step number={6} title="Add iOS & Android Platforms" icon={Smartphone}>
-          <p>Add native platforms to your project:</p>
-          
-          <div className="space-y-4">
-            <div>
-              <p className="font-semibold text-white mb-2">For Android:</p>
-              <CodeBlock>npx cap add android</CodeBlock>
+        {/* Your app URL */}
+        <Card className="bg-blue-950/40 border-blue-500/30 mb-8">
+          <CardContent className="pt-4">
+            <p className="text-white font-semibold mb-2 text-sm">📌 Your TV App URL (you'll need this in Step 4):</p>
+            <div className="bg-gray-950 px-4 py-3 rounded-lg border border-blue-500/30 font-mono text-cyan-300 text-sm break-all flex items-center justify-between gap-3">
+              <span>{TV_URL}</span>
+              <button
+                onClick={() => navigator.clipboard.writeText(TV_URL)}
+                className="flex-shrink-0 text-gray-400 hover:text-white"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
             </div>
-            
-            <div>
-              <p className="font-semibold text-white mb-2">For iOS (Mac only):</p>
-              <CodeBlock>npx cap add ios</CodeBlock>
-            </div>
-          </div>
-
-          <p className="mt-4">Sync your web code to the native projects:</p>
-          <CodeBlock>npx cap sync</CodeBlock>
-        </Step>
-
-        <Step number={7} title="Configure Android App" icon={Smartphone}>
-          <p>Open Android Studio:</p>
-          <CodeBlock>npx cap open android</CodeBlock>
-
-          <div className="mt-4 space-y-3">
-            <p className="font-semibold text-white">In Android Studio:</p>
-            <ol className="list-decimal list-inside space-y-2 pl-4">
-              <li>Wait for Gradle sync to complete</li>
-              <li>Go to <strong className="text-white">Build</strong> → <strong className="text-white">Select Build Variant</strong> → Choose <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">release</code></li>
-              <li>Update app icon: Replace files in <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">android/app/src/main/res/mipmap-*</code> folders</li>
-              <li>Edit <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">android/app/src/main/res/values/strings.xml</code>:</li>
-            </ol>
-          </div>
-
-          <CodeBlock language="xml">{`<resources>
-    <string name="app_name">HushTV Player</string>
-    <string name="title_activity_main">HushTV Player</string>
-    <string name="package_name">com.hushtv.player</string>
-    <string name="custom_url_scheme">com.hushtv.player</string>
-</resources>`}</CodeBlock>
-
-          <p className="mt-4">Build APK:</p>
-          <ol className="list-decimal list-inside space-y-2 pl-4 mt-2">
-            <li>Go to <strong className="text-white">Build</strong> → <strong className="text-white">Build Bundle(s) / APK(s)</strong> → <strong className="text-white">Build APK(s)</strong></li>
-            <li>Wait for build to complete</li>
-            <li>Click <strong className="text-white">"locate"</strong> to find your APK file</li>
-            <li>APK location: <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">android/app/build/outputs/apk/release/app-release.apk</code></li>
-          </ol>
-        </Step>
-
-        <Step number={8} title="Configure iOS App" icon={Smartphone}>
-          <p>Open Xcode (Mac only):</p>
-          <CodeBlock>npx cap open ios</CodeBlock>
-
-          <div className="mt-4 space-y-3">
-            <p className="font-semibold text-white">In Xcode:</p>
-            <ol className="list-decimal list-inside space-y-2 pl-4">
-              <li>Select <strong className="text-white">App</strong> target in the sidebar</li>
-              <li>Update <strong className="text-white">Bundle Identifier</strong> to <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">com.hushtv.player</code></li>
-              <li>Set <strong className="text-white">Team</strong> (requires Apple Developer account)</li>
-              <li>Update app icon: Drag icon images to <strong className="text-white">Assets.xcassets/AppIcon</strong></li>
-              <li>Go to <strong className="text-white">Signing & Capabilities</strong> → Enable <strong className="text-white">Automatically manage signing</strong></li>
-            </ol>
-          </div>
-
-          <p className="mt-4">Build IPA:</p>
-          <ol className="list-decimal list-inside space-y-2 pl-4 mt-2">
-            <li>Select <strong className="text-white">Any iOS Device</strong> (or your connected iPhone) from device dropdown</li>
-            <li>Go to <strong className="text-white">Product</strong> → <strong className="text-white">Archive</strong></li>
-            <li>Wait for archive to complete</li>
-            <li>Click <strong className="text-white">Distribute App</strong> → Choose distribution method</li>
-          </ol>
-
-          <Alert className="mt-4 bg-blue-900/20 border-blue-500/30">
-            <AlertDescription className="text-blue-200">
-              💡 <strong>Note:</strong> iOS apps require an Apple Developer account ($99/year) to publish to App Store or install on real devices.
-            </AlertDescription>
-          </Alert>
-        </Step>
-
-        <Step number={9} title="Testing Your Apps" icon={Play}>
-          <div className="space-y-4">
-            <div>
-              <p className="font-semibold text-white mb-2">Test on Android:</p>
-              <ul className="list-disc list-inside space-y-2 pl-4">
-                <li>Connect Android device via USB with <strong className="text-white">USB Debugging</strong> enabled</li>
-                <li>In Android Studio, click the <strong className="text-white">Run</strong> button (green play icon)</li>
-                <li>Or install APK manually: <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">adb install app-release.apk</code></li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-semibold text-white mb-2">Test on iOS:</p>
-              <ul className="list-disc list-inside space-y-2 pl-4">
-                <li>Connect iPhone/iPad via USB</li>
-                <li>Select your device in Xcode</li>
-                <li>Click the <strong className="text-white">Run</strong> button (play icon)</li>
-              </ul>
-            </div>
-          </div>
-        </Step>
-
-        <Step number={10} title="Publishing to App Stores" icon={Download}>
-          <div className="space-y-4">
-            <div>
-              <p className="font-semibold text-white mb-2">📱 Google Play Store (Android):</p>
-              <ol className="list-decimal list-inside space-y-2 pl-4">
-                <li>Create a <a href="https://play.google.com/console" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">Google Play Developer account</a> ($25 one-time fee)</li>
-                <li>Generate signed APK/AAB in Android Studio (<strong className="text-white">Build</strong> → <strong className="text-white">Generate Signed Bundle/APK</strong>)</li>
-                <li>Upload to Play Console</li>
-                <li>Fill in app details, screenshots, privacy policy</li>
-                <li>Submit for review (usually 1-3 days)</li>
-              </ol>
-            </div>
-
-            <div>
-              <p className="font-semibold text-white mb-2">🍎 Apple App Store (iOS):</p>
-              <ol className="list-decimal list-inside space-y-2 pl-4">
-                <li>Create an <a href="https://developer.apple.com" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">Apple Developer account</a> ($99/year)</li>
-                <li>Create App ID in Apple Developer portal</li>
-                <li>Archive app in Xcode and distribute</li>
-                <li>Upload to App Store Connect</li>
-                <li>Fill in app details, screenshots, privacy policy</li>
-                <li>Submit for review (usually 1-7 days)</li>
-              </ol>
-            </div>
-          </div>
-
-          <Alert className="mt-4 bg-green-900/20 border-green-500/30">
-            <AlertDescription className="text-green-200">
-              ✅ <strong>Tip:</strong> Prepare high-quality screenshots (1080x1920 for Android, various sizes for iOS) and a compelling app description before submitting!
-            </AlertDescription>
-          </Alert>
-        </Step>
-
-        <Card className="bg-gradient-to-br from-orange-900/20 to-orange-800/10 border-orange-500/30 mt-8">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <CheckCircle className="w-6 h-6 text-green-400" />
-              Important Notes
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-gray-300">
-            <p>📱 <strong className="text-white">Update Workflow:</strong> When you update your app, run <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">npm run build</code> then <code className="bg-gray-900 px-2 py-1 rounded text-orange-300">npx cap sync</code></p>
-            <p>🔧 <strong className="text-white">Native Features:</strong> Capacitor gives you access to camera, push notifications, file system, and more via plugins</p>
-            <p>🌐 <strong className="text-white">API URLs:</strong> Make sure all your backend functions are accessible via HTTPS</p>
-            <p>📊 <strong className="text-white">App Size:</strong> Your APK will be around 15-30MB, IPA around 20-40MB</p>
-            <p>⚡ <strong className="text-white">Performance:</strong> Native apps are 2-3x faster than PWA and feel more responsive</p>
           </CardContent>
         </Card>
 
-        <div className="mt-8 p-6 bg-gray-800/30 border border-orange-500/20 rounded-lg">
-          <h3 className="text-xl font-bold text-white mb-4">📚 Helpful Resources</h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <a href="https://capacitorjs.com/docs" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">
-              → Capacitor Documentation
-            </a>
-            <a href="https://developer.android.com/studio/publish" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">
-              → Android Publishing Guide
-            </a>
-            <a href="https://developer.apple.com/app-store/submissions/" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">
-              → iOS Publishing Guide
-            </a>
-            <a href="https://capacitorjs.com/docs/plugins" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">
-              → Capacitor Plugins
-            </a>
+        {/* OPTION A: Easy way */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent to-green-500/40" />
+            <span className="text-green-400 font-bold text-lg px-3">⭐ Easiest Method — No Setup Required</span>
+            <div className="h-px flex-1 bg-gradient-to-l from-transparent to-green-500/40" />
           </div>
+
+          <Step number="A" title="Use a Free Online APK Builder (Recommended)" color="green">
+            <p>You don't need to install anything. These free services build an APK from a URL in minutes:</p>
+            
+            <div className="space-y-4 mt-4">
+              <div className="bg-green-950/30 border border-green-500/30 rounded-lg p-4">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p className="text-white font-bold text-base">Option 1: WebViewGold / AppMySite</p>
+                    <p className="text-gray-400 text-xs">Paid but very easy — generates a proper signed APK</p>
+                  </div>
+                  <a href="https://appsgeyser.com" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 flex items-center gap-1 text-xs flex-shrink-0">
+                    Visit <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+
+              <div className="bg-green-950/30 border border-green-500/30 rounded-lg p-4">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-white font-bold text-base">Option 2: AppsGeyser (Free)</p>
+                    <p className="text-gray-400 text-xs">Completely free — builds a WebView APK around your URL</p>
+                  </div>
+                  <a href="https://appsgeyser.com/create/website" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 flex items-center gap-1 text-xs flex-shrink-0">
+                    Visit <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <ol className="list-decimal list-inside space-y-2 text-gray-300 text-xs pl-2">
+                  <li>Go to <strong className="text-white">appsgeyser.com/create/website</strong></li>
+                  <li>Paste your TV URL: <span className="font-mono text-cyan-300 break-all">{TV_URL}</span></li>
+                  <li>Set App Name: <strong className="text-white">HushTV</strong></li>
+                  <li>Click <strong className="text-white">Create</strong> → Download APK</li>
+                  <li>Transfer APK to your Android TV and install it</li>
+                </ol>
+              </div>
+
+              <div className="bg-green-950/30 border border-green-500/30 rounded-lg p-4">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-white font-bold text-base">Option 3: Gonative.io</p>
+                    <p className="text-gray-400 text-xs">Free trial, best quality WebView wrapper</p>
+                  </div>
+                  <a href="https://gonative.io" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 flex items-center gap-1 text-xs flex-shrink-0">
+                    Visit <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <ol className="list-decimal list-inside space-y-2 text-gray-300 text-xs pl-2">
+                  <li>Go to <strong className="text-white">gonative.io</strong> → New App</li>
+                  <li>Enter your TV URL: <span className="font-mono text-cyan-300 break-all">{TV_URL}</span></li>
+                  <li>Download the Android APK from the build results</li>
+                </ol>
+              </div>
+            </div>
+
+            <Alert className="mt-4 bg-yellow-900/20 border-yellow-500/30">
+              <AlertDescription className="text-yellow-200 text-xs">
+                <strong>Installing on Android TV:</strong> Enable "Unknown Sources" in your TV's Developer Settings first, then use a file manager app or ADB to install the APK.
+              </AlertDescription>
+            </Alert>
+          </Step>
         </div>
 
-        <div className="mt-8 text-center">
-          <Button
-            onClick={() => navigate(-1)}
-            className="bg-gradient-to-r from-orange-600 to-orange-800 hover:from-orange-700 hover:to-orange-900"
-            size="lg"
-          >
-            Got it! Let's Build 🚀
+        {/* OPTION B: Manual */}
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent to-blue-500/40" />
+            <span className="text-blue-400 font-bold text-lg px-3">🛠 Manual Method — Full Control</span>
+            <div className="h-px flex-1 bg-gradient-to-l from-transparent to-blue-500/40" />
+          </div>
+
+          <Alert className="mb-5 bg-blue-900/20 border-blue-500/30">
+            <AlertDescription className="text-blue-200 text-xs">
+              This method requires a Windows/Mac/Linux computer. You only need to do this setup once. Takes about 30–60 minutes the first time.
+            </AlertDescription>
+          </Alert>
+
+          <Step number={1} title="Install the tools you need" color="blue">
+            <p>Download and install these two things (both free):</p>
+            <div className="space-y-3 mt-3">
+              <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+                <div>
+                  <p className="text-white font-semibold">Node.js</p>
+                  <p className="text-gray-400 text-xs">Choose the "LTS" version</p>
+                </div>
+                <a href="https://nodejs.org" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 text-xs flex items-center gap-1">
+                  Download <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+                <div>
+                  <p className="text-white font-semibold">Android Studio</p>
+                  <p className="text-gray-400 text-xs">Needed to build the APK</p>
+                </div>
+                <a href="https://developer.android.com/studio" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 text-xs flex items-center gap-1">
+                  Download <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+            <p className="text-gray-400 text-xs mt-3">After installing Android Studio, open it and let it finish downloading the Android SDK (it will prompt you automatically).</p>
+          </Step>
+
+          <Step number={2} title="Create a new project folder on your computer" color="blue">
+            <p>Open <strong className="text-white">Terminal</strong> (Mac/Linux) or <strong className="text-white">Command Prompt</strong> (Windows) and run:</p>
+            <CodeBlock>{`mkdir hushtv-tv-app
+cd hushtv-tv-app
+npm init -y`}</CodeBlock>
+            <p>Then install Capacitor:</p>
+            <CodeBlock>{`npm install @capacitor/core @capacitor/cli @capacitor/android`}</CodeBlock>
+          </Step>
+
+          <Step number={3} title="Initialize the Android project" color="blue">
+            <p>Still in the same folder, run:</p>
+            <CodeBlock>{`npx cap init "HushTV" "com.hushtv.tv" --web-dir=www`}</CodeBlock>
+            <p>Create the web folder and a simple index file:</p>
+            <CodeBlock>{`mkdir www
+echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=${TV_URL}"></head><body></body></html>' > www/index.html`}</CodeBlock>
+          </Step>
+
+          <Step number={4} title="Set your TV URL in the Capacitor config" color="blue">
+            <p>Open the file <Pill>capacitor.config.json</Pill> that was just created and replace everything in it with this:</p>
+            <CodeBlock>{`{
+  "appId": "com.hushtv.tv",
+  "appName": "HushTV",
+  "webDir": "www",
+  "server": {
+    "url": "${TV_URL}",
+    "cleartext": true,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}`}</CodeBlock>
+            <Alert className="bg-cyan-900/20 border-cyan-500/30">
+              <AlertDescription className="text-cyan-200 text-xs">
+                ✅ The <Pill>server.url</Pill> setting is the key part — it tells the Android app to load your HushTV TV interface directly, without any local files.
+              </AlertDescription>
+            </Alert>
+          </Step>
+
+          <Step number={5} title="Add Android and open Android Studio" color="blue">
+            <CodeBlock>{`npx cap add android
+npx cap open android`}</CodeBlock>
+            <p>Android Studio will open. <strong className="text-white">Wait for the Gradle sync to finish</strong> (progress bar at the bottom — can take 2–5 minutes).</p>
+          </Step>
+
+          <Step number={6} title="Build the APK" color="orange">
+            <p>In Android Studio, from the top menu:</p>
+            <ol className="list-decimal list-inside space-y-2 pl-2 text-gray-300">
+              <li>Click <strong className="text-white">Build</strong></li>
+              <li>Click <strong className="text-white">Build Bundle(s) / APK(s)</strong></li>
+              <li>Click <strong className="text-white">Build APK(s)</strong></li>
+              <li>Wait for it to finish (1–3 minutes)</li>
+              <li>A blue notification will appear at the bottom — click <strong className="text-white">"locate"</strong></li>
+            </ol>
+            <p className="mt-3">Your APK will be at:</p>
+            <CodeBlock>android/app/build/outputs/apk/debug/app-debug.apk</CodeBlock>
+            <Alert className="bg-green-900/20 border-green-500/30">
+              <AlertDescription className="text-green-200 text-xs">
+                🎉 That's your APK file! Copy it to a USB drive or send it to your Android TV to install.
+              </AlertDescription>
+            </Alert>
+          </Step>
+
+          <Step number={7} title="Install on your Android TV / Fire Stick" color="purple">
+            <div className="space-y-4">
+              <div>
+                <p className="text-white font-semibold mb-2">📺 NVIDIA Shield / Android TV Box:</p>
+                <ol className="list-decimal list-inside space-y-1.5 pl-2 text-gray-300 text-xs">
+                  <li>Go to <strong className="text-white">Settings → Device Preferences → Security &amp; Restrictions</strong></li>
+                  <li>Enable <strong className="text-white">Unknown Sources</strong></li>
+                  <li>Copy the APK to a USB drive, plug it in to your TV</li>
+                  <li>Use the <strong className="text-white">File Commander</strong> or <strong className="text-white">ES File Explorer</strong> app to find and tap the APK</li>
+                  <li>Tap <strong className="text-white">Install</strong></li>
+                </ol>
+              </div>
+              <div>
+                <p className="text-white font-semibold mb-2">🔥 Fire TV Stick:</p>
+                <ol className="list-decimal list-inside space-y-1.5 pl-2 text-gray-300 text-xs">
+                  <li>Go to <strong className="text-white">Settings → My Fire TV → Developer Options</strong></li>
+                  <li>Enable <strong className="text-white">Apps from Unknown Sources</strong></li>
+                  <li>Install the free <strong className="text-white">Downloader</strong> app from the Amazon App Store</li>
+                  <li>Open Downloader and enter the URL where your APK is hosted (e.g. upload it to Google Drive and share the link)</li>
+                  <li>Download and install</li>
+                </ol>
+              </div>
+              <div>
+                <p className="text-white font-semibold mb-2">🖥 ADB Install (any Android TV, easiest if you have a PC):</p>
+                <CodeBlock>{`# Connect your TV and PC to same WiFi, enable ADB on TV, then:
+adb connect YOUR_TV_IP_ADDRESS
+adb install app-debug.apk`}</CodeBlock>
+              </div>
+            </div>
+          </Step>
+        </div>
+
+        {/* Summary */}
+        <Card className="bg-gradient-to-br from-cyan-950/40 to-blue-950/40 border-cyan-500/30 mt-4">
+          <CardContent className="pt-5">
+            <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2"><CheckCircle className="w-5 h-5 text-green-400" /> Quick Summary</h3>
+            <div className="space-y-2 text-sm text-gray-300">
+              <p>⭐ <strong className="text-white">Fastest (5 min):</strong> Use AppsGeyser.com — paste your URL, download APK</p>
+              <p>🛠 <strong className="text-white">Best quality:</strong> Manual method with Capacitor — full control, no watermarks</p>
+              <p>📺 <strong className="text-white">Your TV URL:</strong> <span className="font-mono text-cyan-400 text-xs break-all">{TV_URL}</span></p>
+              <p>📱 <strong className="text-white">Installing:</strong> Enable "Unknown Sources" on your TV device first</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="mt-6 text-center">
+          <Button onClick={() => navigate(-1)} className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700" size="lg">
+            Done — Back to App 🚀
           </Button>
         </div>
       </div>
