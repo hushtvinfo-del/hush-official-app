@@ -65,6 +65,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -259,7 +260,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
 
         // Animated sidebar width — collapses to 0 when focus is in the grid.
         val sidebarWidth by animateDpAsState(
-            targetValue = if (gridHasFocus) 0.dp else 260.dp,
+            targetValue = if (gridHasFocus) 0.dp else 200.dp,
             animationSpec = tween(120),
             label = "vod-sidebar-width",
         )
@@ -278,7 +279,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                     title = title,
                     loading = loadingCats,
                     returnToSidebarToken = returnToSidebarToken,
-                    modifier = Modifier.requiredWidth(260.dp),
+                    modifier = Modifier.requiredWidth(200.dp),
                     onBack = { nav.popBackStack() },
                     onFocus = { id -> if (id != "__divider__" && id != "__divider2__") selectedCatId = id },
                     onEnter = { id ->
@@ -490,13 +491,13 @@ private fun VodSidebar(
 
     Column(
         modifier
-            .width(260.dp)
+            .width(200.dp)
             .fillMaxHeight()
             .background(Color(0x80000000)),
     ) {
         // Header — back button + screen title
         Row(
-            Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp),
+            Modifier.padding(start = 12.dp, end = 12.dp, top = 20.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -616,6 +617,7 @@ private fun SidebarRow(
             fontFamily = Inter,
             fontWeight = if (selected || focused) FontWeight.SemiBold else FontWeight.Medium,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
