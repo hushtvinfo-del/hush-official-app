@@ -65,6 +65,19 @@ object UpdateManager {
     fun isUpdateAvailable(info: VersionInfo): Boolean =
         info.versionCode > currentVersionCode() && info.apkUrl.isNotBlank()
 
+    /** True when the OS has granted this app permission to launch the installer. */
+    fun canInstallPackages(ctx: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        return ctx.packageManager.canRequestPackageInstalls()
+    }
+
+    /** Intent that opens the "Install unknown apps" screen for this package. */
+    fun unknownSourcesSettingsIntent(ctx: Context): Intent =
+        Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+            data = Uri.parse("package:${ctx.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
     // ─── Download + install ───────────────────────────────────────────────
 
     private const val DOWNLOAD_FILENAME = "HushTV-update.apk"
@@ -115,13 +128,24 @@ object UpdateManager {
     fun downloadedApk(ctx: Context): File =
         File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), DOWNLOAD_FILENAME)
 
-    /** Launches the system package installer on the APK we just downloaded.
-     *  If the app doesn't have REQUEST_INSTALL_PACKAGES permission yet
-     *  (Android 8+ only), returns a Settings intent that the caller must
-     *  fire to send the user to the permission screen. */
+    /**
+     * Launches the system package installer on the APK we just downloaded.
+     *
+     * Returns:
+     *  • `Intent` pointing at the "install unknown apps" settings screen — caller
+     *    must `startActivity()` it to send the user to enable the permission.
+     *  • `null` when the installer launched successfully.
+     *
+     * Throws `IllegalStateException` with a human-readable message when
+     * something irrecoverable went wrong (missing file, installer rejection).
+     */
     fun triggerInstall(ctx: Context): Intent? {
         val apk = downloadedApk(ctx)
-        if (!apk.exists()) return null
+        if (!apk.exists() || apk.length() < 1_000_000L) {
+            throw IllegalStateException(
+                "Downloaded APK missing. Expected at ${apk.absolutePath}"
+            )
+        }
 
         // On API 26+ the app needs REQUEST_INSTALL_PACKAGES granted.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -135,13 +159,34 @@ object UpdateManager {
         }
 
         val authority = "${ctx.packageName}.fileprovider"
-        val uri: Uri = FileProvider.getUriForFile(ctx, authority, apk)
+        val uri: Uri = try {
+            FileProvider.getUriForFile(ctx, authority, apk)
+        } catch (e: Exception) {
+            throw IllegalStateException(
+                "FileProvider rejected the APK: ${e.message}. " +
+                    "You can install manually via:\n${apk.absolutePath}",
+                e,
+            )
+        }
 
         val install = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
         }
-        ctx.startActivity(install)
+
+        try {
+            ctx.startActivity(install)
+        } catch (e: Exception) {
+            throw IllegalStateException(
+                "The TV refused to launch the installer: ${e.message}. " +
+                    "Install manually: ${apk.absolutePath}",
+                e,
+            )
+        }
         return null
     }
 
