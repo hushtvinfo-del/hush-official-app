@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.hushtv.tv.data.LastProfileStore
 import com.hushtv.tv.data.Playlist
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.ui.HushTVLogo
@@ -108,7 +109,13 @@ fun TVHomeScreen(nav: NavController) {
                 playlists.forEachIndexed { i, p ->
                     val mod = if (i == 0) Modifier.focusRequester(firstFocus) else Modifier
                     AccountCard(p, modifier = mod) {
-                        nav.navigate("menu/${p.id}")
+                        LastProfileStore.save(ctx, p.id)
+                        // Remove the picker from the back stack — pressing BACK
+                        // from the menu should exit the app, not bounce back
+                        // to profile selection.
+                        nav.navigate("menu/${p.id}") {
+                            popUpTo("home") { inclusive = true }
+                        }
                     }
                 }
                 AddAccountCard(

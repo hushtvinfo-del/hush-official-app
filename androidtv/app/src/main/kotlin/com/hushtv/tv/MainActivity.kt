@@ -16,6 +16,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.hushtv.tv.data.LastChannelStore
+import com.hushtv.tv.data.LastProfileStore
+import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.ui.HushSplashScreen
 import com.hushtv.tv.ui.screens.TVAddAccountScreen
 import com.hushtv.tv.ui.screens.TVBrowseScreen
@@ -64,7 +66,18 @@ private fun AppContent() {
     val ctx = LocalContext.current
     val nav = rememberNavController()
 
-    NavHost(navController = nav, startDestination = "home") {
+    // Determine the start destination BEFORE composing the NavHost so the
+    // profile picker never flashes on screen for returning users.
+    //
+    //   • Valid saved profile → boot straight into that profile's menu.
+    //     The picker is NOT in the back stack → BACK exits the app.
+    //   • No saved profile (first run or after a wipe) → show the picker.
+    val startDestination = remember {
+        val id = LastProfileStore.load(ctx)
+        if (id != null && PlaylistStore.find(ctx, id) != null) "menu/$id" else "home"
+    }
+
+    NavHost(navController = nav, startDestination = startDestination) {
         composable("home") { TVHomeScreen(nav) }
         composable("add") { TVAddAccountScreen(nav) }
         composable("menu/{playlistId}") { bs ->
@@ -112,14 +125,18 @@ private fun AppContent() {
         }
     }
 
-    // Auto-resume: if the user was watching a live channel last time,
-    // skip the Home → Menu → Browse → Player chain and boot straight
-    // into that channel fullscreen. Just like turning on a real TV.
+    // Optional: auto-resume the last-watched live channel on top of the menu
+    // for the active profile. BACK from the player lands on the menu.
     var resumeAttempted by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (resumeAttempted) return@LaunchedEffect
         resumeAttempted = true
         val last = LastChannelStore.load(ctx) ?: return@LaunchedEffect
+        val activeProfileId = LastProfileStore.load(ctx)
+        // Only auto-resume if the channel belongs to the profile we just
+        // auto-logged into (or if no profile is saved yet — preserves the
+        // original "turn-on-TV" behaviour for legacy users).
+        if (activeProfileId != null && last.playlistId != activeProfileId) return@LaunchedEffect
         nav.navigate(
             "player/${last.playlistId}" +
                 "/${Uri.encode(last.streamUrl)}" +

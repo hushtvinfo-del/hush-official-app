@@ -172,6 +172,31 @@ auto-update enabled.
 - Shipped as versionCode=25 / versionName="1.3.2" — APK uploaded to
   `/var/www/hushtv/HushTV.apk` (23,395,348 bytes), `version.json` bumped.
 
+### Phase 6 — v1.3.3 auto-login / no-back-to-picker (2026-04-22 — completed, deployed)
+User feedback: "Every time I click back it goes to the profile picker. It
+should only go to the picker if I manually press the Profile button, and it
+should auto-log me into my profile on app start."
+
+- **New store** `LastProfileStore.kt` (SharedPreferences, `hushtv_prefs` →
+  `last_profile_id`) with save / load / clear / loadValid helpers.
+- **Dynamic start destination** (`MainActivity.AppContent`): `remember {}`
+  block resolves `LastProfileStore.load()` → if the saved profile still exists
+  in `PlaylistStore`, NavHost starts at `menu/{id}` directly. No flash of the
+  picker. First-run users still land on `home` as before.
+- **TVHomeScreen.AccountCard.onClick**: saves the picked profile as last used,
+  then navigates with `popUpTo("home") { inclusive = true }` so the picker
+  never sits in the back stack.
+- **TVAddAccountScreen**: after `PlaylistStore.add()`, saves the newly-created
+  profile as last used and navigates to its menu with the same popUp clause.
+- **TVMainMenuScreen**: the Profile button in the left sidebar is now the
+  ONLY route back to the picker — swapped `nav.popBackStack()` for
+  `nav.navigate("home")`.
+- **Live auto-resume** still works: the existing `LastChannelStore` flow in
+  `MainActivity` now only fires when the saved channel belongs to the active
+  profile (or no profile is saved — legacy behaviour).
+- Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
+  and version.json both live on `https://hushtv.xyz`.
+
 ---
 
 ## Backlog

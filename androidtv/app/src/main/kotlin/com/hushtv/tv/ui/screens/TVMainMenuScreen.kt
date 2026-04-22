@@ -235,7 +235,11 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             homeFocus = sidebarHomeFocus,
             onExpandChange = { sidebarFocused = it },
             onTab = { t -> t.route?.let { nav.navigate(it) } },
-            onProfile = { nav.popBackStack() },
+            // Profile button is the ONLY way back to the account picker.
+            // Use navigate("home") instead of popBackStack(): the picker is
+            // no longer in the back stack (auto-login removes it), so a
+            // plain navigate opens it fresh on top of the current menu.
+            onProfile = { nav.navigate("home") },
         )
 
         // ── CONTENT ───────────────────────────────────────────

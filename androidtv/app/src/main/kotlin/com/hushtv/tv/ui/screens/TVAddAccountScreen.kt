@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.hushtv.tv.data.LastProfileStore
 import com.hushtv.tv.data.Playlist
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
@@ -256,20 +257,28 @@ fun TVAddAccountScreen(nav: NavController) {
                                     if (resp.user_info?.auth == 0 || resp.server_info == null) {
                                         throw RuntimeException("Invalid username or password.")
                                     }
+                                    val newId = PlaylistStore.newId()
                                     PlaylistStore.add(
                                         ctx,
                                         Playlist(
-                                            id = PlaylistStore.newId(),
+                                            id = newId,
                                             name = nickname.trim(),
                                             username = username.trim(),
                                             password = password.trim(),
                                             host = XtreamApi.HUSH_HOST,
                                         ),
                                     )
+                                    // Mark the newly-created profile as "last used" so
+                                    // the next cold start auto-logs into it, and drop
+                                    // both the add screen and the picker from the back
+                                    // stack so BACK from the menu exits the app.
+                                    LastProfileStore.save(ctx, newId)
                                     loading = false
                                     success = true
                                     kotlinx.coroutines.delay(800)
-                                    nav.popBackStack()
+                                    nav.navigate("menu/$newId") {
+                                        popUpTo("home") { inclusive = true }
+                                    }
                                 } catch (e: Exception) {
                                     loading = false
                                     error = e.message ?: "Failed to sign in. Please try again."
