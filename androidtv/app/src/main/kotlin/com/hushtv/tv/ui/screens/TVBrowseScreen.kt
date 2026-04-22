@@ -76,6 +76,7 @@ import com.hushtv.tv.data.WatchProgressStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamCategory
 import com.hushtv.tv.data.XtreamVodInfo
+import com.hushtv.tv.data.XtreamVodInfoInner
 import com.hushtv.tv.ui.theme.Amber
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.BorderSlate
@@ -210,14 +211,45 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
     var gridColumnCount by remember { mutableStateOf(8) }
     var vodInfo by remember { mutableStateOf<XtreamVodInfo?>(null) }
 
-    // Fetch detailed VOD info for the focused movie (debounced, cancellable).
+    // Fetch detailed VOD info for the focused item (debounced, cancellable).
+    // Movies → get_vod_info. Series → get_series_info, mapped to the same
+    // XtreamVodInfo shape so the preview panel can share one renderer.
     LaunchedEffect(focusedIdx, gridItems) {
         vodInfo = null
         val p = playlist ?: return@LaunchedEffect
         val item = gridItems.getOrNull(focusedIdx) ?: return@LaunchedEffect
-        if (item.kind != "movie") return@LaunchedEffect
         delay(350)
-        vodInfo = XtreamApi.getVodInfo(p.host, p.username, p.password, item.streamId)
+        vodInfo = when (item.kind) {
+            "movie" -> XtreamApi.getVodInfo(p.host, p.username, p.password, item.streamId)
+            "series" -> runCatching {
+                val raw = XtreamApi.getSeriesInfo(
+                    p.host, p.username, p.password, item.seriesId.toString(),
+                ).info.orEmpty()
+                fun s(k: String): String? = when (val v = raw[k]) {
+                    is String -> v.takeIf { it.isNotBlank() }
+                    is Number -> v.toString()
+                    else -> null
+                }
+                XtreamVodInfo(
+                    info = XtreamVodInfoInner(
+                        plot = s("plot") ?: s("description"),
+                        description = s("description"),
+                        genre = s("genre"),
+                        rating = s("rating"),
+                        releasedate = s("releaseDate") ?: s("releasedate") ?: s("release_date"),
+                        release_date = s("release_date") ?: s("releaseDate"),
+                        cast = s("cast"),
+                        director = s("director"),
+                        cover_big = s("cover") ?: s("cover_big"),
+                        movie_image = s("cover") ?: s("cover_big"),
+                        backdrop_path = (raw["backdrop_path"] as? List<*>)?.mapNotNull { it as? String },
+                        youtube_trailer = s("youtube_trailer"),
+                    ),
+                    movie_data = null,
+                )
+            }.getOrNull()
+            else -> null
+        }
     }
 
     val firstGridFocus = remember { FocusRequester() }
