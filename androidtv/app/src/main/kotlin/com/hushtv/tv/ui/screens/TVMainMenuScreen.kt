@@ -244,26 +244,51 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         )
 
         // ── CONTENT ───────────────────────────────────────────
+        // Layered:
+        //   1. Fixed hero backdrop (behind, never scrolls — stays on screen
+        //      as user moves down through rows).
+        //   2. Scrollable rows (in front, transparent top so hero peeks
+        //      through; first row sits at ~55% of the viewport so the hero
+        //      text is fully visible on first render).
         Box(Modifier.weight(1f).fillMaxHeight()) {
+            val continueEntries = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
+            var heroEntry by remember { mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null) }
+            // Seed the hero with the first entry whenever the list changes —
+            // so the hero renders immediately, not on first focus.
+            LaunchedEffect(continueEntries.firstOrNull()) {
+                if (heroEntry == null || continueEntries.none { it === heroEntry }) {
+                    heroEntry = continueEntries.firstOrNull()
+                }
+            }
+
+            // Layer 1 — sticky hero backdrop.
+            com.hushtv.tv.ui.screens.home.HomeHeroLayer(entry = heroEntry)
+
+            // Layer 2 — scrollable rows. Transparent until a row reaches
+            // the "fold", after which each row renders on its own dark tile
+            // so it has a clean backdrop when scrolled up past the hero text.
             LazyColumn(
                 contentPadding = PaddingValues(bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
-                // Section 1 — Continue Watching (hero + card row).
-                // Only renders if there are partially-watched titles.
-                item {
-                    com.hushtv.tv.ui.screens.home.HomeContinueWatchingSection(
-                        playlistId = playlistId,
-                        onCardClick = { entry ->
-                            // Entries are all VOD — route to the movie detail
-                            // screen so the Resume prompt in the player can
-                            // pick up the saved position.
-                            nav.navigate(
-                                "moviedetail/$playlistId/${entry.progress.streamId}" +
-                                    "/${Uri.encode(entry.progress.title)}"
-                            )
-                        },
-                    )
+                // Push the first row down to ~55% of the viewport so the
+                // hero text is legible above it on initial render.
+                item { Spacer(Modifier.fillParentMaxHeight(0.55f)) }
+
+                if (continueEntries.isNotEmpty()) {
+                    item {
+                        com.hushtv.tv.ui.screens.home.HomeContinueWatchingRow(
+                            playlistId = playlistId,
+                            entries = continueEntries,
+                            onFocusedEntryChange = { heroEntry = it },
+                            onCardClick = { entry ->
+                                nav.navigate(
+                                    "moviedetail/$playlistId/${entry.progress.streamId}" +
+                                        "/${Uri.encode(entry.progress.title)}"
+                                )
+                            },
+                        )
+                    }
                 }
             }
         }

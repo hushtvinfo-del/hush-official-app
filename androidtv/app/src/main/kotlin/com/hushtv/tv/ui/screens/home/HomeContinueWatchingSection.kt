@@ -1,23 +1,33 @@
 package com.hushtv.tv.ui.screens.home
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -26,7 +36,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.hushtv.tv.R
 import com.hushtv.tv.data.TmdbMovie
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.WatchProgressStore
@@ -58,219 +67,77 @@ data class ContinueEntry(
     }
 }
 
+/**
+ * Loads + hydrates the Continue Watching list and fires [onEntriesLoaded]
+ * with the results (shell first, then re-fires as TMDB metadata lands for
+ * each title). Also takes a callback for the focused entry so the parent
+ * can render a sticky hero backdrop that reacts to D-pad focus.
+ *
+ * Renders JUST the card row — no hero. The hero is a separate fixed layer
+ * behind the scrollable content (see [HomeHeroLayer]).
+ */
 @Composable
-fun HomeContinueWatchingSection(
+fun HomeContinueWatchingRow(
     playlistId: String,
+    entries: List<ContinueEntry>,
+    onFocusedEntryChange: (ContinueEntry) -> Unit,
     onCardClick: (ContinueEntry) -> Unit,
 ) {
+    if (entries.isEmpty()) return
+
+    Column(Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, top = 20.dp, bottom = 20.dp)) {
+        Text(
+            "Continue Watching",
+            color = Color.White,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = Inter,
+        )
+        Spacer(Modifier.height(12.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(entries, key = { "cw-${it.progress.kind}-${it.progress.streamId}" }) { e ->
+                ContinueCard(
+                    entry = e,
+                    onFocus = { onFocusedEntryChange(e) },
+                    onClick = { onCardClick(e) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Composable-friendly data loader. Call this at the top of the home screen;
+ * pass the returned list to [HomeContinueWatchingRow] and also use the first
+ * entry as the initial hero backdrop.
+ */
+@Composable
+fun rememberContinueEntries(playlistId: String): List<ContinueEntry> {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-
-    // Load raw entries + hydrate with TMDB in parallel. Recompute on each
-    // composition key change (playlistId), and also every time the screen
-    // becomes active (users finish a movie → re-open home).
-    var entries by remember { mutableStateOf<List<ContinueEntry>>(emptyList()) }
-    var loaded by remember { mutableStateOf(false) }
+    var entries by remember(playlistId) { mutableStateOf<List<ContinueEntry>>(emptyList()) }
 
     LaunchedEffect(playlistId) {
         val raw = WatchProgressStore.continueWatching(ctx).take(12)
         if (raw.isEmpty()) {
             entries = emptyList()
-            loaded = true
             return@LaunchedEffect
         }
-
-        // Kick off TMDB hydration in parallel — UI renders progressively.
-        val shells = raw.map { ContinueEntry(it, null) }
-        entries = shells
-        loaded = true
-
+        // Render shells instantly, then hydrate TMDB per-entry in parallel.
+        entries = raw.map { ContinueEntry(it, null) }
         raw.forEachIndexed { idx, entry ->
             scope.launch {
                 val tmdb = withContext(Dispatchers.IO) {
                     val id = TmdbService.searchMovie(entry.title, null)
                     id?.let { TmdbService.getMovie(it) }
                 }
-                // Replace the shell with the hydrated entry, preserving order.
                 entries = entries.toMutableList().also { list ->
                     if (idx < list.size) list[idx] = list[idx].copy(tmdb = tmdb)
                 }
             }
         }
     }
-
-    if (!loaded || entries.isEmpty()) return
-
-    var focusedIdx by remember { mutableStateOf(0) }
-    val focused = entries.getOrNull(focusedIdx) ?: entries.first()
-
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(560.dp),
-    ) {
-        HeroBackdrop(entry = focused)
-
-        // Left-to-right darkening veil over the backdrop so the text column
-        // below stays readable. 60 % opacity at the left edge fading to 0 %
-        // at ~55 % across the hero matches the reference image well.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        0.0f to Color(0xF0000000),
-                        0.35f to Color(0xC0000000),
-                        0.6f to Color(0x70000000),
-                        1.0f to Color(0x00000000),
-                    )
-                )
-        )
-        // Bottom fade → helps the card row pop against the artwork.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.0f to Color.Transparent,
-                        0.65f to Color.Transparent,
-                        1.0f to Color(0xFF050507),
-                    )
-                )
-        )
-
-        // Text + row column
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(start = 48.dp, top = 36.dp, end = 48.dp, bottom = 20.dp),
-        ) {
-            HeroText(entry = focused)
-            Spacer(Modifier.weight(1f))
-            Text(
-                "Continue Watching",
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = Inter,
-            )
-            Spacer(Modifier.height(10.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(entries, key = { "cw-${it.progress.kind}-${it.progress.streamId}" }) { e ->
-                    val idxOfThis = entries.indexOf(e)
-                    ContinueCard(
-                        entry = e,
-                        onFocus = { focusedIdx = idxOfThis },
-                        onClick = { onCardClick(e) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeroBackdrop(entry: ContinueEntry) {
-    val url = entry.backdropUrl
-    if (url == null) {
-        // Fallback — solid dark surface while TMDB hydrates, or when there's
-        // just no backdrop available for this title.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color(0xFF0B0F1A))
-        )
-    } else {
-        AsyncImage(
-            model = url,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-}
-
-@Composable
-private fun HeroText(entry: ContinueEntry) {
-    Column(Modifier.fillMaxWidth(0.55f)) {
-        Text(
-            entry.progress.title,
-            color = Color.White,
-            fontSize = 44.sp,
-            fontWeight = FontWeight.Black,
-            lineHeight = 48.sp,
-            fontFamily = Inter,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(10.dp))
-
-        // Meta row: S1E1 · Genre · Year
-        val metaParts = buildList {
-            if (entry.progress.kind == "series") add("Series")
-            else add("Movie")
-            entry.genre?.let { add(it) }
-            entry.year?.let { add(it) }
-        }
-        Text(
-            metaParts.joinToString("  ·  "),
-            color = Color(0xFFCBD5E1),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = Inter,
-        )
-        Spacer(Modifier.height(12.dp))
-
-        // Time left + IMDb rating
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "${entry.minutesLeft}M LEFT",
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = Inter,
-                letterSpacing = 1.sp,
-            )
-            entry.ratingText?.let { rating ->
-                Spacer(Modifier.width(14.dp))
-                Surface(
-                    color = Color(0xFFF5C518),
-                    shape = RoundedCornerShape(3.dp),
-                ) {
-                    Text(
-                        "IMDb",
-                        color = Color.Black,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                    )
-                }
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    rating,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = Inter,
-                )
-            }
-        }
-
-        // Description
-        val overview = entry.tmdb?.overview
-        if (!overview.isNullOrBlank()) {
-            Spacer(Modifier.height(14.dp))
-            Text(
-                "\"$overview\"",
-                color = Color(0xFFE2E8F0),
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-                fontFamily = Inter,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    return entries
 }
 
 @Composable
@@ -308,7 +175,6 @@ private fun ContinueCard(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            // Dim un-focused cards slightly so the focused one pops.
             if (!focused) {
                 Box(
                     Modifier
@@ -317,7 +183,6 @@ private fun ContinueCard(
                 )
             }
 
-            // Time-left chip (top-right)
             Surface(
                 color = Color(0xE0000000),
                 shape = RoundedCornerShape(6.dp),
@@ -335,7 +200,6 @@ private fun ContinueCard(
                 )
             }
 
-            // Progress bar at the bottom of the card
             val ratio = entry.progress.ratio.coerceIn(0f, 1f)
             Box(
                 Modifier
