@@ -101,6 +101,7 @@ import kotlin.random.Random
 
 private const val CAT_ALL = "__all__"
 private const val CAT_SEARCH = "__search__"
+private const val CAT_FAV = "__fav__"
 
 /** Days considered "new" — retained for internal use but not exposed in UI. */
 private const val NEW_WINDOW_DAYS = 14L
@@ -147,9 +148,10 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
         }
     }
 
-    // Virtual sidebar: [Search] + [All] + real categories
+    // Virtual sidebar: [Favorites, Search] + [All] + real categories
     val sidebarEntries: List<SidebarEntry> = remember(allCategories, type) {
         buildList {
+            add(SidebarEntry(CAT_FAV, "Favorites", Icons.Default.Star))
             add(SidebarEntry(CAT_SEARCH, "Search", Icons.Default.Search))
             add(SidebarEntry("__divider__", "", Icons.Default.Info, isDivider = true))
             add(SidebarEntry(CAT_ALL, "All", Icons.Outlined.Slideshow))
@@ -168,6 +170,15 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
         val p = playlist ?: return@LaunchedEffect
         when (selectedCatId) {
             CAT_ALL -> gridItems = allItems
+            CAT_FAV -> {
+                // Filter allItems by "in My List" for the current kind.
+                // Movies key on streamId, series on seriesId.
+                val favIds = MyListStore.getAll(ctx, playlistId, effectiveKind)
+                gridItems = allItems.filter {
+                    val id = if (it.kind == "series") it.seriesId else it.streamId
+                    favIds.contains(id)
+                }
+            }
             CAT_SEARCH -> {
                 val q = searchQuery.trim().lowercase()
                 gridItems = if (q.length < 2) emptyList()
@@ -369,9 +380,13 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                             InfoBox(
                                 msg = when (selectedCatId) {
                                     CAT_SEARCH -> "No results for \"$searchQuery\"."
+                                    CAT_FAV -> "No favorites yet. Press and hold the OK / ENTER button on any poster to add it here."
                                     else -> "Nothing here yet."
                                 },
-                                icon = Icons.Default.Movie,
+                                icon = when (selectedCatId) {
+                                    CAT_FAV -> Icons.Default.Star
+                                    else -> Icons.Default.Movie
+                                },
                             )
                         else -> {
                             // Track column count — used both for laying out the
@@ -410,6 +425,16 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                                                 onLeftEdge = { returnToSidebarToken++ },
                                                 isLeftmost = idx % cols == 0,
                                                 onClick = { onCardClick(item) },
+                                                onLongPressFavorite = {
+                                                    val id = if (item.kind == "series") item.seriesId else item.streamId
+                                                    val nowInList = MyListStore.toggle(ctx, playlistId, item.kind, id)
+                                                    myListVersion++
+                                                    android.widget.Toast.makeText(
+                                                        ctx,
+                                                        if (nowInList) "Added to Favorites" else "Removed from Favorites",
+                                                        android.widget.Toast.LENGTH_SHORT,
+                                                    ).show()
+                                                },
                                             )
                                         }
                                     }
@@ -927,6 +952,7 @@ private fun CompactPoster(
     onLeftEdge: () -> Unit,
     isLeftmost: Boolean,
     onClick: () -> Unit,
+    onLongPressFavorite: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -934,13 +960,43 @@ private fun CompactPoster(
         animationSpec = tween(90),
         label = "poster-scale",
     )
+    // Track whether the current press already fired a long-press toggle so
+    // we can consume the subsequent KeyUp and prevent the short-press click
+    // (clickableWithEnter) from navigating into the detail screen.
+    var longPressFiredByMe by remember { mutableStateOf(false) }
     Column(
         modifier = focusMod
             .onPreviewKeyEvent { ev ->
+                // 1) Leftmost LEFT → bubble to sidebar
                 if (isLeftmost && ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
                     onLeftEdge()
-                    true
-                } else false
+                    return@onPreviewKeyEvent true
+                }
+                // 2) Long-press OK / ENTER / DPAD_CENTER → toggle favorite
+                val isEnterKey = ev.key == Key.Enter ||
+                    ev.key == Key.DirectionCenter ||
+                    ev.key == Key.NumPadEnter
+                if (isEnterKey) {
+                    when (ev.type) {
+                        KeyEventType.KeyDown -> {
+                            if (ev.nativeKeyEvent.isLongPress) {
+                                longPressFiredByMe = true
+                                onLongPressFavorite()
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        KeyEventType.KeyUp -> {
+                            if (longPressFiredByMe) {
+                                // Eat the KeyUp so clickableWithEnter does not
+                                // also fire a short-press navigate.
+                                longPressFiredByMe = false
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+                false
             }
             .onFocusChanged {
                 focused = it.isFocused
