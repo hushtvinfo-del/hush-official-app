@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const Section = ({ title, children }) => (
   <div className="mb-16">
@@ -112,6 +112,120 @@ const FocusDemo = () => {
           {item}
         </button>
       ))}
+    </div>
+  );
+};
+
+// Animated Loading Screen Mockup
+const LoadingScreenMockup = () => {
+  const [progress, setProgress] = React.useState(0);
+  const [logoOpacity, setLogoOpacity] = React.useState(0);
+  const [logoScale, setLogoScale] = React.useState(0.85);
+  const [dotOpacity, setDotOpacity] = React.useState(0);
+  const [taglineOpacity, setTaglineOpacity] = React.useState(0);
+  const [running, setRunning] = React.useState(false);
+
+  const runAnimation = () => {
+    if (running) return;
+    setRunning(true);
+    setProgress(0); setLogoOpacity(0); setLogoScale(0.85); setDotOpacity(0); setTaglineOpacity(0);
+
+    setTimeout(() => { setLogoOpacity(1); setLogoScale(1); }, 300);
+    setTimeout(() => { setDotOpacity(1); }, 450);
+    setTimeout(() => {
+      let p = 0;
+      const interval = setInterval(() => {
+        p += 1.2;
+        setProgress(Math.min(p, 100));
+        if (p >= 100) clearInterval(interval);
+      }, 14);
+    }, 900);
+    setTimeout(() => { setTaglineOpacity(1); }, 1800);
+    setTimeout(() => { setRunning(false); }, 3200);
+  };
+
+  React.useEffect(() => { runAnimation(); }, []);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{
+        background: '#000000',
+        borderRadius: 16,
+        height: 320,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
+        border: '1px solid rgba(255,255,255,0.1)',
+        overflow: 'hidden',
+        position: 'relative',
+      }}>
+        {/* Subtle radial glow behind logo */}
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 400, height: 400, borderRadius: '50%',
+          background: `radial-gradient(circle, rgba(6,182,212,${logoOpacity * 0.07}) 0%, transparent 65%)`,
+          transition: 'background 0.8s ease',
+          pointerEvents: 'none',
+        }} />
+
+        {/* Logo */}
+        <div style={{
+          opacity: logoOpacity,
+          transform: `scale(${logoScale})`,
+          transition: 'opacity 0.6s ease, transform 0.6s cubic-bezier(0.16,1,0.3,1)',
+          fontFamily: 'Inter, sans-serif', fontWeight: 900,
+          fontSize: 72, letterSpacing: '-0.03em', lineHeight: 1,
+          marginBottom: 16,
+        }}>
+          <span style={{ color: '#FFFFFF' }}>hush</span>
+          <span style={{ color: '#06B6D4', opacity: dotOpacity, transition: 'opacity 0.4s ease' }}>+</span>
+        </div>
+
+        {/* Tagline */}
+        <div style={{
+          opacity: taglineOpacity,
+          transition: 'opacity 0.5s ease',
+          color: '#475569', fontSize: 14, letterSpacing: '0.14em',
+          fontFamily: 'Inter, sans-serif', fontWeight: 400, textTransform: 'uppercase',
+        }}>
+          Your Stream. Your Way.
+        </div>
+
+        {/* Progress bar pinned to bottom */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          height: 2, background: 'rgba(255,255,255,0.06)',
+        }}>
+          <div style={{
+            height: '100%',
+            width: `${progress}%`,
+            background: '#06B6D4',
+            borderRadius: '0 2px 2px 0',
+            transition: 'width 0.01s linear',
+            boxShadow: '0 0 8px rgba(6,182,212,0.8)',
+          }} />
+        </div>
+
+        {/* TV badge */}
+        <div style={{
+          position: 'absolute', top: 16, right: 16,
+          fontSize: 10, color: '#334155', fontFamily: 'monospace', letterSpacing: '0.1em',
+        }}>1920×1080</div>
+      </div>
+
+      <button
+        onClick={runAnimation}
+        disabled={running}
+        style={{
+          marginTop: 12, padding: '8px 20px', borderRadius: 8,
+          background: running ? 'rgba(255,255,255,0.05)' : 'rgba(6,182,212,0.15)',
+          border: '1px solid rgba(6,182,212,0.3)',
+          color: running ? '#475569' : '#06B6D4',
+          fontSize: 13, fontWeight: 600, cursor: running ? 'not-allowed' : 'pointer',
+          transition: 'all 0.2s ease',
+        }}
+      >
+        {running ? 'Playing…' : '▶ Replay Animation'}
+      </button>
     </div>
   );
 };
@@ -503,6 +617,69 @@ Card snap:          scroll-snap-align: start
               ].map(([k, v]) => (
                 <SpecRow key={k} label={k} value={v} />
               ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* Loading Screen */}
+        <Section title="Launch / Loading Screen">
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 32, marginBottom: 16 }}>
+            <p style={{ color: '#94A3B8', marginBottom: 28, lineHeight: 1.7, fontSize: 15 }}>
+              The launch screen is the user's <strong style={{ color: 'white' }}>first impression</strong>. It should feel cinematic and premium — pure black background, 
+              centered logo that fades + scales in, a thin cyan progress bar that fills across the bottom, then a smooth fade-out into the home screen. Total duration: <strong style={{ color: '#06B6D4' }}>2.5–3 seconds</strong>.
+            </p>
+
+            {/* Live mockup */}
+            <LoadingScreenMockup />
+
+            <div style={{ marginTop: 28 }}>
+              <p style={{ color: '#64748B', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>Sequence Breakdown</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
+                {[
+                  { step: '0–0.3s', label: 'Black screen', desc: 'Instant black. No flash of white.' },
+                  { step: '0.3–1.0s', label: 'Logo Fade In', desc: '"hush" fades + scales from 0.8→1.0. "+" cyan dot appears 150ms later.' },
+                  { step: '1.0–2.0s', label: 'Progress Bar', desc: 'Thin 2dp cyan bar sweeps left→right across the bottom edge.' },
+                  { step: '2.0–2.5s', label: 'Tagline', desc: 'Optional: "Your Stream. Your Way." fades in below logo at #475569.' },
+                  { step: '2.5–3.0s', label: 'Fade Out', desc: 'Entire screen fades to black, then home screen fades in.' },
+                ].map(item => (
+                  <div key={item.step} style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 10, padding: '14px 16px', borderLeft: '2px solid rgba(6,182,212,0.4)' }}>
+                    <p style={{ color: '#06B6D4', fontFamily: 'monospace', fontSize: 11, marginBottom: 4 }}>{item.step}</p>
+                    <p style={{ color: 'white', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{item.label}</p>
+                    <p style={{ color: '#64748B', fontSize: 12, lineHeight: 1.5 }}>{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <CodeBlock code={`// Loading Screen — Android TV (Compose or XML)
+Background:       #000000 solid (no gradients during load)
+Logo:             "hush" white + "+" cyan, Inter Black 900, centered
+Logo Animation:   alpha 0→1 over 600ms, scaleX/Y 0.85→1.0, easing: FastOutSlowIn
+Logo Delay:       300ms after Activity onCreate
+Cyan Dot Delay:   150ms after "hush" starts animating
+
+// Progress Bar
+Height:           2dp
+Color:            #06B6D4
+Position:         pinned to very bottom of screen
+Width:            animates 0% → 100% over 1200ms, linear interpolator
+Corner Radius:    1dp
+
+// Tagline (optional)
+Text:             "Your Stream. Your Way."
+Font:             Inter Regular 400, 14sp
+Color:            #475569
+Delay:            appears at ~1.8s, fade in 400ms
+Letter Spacing:   0.12em
+
+// Exit Transition
+Entire screen:    alpha 1→0 over 400ms, then launch MainActivity
+Easing:           AccelerateInterpolator
+
+// Android Implementation Note
+Use SplashScreen API (API 31+) or a dedicated SplashActivity
+Prevent white flash: set windowBackground="#000000" in splash theme
+styles.xml: <item name="android:windowBackground">@color/black</item>
+            <item name="android:windowIsTranslucent">false</item>`} />
             </div>
           </div>
         </Section>
