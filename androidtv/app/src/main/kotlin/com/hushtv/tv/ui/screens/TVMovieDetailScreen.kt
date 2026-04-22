@@ -749,25 +749,118 @@ private fun PosterMissing() {
     }
 }
 
-/** Cross-reference a list of title strings from TMDB against the library. */
+/** Cross-reference a list of title strings from TMDB against the library.
+ *
+ *  Xtream catalog titles typically have noisy prefixes like `"US | "`,
+ *  `"EN: "`, `"[VIP]"`, country flags, quality tags (`4K`, `HD`, `FHD`),
+ *  year suffixes (`(2018)`, ` 2024`), and various punctuation. TMDB returns
+ *  clean titles like `"Den of Thieves"`. We normalise both sides heavily and
+ *  match by both exact and containment (in either direction).
+ */
 private fun matchLibraryByTitles(
     titles: List<String>,
     library: List<MediaCard>,
 ): List<MediaCard> {
     if (titles.isEmpty() || library.isEmpty()) return emptyList()
-    val libLower = library.map { it to it.title.lowercase() }
+
+    // Pre-normalise the library once.
+    val libNorm: List<Pair<MediaCard, String>> = library.map { it to normaliseTitle(it.title) }
+    val libByExact: Map<String, MediaCard> = libNorm.associate { (card, n) -> n to card }
+
     val seen = mutableSetOf<String>()
     val out = mutableListOf<MediaCard>()
-    titles.forEach { raw ->
-        val t = raw.trim().lowercase()
-        if (t.isBlank() || t.length < 2) return@forEach
-        val hit = libLower.firstOrNull { (_, lt) ->
-            lt == t || lt.startsWith("$t ") || lt.startsWith("$t:") ||
-                (t.length >= 5 && (lt.contains(" $t") || lt.contains(" $t:")))
-        }?.first
-        if (hit != null && seen.add("${hit.kind}-${hit.id}")) out += hit
+
+    fun addIfNew(card: MediaCard) {
+        if (seen.add("${card.kind}-${card.id}")) out += card
     }
+
+    for (raw in titles) {
+        val t = normaliseTitle(raw)
+        if (t.length < 2) continue
+
+        // 1. Exact normalised match (fast path).
+        val exactHit = libByExact[t]
+        if (exactHit != null) {
+            addIfNew(exactHit)
+            continue
+        }
+
+        // 2. Substring match in either direction — whole-word boundary.
+        //    Require a minimum length so short titles like "Up" don't
+        //    collide with everything.
+        if (t.length < 3) continue
+        val pattern = " $t "
+        val hit = libNorm.firstOrNull { (_, lt) ->
+            val padded = " $lt "
+            padded.contains(pattern) ||
+                // Library title IS the TMDB title plus a suffix/prefix.
+                padded.startsWith("$t ") ||
+                padded.endsWith(" $t") ||
+                // TMDB title IS the library title plus extra (e.g. library has
+                // "Den of Thieves 2" and TMDB filmography has "Den of Thieves").
+                (lt.length >= 4 && (" $t ").contains(" $lt "))
+        }?.first
+        if (hit != null) addIfNew(hit)
+    }
+
     return out.take(30)
+}
+
+/**
+ * Normalise a noisy Xtream or TMDB title for fuzzy matching.
+ *
+ *  "US | Den of Thieves (2018)"   → "den of thieves"
+ *  "[EN] Den of Thieves 4K"       → "den of thieves"
+ *  "VIP: Plane (2023) FHD"        → "plane"
+ *  "Den of Thieves"               → "den of thieves"
+ */
+private fun normaliseTitle(raw: String): String {
+    var t = raw.trim().lowercase()
+
+    // Strip bracketed / parenthesised prefixes FIRST, before generic
+    // leading-punctuation cleanup removes the opening bracket.
+    //   "[EN] Den of Thieves"    → "Den of Thieves"
+    //   "(VIP) Plane"            → "Plane"
+    t = t.replace(Regex("""^\[[^\]]*\]\s*"""), "")
+    t = t.replace(Regex("""^\([^)]*\)\s*"""), "")
+    t = t.replace(Regex("""^\{[^}]*\}\s*"""), "")
+
+    // Strip leading flag emojis / other decorative unicode.
+    t = t.replace(Regex("^[^a-z0-9]+"), "")
+
+    // Strip 1–4 letter/language codes followed by separator: "US | ", "EN - ", "PT: "
+    // Repeat up to 3 times for stacked prefixes like "US | VIP | 4K - "
+    repeat(3) {
+        t = t.replace(Regex("^[a-z]{1,4}\\s*[|:\\-·•]+\\s*"), "")
+        t = t.replace(
+            Regex(
+                "^(vip|hd|fhd|uhd|sd|4k|hq|dolby|imax|atmos|dual|multi|english|dub(bed)?|sub(bed|titled)?)\\s*[|:\\-·•]?\\s*"
+            ),
+            ""
+        )
+    }
+
+    // Strip year in parentheses anywhere: "(2018)".
+    t = t.replace(Regex("\\(\\s*(19|20)\\d{2}\\s*\\)"), " ")
+
+    // Strip bare year at the END: " 2018", "-2018".
+    t = t.replace(Regex("[\\s\\-]+(19|20)\\d{2}\\s*$"), "")
+
+    // Strip trailing quality / format tags: " 4K", " HD", " FHD"
+    repeat(3) {
+        t = t.replace(
+            Regex("[\\s\\-|·•]+(vip|hd|fhd|uhd|sd|4k|hq|dolby|imax|atmos|dual|multi)\\s*$"),
+            ""
+        )
+    }
+
+    // Replace any remaining punctuation with space.
+    t = t.replace(Regex("[^a-z0-9\\s]"), " ")
+
+    // Collapse whitespace.
+    t = t.replace(Regex("\\s+"), " ").trim()
+
+    return t
 }
 
 /* ──────────────────────────────────────────────────────────────── */
