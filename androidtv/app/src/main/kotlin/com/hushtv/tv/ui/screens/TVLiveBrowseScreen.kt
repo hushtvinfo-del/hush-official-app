@@ -124,7 +124,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     val onPlay: (MediaCard) -> Unit = sel@{ c ->
         val p = playlist ?: return@sel
         val url = XtreamApi.liveUrl(p.host, p.username, p.password, c.streamId)
-        nav.navigate("player/${Uri.encode(url)}/${Uri.encode(c.title)}/true")
+        nav.navigate("player/${p.id}/${Uri.encode(url)}/${Uri.encode(c.title)}/true")
     }
 
     Column(

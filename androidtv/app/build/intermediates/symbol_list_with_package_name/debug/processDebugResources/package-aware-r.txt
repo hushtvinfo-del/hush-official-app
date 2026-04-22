@@ -61,6 +61,7 @@ attr popExitAnim
 attr popUpTo
 attr popUpToInclusive
 attr popUpToSaveState
+attr postSplashScreenTheme
 attr previous_icon
 attr queryPatterns
 attr recyclerViewStyle
@@ -92,6 +93,7 @@ attr shuffle_off_icon
 attr shuffle_on_icon
 attr shutter_background_color
 attr spanCount
+attr splashScreenIconSize
 attr stackFromEnd
 attr startDestination
 attr subtitle_off_icon
@@ -106,6 +108,10 @@ attr uri
 attr use_artwork
 attr use_controller
 attr vr_icon
+attr windowSplashScreenAnimatedIcon
+attr windowSplashScreenAnimationDuration
+attr windowSplashScreenBackground
+attr windowSplashScreenIconBackgroundColor
 color androidx_core_ripple_material_light
 color androidx_core_secondary_text_default_material_light
 color call_notification_answer_color
@@ -188,7 +194,16 @@ dimen notification_small_icon_size_as_large
 dimen notification_subtext_size
 dimen notification_top_pad
 dimen notification_top_pad_large_text
+dimen splashscreen_icon_mask_size_no_background
+dimen splashscreen_icon_mask_size_with_background
+dimen splashscreen_icon_mask_stroke_no_background
+dimen splashscreen_icon_mask_stroke_with_background
+dimen splashscreen_icon_size
+dimen splashscreen_icon_size_no_background
+dimen splashscreen_icon_size_with_background
 drawable abc_vector_test
+drawable compat_splash_screen
+drawable compat_splash_screen_no_icon_background
 drawable exo_edit_mode_logo
 drawable exo_ic_audiotrack
 drawable exo_ic_check
@@ -277,6 +292,7 @@ drawable ic_call_answer_video_low
 drawable ic_call_decline
 drawable ic_call_decline_low
 drawable ic_launcher_foreground
+drawable icon_background
 drawable media3_icon_album
 drawable media3_icon_artist
 drawable media3_icon_block
@@ -505,6 +521,7 @@ id report_drawn
 id right_icon
 id right_side
 id spherical_gl_surface_view
+id splashscreen_icon_view
 id status_bar_latest_event_content
 id surface_view
 id tag_accessibility_actions
@@ -534,6 +551,7 @@ id when_playing
 id wrapped_composition_tag
 id zoom
 integer cancel_button_image_alpha
+integer default_icon_animation_duration
 integer exo_media_button_opacity_percentage_disabled
 integer exo_media_button_opacity_percentage_enabled
 integer m3c_window_layout_in_display_cutout_mode
@@ -575,6 +593,7 @@ layout notification_template_media
 layout notification_template_media_custom
 layout notification_template_part_chronometer
 layout notification_template_part_time
+layout splash_screen_view
 mipmap ic_launcher
 mipmap ic_launcher_round
 plurals exo_controls_fastforward_by_amount_description
@@ -742,6 +761,13 @@ string tab
 string template_percent
 string tooltip_description
 string tooltip_label
+style Base_Theme_SplashScreen
+style Base_Theme_SplashScreen_DayNight
+style Base_Theme_SplashScreen_Light
+style Base_v21_Theme_SplashScreen
+style Base_v21_Theme_SplashScreen_Light
+style Base_v27_Theme_SplashScreen
+style Base_v27_Theme_SplashScreen_Light
 style DialogWindowTheme
 style EdgeToEdgeFloatingDialogTheme
 style EdgeToEdgeFloatingDialogWindowTheme
@@ -790,6 +816,10 @@ style TextAppearance_Compat_Notification_Time_Media
 style TextAppearance_Compat_Notification_Title
 style TextAppearance_Compat_Notification_Title_Media
 style Theme_HushTV
+style Theme_HushTV_Splash
+style Theme_SplashScreen
+style Theme_SplashScreen_Common
+style Theme_SplashScreen_IconBackground
 style Widget_Compat_NotificationActionContainer
 style Widget_Compat_NotificationActionText
 styleable ActivityNavigator android_name action data dataPattern targetPackage

@@ -6,9 +6,12 @@ import com.squareup.moshi.adapter
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Cache
+import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 object XtreamApi {
@@ -16,12 +19,34 @@ object XtreamApi {
     /** The Xtream server URL hardcoded in the React app (TVAddAccount.jsx). */
     const val HUSH_HOST = "https://hushvipnew.ink:443"
 
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    private var client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .build()
+
+    /** Call this once at app startup (from Application.onCreate) to enable a
+     *  shared 20MB on-disk response cache. Dramatically speeds up the second
+     *  cold-launch because category/stream lists are served from local disk. */
+    fun enableDiskCache(ctx: android.content.Context) {
+        val cacheDir = File(ctx.cacheDir, "xtream_http_cache")
+        val cache = Cache(cacheDir, maxSize = 20L * 1024 * 1024)
+        client = client.newBuilder()
+            .cache(cache)
+            // Accept cached responses up to 5 min old even if the upstream
+            // sends no-cache — this is safe for IPTV category lists which
+            // rarely change.
+            .addNetworkInterceptor { chain ->
+                val req = chain.request()
+                val resp = chain.proceed(req)
+                resp.newBuilder()
+                    .header("Cache-Control", "public, max-age=300")
+                    .removeHeader("Pragma")
+                    .build()
+            }
+            .build()
+    }
 
     private val moshi: Moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())

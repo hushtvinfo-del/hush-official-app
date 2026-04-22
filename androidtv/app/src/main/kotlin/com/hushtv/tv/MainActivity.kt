@@ -1,5 +1,6 @@
 package com.hushtv.tv
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,9 +10,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.ui.screens.TVAddAccountScreen
 import com.hushtv.tv.ui.screens.TVBrowseScreen
 import com.hushtv.tv.ui.screens.TVHomeScreen
@@ -23,9 +27,13 @@ import com.hushtv.tv.ui.theme.HushTVTheme
 import com.hushtv.tv.update.UpdateDialog
 import com.hushtv.tv.update.UpdateManager
 import com.hushtv.tv.update.VersionInfo
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Must be called before super.onCreate(). Shows the branded splash
+        // (icon on black) instantly, even while Compose is still initialising.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         setContent {
             HushTVTheme {
@@ -33,7 +41,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize().background(Color.Black),
                     color = Color.Black
                 ) {
+                    val ctx = LocalContext.current
                     val nav = rememberNavController()
+
                     NavHost(navController = nav, startDestination = "home") {
                         composable("home") { TVHomeScreen(nav) }
                         composable("add") { TVAddAccountScreen(nav) }
@@ -57,9 +67,10 @@ class MainActivity : ComponentActivity() {
                                 bs.arguments?.getString("seriesName") ?: ""
                             )
                         }
-                        composable("player/{streamUrl}/{channelName}/{isLive}") { bs ->
+                        composable("player/{playlistId}/{streamUrl}/{channelName}/{isLive}") { bs ->
                             TVPlayerScreen(
                                 nav,
+                                bs.arguments?.getString("playlistId") ?: "",
                                 bs.arguments?.getString("streamUrl") ?: "",
                                 bs.arguments?.getString("channelName") ?: "",
                                 bs.arguments?.getString("isLive") == "true"
@@ -67,8 +78,23 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Global update-check overlay. Runs once on cold start;
-                    // if the user taps "Later" it stays dismissed until next launch.
+                    // Auto-resume: if the user was watching a live channel last time,
+                    // skip the Home → Menu → Browse → Player chain and boot straight
+                    // into that channel fullscreen. Just like turning on a real TV.
+                    var resumeAttempted by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        if (resumeAttempted) return@LaunchedEffect
+                        resumeAttempted = true
+                        val last = LastChannelStore.load(ctx) ?: return@LaunchedEffect
+                        nav.navigate(
+                            "player/${last.playlistId}" +
+                                "/${Uri.encode(last.streamUrl)}" +
+                                "/${Uri.encode(last.channelName)}" +
+                                "/true"
+                        )
+                    }
+
+                    // Update check runs AFTER first render so it never delays startup.
                     UpdateCheckHost()
                 }
             }
@@ -76,14 +102,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Composable helper that fetches /version.json on first composition and shows
- *  [UpdateDialog] when an update is available. Silent on failures. */
+/** Fetches /version.json after a small delay (so UI is already rendered) and
+ *  shows the update dialog if a newer version is available. */
 @Composable
 private fun UpdateCheckHost() {
     var info by remember { mutableStateOf<VersionInfo?>(null) }
     var dismissed by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        // Let the UI fully settle first — the check should NEVER block launch.
+        delay(3000)
         val latest = UpdateManager.fetchLatest() ?: return@LaunchedEffect
         if (UpdateManager.isUpdateAvailable(latest)) info = latest
     }

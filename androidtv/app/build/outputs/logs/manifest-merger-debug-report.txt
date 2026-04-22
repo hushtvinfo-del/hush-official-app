@@ -1,20 +1,20 @@
 -- Merging decision tree log ---
 provider#androidx.core.content.FileProvider
-INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:44:9-52:20
+INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:45:9-53:20
 	android:grantUriPermissions
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:48:13-47
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:49:13-47
 	android:authorities
 		INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:46:13-64
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:47:13-64
 	android:exported
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:47:13-37
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:48:13-37
 	android:name
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:45:13-62
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:46:13-62
 manifest
-ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:2:1-54:12
-INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:2:1-54:12
-INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:2:1-54:12
-INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:2:1-54:12
+ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:2:1-55:12
+INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:2:1-55:12
+INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:2:1-55:12
+INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:2:1-55:12
 MERGED from [androidx.media3:media3-ui:1.4.1] /root/.gradle/caches/transforms-4/663fe680b59799d4cb88142368e025f9/transformed/media3-ui-1.4.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.media3:media3-session:1.4.1] /root/.gradle/caches/transforms-4/2f9cda94b633a3a83e454eb1023d8041/transformed/media3-session-1.4.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.media3:media3-extractor:1.4.1] /root/.gradle/caches/transforms-4/6d05d9cbc18f5fb346b15b1752bb4721/transformed/media3-extractor-1.4.1/AndroidManifest.xml:17:1-22:12
@@ -76,6 +76,7 @@ MERGED from [androidx.graphics:graphics-path:1.0.1] /root/.gradle/caches/transfo
 MERGED from [androidx.core:core:1.13.1] /root/.gradle/caches/transforms-4/8e0a0bff2d388b6446750efdf4a5758f/transformed/core-1.13.1/AndroidManifest.xml:17:1-30:12
 MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] /root/.gradle/caches/transforms-4/ca320cc04769201d96ae35a18d4b1c24/transformed/customview-poolingcontainer-1.0.0/AndroidManifest.xml:17:1-23:12
 MERGED from [androidx.core:core-ktx:1.13.1] /root/.gradle/caches/transforms-4/ee0481a11330c26fe06a00831ef0481b/transformed/core-ktx-1.13.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.core:core-splashscreen:1.0.1] /root/.gradle/caches/transforms-4/08a5c87c8b8ae2e447c478574aaf3a93/transformed/core-splashscreen-1.0.1/AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.3] /root/.gradle/caches/transforms-4/b7106526683c11c4d2ecc0f6633dc1b6/transformed/runtime-saveable-release/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.compose.runtime:runtime-android:1.7.3] /root/.gradle/caches/transforms-4/3210928b3bfb0bfd6ed3f80408de6648/transformed/runtime-release/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.annotation:annotation-experimental:1.4.1] /root/.gradle/caches/transforms-4/0eb5b216ac68d58d5ef4ed40739f717e/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:2:1-7:12
@@ -131,8 +132,8 @@ ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:14:5-16:36
 	android:name
 		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:15:9-52
 application
-ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:18:5-53:19
-INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:18:5-53:19
+ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:18:5-54:19
+INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml:18:5-54:19
 MERGED from [androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.lifecycle:lifecycle-process:2.8.6] /root/.gradle/caches/transforms-4/be3bf2561d4c33f9b6eb7fb85e864c52/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:23:5-33:19
@@ -150,57 +151,59 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /root/.gradle/caches/transf
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] /root/.gradle/caches/transforms-4/8e0a0bff2d388b6446750efdf4a5758f/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:26:9-35
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:27:9-35
 	android:label
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:22:9-41
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:23:9-41
 	android:roundIcon
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:23:9-54
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:24:9-54
 	android:icon
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:21:9-43
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:22:9-43
 	android:allowBackup
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:19:9-35
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:20:9-35
 	android:banner
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:20:9-45
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:21:9-45
 	android:theme
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:27:9-44
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:28:9-44
 	android:networkSecurityConfig
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:24:9-69
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:25:9-69
 	android:usesCleartextTraffic
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:25:9-44
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:26:9-44
+	android:name
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:19:9-34
 activity#com.hushtv.tv.MainActivity
-ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:29:9-41:20
+ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:30:9-42:20
 	android:screenOrientation
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:34:13-50
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:35:13-50
 	android:launchMode
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:33:13-44
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:34:13-44
 	android:exported
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:32:13-36
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:33:13-36
 	android:configChanges
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:31:13-113
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:32:13-113
 	android:theme
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:35:13-48
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:36:13-55
 	android:name
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:30:13-41
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:31:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER+category:name:android.intent.category.LEANBACK_LAUNCHER
-ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:36:13-40:29
+ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:37:13-41:29
 action#android.intent.action.MAIN
-ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:37:17-69
+ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:38:17-69
 	android:name
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:37:25-66
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:38:25-66
 category#android.intent.category.LEANBACK_LAUNCHER
-ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:38:17-86
+ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:39:17-86
 	android:name
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:38:27-83
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:39:27-83
 category#android.intent.category.LAUNCHER
-ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:39:17-77
+ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:40:17-77
 	android:name
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:39:27-74
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:40:27-74
 meta-data#android.support.FILE_PROVIDER_PATHS
-ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:49:13-51:54
+ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:50:13-52:54
 	android:resource
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:51:17-51
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:52:17-51
 	android:name
-		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:50:17-67
+		ADDED from /app/androidtv/app/src/main/AndroidManifest.xml:51:17-67
 uses-sdk
 INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /app/androidtv/app/src/main/AndroidManifest.xml
@@ -327,6 +330,8 @@ MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] /root/.gradl
 MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] /root/.gradle/caches/transforms-4/ca320cc04769201d96ae35a18d4b1c24/transformed/customview-poolingcontainer-1.0.0/AndroidManifest.xml:20:5-21:38
 MERGED from [androidx.core:core-ktx:1.13.1] /root/.gradle/caches/transforms-4/ee0481a11330c26fe06a00831ef0481b/transformed/core-ktx-1.13.1/AndroidManifest.xml:5:5-44
 MERGED from [androidx.core:core-ktx:1.13.1] /root/.gradle/caches/transforms-4/ee0481a11330c26fe06a00831ef0481b/transformed/core-ktx-1.13.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-splashscreen:1.0.1] /root/.gradle/caches/transforms-4/08a5c87c8b8ae2e447c478574aaf3a93/transformed/core-splashscreen-1.0.1/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.core:core-splashscreen:1.0.1] /root/.gradle/caches/transforms-4/08a5c87c8b8ae2e447c478574aaf3a93/transformed/core-splashscreen-1.0.1/AndroidManifest.xml:20:5-22:41
 MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.3] /root/.gradle/caches/transforms-4/b7106526683c11c4d2ecc0f6633dc1b6/transformed/runtime-saveable-release/AndroidManifest.xml:5:5-44
 MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.3] /root/.gradle/caches/transforms-4/b7106526683c11c4d2ecc0f6633dc1b6/transformed/runtime-saveable-release/AndroidManifest.xml:5:5-44
 MERGED from [androidx.compose.runtime:runtime-android:1.7.3] /root/.gradle/caches/transforms-4/3210928b3bfb0bfd6ed3f80408de6648/transformed/runtime-release/AndroidManifest.xml:5:5-44

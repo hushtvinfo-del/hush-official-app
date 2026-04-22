@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.hushtv.tv.debug"
-    android:versionCode="4"
-    android:versionName="1.0.3-debug" >
+    android:versionCode="5"
+    android:versionName="1.0.4-debug" >
 
     <uses-sdk
         android:minSdkVersion="24"
@@ -29,6 +29,7 @@
     <uses-permission android:name="com.hushtv.tv.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
 
     <application
+        android:name="com.hushtv.tv.HushTVApp"
         android:allowBackup="true"
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
         android:banner="@drawable/tv_banner"
@@ -47,7 +48,7 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:screenOrientation="landscape"
-            android:theme="@style/Theme.HushTV" >
+            android:theme="@style/Theme.HushTV.Splash" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

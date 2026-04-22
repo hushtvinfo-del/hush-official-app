@@ -135,11 +135,11 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
         when (item.kind) {
             "live" -> {
                 val url = XtreamApi.liveUrl(p.host, p.username, p.password, item.streamId)
-                nav.navigate("player/${Uri.encode(url)}/${Uri.encode(item.title)}/true")
+                nav.navigate("player/$playlistId/${Uri.encode(url)}/${Uri.encode(item.title)}/true")
             }
             "movie" -> {
                 val url = XtreamApi.movieUrl(p.host, p.username, p.password, item.streamId, item.containerExtension)
-                nav.navigate("player/${Uri.encode(url)}/${Uri.encode(item.title)}/false")
+                nav.navigate("player/$playlistId/${Uri.encode(url)}/${Uri.encode(item.title)}/false")
             }
             "series" -> {
                 nav.navigate("series/$playlistId/${item.seriesId}/${Uri.encode(item.title)}")

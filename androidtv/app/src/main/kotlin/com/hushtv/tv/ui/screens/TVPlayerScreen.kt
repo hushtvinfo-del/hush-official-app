@@ -36,6 +36,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
+import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.tvFocusable
 import kotlinx.coroutines.delay
@@ -44,11 +45,24 @@ import kotlinx.coroutines.delay
 @Composable
 fun TVPlayerScreen(
     nav: NavController,
+    playlistId: String,
     streamUrl: String,
     channelName: String,
     isLive: Boolean
 ) {
     val ctx = LocalContext.current
+
+    // Persist "last watched live channel" so next cold launch resumes here.
+    LaunchedEffect(streamUrl, channelName, isLive, playlistId) {
+        if (isLive && playlistId.isNotBlank()) {
+            LastChannelStore.save(
+                ctx = ctx,
+                playlistId = playlistId,
+                streamUrl = streamUrl,
+                channelName = channelName
+            )
+        }
+    }
 
     val player = remember {
         ExoPlayer.Builder(ctx).build().apply {

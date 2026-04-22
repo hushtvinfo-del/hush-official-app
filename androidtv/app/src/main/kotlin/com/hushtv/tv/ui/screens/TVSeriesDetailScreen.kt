@@ -118,7 +118,7 @@ fun TVSeriesDetailScreen(
                                     p.host, p.username, p.password, ep.id, ep.container_extension
                                 )
                                 val t = "$seriesName — S${ep.season ?: seasonKey} E${ep.episode_num}"
-                                nav.navigate("player/${Uri.encode(url)}/${Uri.encode(t)}/false")
+                                nav.navigate("player/$playlistId/${Uri.encode(url)}/${Uri.encode(t)}/false")
                             }
                         }
                     }
