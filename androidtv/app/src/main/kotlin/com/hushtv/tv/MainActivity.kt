@@ -23,6 +23,7 @@ import com.hushtv.tv.ui.screens.TVEpgGridScreen
 import com.hushtv.tv.ui.screens.TVHomeScreen
 import com.hushtv.tv.ui.screens.TVLiveBrowseScreen
 import com.hushtv.tv.ui.screens.TVMainMenuScreen
+import com.hushtv.tv.ui.screens.TVMovieDetailScreen
 import com.hushtv.tv.ui.screens.TVPlayerScreen
 import com.hushtv.tv.ui.screens.TVSeriesDetailScreen
 import com.hushtv.tv.ui.screens.TVSettingsScreen
@@ -84,6 +85,14 @@ private fun AppContent() {
                 bs.arguments?.getString("playlistId") ?: "",
                 bs.arguments?.getString("seriesId") ?: "",
                 bs.arguments?.getString("seriesName") ?: "",
+            )
+        }
+        composable("moviedetail/{playlistId}/{streamId}/{title}") { bs ->
+            TVMovieDetailScreen(
+                nav,
+                bs.arguments?.getString("playlistId") ?: "",
+                bs.arguments?.getString("streamId")?.toIntOrNull() ?: 0,
+                bs.arguments?.getString("title") ?: "",
             )
         }
         composable("epg/{playlistId}") { bs ->
