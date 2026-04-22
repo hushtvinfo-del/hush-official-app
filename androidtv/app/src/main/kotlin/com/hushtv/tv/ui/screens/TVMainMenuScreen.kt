@@ -379,7 +379,7 @@ private fun Sidebar(
     onProfile: () -> Unit,
 ) {
     val width by animateDpAsState(
-        targetValue = if (expanded) 128.dp else 68.dp,
+        targetValue = if (expanded) 134.dp else 68.dp,
         animationSpec = tween(150),
         label = "sidebar-width",
     )
