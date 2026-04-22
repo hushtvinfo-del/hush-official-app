@@ -196,27 +196,55 @@ fun TVSeriesDetailScreen(
             )
         }
 
-        // Back button
-        Box(
-            Modifier
-                .padding(16.dp)
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(Color(0x88000000))
-                .border(2.dp, Color(0x55FFFFFF), CircleShape)
-                .focusRequester(backFocus)
-                .onKeyEvent { ev ->
-                    if (ev.type == KeyEventType.KeyDown &&
-                        (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
-                    ) {
-                        nav.popBackStack(); true
-                    } else false
-                }
-                .focusable()
-                .clickable { nav.popBackStack() },
-            contentAlignment = Alignment.Center,
+        // Fixed top action bar: Back · My List · Trailer (series has no Play — episodes are the play targets)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 16.dp, top = 14.dp, end = 16.dp),
         ) {
-            Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x88000000))
+                    .border(2.dp, Color(0x55FFFFFF), CircleShape)
+                    .focusRequester(backFocus)
+                    .onKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown &&
+                            (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+                        ) {
+                            nav.popBackStack(); true
+                        } else false
+                    }
+                    .focusable()
+                    .clickable { nav.popBackStack() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+
+            if (!loading) {
+                SCta(
+                    label = if (isInMyList) "In List" else "My List",
+                    icon = if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    primary = false,
+                    onClick = {
+                        MyListStore.toggle(ctx, playlistId, "series", seriesIdInt)
+                        myListVersion++
+                    },
+                )
+                val trailerKeyNow = TmdbService.pickTrailer(tmdbTv?.videos)
+                trailerKeyNow?.let { k ->
+                    SCta(
+                        label = "Trailer",
+                        icon = Icons.Default.PlayCircle,
+                        primary = false,
+                        onClick = { openYoutubeExt(ctx, k) },
+                    )
+                }
+            }
         }
 
         if (loading) {
@@ -230,7 +258,7 @@ fun TVSeriesDetailScreen(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = 72.dp, end = 48.dp, top = 56.dp, bottom = 24.dp)
+                .padding(start = 72.dp, end = 48.dp, top = 80.dp, bottom = 24.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
             // ── Hero row — natural height, verticalScroll handles overflow ─
@@ -321,29 +349,8 @@ fun TVSeriesDetailScreen(
                             lineHeight = 20.sp,
                             maxLines = 5,
                         )
-                        Spacer(Modifier.height(16.dp))
                     }
-
-                    // CTAs
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        SCta(
-                            label = "My List",
-                            icon = if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            primary = false,
-                            onClick = {
-                                MyListStore.toggle(ctx, playlistId, "series", seriesIdInt)
-                                myListVersion++
-                            },
-                        )
-                        trailerKey?.let { k ->
-                            SCta(
-                                label = "Trailer",
-                                icon = Icons.Default.PlayCircle,
-                                primary = false,
-                                onClick = { openYoutubeExt(ctx, k) },
-                            )
-                        }
-                    }
+                    // CTAs rendered in the fixed top bar (outside scroll)
                 }
             }
 
