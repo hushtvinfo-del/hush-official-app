@@ -41,7 +41,7 @@ import com.hushtv.tv.ui.theme.Inter
  * look broken while TMDB hydrates (or when there are no entries at all).
  */
 @Composable
-fun HomeHeroLayer(entry: ContinueEntry?, contentStartPadding: androidx.compose.ui.unit.Dp = 64.dp) {
+fun HomeHeroLayer(entry: ContinueEntry?, contentStartPadding: androidx.compose.ui.unit.Dp = 48.dp) {
     Box(Modifier.fillMaxSize()) {
         if (entry?.backdropUrl != null) {
             AsyncImage(

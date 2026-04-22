@@ -253,35 +253,14 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         Box(Modifier.weight(1f).fillMaxHeight()) {
             val continueEntries = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
             var heroEntry by remember { mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null) }
-            // Seed the hero with the first entry whenever the list changes —
-            // so the hero renders immediately, not on first focus.
             LaunchedEffect(continueEntries.firstOrNull()) {
                 if (heroEntry == null || continueEntries.none { it === heroEntry }) {
                     heroEntry = continueEntries.firstOrNull()
                 }
             }
 
-            // Animate Home content's left padding inversely to the sidebar
-            // width so the first card (and hero title) stay pinned to the
-            // SAME screen-x position regardless of whether the sidebar is
-            // collapsed (52 dp) or expanded (116 dp). Without this, the
-            // content visibly slides left/right when the sidebar animates,
-            // which cuts off titles like "Den of Thieves" when the sidebar
-            // collapses.
-            //
-            //   collapsed: 52 dp sidebar + 128 dp content-start = 180 dp
-            //   expanded: 116 dp sidebar +  64 dp content-start = 180 dp
-            val contentStartPad by animateDpAsState(
-                targetValue = if (sidebarFocused) 64.dp else 128.dp,
-                animationSpec = tween(150),
-                label = "content-start-pad",
-            )
-
             // Layer 1 — sticky hero backdrop.
-            com.hushtv.tv.ui.screens.home.HomeHeroLayer(
-                entry = heroEntry,
-                contentStartPadding = contentStartPad,
-            )
+            com.hushtv.tv.ui.screens.home.HomeHeroLayer(entry = heroEntry)
 
             // Layer 2 — scrollable rows. Transparent until a row reaches
             // the "fold", after which each row renders on its own dark tile
@@ -299,7 +278,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         com.hushtv.tv.ui.screens.home.HomeContinueWatchingRow(
                             playlistId = playlistId,
                             entries = continueEntries,
-                            contentStartPadding = contentStartPad,
                             onFocusedEntryChange = { heroEntry = it },
                             onCardClick = { entry ->
                                 nav.navigate(
@@ -312,20 +290,17 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 }
             }
 
-            // Layer 3 — edge blend. A soft dark-to-transparent horizontal
-            // gradient on the left edge of the content so the sidebar melts
-            // into the home screen instead of ending with a hard seam. The
-            // gradient is purely visual; it's not a focus target and has no
-            // clickable modifier so it can't steal D-pad focus.
+            // Layer 3 — narrow edge blend. 32 dp wide dark-to-transparent
+            // gradient on the content's left edge so the sidebar softens
+            // into the home without ever overlapping real content.
             Box(
                 Modifier
                     .align(Alignment.CenterStart)
-                    .width(56.dp)
+                    .width(32.dp)
                     .fillMaxHeight()
                     .background(
                         Brush.horizontalGradient(
-                            0.0f to Color(0xD0000000),
-                            0.45f to Color(0x66000000),
+                            0.0f to Color(0xB3000000),
                             1.0f to Color.Transparent,
                         )
                     )

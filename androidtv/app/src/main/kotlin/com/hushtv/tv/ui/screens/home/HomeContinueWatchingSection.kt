@@ -82,7 +82,7 @@ fun HomeContinueWatchingRow(
     entries: List<ContinueEntry>,
     onFocusedEntryChange: (ContinueEntry) -> Unit,
     onCardClick: (ContinueEntry) -> Unit,
-    contentStartPadding: androidx.compose.ui.unit.Dp = 64.dp,
+    contentStartPadding: androidx.compose.ui.unit.Dp = 48.dp,
 ) {
     if (entries.isEmpty()) return
 
