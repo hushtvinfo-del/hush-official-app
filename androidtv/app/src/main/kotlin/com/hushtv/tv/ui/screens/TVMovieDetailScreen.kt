@@ -53,13 +53,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.SubcomposeAsyncImage
-import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.MyListStore
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.RpdbService
 import com.hushtv.tv.data.TmdbCastMember
 import com.hushtv.tv.data.TmdbMovie
-import com.hushtv.tv.data.TmdbRecommendation
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.ui.theme.Amber
@@ -93,9 +91,6 @@ fun TVMovieDetailScreen(
     var vodInfo by remember { mutableStateOf<com.hushtv.tv.data.XtreamVodInfo?>(null) }
     var tmdbMovie by remember { mutableStateOf<TmdbMovie?>(null) }
     var loading by remember { mutableStateOf(true) }
-    // Full library (movies + series) — used for cross-referencing an actor's
-    // filmography against titles the user can actually play.
-    var library by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
 
     // Fetch Xtream VOD info → tmdb_id (if present) → TMDB details.
     LaunchedEffect(streamId) {
@@ -110,17 +105,6 @@ fun TVMovieDetailScreen(
         }
         loading = false
     }
-
-    // Lazy-fetch the full library in the background (for cast filmography lookup).
-    LaunchedEffect(streamId) {
-        val p = playlist ?: return@LaunchedEffect
-        val movies = runCatching { XtreamApi.getAllStreams(p.host, p.username, p.password, "movie") }.getOrDefault(emptyList())
-        val series = runCatching { XtreamApi.getAllStreams(p.host, p.username, p.password, "series") }.getOrDefault(emptyList())
-        library = movies + series
-    }
-
-    // Cast-filmography dialog state
-    var castDialog by remember { mutableStateOf<CastDialogState?>(null) }
 
     // My-list state
     var myListVersion by remember { mutableStateOf(0) }
@@ -159,7 +143,6 @@ fun TVMovieDetailScreen(
     val genres = tmdbMovie?.genres?.map { it.name }
         ?: inner?.genre?.split(',', '/')?.map { it.trim() }.orEmpty()
     val castList = tmdbMovie?.credits?.cast?.sortedBy { it.order }?.take(20).orEmpty()
-    val recommendations = tmdbMovie?.recommendations?.results?.take(20).orEmpty()
 
     val onPlay: () -> Unit = click@{
         val p = playlist ?: return@click
@@ -394,342 +377,12 @@ fun TVMovieDetailScreen(
                 Spacer(Modifier.height(12.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(castList, key = { "cast-${it.id}" }) { c ->
-                        CastCard(member = c) {
-                            // Open filmography dialog — fetch TMDB person credits
-                            // and cross-reference against the user's library.
-                            if (library.isEmpty()) {
-                                castDialog = CastDialogState(c, emptyList(), loading = true, notice = "Loading library…")
-                            } else {
-                                castDialog = CastDialogState(c, emptyList(), loading = true)
-                            }
-                            scope.launch {
-                                val titles = TmdbService.personCombinedCredits(c.id)
-                                // Wait for library if still loading
-                                var lib = library
-                                var waits = 0
-                                while (lib.isEmpty() && waits < 20) {
-                                    kotlinx.coroutines.delay(200)
-                                    lib = library
-                                    waits++
-                                }
-                                val matches = matchLibraryByTitles(titles, lib)
-                                castDialog = CastDialogState(c, matches, loading = false)
-                            }
-                        }
+                        CastCard(member = c)
                     }
                 }
                 Spacer(Modifier.height(32.dp))
             }
-
-            // ── Recommendations row ───────────────────────────
-            if (recommendations.isNotEmpty()) {
-                SectionHeader("More Like This")
-                Spacer(Modifier.height(12.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(recommendations, key = { "rec-${it.id}" }) { r ->
-                        RecommendationCard(rec = r) {
-                            // Try to find this title in the user's library.
-                            // If found, open its detail. If not, fallback to a
-                            // cast dialog-style "not in library" notice.
-                            val title = (r.title ?: r.name).orEmpty()
-                            val libMatch = matchLibraryByTitles(listOf(title), library).firstOrNull()
-                            if (libMatch != null) {
-                                when (libMatch.kind) {
-                                    "movie" -> nav.navigate("moviedetail/$playlistId/${libMatch.streamId}/${Uri.encode(libMatch.title)}")
-                                    "series" -> nav.navigate("series/$playlistId/${libMatch.seriesId}/${Uri.encode(libMatch.title)}")
-                                }
-                            } else {
-                                // Show a toast-like temporary notice via dialog
-                                castDialog = CastDialogState(
-                                    TmdbCastMember(
-                                        id = 0,
-                                        name = title,
-                                        character = "Not in your library",
-                                    ),
-                                    emptyList(),
-                                    loading = false,
-                                    notice = "$title isn't in your library yet.",
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
-
-        // ── Cast filmography dialog (overlay) ──────────────────────
-        castDialog?.let { state ->
-            CastFilmographyDialog(
-                state = state,
-                onDismiss = { castDialog = null },
-                onTitleClick = { item ->
-                    castDialog = null
-                    when (item.kind) {
-                        "movie" -> nav.navigate("moviedetail/$playlistId/${item.streamId}/${Uri.encode(item.title)}")
-                        "series" -> nav.navigate("series/$playlistId/${item.seriesId}/${Uri.encode(item.title)}")
-                    }
-                },
-            )
-        }
-    }
-}
-
-/* ──────────────────────────────────────────────────────────────── */
-/*  CAST FILMOGRAPHY DIALOG                                         */
-/* ──────────────────────────────────────────────────────────────── */
-
-data class CastDialogState(
-    val member: TmdbCastMember,
-    val matches: List<MediaCard>,
-    val loading: Boolean,
-    val notice: String? = null,
-)
-
-@Composable
-private fun CastFilmographyDialog(
-    state: CastDialogState,
-    onDismiss: () -> Unit,
-    onTitleClick: (MediaCard) -> Unit,
-) {
-    // Inline overlay — NOT androidx.compose.ui.window.Dialog, which has
-    // known focus-transfer issues on Android TV. This overlay lives in
-    // the same composition as the detail screen so focus requesters work.
-    val firstFocus = remember { FocusRequester() }
-    val closeFocus = remember { FocusRequester() }
-    LaunchedEffect(state.matches.size, state.loading) {
-        kotlinx.coroutines.delay(80)
-        runCatching {
-            if (state.matches.isNotEmpty()) firstFocus.requestFocus()
-            else closeFocus.requestFocus()
-        }
-    }
-
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0xEE000000))
-            // BACK key dismisses
-            .onKeyEvent { ev ->
-                if (ev.type == KeyEventType.KeyDown &&
-                    (ev.key == Key.Back || ev.key == Key.Escape)
-                ) {
-                    onDismiss(); true
-                } else false
-            }
-            .focusable(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier
-                .widthIn(max = 1100.dp)
-                .fillMaxWidth(0.82f)
-                .heightIn(max = 640.dp)
-                .background(Color(0xFF0B111D), RoundedCornerShape(16.dp))
-                .border(1.dp, Color(0x3306B6D4), RoundedCornerShape(16.dp))
-                .padding(28.dp),
-        ) {
-            // Header
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(SurfaceNavy),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val img = TmdbService.img(state.member.profile_path, "w185")
-                    if (!img.isNullOrBlank()) {
-                        SubcomposeAsyncImage(
-                            model = img,
-                            contentDescription = state.member.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize().clip(CircleShape),
-                            error = {
-                                Text(
-                                    state.member.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                    color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Black,
-                                )
-                            },
-                            loading = { },
-                        )
-                    } else {
-                        Text(
-                            state.member.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                            color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Black,
-                        )
-                    }
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        state.member.name,
-                        color = TextPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        if (state.matches.isEmpty() && !state.loading) "Not in your library"
-                        else "Also in your library",
-                        color = Cyan,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.3.sp,
-                    )
-                }
-                // Close button (always reachable)
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .focusRequester(closeFocus)
-                        .onKeyEvent { ev ->
-                            if (ev.type == KeyEventType.KeyDown &&
-                                (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
-                            ) {
-                                onDismiss(); true
-                            } else false
-                        }
-                        .focusable()
-                        .clickable(onClick = onDismiss)
-                        .background(Color(0x1AFFFFFF), CircleShape)
-                        .border(1.dp, Color(0x33FFFFFF), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-            }
-
-            Spacer(Modifier.height(18.dp))
-
-            when {
-                state.loading -> {
-                    Box(
-                        Modifier.fillMaxWidth().height(200.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Cyan, modifier = Modifier.size(34.dp))
-                            Spacer(Modifier.height(10.dp))
-                            Text(
-                                state.notice ?: "Searching your library…",
-                                color = TextSecondary,
-                                fontSize = 12.sp,
-                            )
-                        }
-                    }
-                }
-                state.matches.isEmpty() -> {
-                    Box(
-                        Modifier.fillMaxWidth().height(200.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            state.notice ?: "No other titles with ${state.member.name} in your library.",
-                            color = TextMuted,
-                            fontSize = 14.sp,
-                        )
-                    }
-                }
-                else -> {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(260.dp),
-                    ) {
-                        items(
-                            count = state.matches.size,
-                            key = { idx -> "fmg-${state.matches[idx].kind}-${state.matches[idx].id}" },
-                        ) { idx ->
-                            val item = state.matches[idx]
-                            val mod = if (idx == 0) Modifier.focusRequester(firstFocus) else Modifier
-                            FilmographyCard(
-                                modifier = mod,
-                                item = item,
-                                onClick = { onTitleClick(item) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FilmographyCard(
-    modifier: Modifier = Modifier,
-    item: MediaCard,
-    onClick: () -> Unit,
-) {
-    var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (focused) 1.05f else 1f,
-        animationSpec = tween(90),
-        label = "fmg-scale",
-    )
-    Column(
-        modifier
-            .width(130.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .onFocusChanged { focused = it.isFocused }
-            .onKeyEvent { ev ->
-                if (ev.type == KeyEventType.KeyDown &&
-                    (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
-                ) {
-                    onClick(); true
-                } else false
-            }
-            .focusable()
-            .clickable(onClick = onClick),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(SurfaceNavy)
-                .border(
-                    width = if (focused) 2.dp else 0.dp,
-                    color = if (focused) Cyan else Color.Transparent,
-                    shape = RoundedCornerShape(8.dp),
-                ),
-        ) {
-            if (!item.poster.isNullOrBlank()) {
-                SubcomposeAsyncImage(
-                    model = item.poster,
-                    contentDescription = item.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    error = { PosterMissing() },
-                    loading = { },
-                )
-            } else {
-                PosterMissing()
-            }
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(5.dp)
-                    .background(Color(0xCC000000), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 5.dp, vertical = 2.dp),
-            ) {
-                Text(
-                    if (item.kind == "series") "SERIES" else "MOVIE",
-                    color = Cyan,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp,
-                )
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            item.title,
-            color = if (focused) Cyan else TextPrimary,
-            fontSize = 10.sp,
-            fontFamily = Inter,
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            lineHeight = 12.sp,
-        )
     }
 }
 
@@ -747,120 +400,6 @@ private fun PosterMissing() {
             fontWeight = FontWeight.Black,
         )
     }
-}
-
-/** Cross-reference a list of title strings from TMDB against the library.
- *
- *  Xtream catalog titles typically have noisy prefixes like `"US | "`,
- *  `"EN: "`, `"[VIP]"`, country flags, quality tags (`4K`, `HD`, `FHD`),
- *  year suffixes (`(2018)`, ` 2024`), and various punctuation. TMDB returns
- *  clean titles like `"Den of Thieves"`. We normalise both sides heavily and
- *  match by both exact and containment (in either direction).
- */
-private fun matchLibraryByTitles(
-    titles: List<String>,
-    library: List<MediaCard>,
-): List<MediaCard> {
-    if (titles.isEmpty() || library.isEmpty()) return emptyList()
-
-    // Pre-normalise the library once.
-    val libNorm: List<Pair<MediaCard, String>> = library.map { it to normaliseTitle(it.title) }
-    val libByExact: Map<String, MediaCard> = libNorm.associate { (card, n) -> n to card }
-
-    val seen = mutableSetOf<String>()
-    val out = mutableListOf<MediaCard>()
-
-    fun addIfNew(card: MediaCard) {
-        if (seen.add("${card.kind}-${card.id}")) out += card
-    }
-
-    for (raw in titles) {
-        val t = normaliseTitle(raw)
-        if (t.length < 2) continue
-
-        // 1. Exact normalised match (fast path).
-        val exactHit = libByExact[t]
-        if (exactHit != null) {
-            addIfNew(exactHit)
-            continue
-        }
-
-        // 2. Substring match in either direction — whole-word boundary.
-        //    Require a minimum length so short titles like "Up" don't
-        //    collide with everything.
-        if (t.length < 3) continue
-        val pattern = " $t "
-        val hit = libNorm.firstOrNull { (_, lt) ->
-            val padded = " $lt "
-            padded.contains(pattern) ||
-                // Library title IS the TMDB title plus a suffix/prefix.
-                padded.startsWith("$t ") ||
-                padded.endsWith(" $t") ||
-                // TMDB title IS the library title plus extra (e.g. library has
-                // "Den of Thieves 2" and TMDB filmography has "Den of Thieves").
-                (lt.length >= 4 && (" $t ").contains(" $lt "))
-        }?.first
-        if (hit != null) addIfNew(hit)
-    }
-
-    return out.take(30)
-}
-
-/**
- * Normalise a noisy Xtream or TMDB title for fuzzy matching.
- *
- *  "US | Den of Thieves (2018)"   → "den of thieves"
- *  "[EN] Den of Thieves 4K"       → "den of thieves"
- *  "VIP: Plane (2023) FHD"        → "plane"
- *  "Den of Thieves"               → "den of thieves"
- */
-private fun normaliseTitle(raw: String): String {
-    var t = raw.trim().lowercase()
-
-    // Strip bracketed / parenthesised prefixes FIRST, before generic
-    // leading-punctuation cleanup removes the opening bracket.
-    //   "[EN] Den of Thieves"    → "Den of Thieves"
-    //   "(VIP) Plane"            → "Plane"
-    t = t.replace(Regex("""^\[[^\]]*\]\s*"""), "")
-    t = t.replace(Regex("""^\([^)]*\)\s*"""), "")
-    t = t.replace(Regex("""^\{[^}]*\}\s*"""), "")
-
-    // Strip leading flag emojis / other decorative unicode.
-    t = t.replace(Regex("^[^a-z0-9]+"), "")
-
-    // Strip 1–4 letter/language codes followed by separator: "US | ", "EN - ", "PT: "
-    // Repeat up to 3 times for stacked prefixes like "US | VIP | 4K - "
-    repeat(3) {
-        t = t.replace(Regex("^[a-z]{1,4}\\s*[|:\\-·•]+\\s*"), "")
-        t = t.replace(
-            Regex(
-                "^(vip|hd|fhd|uhd|sd|4k|hq|dolby|imax|atmos|dual|multi|english|dub(bed)?|sub(bed|titled)?)\\s*[|:\\-·•]?\\s*"
-            ),
-            ""
-        )
-    }
-
-    // Strip year in parentheses anywhere: "(2018)".
-    t = t.replace(Regex("\\(\\s*(19|20)\\d{2}\\s*\\)"), " ")
-
-    // Strip bare year at the END: " 2018", "-2018".
-    t = t.replace(Regex("[\\s\\-]+(19|20)\\d{2}\\s*$"), "")
-
-    // Strip trailing quality / format tags: " 4K", " HD", " FHD"
-    repeat(3) {
-        t = t.replace(
-            Regex("[\\s\\-|·•]+(vip|hd|fhd|uhd|sd|4k|hq|dolby|imax|atmos|dual|multi)\\s*$"),
-            ""
-        )
-    }
-
-    // Replace any remaining punctuation with space.
-    t = t.replace(Regex("[^a-z0-9\\s]"), " ")
-
-    // Collapse whitespace.
-    t = t.replace(Regex("\\s+"), " ").trim()
-
-    return t
 }
 
 /* ──────────────────────────────────────────────────────────────── */
@@ -927,11 +466,15 @@ private fun RatingBadge(
 }
 
 /* ──────────────────────────────────────────────────────────────── */
-/*  CAST & RECOMMENDATIONS                                          */
+/*  CAST                                                           */
 /* ──────────────────────────────────────────────────────────────── */
 
 @Composable
-private fun CastCard(member: TmdbCastMember, onClick: () -> Unit) {
+private fun CastCard(member: TmdbCastMember) {
+    // Display-only — clicking an actor is intentionally a no-op because
+    // cross-referencing TMDB filmography to the noisy Xtream library was
+    // unreliable. The card still gets a focus highlight so it looks alive
+    // on the D-pad but does nothing on Enter.
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.08f else 1f,
@@ -944,15 +487,7 @@ private fun CastCard(member: TmdbCastMember, onClick: () -> Unit) {
             .width(96.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .onKeyEvent { ev ->
-                if (ev.type == KeyEventType.KeyDown &&
-                    (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
-                ) {
-                    onClick(); true
-                } else false
-            }
-            .focusable()
-            .clickable(onClick = onClick),
+            .focusable(),
     ) {
         Box(
             Modifier
@@ -1010,85 +545,6 @@ private fun CastInitial(name: String) {
         fontFamily = Inter,
         fontWeight = FontWeight.Black,
     )
-}
-
-@Composable
-private fun RecommendationCard(rec: TmdbRecommendation, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (focused) 1.08f else 1f,
-        animationSpec = tween(90),
-        label = "rec-scale",
-    )
-    Column(
-        modifier = Modifier
-            .width(130.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .onFocusChanged { focused = it.isFocused }
-            .onKeyEvent { ev ->
-                if (ev.type == KeyEventType.KeyDown &&
-                    (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
-                ) {
-                    onClick(); true
-                } else false
-            }
-            .focusable()
-            .clickable(onClick = onClick),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(SurfaceNavy)
-                .border(
-                    width = if (focused) 2.dp else 0.dp,
-                    color = if (focused) Cyan else Color.Transparent,
-                    shape = RoundedCornerShape(8.dp),
-                ),
-        ) {
-            val img = TmdbService.img(rec.poster_path, "w342")
-            if (!img.isNullOrBlank()) {
-                SubcomposeAsyncImage(
-                    model = img,
-                    contentDescription = rec.title ?: rec.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            // TMDB rating badge
-            if (rec.vote_average > 0) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(5.dp)
-                        .background(Color(0xCC000000), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                ) {
-                    Icon(Icons.Default.Star, null, tint = Amber, modifier = Modifier.size(10.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text(
-                        String.format("%.1f", rec.vote_average),
-                        color = TextPrimary,
-                        fontSize = 10.sp,
-                        fontFamily = Inter,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            rec.title ?: rec.name ?: "",
-            color = if (focused) Cyan else TextPrimary,
-            fontSize = 11.sp,
-            fontFamily = Inter,
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            lineHeight = 13.sp,
-        )
-    }
 }
 
 /* ──────────────────────────────────────────────────────────────── */

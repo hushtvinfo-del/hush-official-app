@@ -55,7 +55,6 @@ import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.RpdbService
 import com.hushtv.tv.data.TmdbCastMember
 import com.hushtv.tv.data.TmdbEpisode
-import com.hushtv.tv.data.TmdbRecommendation
 import com.hushtv.tv.data.TmdbSeasonDetail
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.TmdbTv
@@ -157,7 +156,6 @@ fun TVSeriesDetailScreen(
     val director = tmdbTv?.credits?.crew?.firstOrNull { it.job == "Director" || it.job == "Creator" }?.name
     val genres = tmdbTv?.genres?.map { it.name }.orEmpty()
     val castList = tmdbTv?.credits?.cast?.sortedBy { it.order }?.take(20).orEmpty()
-    val recommendations = tmdbTv?.recommendations?.results?.take(20).orEmpty()
     val trailerKey = TmdbService.pickTrailer(tmdbTv?.videos)
 
     val seasonList = remember(xtreamEpisodesBySeason, tmdbTv) {
@@ -414,17 +412,6 @@ fun TVSeriesDetailScreen(
                 }
                 Spacer(Modifier.height(28.dp))
             }
-
-            // ── Recommendations ──────────────────────────
-            if (recommendations.isNotEmpty()) {
-                SSectionHeader("More Like This")
-                Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(recommendations, key = { "rec-${it.id}" }) { r ->
-                        SeriesRecCard(r)
-                    }
-                }
-            }
         }
     }
 }
@@ -647,7 +634,7 @@ private fun SeriesCastCard(member: TmdbCastMember) {
             .width(96.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .clickableWithEnter { },
+            .focusable(),
     ) {
         Box(
             Modifier
@@ -704,76 +691,6 @@ private fun SeriesCastInitial(name: String) {
         fontFamily = Inter,
         fontWeight = FontWeight.Black,
     )
-}
-
-@Composable
-private fun SeriesRecCard(rec: TmdbRecommendation) {
-    var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (focused) 1.08f else 1f,
-        animationSpec = tween(90),
-        label = "s-rec-scale",
-    )
-    Column(
-        modifier = Modifier
-            .width(130.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .onFocusChanged { focused = it.isFocused }
-            .clickableWithEnter { },
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(SurfaceNavy)
-                .border(
-                    width = if (focused) 2.dp else 0.dp,
-                    color = if (focused) Cyan else Color.Transparent,
-                    shape = RoundedCornerShape(8.dp),
-                ),
-        ) {
-            val img = TmdbService.img(rec.poster_path, "w342")
-            if (!img.isNullOrBlank()) {
-                SubcomposeAsyncImage(
-                    model = img,
-                    contentDescription = rec.name ?: rec.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            if (rec.vote_average > 0) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(5.dp)
-                        .background(Color(0xCC000000), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                ) {
-                    Icon(Icons.Default.Star, null, tint = Amber, modifier = Modifier.size(10.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text(
-                        String.format("%.1f", rec.vote_average),
-                        color = TextPrimary,
-                        fontSize = 10.sp,
-                        fontFamily = Inter,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            rec.name ?: rec.title ?: "",
-            color = if (focused) Cyan else TextPrimary,
-            fontSize = 11.sp,
-            fontFamily = Inter,
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            lineHeight = 13.sp,
-        )
-    }
 }
 
 /* ──────────────────────────────────────────────────────────────── */
