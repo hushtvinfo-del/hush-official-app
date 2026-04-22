@@ -347,7 +347,7 @@ const HeroBillboardMockup = () => {
       </div>
       {/* Label */}
       <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '4px 10px' }}>
-        <p style={{ color: '#475569', fontSize: 10, fontFamily: 'monospace' }}>Auto-rotates every 5s · click dots to switch</p>
+        <p style={{ color: '#475569', fontSize: 10, fontFamily: 'monospace' }}>Auto-rotates every 5s · click dots to switch (on TV: auto-only, stops when D-pad focuses hero)</p>
       </div>
     </div>
   );
@@ -439,7 +439,7 @@ const ContentRowsMockup = () => {
             </div>
           ))}
         </div>
-        <p style={{ color: '#334155', fontSize: 11, fontFamily: 'monospace', marginTop: 10 }}>↑ Hover cards to preview focus states</p>
+        <p style={{ color: '#334155', fontSize: 11, fontFamily: 'monospace', marginTop: 10 }}>↑ Mouse-over cards to preview D-pad focus states (on TV this is driven by remote navigation)</p>
       </div>
     </div>
   );
@@ -645,7 +645,7 @@ const LoginScreenMockup = () => {
           </>
         )}
       </div>
-      <p style={{ color: '#1E293B', fontSize: 10, fontFamily: 'monospace', marginTop: 20 }}>↑ Fully interactive mockup — fill fields and click Connect to preview states</p>
+      <p style={{ color: '#1E293B', fontSize: 10, fontFamily: 'monospace', marginTop: 20 }}>↑ Web preview only — on Android TV all input is via D-pad navigation + system on-screen keyboard</p>
     </div>
   );
 };
@@ -857,7 +857,7 @@ Text Color:      #9CA3AF
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
             {[
               { name: 'Home Screen', desc: 'Full-screen hero with account selector. No navigation bar visible. Logo top-left. Large focus cards grid.' },
-              { name: 'Main Menu', desc: 'Category grid (Live TV, Movies, Series, Favorites, Search). 2-3 columns. Large touch targets (min 80dp height).' },
+              { name: 'Main Menu', desc: 'Category grid (Live TV, Movies, Series, Favorites, Search). 2-3 columns. Large D-pad targets (min 80dp height). ENTER selects category.' },
               { name: 'Browse/Grid', desc: 'Horizontal scrolling rows by category. Poster cards with title below. Cinematic backdrop on focus.' },
               { name: 'Player', desc: 'Full-screen video. Minimal overlay UI. Progress bar in cyan. Volume/controls fade in on D-pad press.' },
             ].map(item => (
@@ -872,11 +872,11 @@ Text Color:      #9CA3AF
             ))}
           </div>
           <CodeBlock code={`// Spacing & Sizing — Android TV
-Screen Margin:    48dp horizontal, 27dp vertical (TV safe zone = 10% of screen)
-Card Min Height:  80dp (touch target)
+Screen Margin:    96dp horizontal, 27dp vertical (TV safe zone = 10% of screen)
+Card Min Height:  80dp (D-pad target — never smaller)
 Grid Gap:         16–24dp
 Corner Radius:    12–16dp on cards, 8dp on buttons
-Focus Scale:      1.06–1.08x (CSS: transform: scale(1.07))
+Focus Scale:      1.06–1.08x (transform: scale — hardware accelerated only)
 
 // TV Safe Zone — IMPORTANT
 Keep all content within 90% of screen (10% safe area margin on all sides)
@@ -977,7 +977,7 @@ Metadata Font:  Inter Regular 14sp · #94A3B8`} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
             {[
               { name: 'App BG', css: 'linear-gradient(135deg, #000000 0%, #0F172A 50%, #000000 100%)', hex: '#000 → #0F172A → #000' },
-              { name: 'Card Hover', css: 'linear-gradient(135deg, #1E293B, #0F172A)', hex: '#1E293B → #0F172A' },
+              { name: 'Card Focus', css: 'linear-gradient(135deg, #1E293B, #0F172A)', hex: '#1E293B → #0F172A' },
               { name: 'Player Overlay', css: 'linear-gradient(to top, #000000 0%, rgba(0,0,0,0.4) 60%, transparent 100%)', hex: 'Black to transparent' },
               { name: 'Cyan Glow', css: 'radial-gradient(circle, rgba(6,182,212,0.15) 0%, transparent 70%)', hex: 'Cyan radial glow' },
             ].map(item => (
@@ -1159,10 +1159,10 @@ styles.xml: <item name="android:windowBackground">@color/black</item>
               The Concept — "One Screen. Everything."
             </p>
             <p style={{ color: '#94A3B8', fontSize: 15, lineHeight: 1.8, marginBottom: 0 }}>
-              The home screen is a single, continuously scrolling canvas that mixes <strong style={{ color: 'white' }}>Live TV, Movies, and Series</strong> together — 
-              exactly like Netflix or Disney+, but with HushTV's pure-black premium aesthetic. Users land here instantly after the loading screen 
-              and can begin watching within 2 D-pad presses. Navigation to dedicated sections is always available via a fixed top bar, 
-              but the home screen itself provides everything a casual viewer needs without ever leaving it.
+              The home screen is a single, continuously D-pad-scrollable canvas that mixes <strong style={{ color: 'white' }}>Live TV, Movies, and Series</strong> together — 
+              exactly like Netflix or Disney+ on a big screen TV, but with HushTV's pure-black premium aesthetic. Users land here after the loading screen 
+              and can begin watching within <strong style={{ color: 'white' }}>2 D-pad presses</strong>. The remote's UP/DOWN navigates between rows; LEFT/RIGHT navigates cards within a row. 
+              The top nav bar is always reachable by pressing UP from the first row. No touch. No swipe. No mouse. Pure remote control.
             </p>
           </div>
 
@@ -1179,10 +1179,10 @@ styles.xml: <item name="android:windowBackground">@color/black</item>
                 { zone: '③ 🔴 Live Now', color: '#EF4444', desc: 'Horizontal scroll row. Wide 16:9 cards showing LIVE channels currently airing. Channel logo top-left, red LIVE badge, current show name, progress bar showing how far into the show it is.' },
                 { zone: '④ Continue Watching', color: '#F59E0B', desc: 'Horizontal scroll. Poster cards with cyan progress bar at bottom. Shows series episode label (S2 E4) or movie % complete. Disappears if empty.' },
                 { zone: '⑤ Trending This Week', color: '#8B5CF6', desc: 'Wide poster row. Top 10 numbered overlay on each card (bold white number, bottom-left). Movies + series mixed. Ranked by popularity score.' },
-                { zone: '⑥ Featured Series', color: '#06B6D4', desc: 'Tall poster (2:3 ratio) cards. 6–8 visible. Genre sub-label below title. Focus scale 1.08×. Tap → Series detail page.' },
-                { zone: '⑦ Movies — New Arrivals', color: '#3B82F6', desc: 'Tall poster cards. "NEW" badge top-right on cards added in last 7 days. TMDB rating badge. Tap → Movie info page.' },
-                { zone: '⑧ Genre Rows (Dynamic)', color: '#475569', desc: 'Multiple rows auto-generated per genre: Action, Drama, Comedy, Sci-Fi etc. Each row has a "See All →" label. Collapses/expands with D-pad.' },
-                { zone: '⑨ Recommended For You', color: '#06B6D4', desc: 'AI-curated row based on watch history. "Because you watched Breaking Bad…" label above row. Mixed content types.' },
+                { zone: '⑥ Featured Series', color: '#06B6D4', desc: 'Tall poster (2:3 ratio) cards. 6–8 visible. Genre sub-label below title. D-pad focus scale 1.08×. OK/ENTER → Series detail page.' },
+                { zone: '⑦ Movies — New Arrivals', color: '#3B82F6', desc: 'Tall poster cards. "NEW" badge top-right on cards added in last 7 days. TMDB rating badge. OK/ENTER → Movie info page.' },
+                { zone: '⑧ Genre Rows (Dynamic)', color: '#475569', desc: 'Multiple rows auto-generated per genre: Action, Drama, Comedy, Sci-Fi etc. Each row has a "See All →" item at end — ENTER on it navigates to full category.' },
+                { zone: '⑨ Recommended For You', color: '#06B6D4', desc: 'AI-curated row based on watch history. "Because you watched Breaking Bad…" label above row. Mixed content types. Always last row before footer.' },
               ].map(item => (
                 <div key={item.zone} style={{ background: 'rgba(0,0,0,0.5)', borderRadius: 10, padding: '14px 16px', borderLeft: `3px solid ${item.color}` }}>
                   <p style={{ color: item.color, fontWeight: 700, fontSize: 12, marginBottom: 6, fontFamily: 'monospace' }}>{item.zone}</p>
@@ -1211,55 +1211,65 @@ styles.xml: <item name="android:windowBackground">@color/black</item>
           </div>
 
           {/* Code spec */}
-          <CodeBlock code={`// HOME SCREEN — Layout Spec
-Screen:           Full 1920×1080, black background
-Scroll:           Vertical page scroll (rows stack top to bottom)
-Nav Bar Height:   72dp (transparent over hero, #0F172A opaque on scroll)
-Hero Height:      500dp (≈46% of 1080p screen)
-Row Height:       Poster rows: 220dp cards · Live rows: 160dp cards
+          <CodeBlock code={`// HOME SCREEN — Android TV Layout Spec
+// ⚠ ALL NAVIGATION IS D-PAD ONLY. No touch, no swipe, no mouse.
+// Remote: UP/DOWN = row navigation · LEFT/RIGHT = card navigation · OK/ENTER = select · BACK = go back
+
+Screen:           1920×1080px (1080p primary). Content within 90% safe zone (10% margin all sides).
+Background:       #000000 solid black
+Scroll:           D-pad DOWN moves focus row-by-row. Page scrolls to keep focused row visible.
+                  RecyclerView (vertical) containing horizontal RecyclerViews per row.
+Nav Bar Height:   72dp. Reaches focus when user presses UP from hero row.
+Hero Height:      500dp (≈46% of screen height)
+Row Card Height:  Poster (2:3): 220dp · Live/Wide (16:9): 160dp
 Row Gap:          32dp between rows
-Row Label:        Inter SemiBold 18sp, white, 24dp left margin
-"See All" Link:   Inter Medium 13sp, #06B6D4, right of row label
+Row Label:        Inter SemiBold 18sp, white, left-aligned at safe zone margin (96dp from edge)
+"See All" Item:   Last item in each row. ENTER on it → full category browse screen.
+                  Color: #06B6D4. Focus: same scale + border as cards.
 
-// TOP NAV TABS
-Tab States:
-  Active:         color white, border-bottom 3dp #06B6D4
-  Focused (TV):   background rgba(6,182,212,0.12), scale 1.04×
-  Inactive:       color #64748B
-Tab Icons:        24dp, shown on TV (hidden on smaller screens)
-Logo:             "hushtv." Inter 900, 28sp, fixed left
+// TOP NAV BAR — D-Pad Behavior
+Reach:            User presses UP from first content row
+Tab Focus:        LEFT/RIGHT moves between tabs. ENTER selects.
+Active Tab:       White text, 3dp cyan underline (#06B6D4)
+Focused Tab:      Scale 1.04×, rgba(6,182,212,0.12) bg highlight
+Inactive Tab:     #64748B text, no border
+Tab min width:    120dp (large enough for TV remote accuracy)
+Logo:             "hushtv." Inter 900, 28sp, left-anchored. Not focusable.
+Profile icon:     Right side. ENTER → account/settings.
 
-// HERO BILLBOARD
-Background:       Full-bleed backdrop image
-Overlay:          gradient: transparent (top) → #000 (60% from bottom)
-                  + left vignette: rgba(0,0,0,0.7) on left 50%
-Title:            Inter Black 900, 52–60sp, white, max 2 lines
-Genre Tags:       Pill badges, Inter 600 12sp, rgba(255,255,255,0.2) bg
-Synopsis:         Inter 400 15sp, #94A3B8, max 3 lines, line-clamp
-CTA Primary:      "▶ Play"   — white bg, black text, 56dp height
-CTA Secondary:    "+ My List" — rgba(255,255,255,0.15) bg, white text
-Auto-rotate:      Every 8000ms, crossfade 600ms transition
-Progress Dots:    Small dots bottom-right of hero, cyan = active
+// HERO BILLBOARD — D-Pad Behavior
+Backdrop:         Full-bleed art image. Crossfade on slide change.
+Overlay:          gradient: transparent 0% → rgba(0,0,0,0.85) 70% (bottom)
+                  + left vignette: rgba(0,0,0,0.7) on left 40% (keeps text readable)
+Title:            Inter Black 900, 52–60sp, white, max 2 lines, ellipsis after
+Genre Tags:       Pill badges, Inter 600 12sp, rgba(255,255,255,0.15) bg, not focusable
+Synopsis:         Inter 400 15sp, #94A3B8, max 2 lines, auto-hidden on focus
+CTA Primary:      "▶ Play" — #FFFFFF bg, #000 text, 56dp height, 180dp wide min
+CTA Secondary:    "+ My List" — rgba(255,255,255,0.12) bg, white text, same height
+CTA Focus order:  LEFT/RIGHT between Play and My List. DOWN → first content row.
+Auto-rotate:      Every 8000ms when no focus is in hero zone. Stops on focus.
+Progress Dots:    Bottom-right, 8dp each. Cyan = current. ENTER on dots has no action.
 
-// LIVE NOW ROW
-Card size:        16:9, 280×158dp
-Red LIVE badge:   top-left, Inter 700 10sp, red bg, blinking dot
-Channel Logo:     top-right, max 48×28dp, white tinted
-Show Progress:    cyan bar at card bottom, 3dp height
-Current Show:     Inter 600 13sp white, below card
-Channel Name:     Inter 400 11sp #64748B
+// LIVE NOW ROW — Android TV Cards
+Card size:        16:9 ratio, min 280×158dp
+LIVE Badge:       Top-left corner. Red #EF4444 bg, "● LIVE" text, blinking dot animation.
+Channel Logo:     Top-right, max 48×28dp, white-tinted (colorFilter: WHITE with SRC_IN)
+Progress Bar:     Cyan 3dp bar at very bottom of card showing % through current broadcast
+Focused state:    scale(1.07), 2px #06B6D4 border, glow shadow, show name animates in below
+ENTER action:     Immediate playback — no detail page for live TV
 
-// TRENDING ROW — Numbered
-Rank Number:      Inter Black 900, 96sp, white 10% opacity, bottom-left
-                  (huge ghost number behind card — Netflix style)
-Card:             2:3 poster, 140×210dp
-Focus:            scale 1.08×, cyan border 2px, glow shadow
+// TRENDING ROW — Numbered (Netflix style)
+Ghost Number:     Inter Black 900, 96sp, rgba(255,255,255,0.08), bottom-left of card
+                  Offset left so number bleeds behind adjacent card
+Card:             2:3 poster, min 140×210dp
+ENTER action:     Navigate to content detail page (Movie Info or Series Detail)
 
-// CONTINUE WATCHING ROW  
-Card:             16:9, 240×135dp
-Progress Bar:     cyan, 3dp, overlaid at bottom of card
-Episode Label:    "S2 E4 · 42 min left" — Inter 500 11sp, #94A3B8
-Resume Button:    appears on focus: "▶ Resume" pill, cyan bg`} />
+// CONTINUE WATCHING ROW
+Card:             16:9, min 240×135dp
+Progress Bar:     Cyan, 3dp, overlaid flush at very bottom edge of card thumbnail
+Episode Label:    "S2 E4 · 42 min left" — shown below card · Inter 500 11sp, #94A3B8
+On Focus:         Show "▶ Resume" pill overlay (cyan bg, black text) centered on card
+ENTER action:     Resume playback from saved progress position`} />
         </Section>
 
         {/* ═══════════════════════════════════════════════════════════ */}
@@ -1286,12 +1296,12 @@ Resume Button:    appears on focus: "▶ Resume" pill, cyan bg`} />
               { label: 'Logo Position', value: 'Top-center. 48dp from top edge. "hushtv." at 40sp, Inter 900.' },
               { label: 'Tagline', value: '"Your Stream. Your Way." — 13sp, Inter 400, #475569, below logo, 8dp gap.' },
               { label: 'Card Container', value: 'Centered card, max-width 400dp. Border: 1px rgba(255,255,255,0.08). Background: rgba(255,255,255,0.03). Radius: 16dp. Padding: 40dp.' },
-              { label: 'Input Fields', value: 'Height 56dp. Background #0F172A. Border 1px #1E293B → #06B6D4 on focus. Radius 10dp. Label floats above on focus.' },
-              { label: 'Submit Button', value: 'Full width. Height 56dp. Cyan #06B6D4 fill. "Connect →" text. Inter 700 16sp. Radius 10dp. Pressed: scale 0.97×.' },
-              { label: 'Error State', value: 'Input border turns #EF4444. Brief shake animation (translateX ±6dp, 3 cycles, 200ms). Error text in red below field.' },
-              { label: 'Success State', value: 'Button morphs: cyan → green, text → "✓ Connected". Hold 600ms, then fade out entire screen → home.' },
-              { label: 'Loading State', value: 'Button shows a spinning arc (cyan, 20dp, border-top colored). Text hides. No layout shift.' },
-              { label: 'Step Indicator', value: 'If multi-step (host → credentials): 3 dots top of card. Active = cyan filled. Previous = white. Upcoming = #1E293B.' },
+              { label: 'Input Fields', value: 'Height 64dp (TV legibility). Background #0F172A. 2px cyan border + glow on D-pad focus. ENTER opens system keyboard.' },
+              { label: 'Connect Button', value: 'Full width 64dp. Cyan #06B6D4 fill, black text. Inter 700 18sp. ENTER triggers. Scale 0.97× on press.' },
+              { label: 'Error State', value: 'Field border → #EF4444. Shake animation ±8dp × 3 cycles. Error text 14sp red below field. Focus stays on problem field.' },
+              { label: 'Success State', value: 'Button → green + "✓ Connected". Hold 800ms. Entire screen crossfades to Home Screen.' },
+              { label: 'Loading State', value: 'Circular ProgressBar (cyan, 28dp) replaces button text. Button stays full-width — no layout shift.' },
+              { label: 'Step Indicator', value: '3 dots above card. Active = cyan pill (24dp wide). Complete = white dot. Pending = #1E293B dot. D-pad navigates forward, BACK goes to previous step.' },
             ].map(({ label, value }) => (
               <div key={label} style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 10, padding: '14px 16px', borderLeft: '2px solid rgba(6,182,212,0.3)' }}>
                 <p style={{ color: '#475569', fontSize: 11, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</p>
@@ -1300,81 +1310,93 @@ Resume Button:    appears on focus: "▶ Resume" pill, cyan bg`} />
             ))}
           </div>
 
-          <CodeBlock code={`// LOGIN SCREEN — Full Spec
-Background:       #000000 (never white-flash — set windowBackground in theme)
-Layout:           Single centered column, vertically centered on screen
+          <CodeBlock code={`// LOGIN / ACCOUNT SETUP SCREEN — Android TV Spec
+// ⚠ INPUT IS VIA TV ON-SCREEN KEYBOARD OR PHYSICAL KEYBOARD. No touch.
+// ENTER on a field → opens Android TV system keyboard. BACK → closes keyboard.
 
-// LOGO BLOCK (top of card or above card)
-Logo:             "hushtv." Inter Black 900, 40sp
+Background:       #000000 solid. windowBackground="#000000" set in theme to prevent white flash.
+Layout:           Full 1920×1080. Single centered column. Vertically centered with ConstraintLayout.
+
+// LOGO BLOCK
+Logo:             "hushtv." Inter Black 900, 40sp. Centered above card.
 Logo Color:       "hush" #FFFFFF · "tv." #06B6D4
-Tagline:          "Your Stream. Your Way." Inter 400 13sp #475569
+Tagline:          "Your Stream. Your Way." · Inter 400 · 13sp · #475569 · letter-spacing 0.08em
 Logo → Card Gap: 32dp
 
 // INPUT CARD
-Width:            min(400dp, screen_width - 96dp)
-Background:       rgba(255, 255, 255, 0.03)
-Border:           1px solid rgba(255, 255, 255, 0.08)
+Width:            640dp (wide enough to be readable from couch at 3m distance)
+Background:       rgba(255,255,255,0.03)
+Border:           1px solid rgba(255,255,255,0.08)
 Border Radius:    16dp
 Padding:          40dp all sides
-Shadow:           none (pure black BG makes shadow unnecessary)
 
 // INPUT FIELDS (3 fields: Host URL · Username · Password)
-Height:           56dp
+// IMPORTANT: On Android TV, EditText fields use the system IME keyboard.
+// Field must look clearly focused so user knows which field is active.
+Height:           64dp (larger than mobile — TV viewing distance requires bigger targets)
 Background:       #0F172A
 Border default:   1px solid #1E293B
-Border focus:     1px solid #06B6D4 + box-shadow 0 0 0 3px rgba(6,182,212,0.15)
+Border focused:   2px solid #06B6D4 + box-shadow 0 0 0 4px rgba(6,182,212,0.2)
 Radius:           10dp
-Font:             Inter 400 15sp white
-Label:            Inter 500 12sp #64748B, floats above on focus, 10dp above field
+Font:             Inter 400 · 18sp white (larger sp for TV distance legibility)
+Label above:      Inter 600 · 13sp · #94A3B8 · always visible (not floating — TV legibility)
 Placeholder:      #334155
 
 // FIELDS
 Field 1 — Server / Host URL:
   Placeholder:    "https://your-iptv-host.com"
-  Keyboard:       URL type (shows .com key)
+  InputType:      TYPE_TEXT_VARIATION_URI
   Validate:       must start with http:// or https://
 
 Field 2 — Username:
   Placeholder:    "Username"
-  Keyboard:       Default
+  InputType:      TYPE_CLASS_TEXT
 
 Field 3 — Password:
   Placeholder:    "Password"
-  Keyboard:       Password (dots)
-  Toggle:         Eye icon right side, tap to reveal
+  InputType:      TYPE_TEXT_VARIATION_PASSWORD
+  Toggle:         D-pad-focusable eye icon button RIGHT of field (not tap — ENTER to toggle)
 
-// SUBMIT BUTTON
+// D-PAD FOCUS ORDER (CRITICAL for TV)
+Focus chain:      Field 1 (Host) → Field 2 (Username) → Field 3 (Password) → Connect Button → Help Link
+ENTER on field:   Opens Android TV on-screen keyboard. User types, presses Done/ENTER → closes keyboard, moves to next field.
+BACK from field:  Closes keyboard without changing field focus.
+Focus ring:       2px solid #06B6D4, outer glow 0 0 0 4px rgba(6,182,212,0.2)
+Min focus target: 64dp height. Never smaller — TV remote is imprecise.
+
+// CONNECT BUTTON
 Text:             "Connect  →"
-Height:           56dp
+Height:           64dp
+Width:            100% of card width
 Background:       #06B6D4
-Text Color:       #000000 (black on cyan — high contrast)
-Font:             Inter Bold 700 16sp
+Text Color:       #000000 (black on cyan — maximum contrast on TV from 3m)
+Font:             Inter Bold 700 · 18sp
 Radius:           10dp
 Margin Top:       24dp from last field
-Press:            scale(0.97) 100ms ease
+ENTER press:      scale(0.97) 80ms → triggers form submission
 
 // STATES
-Loading:          Spinning ring replaces text. No layout shift.
-Success:          BG → #22C55E, text → "✓ Connected", hold 600ms, fade out
-Error:            Border → #EF4444, shake animation, red message below
+Loading:          ProgressBar (circular, cyan, 28dp) replaces text. Button stays same size.
+Success:          Button BG → #22C55E, text → "✓ Connected", hold 800ms, then transition to Home
+Error:            Field borders → #EF4444. Shake animation (TranslateAnimation ±8dp, 3 cycles, 250ms).
+                  Error text 14sp #EF4444 appears below affected field.
 
-// SECONDARY LINK (below button)
-Text:             "Need help finding your credentials? →"
-Color:            #334155 → #06B6D4 on hover/focus
-Font:             Inter 400 13sp
+// STEP INDICATOR
+Dots:             3 dots, 10dp each, 8dp gap, centered above card
+Active step:      #06B6D4 filled, width 24dp (pill shape)
+Complete step:    #FFFFFF filled
+Pending step:     #1E293B filled
 
-// STEP INDICATOR (if multi-step flow)
-Dots:             3 dots, 8dp each, 6dp gap
-Active:           #06B6D4 filled
-Complete:         #FFFFFF filled
-Pending:          #1E293B filled
+// SECONDARY HELP LINK
+Text:             "Need help? Contact support →"
+Font:             Inter 400 · 14sp · #334155
+Focused:          color #06B6D4, underline
+ENTER:            Opens support URL in browser (if available) or shows QR code overlay
 
-// TV D-PAD BEHAVIOR
-Tab order:        Host URL → Username → Password → Submit → Help Link
-Focus ring:       2px #06B6D4, 0 0 0 4px rgba(6,182,212,0.2)
-Back button:      Clears current field or navigates back to previous step
-Enter on field:   Moves focus to next field (like tab)
-Enter on submit:  Triggers form submission`} />
+// ANDROID TV KEYBOARD NOTE
+The system on-screen keyboard (Leanback keyboard) appears when EditText gains focus via ENTER.
+Do NOT use a custom keyboard — use the system one. Ensure the layout scrolls up so
+the focused field remains visible above the keyboard (WindowSoftInputMode: adjustPan).`} />
 
         </Section>
 
