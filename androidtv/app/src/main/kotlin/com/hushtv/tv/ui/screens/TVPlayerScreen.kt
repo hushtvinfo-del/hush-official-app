@@ -144,8 +144,19 @@ fun TVPlayerScreen(
     }
     LaunchedEffect(controlsTick) {
         showControls = true
-        delay(4000)
+        delay(7000)
         showControls = false
+    }
+
+    // VOD focus target — when the OSD becomes visible, we move focus to the
+    // primary Play/Pause button so the user can immediately navigate the
+    // control bar with the D-pad instead of the root Box capturing OK.
+    val playPauseFocus = remember { FocusRequester() }
+    LaunchedEffect(showControls, isLive) {
+        if (showControls && !isLive) {
+            delay(50)
+            runCatching { playPauseFocus.requestFocus() }
+        }
     }
 
     // Persist watch progress for movies (every 15s + on dispose).
@@ -309,7 +320,27 @@ fun TVPlayerScreen(
                             if (infoVisible) infoTick++
                             true
                         } else {
-                            if (player.isPlaying) player.pause() else player.play(); true
+                            if (!showControls) {
+                                // OSD is hidden — FIRST press of OK just brings
+                                // the control bar up and moves focus to the
+                                // Play/Pause button (done by the
+                                // LaunchedEffect(showControls) above). User's
+                                // next OK press actually toggles playback via
+                                // the focused button's own clickableWithEnter.
+                                // This matches user expectation: "OK brings up
+                                // the controls, don't just silently pause".
+                                controlsTick++
+                                true
+                            } else {
+                                // OSD is visible. If a button is focused, its
+                                // clickableWithEnter handles Enter first and
+                                // consumes the event — we never reach here.
+                                // This branch only fires if somehow focus is
+                                // on the root Box → fall back to toggle.
+                                if (player.isPlaying) player.pause() else player.play()
+                                controlsTick++
+                                true
+                            }
                         }
                     }
                     Key.Info -> { infoVisible = !infoVisible; if (infoVisible) infoTick++; true }
@@ -341,7 +372,10 @@ fun TVPlayerScreen(
                     }
                     // Seek (for VOD only — live ignores)
                     Key.DirectionRight -> {
-                        if (!isLive) {
+                        if (!isLive && !showControls) {
+                            // Quick 10s skip + reveal OSD. When OSD is
+                            // already visible, let Compose focus traversal
+                            // move between control buttons instead.
                             player.seekTo(
                                 (player.currentPosition + 10_000).coerceAtMost(
                                     player.duration.coerceAtLeast(0)
@@ -350,7 +384,7 @@ fun TVPlayerScreen(
                         } else false
                     }
                     Key.DirectionLeft -> {
-                        if (!isLive) {
+                        if (!isLive && !showControls) {
                             player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0)); true
                         } else false
                     }
@@ -694,6 +728,7 @@ fun TVPlayerScreen(
                                 icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 size = 72.dp,
                                 primary = true,
+                                focusRequester = playPauseFocus,
                                 onClick = {
                                     if (player.isPlaying) player.pause() else player.play()
                                 },
@@ -821,17 +856,20 @@ private fun OsdCircleButton(
     onClick: () -> Unit,
     onInteract: () -> Unit = {},
     primary: Boolean = false,
+    focusRequester: FocusRequester? = null,
 ) {
+    val mod = Modifier
+        .size(size)
+        .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+        .tvFocusable(shape = CircleShape)
+        .clickableWithEnter {
+            onInteract()
+            onClick()
+        }
     Surface(
         color = if (primary) Cyan.copy(alpha = 0.18f) else Color(0x26FFFFFF),
         shape = CircleShape,
-        modifier = Modifier
-            .size(size)
-            .tvFocusable(shape = CircleShape)
-            .clickableWithEnter {
-                onInteract()
-                onClick()
-            },
+        modifier = mod,
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
