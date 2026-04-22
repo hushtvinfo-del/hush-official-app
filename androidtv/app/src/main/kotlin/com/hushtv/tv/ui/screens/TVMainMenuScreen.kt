@@ -221,33 +221,27 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         }
     }
 
-    Row(
+    // Netflix-style layered layout: content is a fixed-width canvas that
+    // NEVER shifts when the sidebar expands/collapses. The sidebar overlays
+    // the content's left edge — content always starts at the same screen-x
+    // regardless of sidebar state. This is what fixes the "content jumps /
+    // text overflows when I move into the content" bug.
+    //
+    // Geometry:
+    //   • Root Box fills the screen with BgBlack, minus 32 dp right overscan
+    //   • Content fills the Box but has fixed left padding = 132 dp (sidebar
+    //     expanded width 116 dp + 16 dp breathing room). This leaves a tiny
+    //     sliver visible when the sidebar collapses to 52 dp — that gap is
+    //     filled by the blend gradient so it looks seamless.
+    //   • Sidebar is aligned CenterStart on top; its own width animates
+    //     116 <-> 52 dp but the CONTENT underneath NEVER REFLOWS.
+    Box(
         Modifier
             .fillMaxSize()
             .background(BgBlack)
-            // TV overscan safety — many TVs (especially older ones) crop
-            // the edges of the video signal. Reserve ~32 dp on the right
-            // so nothing interactive / important gets clipped. Left side
-            // is handled by the sidebar itself; top/bottom are usually
-            // safe in landscape TV layouts.
             .padding(end = 32.dp),
     ) {
-        // ── LEFT SIDEBAR ──────────────────────────────────────
-        Sidebar(
-            tabs = tabs,
-            activeKey = "home",
-            expanded = sidebarFocused,
-            expiryStr = expiryStr,
-            daysLeft = daysLeft,
-            homeFocus = sidebarHomeFocus,
-            onExpandChange = { sidebarFocused = it },
-            onTab = { t -> t.route?.let { nav.navigate(it) } },
-            // Profile button is the ONLY way back to the account picker.
-            // Use navigate("home") instead of popBackStack(): the picker is
-            // no longer in the back stack (auto-login removes it), so a
-            // plain navigate opens it fresh on top of the current menu.
-            onProfile = { nav.navigate("home") },
-        )
+        // ── CONTENT (full-width, fixed position) ──────────────────────
 
         // ── CONTENT ───────────────────────────────────────────
         // Layered:
@@ -256,7 +250,14 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         //   2. Scrollable rows (in front, transparent top so hero peeks
         //      through; first row sits at ~55% of the viewport so the hero
         //      text is fully visible on first render).
-        Box(Modifier.weight(1f).fillMaxHeight()) {
+        // ── CONTENT layer (fixed-position canvas) ─────────────────────
+        // 132 dp left padding = sidebar expanded width (116) + 16 dp gap, so
+        // content never overlaps the sidebar even when it's fully expanded.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(start = 132.dp),
+        ) {
             val continueEntries = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
             var heroEntry by remember { mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null) }
             LaunchedEffect(continueEntries.firstOrNull()) {
@@ -265,8 +266,12 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 }
             }
 
-            // Layer 1 — sticky hero backdrop.
-            com.hushtv.tv.ui.screens.home.HomeHeroLayer(entry = heroEntry)
+            // Layer 1 — sticky hero backdrop. 0 dp left padding here since
+            // the outer content Box already provides the gap to the sidebar.
+            com.hushtv.tv.ui.screens.home.HomeHeroLayer(
+                entry = heroEntry,
+                contentStartPadding = 0.dp,
+            )
 
             // Layer 2 — scrollable rows. Transparent until a row reaches
             // the "fold", after which each row renders on its own dark tile
@@ -284,6 +289,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         com.hushtv.tv.ui.screens.home.HomeContinueWatchingRow(
                             playlistId = playlistId,
                             entries = continueEntries,
+                            contentStartPadding = 0.dp,
                             onFocusedEntryChange = { heroEntry = it },
                             onCardClick = { entry ->
                                 nav.navigate(
@@ -295,21 +301,20 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     }
                 }
             }
+        }
 
-            // Layer 3 — narrow edge blend. 32 dp wide dark-to-transparent
-            // gradient on the content's left edge so the sidebar softens
-            // into the home without ever overlapping real content.
-            Box(
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .width(32.dp)
-                    .fillMaxHeight()
-                    .background(
-                        Brush.horizontalGradient(
-                            0.0f to Color(0xB3000000),
-                            1.0f to Color.Transparent,
-                        )
-                    )
+        // ── SIDEBAR overlay (on top, aligned left, never pushes content) ─
+        Box(Modifier.align(Alignment.CenterStart)) {
+            Sidebar(
+                tabs = tabs,
+                activeKey = "home",
+                expanded = sidebarFocused,
+                expiryStr = expiryStr,
+                daysLeft = daysLeft,
+                homeFocus = sidebarHomeFocus,
+                onExpandChange = { sidebarFocused = it },
+                onTab = { t -> t.route?.let { nav.navigate(it) } },
+                onProfile = { nav.navigate("home") },
             )
         }
     }

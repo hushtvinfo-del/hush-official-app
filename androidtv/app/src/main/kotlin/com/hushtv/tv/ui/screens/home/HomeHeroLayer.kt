@@ -95,7 +95,7 @@ fun HomeHeroLayer(entry: ContinueEntry?, contentStartPadding: androidx.compose.u
 
 @Composable
 private fun HeroTextBlock(entry: ContinueEntry) {
-    Column(Modifier.fillMaxWidth(0.48f)) {
+    Column(Modifier.fillMaxWidth(0.58f)) {
         Text(
             entry.progress.title,
             color = Color.White,
