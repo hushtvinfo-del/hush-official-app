@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -378,7 +379,7 @@ private fun Sidebar(
     onProfile: () -> Unit,
 ) {
     val width by animateDpAsState(
-        targetValue = if (expanded) 170.dp else 76.dp,
+        targetValue = if (expanded) 128.dp else 68.dp,
         animationSpec = tween(150),
         label = "sidebar-width",
     )
@@ -393,7 +394,7 @@ private fun Sidebar(
                 )
             )
             .onFocusChanged { onExpandChange(it.hasFocus) }
-            .padding(vertical = 20.dp, horizontal = 8.dp),
+            .padding(vertical = 20.dp, horizontal = 6.dp),
     ) {
         // Logo block
         Row(
@@ -529,17 +530,19 @@ private fun SidebarItem(
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 8.dp),
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
         if (expanded) {
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(8.dp))
             Text(
                 label,
                 color = tint,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontFamily = Inter,
                 fontWeight = if (active || focused) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         // Active dot (collapsed)
