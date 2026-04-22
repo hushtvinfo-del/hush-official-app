@@ -224,7 +224,13 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     Row(
         Modifier
             .fillMaxSize()
-            .background(BgBlack),
+            .background(BgBlack)
+            // TV overscan safety — many TVs (especially older ones) crop
+            // the edges of the video signal. Reserve ~32 dp on the right
+            // so nothing interactive / important gets clipped. Left side
+            // is handled by the sidebar itself; top/bottom are usually
+            // safe in landscape TV layouts.
+            .padding(end = 32.dp),
     ) {
         // ── LEFT SIDEBAR ──────────────────────────────────────
         Sidebar(
