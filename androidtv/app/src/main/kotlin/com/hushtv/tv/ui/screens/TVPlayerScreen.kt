@@ -1,8 +1,10 @@
 package com.hushtv.tv.ui.screens
 
+import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -34,6 +36,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -60,10 +63,13 @@ import com.hushtv.tv.data.WatchProgressStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.ui.player.AspectMode
 import com.hushtv.tv.ui.player.PlayerOptionsMenu
+import com.hushtv.tv.ui.player.ThumbnailExtractor
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.TextSecondary
 import com.hushtv.tv.ui.tvFocusable
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -93,6 +99,16 @@ fun TVPlayerScreen(
         }
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
+
+    // Thumbnail preview extractor for scrubber (VOD only). Lazy-init so live
+    // streams never pay the cost.
+    val thumbExtractor = remember(currentUrl, isLive) {
+        if (isLive) null else ThumbnailExtractor(currentUrl)
+    }
+    DisposableEffect(thumbExtractor) {
+        onDispose { thumbExtractor?.release() }
+    }
+    var scrubThumb by remember { mutableStateOf<Bitmap?>(null) }
 
     // Persist last watched channel whenever stream changes.
     LaunchedEffect(currentUrl, currentName) {
@@ -719,6 +735,18 @@ fun TVPlayerScreen(
                         var scrubFocused by remember { mutableStateOf(false) }
                         var lastSeekMs by remember { mutableStateOf(0L) }
                         var seekChainCount by remember { mutableStateOf(0) }
+
+                        // Async thumbnail extraction — debounced so we don't
+                        // spawn a decoder on every D-pad tap during fast scrub.
+                        LaunchedEffect(scrubFocused, positionMs) {
+                            if (!scrubFocused || thumbExtractor == null) return@LaunchedEffect
+                            delay(180)
+                            val bmp = withContext(Dispatchers.IO) {
+                                thumbExtractor.extract(positionMs)
+                            }
+                            if (bmp != null) scrubThumb = bmp
+                        }
+
                         Column(
                             Modifier
                                 .fillMaxWidth()
@@ -762,21 +790,58 @@ fun TVPlayerScreen(
                                 },
                             verticalArrangement = Arrangement.Center,
                         ) {
-                            // Progress track. When focused the bar grows to
-                            // 10 dp and gets a visible thumb; unfocused 6 dp.
-                            val barHeight = if (scrubFocused) 10.dp else 6.dp
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(barHeight)
-                                    .background(Color(0x40FFFFFF), RoundedCornerShape(5.dp))
-                            ) {
+                            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                                val trackWidth = maxWidth
+
+                                // Floating thumbnail preview above the playhead.
+                                // Only visible while the scrubber is focused AND
+                                // we have a decoded frame in hand.
+                                val bmp = scrubThumb
+                                if (scrubFocused && bmp != null) {
+                                    val thumbWidthDp = 160.dp
+                                    val offsetX = (trackWidth * pct) - (thumbWidthDp / 2)
+                                    val clampedX = offsetX.coerceIn(0.dp, trackWidth - thumbWidthDp)
+                                    Column(
+                                        Modifier
+                                            .offset(x = clampedX, y = -(110.dp))
+                                            .width(thumbWidthDp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        Image(
+                                            bitmap = bmp.asImageBitmap(),
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .width(thumbWidthDp)
+                                                .height(90.dp)
+                                                .background(Color.Black)
+                                                .border(2.dp, Cyan, RoundedCornerShape(6.dp)),
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            formatTime(positionMs),
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                }
+
+                                // Progress track. When focused the bar grows
+                                // to 10 dp; unfocused 6 dp.
+                                val barHeight = if (scrubFocused) 10.dp else 6.dp
                                 Box(
                                     Modifier
-                                        .fillMaxWidth(pct)
+                                        .fillMaxWidth()
                                         .height(barHeight)
-                                        .background(Cyan, RoundedCornerShape(5.dp))
-                                )
+                                        .background(Color(0x40FFFFFF), RoundedCornerShape(5.dp))
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .fillMaxWidth(pct)
+                                            .height(barHeight)
+                                            .background(Cyan, RoundedCornerShape(5.dp))
+                                    )
+                                }
                             }
                             Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
                                 Text(
