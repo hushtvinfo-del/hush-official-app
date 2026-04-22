@@ -86,6 +86,7 @@ import com.hushtv.tv.ui.theme.TextDim
 import com.hushtv.tv.ui.theme.TextMuted
 import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
+import com.hushtv.tv.ui.tv.PositionFocusedItemInLazyLayout
 import com.hushtv.tv.ui.tvFocusable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -317,82 +318,100 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                         } else false
                     },
             ) {
-                // Top section: detail panel (only when grid has focus + item exists)
+                // Top section: detail panel (only when grid has focus + item exists).
+                // IMPORTANT: give the Crossfade a FIXED height so that the grid
+                // below never shifts when the user moves focus between the
+                // sidebar and the grid. Layout shifts are one of the main
+                // reasons D-pad focus-scroll drifts in the "wrong direction".
                 val focusedItem = gridItems.getOrNull(focusedIdx)
-                Crossfade(
-                    targetState = gridHasFocus && focusedItem != null,
-                    animationSpec = tween(150),
-                    label = "detail-panel",
-                ) { showDetail ->
-                    if (showDetail) {
-                        DetailPanel(
-                            item = focusedItem!!,
-                            info = vodInfo,
-                            isInMyList = remember(myListVersion) {
-                                val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
-                                MyListStore.isInList(ctx, playlistId, focusedItem.kind, id)
-                            },
-                            onPlay = { onCardClick(focusedItem) },
-                            onToggleMyList = {
-                                val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
-                                MyListStore.toggle(ctx, playlistId, focusedItem.kind, id)
-                                myListVersion++
-                            },
-                            onTrailer = { vid ->
-                                trailerVideoId = vid
-                            },
-                        )
-                    } else {
-                        CategoryHeader(title = sidebarEntries.firstOrNull { it.id == selectedCatId }?.label ?: title)
+                Box(Modifier.fillMaxWidth().height(220.dp)) {
+                    Crossfade(
+                        targetState = gridHasFocus && focusedItem != null,
+                        animationSpec = tween(150),
+                        label = "detail-panel",
+                    ) { showDetail ->
+                        if (showDetail) {
+                            DetailPanel(
+                                item = focusedItem!!,
+                                info = vodInfo,
+                                isInMyList = remember(myListVersion) {
+                                    val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
+                                    MyListStore.isInList(ctx, playlistId, focusedItem.kind, id)
+                                },
+                                onPlay = { onCardClick(focusedItem) },
+                                onToggleMyList = {
+                                    val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
+                                    MyListStore.toggle(ctx, playlistId, focusedItem.kind, id)
+                                    myListVersion++
+                                },
+                                onTrailer = { vid ->
+                                    trailerVideoId = vid
+                                },
+                            )
+                        } else {
+                            CategoryHeader(title = sidebarEntries.firstOrNull { it.id == selectedCatId }?.label ?: title)
+                        }
                     }
                 }
 
                 // ── Poster grid ────────────────────────────────
+                // weight(1f) so the grid claims the exact remaining vertical
+                // space — otherwise LazyVerticalGrid falls back to intrinsic
+                // sizing which breaks focus-driven scroll math.
                 val gridState = rememberLazyGridState()
-                when {
-                    loadingItems -> CenterLoader()
-                    selectedCatId == CAT_SEARCH && searchQuery.trim().length < 2 ->
-                        InfoBox("Type at least 2 characters to search.", Icons.Default.Search)
-                    gridItems.isEmpty() ->
-                        InfoBox(
-                            msg = when (selectedCatId) {
-                                CAT_SEARCH -> "No results for \"$searchQuery\"."
-                                else -> "Nothing here yet."
-                            },
-                            icon = Icons.Default.Movie,
-                        )
-                    else -> {
-                        // Track column count — used both for laying out the
-                        // grid AND for the parent-level LEFT interception.
-                        BoxWithConstraints(Modifier.fillMaxSize()) {
-                            val cols = ((maxWidth + 12.dp) / (124.dp + 12.dp)).toInt().coerceAtLeast(1)
-                            LaunchedEffect(cols) { gridColumnCount = cols }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    when {
+                        loadingItems -> CenterLoader()
+                        selectedCatId == CAT_SEARCH && searchQuery.trim().length < 2 ->
+                            InfoBox("Type at least 2 characters to search.", Icons.Default.Search)
+                        gridItems.isEmpty() ->
+                            InfoBox(
+                                msg = when (selectedCatId) {
+                                    CAT_SEARCH -> "No results for \"$searchQuery\"."
+                                    else -> "Nothing here yet."
+                                },
+                                icon = Icons.Default.Movie,
+                            )
+                        else -> {
+                            // Track column count — used both for laying out the
+                            // grid AND for the parent-level LEFT interception.
+                            BoxWithConstraints(Modifier.fillMaxSize()) {
+                                val cols = ((maxWidth + 12.dp) / (124.dp + 12.dp)).toInt().coerceAtLeast(1)
+                                LaunchedEffect(cols) { gridColumnCount = cols }
 
-                            LazyVerticalGrid(
-                                state = gridState,
-                                columns = GridCells.Fixed(cols),
-                                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp),
-                            ) {
-                                itemsIndexed(gridItems, key = { i, it -> "${it.kind}-${it.id}-$i" }) { idx, item ->
-                                    val progress = remember(watchVersion, item.id) {
-                                        WatchProgressStore.getRatio(ctx, item.streamId, item.kind)
+                                // TV-grade focus pivot: keeps the focused row
+                                // anchored ~30% from the top of the viewport
+                                // regardless of D-pad direction. This replaces
+                                // the deprecated TvLazyVerticalGrid.pivotOffsets
+                                // per Google's 2026 guidance for Compose 1.7+.
+                                PositionFocusedItemInLazyLayout(parentFraction = 0.3f) {
+                                    LazyVerticalGrid(
+                                        state = gridState,
+                                        columns = GridCells.Fixed(cols),
+                                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                                    ) {
+                                        itemsIndexed(gridItems, key = { i, it -> "${it.kind}-${it.id}-$i" }) { idx, item ->
+                                            val progress = remember(watchVersion, item.id) {
+                                                WatchProgressStore.getRatio(ctx, item.streamId, item.kind)
+                                            }
+                                            val isInList = remember(myListVersion, item.id) {
+                                                val id = if (item.kind == "series") item.seriesId else item.streamId
+                                                MyListStore.isInList(ctx, playlistId, item.kind, id)
+                                            }
+                                            CompactPoster(
+                                                item = item,
+                                                progress = progress,
+                                                isInList = isInList,
+                                                focusMod = if (idx == 0) Modifier.focusRequester(firstGridFocus) else Modifier,
+                                                onFocus = { focusedIdx = idx },
+                                                onLeftEdge = { returnToSidebarToken++ },
+                                                isLeftmost = idx % cols == 0,
+                                                onClick = { onCardClick(item) },
+                                            )
+                                        }
                                     }
-                                    val isInList = remember(myListVersion, item.id) {
-                                        val id = if (item.kind == "series") item.seriesId else item.streamId
-                                        MyListStore.isInList(ctx, playlistId, item.kind, id)
-                                    }
-                                    CompactPoster(
-                                        item = item,
-                                        progress = progress,
-                                        isInList = isInList,
-                                        focusMod = if (idx == 0) Modifier.focusRequester(firstGridFocus) else Modifier,
-                                        onFocus = { focusedIdx = idx },
-                                        onLeftEdge = { returnToSidebarToken++ },
-                                        isLeftmost = idx % cols == 0,
-                                        onClick = { onCardClick(item) },
-                                    )
                                 }
                             }
                         }
@@ -915,10 +934,6 @@ private fun CompactPoster(
     )
     Column(
         modifier = focusMod
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
             .onPreviewKeyEvent { ev ->
                 if (isLeftmost && ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
                     onLeftEdge()
@@ -930,7 +945,17 @@ private fun CompactPoster(
                 if (it.isFocused) onFocus()
             }
             .focusable()
-            .clickableWithEnter(onClick),
+            .clickableWithEnter(onClick)
+            // Scale is applied AFTER focusable so the focusable's layout
+            // bounds are always at their natural (unscaled) size. This keeps
+            // Compose's D-pad focus search + bring-into-view scroll math
+            // deterministic — previously, scaling the whole Column was
+            // nudging the focus bounds just enough to cause "wrong
+            // direction" drift on dense grids.
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
     ) {
         Box(
             Modifier

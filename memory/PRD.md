@@ -197,6 +197,33 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 7 — v1.3.4 D-pad grid focus fix (2026-04-22 — completed, deployed)
+User feedback: "Something is seriously wrong with the scrolling using the d
+pad in movies and series — when you scroll over right then down right etc
+its scrolling in the wrong direction and not accurate."
+
+Root cause: stock `LazyVerticalGrid` + layout shifts above the grid. Applied
+the official Google 2026 TV guidance (Create scrollable layouts for TV):
+
+- **New helper** `ui/tv/FocusedItemPivot.kt` exposes
+  `PositionFocusedItemInLazyLayout(parentFraction = 0.3f)` — a
+  `BringIntoViewSpec` wrapper that pins the focused row ~30% from the top
+  of the viewport, replacing the deprecated `TvLazyVerticalGrid.pivotOffsets`.
+- **TVBrowseScreen grid** is now wrapped with the pivot helper. D-pad
+  RIGHT/DOWN/LEFT now moves one step deterministically instead of snapping
+  to wherever the next lazy-composed item happens to land.
+- **Fixed Crossfade height** above the grid to a stable `220.dp` so focus
+  moving from the sidebar into the first row no longer shifts the grid down
+  by 160 dp mid-transition.
+- **Grid container now uses `weight(1f)`** inside the right-pane Column, so
+  the grid claims a bounded vertical space (previously it fell back to
+  intrinsic sizing, which breaks bring-into-view math).
+- **CompactPoster scale** (1.05× on focus) moved to the end of the modifier
+  chain — applied AFTER `.focusable()` so layout bounds stay stable. The old
+  order nudged focus bounds and caused drift on dense grids.
+- Shipped as versionCode=27 / versionName="1.3.4" — APK (23,411,732 bytes)
+  live on `https://hushtv.xyz`.
+
 ---
 
 ## Backlog
