@@ -82,10 +82,11 @@ fun HomeContinueWatchingRow(
     entries: List<ContinueEntry>,
     onFocusedEntryChange: (ContinueEntry) -> Unit,
     onCardClick: (ContinueEntry) -> Unit,
+    contentStartPadding: androidx.compose.ui.unit.Dp = 64.dp,
 ) {
     if (entries.isEmpty()) return
 
-    Column(Modifier.fillMaxWidth().padding(start = 64.dp, end = 48.dp, top = 20.dp, bottom = 20.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = contentStartPadding, end = 48.dp, top = 20.dp, bottom = 20.dp)) {
         Text(
             "Continue Watching",
             color = Color.White,

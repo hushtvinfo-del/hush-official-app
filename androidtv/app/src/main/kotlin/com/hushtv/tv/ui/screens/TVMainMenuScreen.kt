@@ -261,8 +261,27 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 }
             }
 
+            // Animate Home content's left padding inversely to the sidebar
+            // width so the first card (and hero title) stay pinned to the
+            // SAME screen-x position regardless of whether the sidebar is
+            // collapsed (52 dp) or expanded (116 dp). Without this, the
+            // content visibly slides left/right when the sidebar animates,
+            // which cuts off titles like "Den of Thieves" when the sidebar
+            // collapses.
+            //
+            //   collapsed: 52 dp sidebar + 128 dp content-start = 180 dp
+            //   expanded: 116 dp sidebar +  64 dp content-start = 180 dp
+            val contentStartPad by animateDpAsState(
+                targetValue = if (sidebarFocused) 64.dp else 128.dp,
+                animationSpec = tween(150),
+                label = "content-start-pad",
+            )
+
             // Layer 1 — sticky hero backdrop.
-            com.hushtv.tv.ui.screens.home.HomeHeroLayer(entry = heroEntry)
+            com.hushtv.tv.ui.screens.home.HomeHeroLayer(
+                entry = heroEntry,
+                contentStartPadding = contentStartPad,
+            )
 
             // Layer 2 — scrollable rows. Transparent until a row reaches
             // the "fold", after which each row renders on its own dark tile
@@ -280,6 +299,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         com.hushtv.tv.ui.screens.home.HomeContinueWatchingRow(
                             playlistId = playlistId,
                             entries = continueEntries,
+                            contentStartPadding = contentStartPad,
                             onFocusedEntryChange = { heroEntry = it },
                             onCardClick = { entry ->
                                 nav.navigate(
