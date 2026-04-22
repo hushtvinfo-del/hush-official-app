@@ -138,6 +138,7 @@ fun TVSeriesDetailScreen(
         MyListStore.isInList(ctx, playlistId, "series", seriesIdInt)
     }
 
+    val scrollState = rememberScrollState()
     val backFocus = remember { FocusRequester() }
     LaunchedEffect(tmdbTv != null || !loading) {
         kotlinx.coroutines.delay(60)
@@ -196,55 +197,31 @@ fun TVSeriesDetailScreen(
             )
         }
 
-        // Fixed top action bar: Back · My List · Trailer (series has no Play — episodes are the play targets)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier
+        // Back button — top-left, outside scroll. Focusing it animates scroll back to 0.
+        Box(
+            Modifier
+                .padding(start = 16.dp, top = 14.dp)
                 .align(Alignment.TopStart)
-                .padding(start = 16.dp, top = 14.dp, end = 16.dp),
-        ) {
-            Box(
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x88000000))
-                    .border(2.dp, Color(0x55FFFFFF), CircleShape)
-                    .focusRequester(backFocus)
-                    .onKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown &&
-                            (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
-                        ) {
-                            nav.popBackStack(); true
-                        } else false
-                    }
-                    .focusable()
-                    .clickable { nav.popBackStack() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(22.dp))
-            }
-
-            if (!loading) {
-                SCta(
-                    label = if (isInMyList) "In List" else "My List",
-                    icon = if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    primary = false,
-                    onClick = {
-                        MyListStore.toggle(ctx, playlistId, "series", seriesIdInt)
-                        myListVersion++
-                    },
-                )
-                val trailerKeyNow = TmdbService.pickTrailer(tmdbTv?.videos)
-                trailerKeyNow?.let { k ->
-                    SCta(
-                        label = "Trailer",
-                        icon = Icons.Default.PlayCircle,
-                        primary = false,
-                        onClick = { openYoutubeExt(ctx, k) },
-                    )
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color(0x88000000))
+                .border(2.dp, Color(0x55FFFFFF), CircleShape)
+                .focusRequester(backFocus)
+                .onFocusChanged {
+                    if (it.isFocused) scope.launch { scrollState.animateScrollTo(0) }
                 }
-            }
+                .onKeyEvent { ev ->
+                    if (ev.type == KeyEventType.KeyDown &&
+                        (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+                    ) {
+                        nav.popBackStack(); true
+                    } else false
+                }
+                .focusable()
+                .clickable { nav.popBackStack() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(22.dp))
         }
 
         if (loading) {
@@ -259,7 +236,7 @@ fun TVSeriesDetailScreen(
             Modifier
                 .fillMaxSize()
                 .padding(start = 72.dp, end = 48.dp, top = 80.dp, bottom = 24.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(scrollState),
         ) {
             // ── Hero row — natural height, verticalScroll handles overflow ─
             Row(
@@ -321,6 +298,29 @@ fun TVSeriesDetailScreen(
                         director?.takeIf { it.isNotBlank() }?.let { SMetaText("Created by $it") }
                     }
                     Spacer(Modifier.height(10.dp))
+
+                    // CTAs — placed HIGH in the info column so they sit in the initial viewport
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SCta(
+                            label = if (isInMyList) "In List" else "My List",
+                            icon = if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            primary = false,
+                            onClick = {
+                                MyListStore.toggle(ctx, playlistId, "series", seriesIdInt)
+                                myListVersion++
+                            },
+                        )
+                        trailerKey?.let { k ->
+                            SCta(
+                                label = "Trailer",
+                                icon = Icons.Default.PlayCircle,
+                                primary = false,
+                                onClick = { openYoutubeExt(ctx, k) },
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
 
                     // Rating badges (TMDB + IMDb)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

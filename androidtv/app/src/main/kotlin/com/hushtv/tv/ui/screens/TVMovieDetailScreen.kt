@@ -128,8 +128,10 @@ fun TVMovieDetailScreen(
         MyListStore.isInList(ctx, playlistId, "movie", streamId)
     }
 
-    // Play focus — Play lives in the FIXED top bar (outside verticalScroll)
-    // so focusing it does NOT scroll the page. Poster stays fully visible.
+    // Shared scroll state — we force it back to 0 whenever Play gains focus
+    // (on entry AND when the user navigates back UP) so the poster is always
+    // in view when focused on a top-level action.
+    val scrollState = rememberScrollState()
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(tmdbMovie != null || !loading) {
         kotlinx.coroutines.delay(60)
@@ -201,62 +203,27 @@ fun TVMovieDetailScreen(
             )
         }
 
-        // ── Fixed top action bar (OUTSIDE the verticalScroll) ─────
-        //    Back · Play · My List · Trailer. Focusing any of these
-        //    causes zero scroll, so the poster stays fully visible.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier
+        // ── Back button — just the back button, no other actions here ────
+        Box(
+            Modifier
+                .padding(start = 16.dp, top = 14.dp)
                 .align(Alignment.TopStart)
-                .padding(start = 16.dp, top = 14.dp, end = 16.dp),
-        ) {
-            // Back button
-            Box(
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x88000000))
-                    .border(2.dp, Color(0x55FFFFFF), CircleShape)
-                    .onKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown &&
-                            (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
-                        ) {
-                            nav.popBackStack(); true
-                        } else false
-                    }
-                    .focusable()
-                    .clickable { nav.popBackStack() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(22.dp))
-            }
-
-            if (!loading) {
-                HeroCta(
-                    label = "Play",
-                    icon = Icons.Default.PlayArrow,
-                    primary = true,
-                    focusRequester = playFocus,
-                    onClick = onPlay,
-                )
-                HeroCta(
-                    label = if (isInMyList) "In List" else "My List",
-                    icon = if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    onClick = {
-                        MyListStore.toggle(ctx, playlistId, "movie", streamId)
-                        myListVersion++
-                    },
-                )
-                val trailerKeyNow = TmdbService.pickTrailer(tmdbMovie?.videos)
-                trailerKeyNow?.let { k ->
-                    HeroCta(
-                        label = "Trailer",
-                        icon = Icons.Default.PlayCircle,
-                        onClick = { openYoutube(ctx, k) },
-                    )
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color(0x88000000))
+                .border(2.dp, Color(0x55FFFFFF), CircleShape)
+                .onKeyEvent { ev ->
+                    if (ev.type == KeyEventType.KeyDown &&
+                        (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+                    ) {
+                        nav.popBackStack(); true
+                    } else false
                 }
-            }
+                .focusable()
+                .clickable { nav.popBackStack() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(22.dp))
         }
 
         if (loading) {
@@ -346,6 +313,44 @@ fun TVMovieDetailScreen(
                     }
 
                     Spacer(Modifier.height(12.dp))
+
+                    // CTAs — placed HIGH in the info column so they sit in
+                    // the initial viewport (no scroll on focus). Play is
+                    // pinned to scrollState so UP from anywhere brings user
+                    // back to top.
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        HeroCta(
+                            label = "Play",
+                            icon = Icons.Default.PlayArrow,
+                            primary = true,
+                            focusRequester = playFocus,
+                            onFocusGained = {
+                                // Snap the scroll back to the top whenever
+                                // Play regains focus — so users can always
+                                // get the poster back into view.
+                                scope.launch { scrollState.animateScrollTo(0) }
+                            },
+                            onClick = onPlay,
+                        )
+                        HeroCta(
+                            label = if (isInMyList) "In List" else "My List",
+                            icon = if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            onClick = {
+                                MyListStore.toggle(ctx, playlistId, "movie", streamId)
+                                myListVersion++
+                            },
+                        )
+                        val trailerKeyNow = TmdbService.pickTrailer(tmdbMovie?.videos)
+                        trailerKeyNow?.let { k ->
+                            HeroCta(
+                                label = "Trailer",
+                                icon = Icons.Default.PlayCircle,
+                                onClick = { openYoutube(ctx, k) },
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
 
                     // Rating badges
                     RatingRow(
@@ -1003,6 +1008,7 @@ private fun HeroCta(
     icon: ImageVector,
     primary: Boolean = false,
     focusRequester: FocusRequester? = null,
+    onFocusGained: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -1027,7 +1033,18 @@ private fun HeroCta(
             if (focused) Cyan else Color.Transparent,
             RoundedCornerShape(10.dp),
         )
-        .onFocusChanged { focused = it.isFocused }
+        .onFocusChanged {
+            val wasFocused = focused
+            focused = it.isFocused
+            if (!wasFocused && it.isFocused) onFocusGained?.invoke()
+        }
+        .onKeyEvent { ev ->
+            if (ev.type == KeyEventType.KeyDown &&
+                (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+            ) {
+                onClick(); true
+            } else false
+        }
         .focusable()
         .clickable(onClick = onClick)
         .padding(horizontal = 22.dp)
