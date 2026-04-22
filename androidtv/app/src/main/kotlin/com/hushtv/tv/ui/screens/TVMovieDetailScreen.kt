@@ -41,6 +41,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -465,124 +470,160 @@ private fun CastFilmographyDialog(
     onDismiss: () -> Unit,
     onTitleClick: (MediaCard) -> Unit,
 ) {
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true,
-        ),
+    // Inline overlay — NOT androidx.compose.ui.window.Dialog, which has
+    // known focus-transfer issues on Android TV. This overlay lives in
+    // the same composition as the detail screen so focus requesters work.
+    val firstFocus = remember { FocusRequester() }
+    val closeFocus = remember { FocusRequester() }
+    LaunchedEffect(state.matches.size, state.loading) {
+        kotlinx.coroutines.delay(80)
+        runCatching {
+            if (state.matches.isNotEmpty()) firstFocus.requestFocus()
+            else closeFocus.requestFocus()
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xEE000000))
+            // BACK key dismisses
+            .onKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown &&
+                    (ev.key == Key.Back || ev.key == Key.Escape)
+                ) {
+                    onDismiss(); true
+                } else false
+            }
+            .focusable(),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
+        Column(
             Modifier
-                .fillMaxSize()
-                .background(Color(0xCC000000))
-                .clickable(onClick = onDismiss),
-            contentAlignment = Alignment.Center,
+                .widthIn(max = 1100.dp)
+                .fillMaxWidth(0.82f)
+                .heightIn(max = 640.dp)
+                .background(Color(0xFF0B111D), RoundedCornerShape(16.dp))
+                .border(1.dp, Color(0x3306B6D4), RoundedCornerShape(16.dp))
+                .padding(28.dp),
         ) {
-            Column(
-                Modifier
-                    .widthIn(max = 1000.dp)
-                    .fillMaxWidth(0.8f)
-                    .heightIn(max = 620.dp)
-                    .background(Color(0xFF0B111D), RoundedCornerShape(16.dp))
-                    .border(1.dp, Color(0x3306B6D4), RoundedCornerShape(16.dp))
-                    .padding(28.dp),
-            ) {
-                // Header
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceNavy),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val img = TmdbService.img(state.member.profile_path, "w185")
-                        if (!img.isNullOrBlank()) {
-                            SubcomposeAsyncImage(
-                                model = img,
-                                contentDescription = state.member.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                error = { Text(
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(SurfaceNavy),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val img = TmdbService.img(state.member.profile_path, "w185")
+                    if (!img.isNullOrBlank()) {
+                        SubcomposeAsyncImage(
+                            model = img,
+                            contentDescription = state.member.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            error = {
+                                Text(
                                     state.member.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                    color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Black
-                                ) },
-                                loading = { },
-                            )
-                        } else {
-                            Text(
-                                state.member.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Black,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            state.member.name,
-                            color = TextPrimary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
+                                    color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Black,
+                                )
+                            },
+                            loading = { },
                         )
+                    } else {
                         Text(
-                            "Also in your library",
-                            color = Cyan,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 1.3.sp,
+                            state.member.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Black,
                         )
                     }
                 }
-
-                Spacer(Modifier.height(18.dp))
-
-                when {
-                    state.loading -> {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(200.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(color = Cyan, modifier = Modifier.size(34.dp))
-                                Spacer(Modifier.height(10.dp))
-                                Text(
-                                    state.notice ?: "Searching your library…",
-                                    color = TextSecondary,
-                                    fontSize = 12.sp,
-                                )
-                            }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        state.member.name,
+                        color = TextPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        if (state.matches.isEmpty() && !state.loading) "Not in your library"
+                        else "Also in your library",
+                        color = Cyan,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.3.sp,
+                    )
+                }
+                // Close button (always reachable)
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .focusRequester(closeFocus)
+                        .onKeyEvent { ev ->
+                            if (ev.type == KeyEventType.KeyDown &&
+                                (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+                            ) {
+                                onDismiss(); true
+                            } else false
                         }
-                    }
-                    state.matches.isEmpty() -> {
-                        Box(
-                            Modifier.fillMaxWidth().height(200.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
+                        .focusable()
+                        .clickable(onClick = onDismiss)
+                        .background(Color(0x1AFFFFFF), CircleShape)
+                        .border(1.dp, Color(0x33FFFFFF), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+
+            when {
+                state.loading -> {
+                    Box(
+                        Modifier.fillMaxWidth().height(200.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = Cyan, modifier = Modifier.size(34.dp))
+                            Spacer(Modifier.height(10.dp))
                             Text(
-                                "No other titles with ${state.member.name} in your library.",
-                                color = TextMuted,
-                                fontSize = 14.sp,
+                                state.notice ?: "Searching your library…",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
                             )
                         }
                     }
-                    else -> {
-                        androidx.compose.foundation.lazy.grid.LazyHorizontalGrid(
-                            rows = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.fillMaxWidth().height(440.dp),
-                        ) {
-                            items(
-                                count = state.matches.size,
-                                key = { idx -> "fmg-${state.matches[idx].kind}-${state.matches[idx].id}" },
-                            ) { idx ->
-                                val item = state.matches[idx]
-                                FilmographyCard(item = item, onClick = { onTitleClick(item) })
-                            }
+                }
+                state.matches.isEmpty() -> {
+                    Box(
+                        Modifier.fillMaxWidth().height(200.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            state.notice ?: "No other titles with ${state.member.name} in your library.",
+                            color = TextMuted,
+                            fontSize = 14.sp,
+                        )
+                    }
+                }
+                else -> {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(260.dp),
+                    ) {
+                        items(
+                            count = state.matches.size,
+                            key = { idx -> "fmg-${state.matches[idx].kind}-${state.matches[idx].id}" },
+                        ) { idx ->
+                            val item = state.matches[idx]
+                            val mod = if (idx == 0) Modifier.focusRequester(firstFocus) else Modifier
+                            FilmographyCard(
+                                modifier = mod,
+                                item = item,
+                                onClick = { onTitleClick(item) },
+                            )
                         }
                     }
                 }
@@ -592,7 +633,11 @@ private fun CastFilmographyDialog(
 }
 
 @Composable
-private fun FilmographyCard(item: MediaCard, onClick: () -> Unit) {
+private fun FilmographyCard(
+    modifier: Modifier = Modifier,
+    item: MediaCard,
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.05f else 1f,
@@ -600,11 +645,19 @@ private fun FilmographyCard(item: MediaCard, onClick: () -> Unit) {
         label = "fmg-scale",
     )
     Column(
-        Modifier
+        modifier
             .width(130.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .clickableWithEnter(onClick),
+            .onKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown &&
+                    (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+                ) {
+                    onClick(); true
+                } else false
+            }
+            .focusable()
+            .clickable(onClick = onClick),
     ) {
         Box(
             Modifier
@@ -777,7 +830,15 @@ private fun CastCard(member: TmdbCastMember, onClick: () -> Unit) {
             .width(96.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .clickableWithEnter(onClick),
+            .onKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown &&
+                    (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+                ) {
+                    onClick(); true
+                } else false
+            }
+            .focusable()
+            .clickable(onClick = onClick),
     ) {
         Box(
             Modifier
@@ -850,7 +911,15 @@ private fun RecommendationCard(rec: TmdbRecommendation, onClick: () -> Unit) {
             .width(130.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .clickableWithEnter(onClick),
+            .onKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown &&
+                    (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+                ) {
+                    onClick(); true
+                } else false
+            }
+            .focusable()
+            .clickable(onClick = onClick),
     ) {
         Box(
             Modifier
