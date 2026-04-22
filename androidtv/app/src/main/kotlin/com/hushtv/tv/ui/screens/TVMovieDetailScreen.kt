@@ -128,10 +128,12 @@ fun TVMovieDetailScreen(
         MyListStore.isInList(ctx, playlistId, "movie", streamId)
     }
 
-    // Play button focus on entry
-    val playFocus = remember { FocusRequester() }
+    // Back-button focus so the screen opens at scroll-top (focusing Play
+    // would force verticalScroll to scroll the poster off-screen).
+    val backFocus = remember { FocusRequester() }
     LaunchedEffect(tmdbMovie != null || !loading) {
-        runCatching { playFocus.requestFocus() }
+        kotlinx.coroutines.delay(60)
+        runCatching { backFocus.requestFocus() }
     }
 
     val inner = vodInfo?.info
@@ -203,16 +205,23 @@ fun TVMovieDetailScreen(
         Box(
             Modifier
                 .padding(16.dp)
-                .size(40.dp)
+                .size(44.dp)
                 .clip(CircleShape)
-                .background(Color(0x55000000))
-                .border(1.dp, Color(0x33FFFFFF), CircleShape)
-                .onFocusChanged { /* only focused when nothing else is */ }
+                .background(Color(0x88000000))
+                .border(2.dp, Color(0x55FFFFFF), CircleShape)
+                .focusRequester(backFocus)
+                .onKeyEvent { ev ->
+                    if (ev.type == KeyEventType.KeyDown &&
+                        (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+                    ) {
+                        nav.popBackStack(); true
+                    } else false
+                }
                 .focusable()
                 .clickable { nav.popBackStack() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(22.dp))
         }
 
         if (loading) {
@@ -229,37 +238,34 @@ fun TVMovieDetailScreen(
                 .padding(start = 72.dp, end = 56.dp, top = 56.dp, bottom = 24.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // ── Hero row — constrained height so nothing ever gets clipped ─
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                // Poster height caps at 300dp and scales down for smaller TVs.
-                val posterHeight = 300.dp
-                val posterWidth = posterHeight * 2f / 3f
-                Row(
-                    Modifier.fillMaxWidth().height(posterHeight),
-                    verticalAlignment = Alignment.Top,
+            // ── Hero row — natural height so content never gets clipped.
+            //    The verticalScroll can still scroll UP if the user moves
+            //    focus down to the cast/recs sections.
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+            ) {
+                val heroPoster = posterUrl ?: rpdbPosterUrl
+                Box(
+                    Modifier
+                        .width(200.dp)
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceNavy),
                 ) {
-                    // TMDB poster only (known 2:3). Fit to preserve aspect.
-                    val heroPoster = posterUrl ?: rpdbPosterUrl
-                    Box(
-                        Modifier
-                            .width(posterWidth)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(SurfaceNavy),
-                    ) {
-                        if (!heroPoster.isNullOrBlank()) {
-                            SubcomposeAsyncImage(
-                                model = heroPoster,
-                                contentDescription = displayTitle,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize(),
-                                error = { PosterMissing() },
-                                loading = { },
-                            )
-                        } else {
-                            PosterMissing()
-                        }
+                    if (!heroPoster.isNullOrBlank()) {
+                        SubcomposeAsyncImage(
+                            model = heroPoster,
+                            contentDescription = displayTitle,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize(),
+                            error = { PosterMissing() },
+                            loading = { },
+                        )
+                    } else {
+                        PosterMissing()
                     }
+                }
 
                 Spacer(Modifier.width(32.dp))
 
@@ -342,7 +348,6 @@ fun TVMovieDetailScreen(
                             label = "Play",
                             icon = Icons.Default.PlayArrow,
                             primary = true,
-                            focusRequester = playFocus,
                             onClick = onPlay,
                         )
                         HeroCta(
@@ -363,7 +368,6 @@ fun TVMovieDetailScreen(
                     }
                 }
             }
-            } // BoxWithConstraints (hero)
 
             Spacer(Modifier.height(40.dp))
 

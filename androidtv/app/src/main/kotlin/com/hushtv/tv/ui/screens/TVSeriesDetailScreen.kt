@@ -34,6 +34,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -133,7 +138,11 @@ fun TVSeriesDetailScreen(
         MyListStore.isInList(ctx, playlistId, "series", seriesIdInt)
     }
 
-    val playFocus = remember { FocusRequester() }
+    val backFocus = remember { FocusRequester() }
+    LaunchedEffect(tmdbTv != null || !loading) {
+        kotlinx.coroutines.delay(60)
+        runCatching { backFocus.requestFocus() }
+    }
 
     // ── Resolve display strings ──────────────────────────────
     val backdropUrl = TmdbService.img(tmdbTv?.backdrop_path, "w1280")
@@ -191,15 +200,23 @@ fun TVSeriesDetailScreen(
         Box(
             Modifier
                 .padding(16.dp)
-                .size(40.dp)
+                .size(44.dp)
                 .clip(CircleShape)
-                .background(Color(0x55000000))
-                .border(1.dp, Color(0x33FFFFFF), CircleShape)
+                .background(Color(0x88000000))
+                .border(2.dp, Color(0x55FFFFFF), CircleShape)
+                .focusRequester(backFocus)
+                .onKeyEvent { ev ->
+                    if (ev.type == KeyEventType.KeyDown &&
+                        (ev.key == Key.Enter || ev.key == Key.DirectionCenter || ev.key == Key.NumPadEnter)
+                    ) {
+                        nav.popBackStack(); true
+                    } else false
+                }
                 .focusable()
                 .clickable { nav.popBackStack() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(22.dp))
         }
 
         if (loading) {
@@ -216,33 +233,30 @@ fun TVSeriesDetailScreen(
                 .padding(start = 72.dp, end = 48.dp, top = 56.dp, bottom = 24.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // ── Hero row — constrained height, fits cleanly in viewport ───
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val posterHeight = 300.dp
-                val posterWidth = posterHeight * 2f / 3f
-                Row(
-                    Modifier.fillMaxWidth().height(posterHeight),
-                    verticalAlignment = Alignment.Top,
+            // ── Hero row — natural height, verticalScroll handles overflow ─
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+            ) {
+                val heroPoster = posterUrl ?: rpdbPoster
+                Box(
+                    Modifier
+                        .width(190.dp)
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceNavy),
                 ) {
-                    val heroPoster = posterUrl ?: rpdbPoster
-                    Box(
-                        Modifier
-                            .width(posterWidth)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(SurfaceNavy),
-                    ) {
-                        if (!heroPoster.isNullOrBlank()) {
-                            SubcomposeAsyncImage(
-                                model = heroPoster,
-                                contentDescription = displayTitle,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize(),
-                                error = { },
-                                loading = { },
-                            )
-                        }
+                    if (!heroPoster.isNullOrBlank()) {
+                        SubcomposeAsyncImage(
+                            model = heroPoster,
+                            contentDescription = displayTitle,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize(),
+                            error = { },
+                            loading = { },
+                        )
                     }
+                }
                 Spacer(Modifier.width(28.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -320,7 +334,6 @@ fun TVSeriesDetailScreen(
                                 MyListStore.toggle(ctx, playlistId, "series", seriesIdInt)
                                 myListVersion++
                             },
-                            focusRequester = playFocus,
                         )
                         trailerKey?.let { k ->
                             SCta(
@@ -333,7 +346,6 @@ fun TVSeriesDetailScreen(
                     }
                 }
             }
-            } // BoxWithConstraints (hero)
 
             Spacer(Modifier.height(28.dp))
 
