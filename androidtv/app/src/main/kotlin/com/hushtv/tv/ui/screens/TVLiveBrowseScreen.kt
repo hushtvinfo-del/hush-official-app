@@ -17,8 +17,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -45,6 +48,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import coil.compose.SubcomposeAsyncImage
+import com.hushtv.tv.data.EpgProgram
+import com.hushtv.tv.data.EpgService
+import com.hushtv.tv.data.FavoritesStore
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.NavState
 import com.hushtv.tv.data.PlaylistStore
@@ -71,6 +77,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     val playlist = remember { PlaylistStore.find(ctx, playlistId) }
 
     var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
+    var allChannelsForFavorites by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var selectedCatIndex by remember {
         mutableStateOf(
             if (NavState.browsePlaylistId == playlistId) NavState.selectedCategoryIndex else 0
@@ -85,6 +92,16 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
 
     val channelCache = remember { mutableStateMapOf<String, List<MediaCard>>() }
 
+    // Categories list — prepend two virtual rows: ★ Favorites and "All channels".
+    val FAVORITES_ID = "__fav__"
+    val ALL_ID = "__all__"
+    val uiCategories = remember(categories) {
+        listOf(
+            XtreamCategory(category_id = FAVORITES_ID, category_name = "★ Favorites"),
+            XtreamCategory(category_id = ALL_ID, category_name = "All channels")
+        ) + categories
+    }
+
     // Load categories once (or reuse cached).
     LaunchedEffect(playlistId) {
         val p = playlist ?: return@LaunchedEffect
@@ -97,28 +114,65 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     }
 
     // Load channels when selected category changes.
-    LaunchedEffect(selectedCatIndex, categories) {
+    LaunchedEffect(selectedCatIndex, uiCategories, allChannelsForFavorites) {
         val p = playlist ?: return@LaunchedEffect
-        val cat = categories.getOrNull(selectedCatIndex) ?: return@LaunchedEffect
-        val cached = channelCache[cat.category_id]
-        if (cached != null) {
-            channels = cached
-            return@LaunchedEffect
-        }
-        loadingChans = true
-        scope.launch {
-            runCatching {
-                val list = XtreamApi.getStreamsForCategory(
-                    p.host, p.username, p.password, "live", cat.category_id
-                )
-                channelCache[cat.category_id] = list
-                channels = list
+        val cat = uiCategories.getOrNull(selectedCatIndex) ?: return@LaunchedEffect
+        when (cat.category_id) {
+            FAVORITES_ID -> {
+                // Collect all favorites across all categories from the cache,
+                // or fetch "all channels" once if we don't have them yet.
+                val favIds = FavoritesStore.getAll(ctx, playlistId)
+                if (allChannelsForFavorites.isEmpty()) {
+                    loadingChans = true
+                    scope.launch {
+                        runCatching {
+                            allChannelsForFavorites = XtreamApi.getAllStreams(
+                                p.host, p.username, p.password, "live"
+                            )
+                        }
+                        loadingChans = false
+                    }
+                }
+                channels = allChannelsForFavorites.filter { favIds.contains(it.streamId) }
             }
-            loadingChans = false
+            ALL_ID -> {
+                if (allChannelsForFavorites.isNotEmpty()) {
+                    channels = allChannelsForFavorites
+                } else {
+                    loadingChans = true
+                    scope.launch {
+                        runCatching {
+                            allChannelsForFavorites = XtreamApi.getAllStreams(
+                                p.host, p.username, p.password, "live"
+                            )
+                            channels = allChannelsForFavorites
+                        }
+                        loadingChans = false
+                    }
+                }
+            }
+            else -> {
+                val cached = channelCache[cat.category_id]
+                if (cached != null) {
+                    channels = cached
+                } else {
+                    loadingChans = true
+                    scope.launch {
+                        runCatching {
+                            val list = XtreamApi.getStreamsForCategory(
+                                p.host, p.username, p.password, "live", cat.category_id
+                            )
+                            channelCache[cat.category_id] = list
+                            channels = list
+                        }
+                        loadingChans = false
+                    }
+                }
+            }
         }
     }
 
-    val currentCategory = categories.getOrNull(selectedCatIndex)
+    val currentCategory = uiCategories.getOrNull(selectedCatIndex)
     val filteredChannels = remember(channels, searchQuery) {
         if (searchQuery.isBlank()) channels
         else channels.filter { it.title.contains(searchQuery, ignoreCase = true) }
@@ -191,12 +245,16 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
             searchQuery = searchQuery,
             onSearchToggle = { searchOpen = !searchOpen; if (!searchOpen) searchQuery = "" },
             onSearchChange = { searchQuery = it },
-            onBack = { nav.popBackStack() }
+            onBack = { nav.popBackStack() },
+            onOpenGuide = {
+                NavState.liveChannels = filteredChannels
+                nav.navigate("epg/$playlistId")
+            }
         )
 
         Row(Modifier.weight(1f).fillMaxWidth()) {
             CategorySidebar(
-                categories = categories,
+                categories = uiCategories,
                 selectedIndex = selectedCatIndex,
                 loading = loadingCats,
                 onSelect = {
@@ -210,6 +268,10 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
 
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 ChannelsPane(
+                    playlistId = playlistId,
+                    host = playlist?.host ?: "",
+                    username = playlist?.username ?: "",
+                    password = playlist?.password ?: "",
                     channels = filteredChannels,
                     loading = loadingChans,
                     onFocusChange = { focusedChannelIdx = it },
@@ -316,7 +378,8 @@ private fun TopBar(
     searchQuery: String,
     onSearchToggle: () -> Unit,
     onSearchChange: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenGuide: () -> Unit
 ) {
     Row(
         Modifier
@@ -351,6 +414,24 @@ private fun TopBar(
         if (searchOpen) {
             SearchField(value = searchQuery, onChange = onSearchChange, onClose = onSearchToggle)
         } else {
+            Surface(
+                color = Color(0x14FFFFFF),
+                shape = CircleShape,
+                modifier = Modifier
+                    .focusTvCircle()
+                    .border(1.dp, Color(0x26FFFFFF), CircleShape)
+                    .clickableWithEnter(onOpenGuide)
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.GridView, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("TV Guide", color = TextSecondary, fontSize = 15.sp)
+                }
+            }
+            Spacer(Modifier.width(10.dp))
             Surface(
                 color = Color(0x14FFFFFF),
                 shape = CircleShape,
@@ -526,6 +607,8 @@ private fun CategoryRow(
 
 @Composable
 private fun ChannelsPane(
+    playlistId: String,
+    host: String, username: String, password: String,
     channels: List<MediaCard>,
     loading: Boolean,
     emptyReason: String?,
@@ -533,9 +616,14 @@ private fun ChannelsPane(
     onFocusChange: (Int) -> Unit,
     onPlay: (Int) -> Unit
 ) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val focusByIndex = remember { mutableMapOf<Int, FocusRequester>() }
     fun reqFor(idx: Int) = focusByIndex.getOrPut(idx) { FocusRequester() }
     val listState = rememberLazyListState()
+
+    // Re-render when EPG arrives
+    var epgVersion by remember { mutableStateOf(0) }
 
     // When the list (re)populates, restore focus to previously-watched channel.
     LaunchedEffect(channels) {
@@ -547,6 +635,24 @@ private fun ChannelsPane(
             }
         }
     }
+
+    // Kick off EPG fetch for currently-visible channels (throttled).
+    LaunchedEffect(channels, listState.firstVisibleItemIndex) {
+        if (host.isBlank() || channels.isEmpty()) return@LaunchedEffect
+        val from = listState.firstVisibleItemIndex
+        val to = (from + 20).coerceAtMost(channels.size)
+        for (i in from until to) {
+            val ch = channels[i]
+            scope.launch {
+                EpgService.fetchShortEpg(host, username, password, ch.streamId)
+                epgVersion++
+            }
+        }
+    }
+
+    // Favorites set — live-updated
+    var favVersion by remember { mutableStateOf(0) }
+    val favs = remember(favVersion, playlistId) { FavoritesStore.getAll(ctx, playlistId) }
 
     Box(Modifier.fillMaxSize().background(Color(0xFF0A0E18))) {
         when {
@@ -562,9 +668,15 @@ private fun ChannelsPane(
                         ChannelRow(
                             number = idx + 1,
                             channel = channels[idx],
+                            nowPlaying = EpgService.nowPlaying(channels[idx].streamId).also { epgVersion },
+                            isFavorite = favs.contains(channels[idx].streamId),
                             modifier = Modifier.focusRequester(reqFor(idx)),
                             onFocus = { onFocusChange(idx) },
-                            onPlay = { onPlay(idx) }
+                            onPlay = { onPlay(idx) },
+                            onToggleFav = {
+                                FavoritesStore.toggle(ctx, playlistId, channels[idx].streamId)
+                                favVersion++
+                            }
                         )
                     }
                 }
@@ -577,9 +689,12 @@ private fun ChannelsPane(
 private fun ChannelRow(
     number: Int,
     channel: MediaCard,
+    nowPlaying: EpgProgram?,
+    isFavorite: Boolean,
     modifier: Modifier = Modifier,
     onFocus: () -> Unit,
-    onPlay: () -> Unit
+    onPlay: () -> Unit,
+    onToggleFav: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
@@ -601,10 +716,10 @@ private fun ChannelRow(
             }
             .focusable()
             .clickableWithEnter(onPlay)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Box(
-            Modifier.width(56.dp).padding(end = 12.dp),
+            Modifier.width(52.dp).padding(end = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -614,13 +729,72 @@ private fun ChannelRow(
             )
         }
         ChannelLogo(channel.poster, channel.title)
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                channel.title, color = Color.White, fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold, maxLines = 1
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    channel.title, color = Color.White, fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    modifier = Modifier.weight(1f, false)
+                )
+                if (isFavorite) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Default.Star, null,
+                        tint = Color(0xFFFACC15),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+            if (nowPlaying != null) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    nowPlaying.title,
+                    color = Color(0xFFD1D5DB), fontSize = 13.sp,
+                    maxLines = 1
+                )
+                // Mini progress bar
+                Spacer(Modifier.height(3.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(Color(0x14FFFFFF), RoundedCornerShape(2.dp))
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(nowPlaying.progressPct)
+                            .height(3.dp)
+                            .background(Cyan, RoundedCornerShape(2.dp))
+                    )
+                }
+            }
         }
+        // Favorite star toggle (right side)
+        Surface(
+            color = if (isFavorite) Color(0x33FACC15) else Color(0x14FFFFFF),
+            shape = CircleShape,
+            modifier = Modifier
+                .size(36.dp)
+                .border(
+                    1.dp,
+                    if (isFavorite) Color(0xFFFACC15) else Color(0x26FFFFFF),
+                    CircleShape
+                )
+                .focusable()
+                .onFocusChanged { }
+                .clickableWithEnter(onToggleFav)
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(
+                    if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                    null,
+                    tint = if (isFavorite) Color(0xFFFACC15) else Color(0xFFB0B3BC),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
         if (focused) {
             Surface(color = Cyan, shape = CircleShape, modifier = Modifier.size(36.dp)) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

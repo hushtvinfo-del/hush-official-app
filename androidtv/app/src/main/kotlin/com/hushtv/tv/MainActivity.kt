@@ -18,6 +18,7 @@ import androidx.navigation.compose.rememberNavController
 import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.ui.screens.TVAddAccountScreen
 import com.hushtv.tv.ui.screens.TVBrowseScreen
+import com.hushtv.tv.ui.screens.TVEpgGridScreen
 import com.hushtv.tv.ui.screens.TVHomeScreen
 import com.hushtv.tv.ui.screens.TVLiveBrowseScreen
 import com.hushtv.tv.ui.screens.TVMainMenuScreen
@@ -66,6 +67,9 @@ class MainActivity : ComponentActivity() {
                                 bs.arguments?.getString("seriesId") ?: "",
                                 bs.arguments?.getString("seriesName") ?: ""
                             )
+                        }
+                        composable("epg/{playlistId}") { bs ->
+                            TVEpgGridScreen(nav, bs.arguments?.getString("playlistId") ?: "")
                         }
                         composable("player/{playlistId}/{streamUrl}/{channelName}/{isLive}") { bs ->
                             TVPlayerScreen(

@@ -39,14 +39,17 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
+import com.hushtv.tv.data.EpgService
 import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.NavState
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.ui.theme.Cyan
+import com.hushtv.tv.ui.theme.TextSecondary
 import com.hushtv.tv.ui.tvFocusable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -133,6 +136,49 @@ fun TVPlayerScreen(
         showControls = false
     }
 
+    // ─── Info overlay (OK/INFO) ─────────────────────────────────────────
+    var infoVisible by remember { mutableStateOf(false) }
+    var infoTick by remember { mutableStateOf(0) }
+    LaunchedEffect(infoTick) {
+        if (infoVisible) {
+            delay(6000)
+            infoVisible = false
+        }
+    }
+
+    // Prefetch EPG when channel changes so the Info overlay has data
+    val playlistObj = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
+    val currentChannel = remember(NavState.currentChannelIndex, currentUrl) {
+        NavState.liveChannels.getOrNull(NavState.currentChannelIndex)
+    }
+    val epgScope = rememberCoroutineScope()
+    LaunchedEffect(currentUrl) {
+        val p = playlistObj ?: return@LaunchedEffect
+        val ch = currentChannel ?: return@LaunchedEffect
+        epgScope.launch {
+            EpgService.fetchShortEpg(p.host, p.username, p.password, ch.streamId)
+        }
+    }
+
+    // ─── Channel-number dialer ─────────────────────────────────────────
+    var dialBuf by remember { mutableStateOf("") }
+    var dialTick by remember { mutableStateOf(0) }
+    LaunchedEffect(dialTick) {
+        if (dialBuf.isNotEmpty()) {
+            delay(1800)
+            val n = dialBuf.toIntOrNull()
+            if (n != null) {
+                val idx = (n - 1).coerceIn(0, (NavState.liveChannels.size - 1).coerceAtLeast(0))
+                val ch = NavState.liveChannels.getOrNull(idx)
+                if (ch != null) {
+                    NavState.rememberPlayback(idx)
+                    playChannel(ch, idx + 1)
+                }
+            }
+            dialBuf = ""
+        }
+    }
+
     // ─── Back-double-press → previous channel ─────────────────────────────
     var lastBackMs by remember { mutableStateOf(0L) }
 
@@ -167,13 +213,45 @@ fun TVPlayerScreen(
                             player.volume = (player.volume - 0.1f).coerceAtLeast(0f); true
                         }
                     }
-                    // Play / pause
+                    // Play / pause OR info toggle
                     Key.Enter, Key.DirectionCenter, Key.MediaPlayPause,
                     Key.Spacebar, Key.NumPadEnter -> {
-                        if (player.isPlaying) player.pause() else player.play(); true
+                        if (isLive) {
+                            // On live streams, center = toggle info overlay
+                            infoVisible = !infoVisible
+                            if (infoVisible) infoTick++
+                            true
+                        } else {
+                            if (player.isPlaying) player.pause() else player.play(); true
+                        }
                     }
+                    Key.Info -> { infoVisible = !infoVisible; if (infoVisible) infoTick++; true }
                     Key.MediaPlay -> { player.play(); true }
                     Key.MediaPause -> { player.pause(); true }
+                    // Channel number dialer (0-9)
+                    Key.Zero, Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
+                    Key.Six, Key.Seven, Key.Eight, Key.Nine,
+                    Key.NumPad0, Key.NumPad1, Key.NumPad2, Key.NumPad3, Key.NumPad4,
+                    Key.NumPad5, Key.NumPad6, Key.NumPad7, Key.NumPad8, Key.NumPad9 -> {
+                        if (isLive) {
+                            val digit = when (e.key) {
+                                Key.Zero, Key.NumPad0 -> "0"
+                                Key.One, Key.NumPad1 -> "1"
+                                Key.Two, Key.NumPad2 -> "2"
+                                Key.Three, Key.NumPad3 -> "3"
+                                Key.Four, Key.NumPad4 -> "4"
+                                Key.Five, Key.NumPad5 -> "5"
+                                Key.Six, Key.NumPad6 -> "6"
+                                Key.Seven, Key.NumPad7 -> "7"
+                                Key.Eight, Key.NumPad8 -> "8"
+                                Key.Nine, Key.NumPad9 -> "9"
+                                else -> ""
+                            }
+                            if (dialBuf.length < 4) dialBuf += digit
+                            dialTick++
+                            true
+                        } else false
+                    }
                     // Seek (for VOD only — live ignores)
                     Key.DirectionRight -> {
                         if (!isLive) {
@@ -233,6 +311,109 @@ fun TVPlayerScreen(
                         zapLabel ?: "",
                         color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold
                     )
+                }
+            }
+        }
+
+        // Channel-number dialer overlay (bottom-center)
+        if (dialBuf.isNotEmpty()) {
+            Surface(
+                color = Color(0xE6000000),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .border(2.dp, Cyan, RoundedCornerShape(18.dp))
+            ) {
+                Column(
+                    Modifier.padding(horizontal = 40.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("CHANNEL", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        dialBuf.padEnd(3, '_'),
+                        color = Cyan, fontSize = 64.sp, fontWeight = FontWeight.Black
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Press digits or wait to confirm",
+                        color = TextSecondary, fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        // Info overlay (bottom banner)
+        if (infoVisible && isLive) {
+            val chIdx = NavState.currentChannelIndex
+            val ch = NavState.liveChannels.getOrNull(chIdx)
+            val now = ch?.let { EpgService.nowPlaying(it.streamId) }
+            val next = ch?.let { EpgService.nextUp(it.streamId) }
+            Surface(
+                color = Color(0xE6000000),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 48.dp, vertical = 60.dp)
+                    .widthIn(max = 900.dp)
+                    .fillMaxWidth(0.9f)
+                    .border(1.dp, Color(0x3306B6D4), RoundedCornerShape(16.dp))
+            ) {
+                Column(Modifier.padding(24.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            (chIdx + 1).toString().padStart(3, '0'),
+                            color = Cyan, fontSize = 18.sp, fontWeight = FontWeight.Black
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            ch?.title ?: currentName,
+                            color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    if (now != null) {
+                        Text(now.title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        Box(
+                            Modifier.fillMaxWidth().height(4.dp).background(Color(0x14FFFFFF), RoundedCornerShape(2.dp))
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(now.progressPct)
+                                    .height(4.dp)
+                                    .background(Cyan, RoundedCornerShape(2.dp))
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "${now.minutesLeft.coerceAtLeast(0)} min left",
+                            color = TextSecondary, fontSize = 12.sp
+                        )
+                        if (now.description.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                now.description,
+                                color = Color(0xFFD1D5DB), fontSize = 13.sp,
+                                maxLines = 3
+                            )
+                        }
+                    } else {
+                        Text("No program info available", color = TextSecondary, fontSize = 14.sp)
+                    }
+                    if (next != null) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "NEXT",
+                            color = TextSecondary, fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            next.title,
+                            color = Color(0xFFD1D5DB), fontSize = 14.sp
+                        )
+                    }
                 }
             }
         }
