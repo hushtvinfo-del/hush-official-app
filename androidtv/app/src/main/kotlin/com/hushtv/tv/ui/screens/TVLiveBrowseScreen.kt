@@ -31,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -287,11 +288,19 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
             }
         )
 
-        Row(Modifier.weight(1f).fillMaxWidth()) {
+        // FocusRequester pinned to the currently-selected category row.
+    // Used so LEFT-arrow from any channel always returns focus to the same
+    // category the user came from (instead of letting Compose's geometric
+    // focus search land on whichever sidebar row happens to be at the
+    // closest Y position to the channel they were on).
+    val selectedCategoryFocus = remember { FocusRequester() }
+
+    Row(Modifier.weight(1f).fillMaxWidth()) {
             CategorySidebar(
                 categories = uiCategories,
                 selectedIndex = selectedCatIndex,
                 loading = loadingCats,
+                selectedFocusRequester = selectedCategoryFocus,
                 onSelect = {
                     // Focus change on a category row — load channels silently
                     // in the background but DO NOT steal focus to the channels pane.
@@ -336,6 +345,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     onFocusChange = { focusedChannelIdx = it },
                     initialFocusIndex = focusedChannelIdx,
                     firstChannelFocus = firstChannelFocus,
+                    leftTarget = selectedCategoryFocus,
                     onPlay = onPlay,
                     emptyReason = when {
                         searchQuery.isNotBlank() && filteredChannels.isEmpty() ->
@@ -710,6 +720,7 @@ private fun CategorySidebar(
     categories: List<XtreamCategory>,
     selectedIndex: Int,
     loading: Boolean,
+    selectedFocusRequester: FocusRequester,
     onSelect: (Int) -> Unit,
     onEnter: (Int) -> Unit,
     restoreFocusIndex: Int
@@ -754,10 +765,20 @@ private fun CategorySidebar(
                     key = { idx -> categories[idx].category_id }
                 ) { idx ->
                     val cat = categories[idx]
+                    // Compose multiple FocusRequesters: the per-row requester
+                    // PLUS the shared "active category" requester so LEFT-arrow
+                    // from a channel always lands here.
+                    val rowFocusMod = if (idx == selectedIndex) {
+                        Modifier
+                            .focusRequester(reqFor(idx))
+                            .focusRequester(selectedFocusRequester)
+                    } else {
+                        Modifier.focusRequester(reqFor(idx))
+                    }
                     CategoryRow(
                         name = cat.category_name,
                         selected = idx == selectedIndex,
-                        modifier = Modifier.focusRequester(reqFor(idx)),
+                        modifier = rowFocusMod,
                         onFocus = { onSelect(idx) },
                         onClick = { onEnter(idx) }
                     )
@@ -829,6 +850,7 @@ private fun ChannelsPane(
     emptyReason: String?,
     initialFocusIndex: Int,
     firstChannelFocus: FocusRequester,
+    leftTarget: FocusRequester,
     onFocusChange: (Int) -> Unit,
     onPlay: (Int) -> Unit
 ) {
@@ -890,6 +912,7 @@ private fun ChannelsPane(
             else -> {
                 LazyColumn(
                     state = listState,
+                    modifier = Modifier.focusProperties { left = leftTarget },
                     contentPadding = PaddingValues(vertical = 8.dp, horizontal = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {

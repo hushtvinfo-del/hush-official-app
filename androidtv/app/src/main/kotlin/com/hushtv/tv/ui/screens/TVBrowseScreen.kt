@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -222,6 +223,9 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
     }
 
     val firstGridFocus = remember { FocusRequester() }
+    // Pinned to the currently-selected sidebar row so LEFT-arrow from the grid
+    // always returns to the same category the user came from.
+    val selectedSidebarFocus = remember { FocusRequester() }
     var pendingJumpToGrid by remember { mutableStateOf(false) }
     LaunchedEffect(gridItems, pendingJumpToGrid) {
         if (pendingJumpToGrid && gridItems.isNotEmpty()) {
@@ -272,6 +276,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                 selectedId = selectedCatId,
                 title = title,
                 loading = loadingCats,
+                selectedFocusRequester = selectedSidebarFocus,
                 onBack = { nav.popBackStack() },
                 onFocus = { id -> if (id != "__divider__" && id != "__divider2__") selectedCatId = id },
                 onEnter = { id ->
@@ -353,6 +358,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                     else -> {
                         LazyVerticalGrid(
                             state = gridState,
+                            modifier = Modifier.focusProperties { left = selectedSidebarFocus },
                             columns = GridCells.Adaptive(minSize = 124.dp),
                             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -412,6 +418,7 @@ private fun VodSidebar(
     selectedId: String,
     title: String,
     loading: Boolean,
+    selectedFocusRequester: FocusRequester,
     onBack: () -> Unit,
     onFocus: (String) -> Unit,
     onEnter: (String) -> Unit,
@@ -512,10 +519,18 @@ private fun VodSidebar(
                                 .background(Color(0x14FFFFFF)),
                         )
                     } else {
+                        val isSelected = entry.id == selectedId
+                        val rowFocusMod = if (isSelected) {
+                            Modifier
+                                .focusRequester(reqFor(i))
+                                .focusRequester(selectedFocusRequester)
+                        } else {
+                            Modifier.focusRequester(reqFor(i))
+                        }
                         SidebarRow(
                             entry = entry,
-                            selected = entry.id == selectedId,
-                            modifier = Modifier.focusRequester(reqFor(i)),
+                            selected = isSelected,
+                            modifier = rowFocusMod,
                             onFocus = { onFocus(entry.id) },
                             onClick = { onEnter(entry.id) },
                         )
