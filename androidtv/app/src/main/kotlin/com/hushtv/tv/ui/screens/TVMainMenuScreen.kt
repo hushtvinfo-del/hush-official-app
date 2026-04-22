@@ -378,7 +378,7 @@ private fun Sidebar(
     onProfile: () -> Unit,
 ) {
     val width by animateDpAsState(
-        targetValue = if (expanded) 220.dp else 76.dp,
+        targetValue = if (expanded) 170.dp else 76.dp,
         animationSpec = tween(150),
         label = "sidebar-width",
     )
@@ -393,7 +393,7 @@ private fun Sidebar(
                 )
             )
             .onFocusChanged { onExpandChange(it.hasFocus) }
-            .padding(vertical = 20.dp, horizontal = 12.dp),
+            .padding(vertical = 20.dp, horizontal = 8.dp),
     ) {
         // Logo block
         Row(
@@ -529,11 +529,11 @@ private fun SidebarItem(
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 10.dp),
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
         if (expanded) {
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(10.dp))
             Text(
                 label,
                 color = tint,
