@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,9 +38,9 @@ import com.hushtv.tv.ui.screens.clickableWithEnter
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.TextSecondary
 
-private enum class Pane { MAIN, AUDIO, SUBTITLE, ASPECT, SLEEP }
+private enum class Pane { MAIN, AUDIO, SUBTITLE, ASPECT, SPEED, SLEEP }
 
-/** Full-screen modal with player options (audio, subtitles, aspect, sleep, info). */
+/** Full-screen modal with player options (audio, subtitles, aspect, speed, sleep, info). */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun PlayerOptionsMenu(
@@ -48,10 +49,24 @@ fun PlayerOptionsMenu(
     onAspectChange: (AspectMode) -> Unit,
     sleepMinutesLeft: Int?,
     onSleepChange: (Int?) -> Unit,
+    playbackSpeed: Float,
+    onPlaybackSpeedChange: (Float) -> Unit,
     onShowInfo: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    initialPane: String? = null,
 ) {
-    var pane by remember { mutableStateOf(Pane.MAIN) }
+    var pane by remember {
+        mutableStateOf(
+            when (initialPane) {
+                "audio" -> Pane.AUDIO
+                "subtitle" -> Pane.SUBTITLE
+                "speed" -> Pane.SPEED
+                "aspect" -> Pane.ASPECT
+                "sleep" -> Pane.SLEEP
+                else -> Pane.MAIN
+            }
+        )
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -79,9 +94,11 @@ fun PlayerOptionsMenu(
                         Pane.MAIN -> MainPane(
                             aspectMode = aspectMode,
                             sleepMinutesLeft = sleepMinutesLeft,
+                            playbackSpeed = playbackSpeed,
                             onAudio = { pane = Pane.AUDIO },
                             onSubtitle = { pane = Pane.SUBTITLE },
                             onAspect = { pane = Pane.ASPECT },
+                            onSpeed = { pane = Pane.SPEED },
                             onSleep = { pane = Pane.SLEEP },
                             onInfo = { onDismiss(); onShowInfo() }
                         )
@@ -99,6 +116,7 @@ fun PlayerOptionsMenu(
                             allowOff = true
                         )
                         Pane.ASPECT -> AspectPicker(aspectMode, onAspectChange, onBack = { pane = Pane.MAIN })
+                        Pane.SPEED -> SpeedPicker(playbackSpeed, onPlaybackSpeedChange, onBack = { pane = Pane.MAIN })
                         Pane.SLEEP -> SleepPicker(sleepMinutesLeft, onSleepChange, onBack = { pane = Pane.MAIN })
                     }
                 }
@@ -111,9 +129,11 @@ fun PlayerOptionsMenu(
 private fun MainPane(
     aspectMode: AspectMode,
     sleepMinutesLeft: Int?,
+    playbackSpeed: Float,
     onAudio: () -> Unit,
     onSubtitle: () -> Unit,
     onAspect: () -> Unit,
+    onSpeed: () -> Unit,
     onSleep: () -> Unit,
     onInfo: () -> Unit
 ) {
@@ -125,6 +145,7 @@ private fun MainPane(
     Spacer(Modifier.height(16.dp))
     OptionRow(Icons.Default.Audiotrack, "Audio track", "Choose language", onAudio)
     OptionRow(Icons.Default.ClosedCaption, "Subtitles", "Enable / disable / pick", onSubtitle)
+    OptionRow(Icons.Default.Speed, "Playback speed", "${trimTrailingZero(playbackSpeed)}×", onSpeed)
     OptionRow(Icons.Default.AspectRatio, "Aspect ratio", aspectMode.label, onAspect)
     OptionRow(
         Icons.Default.Bedtime, "Sleep timer",
@@ -133,6 +154,9 @@ private fun MainPane(
     )
     OptionRow(Icons.Default.Info, "Program info", "Show what's on now", onInfo)
 }
+
+private fun trimTrailingZero(v: Float): String =
+    if (v == v.toInt().toFloat()) v.toInt().toString() else v.toString().trimEnd('0').trimEnd('.')
 
 @Composable
 private fun OptionRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
@@ -277,6 +301,27 @@ private fun AspectPicker(
             label = mode.label,
             selected = mode == current,
             onClick = { onChange(mode) }
+        )
+        Spacer(Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun SpeedPicker(
+    current: Float, onChange: (Float) -> Unit, onBack: () -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        BackChip(onBack)
+        Spacer(Modifier.width(12.dp))
+        Text("Playback speed", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+    }
+    Spacer(Modifier.height(14.dp))
+    val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+    speeds.forEach { sp ->
+        TrackChoice(
+            label = "${trimTrailingZero(sp)}×",
+            selected = kotlin.math.abs(current - sp) < 0.01f,
+            onClick = { onChange(sp) }
         )
         Spacer(Modifier.height(4.dp))
     }

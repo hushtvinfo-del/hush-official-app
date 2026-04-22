@@ -10,8 +10,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Replay30
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
@@ -228,9 +236,13 @@ fun TVPlayerScreen(
         }
     }
 
-    // ─── Options menu (audio, subtitles, aspect, sleep) ────────────────
+    // ─── Options menu (audio, subtitles, aspect, speed, sleep) ────────
     var optionsOpen by remember { mutableStateOf(false) }
+    // When the user taps a quick-action chip in the OSD (CC / Audio / Speed),
+    // we jump straight into the matching pane of the options menu.
+    var optionsInitialPane by remember { mutableStateOf<String?>(null) }
     var aspectMode by remember { mutableStateOf(AspectMode.FIT) }
+    var playbackSpeed by remember { mutableStateOf(1f) }
     var sleepMinutes by remember { mutableStateOf<Int?>(null) }
     var sleepExpiresAt by remember { mutableStateOf<Long?>(null) }
     val sleepMinutesLeft by remember {
@@ -248,6 +260,10 @@ fun TVPlayerScreen(
                 break
             }
         }
+    }
+
+    LaunchedEffect(playbackSpeed) {
+        runCatching { player.setPlaybackSpeed(playbackSpeed) }
     }
 
     // ─── Back-double-press → previous channel ─────────────────────────────
@@ -338,6 +354,20 @@ fun TVPlayerScreen(
                             player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0)); true
                         } else false
                     }
+                    Key.MediaFastForward -> {
+                        if (!isLive) {
+                            player.seekTo(
+                                (player.currentPosition + 30_000).coerceAtMost(
+                                    player.duration.coerceAtLeast(0)
+                                )
+                            ); true
+                        } else false
+                    }
+                    Key.MediaRewind -> {
+                        if (!isLive) {
+                            player.seekTo((player.currentPosition - 30_000).coerceAtLeast(0)); true
+                        } else false
+                    }
                     // Back: single press → exit. Double press within 1 s → toggle last channel.
                     Key.Back, Key.Escape -> {
                         val now = System.currentTimeMillis()
@@ -351,7 +381,11 @@ fun TVPlayerScreen(
                             nav.popBackStack(); true
                         }
                     }
-                    Key.Menu, Key.F1 -> { optionsOpen = true; true }
+                    Key.Menu, Key.F1 -> {
+                        optionsInitialPane = null
+                        optionsOpen = true
+                        true
+                    }
                     else -> false
                 }
             },
@@ -501,6 +535,26 @@ fun TVPlayerScreen(
             }
         }
 
+        // Center pause indicator — always visible when VOD is paused, regardless
+        // of OSD state, so the user immediately sees playback is halted.
+        if (!isLive && !isPlaying) {
+            Surface(
+                color = Color(0xB3000000),
+                shape = CircleShape,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(96.dp)
+                    .border(2.dp, Cyan, CircleShape)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Pause,
+                        null, tint = Color.White, modifier = Modifier.size(48.dp)
+                    )
+                }
+            }
+        }
+
         // Full OSD
         if (showControls) {
             Box(
@@ -578,51 +632,147 @@ fun TVPlayerScreen(
                         Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
                             Text(formatTime(positionMs), color = Color(0xFF9CA3AF), fontSize = 13.sp)
                             Spacer(Modifier.weight(1f))
+                            val remaining = (durationMs - positionMs).coerceAtLeast(0)
+                            Text(
+                                "-${formatTime(remaining)}",
+                                color = Color(0xFF9CA3AF), fontSize = 13.sp,
+                            )
+                            Spacer(Modifier.width(12.dp))
                             Text(formatTime(durationMs), color = Color(0xFF9CA3AF), fontSize = 13.sp)
                         }
                         Spacer(Modifier.height(16.dp))
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            color = Color(0x26FFFFFF), shape = CircleShape,
-                            modifier = Modifier.size(64.dp)
-                                .tvFocusable(shape = CircleShape)
-                                .clickableWithEnter {
-                                    if (player.isPlaying) player.pause() else player.play()
-                                }
-                        ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Icon(
-                                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    null, tint = Color.White, modifier = Modifier.size(32.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(20.dp))
-                        Surface(
-                            color = Color(0x26FFFFFF), shape = CircleShape,
-                            modifier = Modifier.size(64.dp)
-                                .tvFocusable(shape = CircleShape)
-                                .clickableWithEnter {
+                    if (isLive) {
+                        // Legacy live OSD — unchanged
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OsdCircleButton(
+                                icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                size = 64.dp,
+                                onClick = { if (player.isPlaying) player.pause() else player.play() },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.width(20.dp))
+                            OsdCircleButton(
+                                icon = if (muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                size = 64.dp,
+                                onClick = {
                                     muted = !muted
                                     player.volume = if (muted) 0f else 1f
-                                }
-                        ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Icon(
-                                    if (muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                    null, tint = Color.White, modifier = Modifier.size(28.dp)
-                                )
-                            }
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                "↑↓ Channel   0-9 Dial   OK Info   MENU Options   Back×2 Last",
+                                color = Color(0xFFD1D5DB), fontSize = 14.sp,
+                            )
                         }
-                        Spacer(Modifier.weight(1f))
+                    } else {
+                        // VOD player — full control bar: seek, play/pause,
+                        // subtitles, audio, speed, more.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OsdCircleButton(
+                                icon = Icons.Default.Replay30,
+                                size = 56.dp,
+                                onClick = {
+                                    player.seekTo((player.currentPosition - 30_000).coerceAtLeast(0))
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.width(14.dp))
+                            OsdCircleButton(
+                                icon = Icons.Default.Replay10,
+                                size = 56.dp,
+                                onClick = {
+                                    player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0))
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.width(14.dp))
+                            OsdCircleButton(
+                                icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                size = 72.dp,
+                                primary = true,
+                                onClick = {
+                                    if (player.isPlaying) player.pause() else player.play()
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.width(14.dp))
+                            OsdCircleButton(
+                                icon = Icons.Default.Forward10,
+                                size = 56.dp,
+                                onClick = {
+                                    player.seekTo(
+                                        (player.currentPosition + 10_000).coerceAtMost(
+                                            player.duration.coerceAtLeast(0)
+                                        )
+                                    )
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.width(14.dp))
+                            OsdCircleButton(
+                                icon = Icons.Default.Forward30,
+                                size = 56.dp,
+                                onClick = {
+                                    player.seekTo(
+                                        (player.currentPosition + 30_000).coerceAtMost(
+                                            player.duration.coerceAtLeast(0)
+                                        )
+                                    )
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.weight(1f))
+                            // Secondary control cluster — opens options menu
+                            // on the matching pane so focus lands right where
+                            // the user clicked.
+                            OsdChipButton(
+                                icon = Icons.Default.ClosedCaption,
+                                label = "CC",
+                                onClick = {
+                                    optionsInitialPane = "subtitle"
+                                    optionsOpen = true
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            OsdChipButton(
+                                icon = Icons.Default.Subtitles,
+                                label = "Audio",
+                                onClick = {
+                                    optionsInitialPane = "audio"
+                                    optionsOpen = true
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            OsdChipButton(
+                                icon = Icons.Default.Speed,
+                                label = "${trimTrailingZero(playbackSpeed)}×",
+                                onClick = {
+                                    optionsInitialPane = "speed"
+                                    optionsOpen = true
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            OsdChipButton(
+                                icon = Icons.Default.Settings,
+                                label = "More",
+                                onClick = {
+                                    optionsInitialPane = null
+                                    optionsOpen = true
+                                },
+                                onInteract = { controlsTick++ },
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            if (isLive)
-                                "↑↓ Channel   0-9 Dial   OK Info   MENU Options   Back×2 Last"
-                            else
-                                "← → Skip 10s   ↑ ↓ Volume   MENU Options   Back Exit",
-                            color = Color(0xFFD1D5DB), fontSize = 14.sp
+                            "← → Seek 10s   ⏪⏩ Seek 30s   OK Play/Pause   MENU Options",
+                            color = Color(0xFF9CA3AF), fontSize = 12.sp,
                         )
                     }
                 }
@@ -642,8 +792,11 @@ fun TVPlayerScreen(
                         System.currentTimeMillis() + it * 60_000L
                     }
                 },
+                playbackSpeed = playbackSpeed,
+                onPlaybackSpeedChange = { playbackSpeed = it },
                 onShowInfo = { infoVisible = true; infoTick++ },
-                onDismiss = { optionsOpen = false }
+                onDismiss = { optionsOpen = false; optionsInitialPane = null },
+                initialPane = optionsInitialPane,
             )
         }
     }
@@ -656,4 +809,66 @@ private fun formatTime(ms: Long): String {
     val m = (totalSec % 3600) / 60
     val s = totalSec % 60
     return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%d:%02d", m, s)
+}
+
+private fun trimTrailingZero(v: Float): String =
+    if (v == v.toInt().toFloat()) v.toInt().toString() else v.toString().trimEnd('0').trimEnd('.')
+
+@Composable
+private fun OsdCircleButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    size: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit,
+    onInteract: () -> Unit = {},
+    primary: Boolean = false,
+) {
+    Surface(
+        color = if (primary) Cyan.copy(alpha = 0.18f) else Color(0x26FFFFFF),
+        shape = CircleShape,
+        modifier = Modifier
+            .size(size)
+            .tvFocusable(shape = CircleShape)
+            .clickableWithEnter {
+                onInteract()
+                onClick()
+            },
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                null,
+                tint = Color.White,
+                modifier = Modifier.size(size * 0.45f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OsdChipButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    onInteract: () -> Unit = {},
+) {
+    Surface(
+        color = Color(0x26FFFFFF),
+        shape = RoundedCornerShape(28.dp),
+        modifier = Modifier
+            .height(44.dp)
+            .tvFocusable(shape = RoundedCornerShape(28.dp))
+            .clickableWithEnter {
+                onInteract()
+                onClick()
+            },
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
 }
