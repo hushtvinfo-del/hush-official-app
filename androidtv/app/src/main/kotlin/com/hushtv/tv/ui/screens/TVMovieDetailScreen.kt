@@ -20,12 +20,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -316,8 +315,8 @@ fun TVMovieDetailScreen(
                             onClick = onPlay,
                         )
                         HeroCta(
-                            label = if (isInMyList) "In List" else "My List",
-                            icon = if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            label = if (isInMyList) "In Favorites" else "Add to Favorites",
+                            icon = if (isInMyList) Icons.Default.Star else Icons.Default.StarBorder,
                             onClick = {
                                 MyListStore.toggle(ctx, playlistId, "movie", streamId)
                                 myListVersion++

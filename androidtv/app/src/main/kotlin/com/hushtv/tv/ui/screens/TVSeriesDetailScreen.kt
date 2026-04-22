@@ -18,11 +18,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -300,8 +299,8 @@ fun TVSeriesDetailScreen(
                     // CTAs — placed HIGH in the info column so they sit in the initial viewport
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         SCta(
-                            label = if (isInMyList) "In List" else "My List",
-                            icon = if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            label = if (isInMyList) "In Favorites" else "Add to Favorites",
+                            icon = if (isInMyList) Icons.Default.Star else Icons.Default.StarBorder,
                             primary = false,
                             onClick = {
                                 MyListStore.toggle(ctx, playlistId, "series", seriesIdInt)

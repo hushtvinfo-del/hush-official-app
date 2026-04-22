@@ -24,8 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
@@ -34,6 +32,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.outlined.Slideshow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -252,7 +251,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
 
     val title = when (type) {
         "series" -> "Series"
-        "favorites" -> "My List"
+        "favorites" -> "Favorites"
         "search" -> "Search"
         else -> "Movies"
     }
@@ -798,8 +797,8 @@ private fun DetailPanel(
                     onClick = onPlay,
                 )
                 DetailCta(
-                    label = if (isInMyList) "In List" else "My List",
-                    icon = if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    label = if (isInMyList) "In Favorites" else "Add to Favorites",
+                    icon = if (isInMyList) Icons.Default.Star else Icons.Default.StarBorder,
                     primary = false,
                     onClick = onToggleMyList,
                 )
@@ -1062,7 +1061,7 @@ private fun CompactPoster(
                 }
             }
 
-            // "In My List" corner badge
+            // Favorited corner badge (star)
             if (isInList) {
                 Box(
                     Modifier
@@ -1073,7 +1072,7 @@ private fun CompactPoster(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Default.Bookmark,
+                        Icons.Default.Star,
                         null,
                         tint = Color.Black,
                         modifier = Modifier.size(10.dp),
