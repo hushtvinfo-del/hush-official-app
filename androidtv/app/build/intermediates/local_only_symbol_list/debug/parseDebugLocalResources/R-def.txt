@@ -1,8 +1,15 @@
 R_DEF: Internal format may change without notice
 local
+color bg_black
+color cyan_400
 color ic_launcher_background
+color slate_600
+color surface_elev
+color surface_navy
+color white
 drawable ic_launcher_foreground
 drawable tv_banner
+font inter
 mipmap ic_launcher
 mipmap ic_launcher_round
 string app_name

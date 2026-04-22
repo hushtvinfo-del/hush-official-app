@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_black">#000000</color>
+    <color name="surface_navy">#0F172A</color>
+    <color name="surface_elev">#1E293B</color>
+    <color name="cyan_400">#06B6D4</color>
+    <color name="slate_600">#475569</color>
+    <color name="white">#FFFFFF</color>
+</resources>

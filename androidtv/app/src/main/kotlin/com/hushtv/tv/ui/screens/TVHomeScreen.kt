@@ -9,8 +9,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,14 +28,25 @@ import androidx.navigation.NavController
 import com.hushtv.tv.data.Playlist
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.ui.HushTVLogo
+import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
+import com.hushtv.tv.ui.theme.CyanGlow08
+import com.hushtv.tv.ui.theme.Inter
+import com.hushtv.tv.ui.theme.SurfaceNavy
+import com.hushtv.tv.ui.theme.TextMuted
+import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
 import com.hushtv.tv.ui.tvFocusable
 
+/**
+ * Account picker — first screen after splash.
+ * Shows stored accounts + an "Add Account" tile.
+ * Design-spec: pure black canvas, centered logo, 640 dp content column.
+ */
 @Composable
 fun TVHomeScreen(nav: NavController) {
     val ctx = LocalContext.current
-    var playlists by remember { mutableStateOf(PlaylistStore.getAll(ctx)) }
+    val playlists by remember { mutableStateOf(PlaylistStore.getAll(ctx)) }
     val firstFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -43,34 +56,54 @@ fun TVHomeScreen(nav: NavController) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(Color(0xFF0F2657), Color.Black),
-                    radius = 1600f
-                )
-            )
+            .background(BgBlack),
     ) {
+        // Soft cyan radial glow for depth
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(CyanGlow08, Color.Transparent),
+                        radius = 1100f,
+                    )
+                )
+        )
+
         Column(
             Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 64.dp, vertical = 48.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 96.dp, vertical = 54.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            HushTVLogo(fontSize = 72.sp)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(40.dp))
+            HushTVLogo(fontSize = 64.sp)
+            Spacer(Modifier.height(10.dp))
             Text(
-                "Official Android TV App",
-                color = TextSecondary,
-                fontSize = 24.sp
+                "Your Stream. Your Way.",
+                color = TextMuted,
+                fontSize = 14.sp,
+                fontFamily = Inter,
+                letterSpacing = 1.7.sp,
             )
-            Spacer(Modifier.height(56.dp))
+            Spacer(Modifier.height(48.dp))
+
+            Text(
+                text = if (playlists.isEmpty()) "GET STARTED" else "CHOOSE YOUR PROFILE",
+                color = TextSecondary,
+                fontSize = 12.sp,
+                fontFamily = Inter,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 2.sp,
+            )
+            Spacer(Modifier.height(20.dp))
 
             Column(
                 Modifier
-                    .widthIn(max = 900.dp)
+                    .widthIn(max = 720.dp)
                     .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 playlists.forEachIndexed { i, p ->
                     val mod = if (i == 0) Modifier.focusRequester(firstFocus) else Modifier
@@ -79,7 +112,7 @@ fun TVHomeScreen(nav: NavController) {
                     }
                 }
                 AddAccountCard(
-                    modifier = if (playlists.isEmpty()) Modifier.focusRequester(firstFocus) else Modifier
+                    modifier = if (playlists.isEmpty()) Modifier.focusRequester(firstFocus) else Modifier,
                 ) {
                     nav.navigate("add")
                 }
@@ -90,67 +123,95 @@ fun TVHomeScreen(nav: NavController) {
 
 @Composable
 private fun AccountCard(p: Playlist, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        color = Color(0x14FFFFFF),
-        shape = RoundedCornerShape(20.dp),
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(20.dp))
-            .tvFocusable(shape = RoundedCornerShape(20.dp))
-            .clickableWithEnter(onClick)
+            .height(88.dp)
+            .background(SurfaceNavy, RoundedCornerShape(14.dp))
+            .tvFocusable(shape = RoundedCornerShape(14.dp), fillOnFocus = false)
+            .clickableWithEnter(onClick),
     ) {
         Row(
-            Modifier.padding(horizontal = 32.dp, vertical = 22.dp),
-            verticalAlignment = Alignment.CenterVertically
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Avatar — cyan circle with play icon
             Box(
                 Modifier
-                    .size(64.dp)
-                    .background(
-                        Brush.linearGradient(listOf(Color(0xFF3B82F6), Cyan)),
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+                    .size(56.dp)
+                    .background(Cyan, CircleShape),
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp))
+                Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(26.dp))
             }
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {
-                Text(p.name, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                Text("@${p.username}", color = TextSecondary, fontSize = 18.sp)
+                Text(
+                    p.name,
+                    color = TextPrimary,
+                    fontSize = 20.sp,
+                    fontFamily = Inter,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "@${p.username}",
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    fontFamily = Inter,
+                )
             }
-            Text("Watch Now →", color = Cyan, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Icon(
+                Icons.Default.ChevronRight,
+                null,
+                tint = Cyan,
+                modifier = Modifier.size(28.dp),
+            )
         }
     }
 }
 
 @Composable
 private fun AddAccountCard(modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        color = Color(0x1406B6D4),
-        shape = RoundedCornerShape(20.dp),
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .border(2.dp, Color(0x6606B6D4), RoundedCornerShape(20.dp))
-            .tvFocusable(shape = RoundedCornerShape(20.dp))
-            .clickableWithEnter(onClick)
+            .height(88.dp)
+            .background(Color.Transparent, RoundedCornerShape(14.dp))
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(listOf(Cyan.copy(alpha = 0.4f), Cyan.copy(alpha = 0.1f))),
+                shape = RoundedCornerShape(14.dp),
+            )
+            .tvFocusable(shape = RoundedCornerShape(14.dp))
+            .clickableWithEnter(onClick),
     ) {
         Row(
-            Modifier.padding(horizontal = 32.dp, vertical = 22.dp),
-            verticalAlignment = Alignment.CenterVertically
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 Modifier
-                    .size(64.dp)
-                    .background(Color(0x3306B6D4), CircleShape)
-                    .border(2.dp, Color(0x6606B6D4), CircleShape),
-                contentAlignment = Alignment.Center
+                    .size(56.dp)
+                    .background(Color.Transparent, CircleShape)
+                    .border(2.dp, Cyan.copy(alpha = 0.6f), CircleShape),
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.Add, null, tint = Cyan, modifier = Modifier.size(28.dp))
+                Icon(Icons.Default.Add, null, tint = Cyan, modifier = Modifier.size(26.dp))
             }
             Spacer(Modifier.width(20.dp))
-            Text("Add Account", color = Cyan, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Add Account",
+                color = Cyan,
+                fontSize = 18.sp,
+                fontFamily = Inter,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }

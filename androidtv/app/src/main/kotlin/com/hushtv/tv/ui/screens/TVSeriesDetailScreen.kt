@@ -57,7 +57,7 @@ fun TVSeriesDetailScreen(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF0A0A0A))) {
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
         Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 64.dp, vertical = 36.dp),

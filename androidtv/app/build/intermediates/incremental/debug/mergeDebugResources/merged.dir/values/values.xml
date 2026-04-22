@@ -106,8 +106,10 @@
     <attr format="color" name="windowSplashScreenIconBackgroundColor"/>
     <color name="androidx_core_ripple_material_light">#1f000000</color>
     <color name="androidx_core_secondary_text_default_material_light">#8a000000</color>
+    <color name="bg_black">#000000</color>
     <color name="call_notification_answer_color">#1d873b</color>
     <color name="call_notification_decline_color">#d93025</color>
+    <color name="cyan_400">#06B6D4</color>
     <color name="exo_black_opacity_60">#98000000</color>
     <color name="exo_black_opacity_70">#B3000000</color>
     <color name="exo_bottom_bar_background">#b0000000</color>
@@ -121,6 +123,10 @@
     <color name="notification_material_background_media_default_color">#ff424242</color>
     <color name="primary_text_default_material_dark">#ffffffff</color>
     <color name="secondary_text_default_material_dark">#b3ffffff</color>
+    <color name="slate_600">#475569</color>
+    <color name="surface_elev">#1E293B</color>
+    <color name="surface_navy">#0F172A</color>
+    <color name="white">#FFFFFF</color>
     <dimen name="compat_button_inset_horizontal_material">4dp</dimen>
     <dimen name="compat_button_inset_vertical_material">6dp</dimen>
     <dimen name="compat_button_padding_horizontal_material">8dp</dimen>
@@ -746,14 +752,15 @@
     <style name="TextAppearance.Compat.Notification.Title" parent="@android:style/TextAppearance.StatusBar.EventContent.Title"/>
     <style name="TextAppearance.Compat.Notification.Title.Media"/>
     <style name="Theme.HushTV" parent="android:Theme.Material.NoActionBar.Fullscreen">
-        <item name="android:windowBackground">@android:color/black</item>
-        <item name="android:statusBarColor">@android:color/black</item>
-        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowBackground">@color/bg_black</item>
+        <item name="android:colorBackground">@color/bg_black</item>
+        <item name="android:statusBarColor">@color/bg_black</item>
+        <item name="android:navigationBarColor">@color/bg_black</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
     <style name="Theme.HushTV.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@android:color/black</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenBackground">@color/bg_black</item>
+        
         <item name="postSplashScreenTheme">@style/Theme.HushTV</item>
     </style>
     <style name="Theme.SplashScreen" parent="Theme.SplashScreen.Common">
@@ -869,23 +876,14 @@
         <attr format="reference" name="fontProviderCerts"/>
         
         <attr name="fontProviderFetchStrategy">
-            <!-- The blocking font fetch works as follows.
-              First, check the local cache, then if the requested font is not cached, request the
-              font from the provider and wait until it is finished.  You can change the length of
-              the timeout by modifying fontProviderFetchTimeout.  If the timeout happens, the
-              default typeface will be used instead. -->
+            
             <enum name="blocking" value="0"/>
-            <!-- The async font fetch works as follows.
-              First, check the local cache, then if the requeted font is not cached, trigger a
-              request the font and continue with layout inflation. Once the font fetch succeeds, the
-              target text view will be refreshed with the downloaded font data. The
-              fontProviderFetchTimeout will be ignored if async loading is specified. -->
+            
             <enum name="async" value="1"/>
         </attr>
         
         <attr format="integer" name="fontProviderFetchTimeout">
-            <!-- A special value for the timeout. In this case, the blocking font fetching will not
-              timeout and wait until a reply is received from the font provider. -->
+            
             <enum name="forever" value="-1"/>
         </attr>
         

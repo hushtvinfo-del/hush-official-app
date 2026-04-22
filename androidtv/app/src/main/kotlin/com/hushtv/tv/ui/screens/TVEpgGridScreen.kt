@@ -75,7 +75,7 @@ fun TVEpgGridScreen(nav: NavController, playlistId: String) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF050A15))) {
+    Column(Modifier.fillMaxSize().background(Color.Black)) {
         // Header
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),

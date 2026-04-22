@@ -147,7 +147,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF0A0A0A))) {
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
         Column(Modifier.fillMaxSize()) {
             // Header
             Row(

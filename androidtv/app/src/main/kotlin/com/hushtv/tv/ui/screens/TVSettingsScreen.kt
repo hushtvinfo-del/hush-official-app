@@ -63,7 +63,7 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
     }
 
     Column(
-        Modifier.fillMaxSize().background(Color(0xFF050A15))
+        Modifier.fillMaxSize().background(Color.Black)
     ) {
         // Header
         Row(

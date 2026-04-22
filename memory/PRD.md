@@ -1,78 +1,187 @@
-# HushTV — Native Android TV APK
+# HushTV Android TV — Product Requirements Document
 
 ## Original problem statement
 
-Build a native Android TV APK based on the React TV interface (`src/pages/tv/`) in
-`https://github.com/hushtvinfo-del/hush-official-app`. Reproduce the Netflix-style
-dark UI, D-pad navigation, Xtream Codes login flow, Live/Movies/Series browsing,
-and HLS/MP4 video playback natively using Kotlin + ExoPlayer.
+I have a React web app on GitHub that includes an Android TV interface. I need a
+**native Android TV APK** based on it. Users log in with Xtream Codes credentials
+and stream IPTV content (Live TV, Movies, Series) using ExoPlayer natively.
+Navigation must work with a D-pad remote (arrow keys + ENTER). The UI must be a
+dark, Netflix-style, full-screen TV interface with large cards and focus
+highlights. Target: Android TV only (not phone/tablet).
 
-Constraint: the React web repo must **not** be modified.
+**Follow-up 1**: Host the APK on a dedicated Ubuntu server and let users download
+it via a public link. Hardcode the Xtream host URL (`https://hushvipnew.ink:443`).
 
-## User choices (explicit)
+**Follow-up 2 (current)**: Ship a full **UI/layout redesign** per the design-spec
+document at `https://play.hushtvwebplayer.com/design-spec` without touching any
+backend logic, API calls, auth, streaming, subtitle, EPG, favorites, or data
+layer.
 
-* **Delivery:** Option 1 — full native Kotlin rewrite → debug-signed APK
-* **Language:** Kotlin
-* **minSdk:** 24 (Android 7.0)
-* **Xtream server:** Hardcoded (`https://hushvipnew.ink:443` — taken from `TVAddAccount.jsx`);
-  users only enter username + password at login.
+## Users
 
-## Architecture (native app)
+- End user watching IPTV on an Android TV / Fire TV box / Chromecast-with-Google-TV
+- One-time sign-in per device, then zero-friction viewing
 
-* **Location:** `/app/androidtv/` (separate project; `/app/hushtv-repo/` is untouched)
-* **Stack:** Kotlin 1.9.24 · AGP 8.5.2 · Gradle 8.7 · Jetpack Compose (compiler 1.5.14) · Navigation-Compose 2.8.1 · Media3/ExoPlayer 1.4.1 · OkHttp · Moshi · Coil
-* **Package:** `com.hushtv.tv` (debug-suffixed to `com.hushtv.tv.debug`)
-* **Screens (mirrors React `src/pages/tv/`):**
-  * `TVHomeScreen` ← TVHome.jsx
-  * `TVAddAccountScreen` ← TVAddAccount.jsx
-  * `TVMainMenuScreen` ← TVMainMenu.jsx
-  * `TVBrowseScreen` ← TVBrowse.jsx
-  * `TVSeriesDetailScreen` ← (series detail path from TVBrowse)
-  * `TVPlayerScreen` ← TVPlayer.jsx
-* **API layer:** `XtreamApi.kt` talks **directly** to `/player_api.php` (no proxy needed on native — CORS only applies in browsers).
-* **Storage:** `PlaylistStore.kt` → SharedPreferences (replaces web's `localStorage['playlists']`).
-* **Focus:** `Modifier.tvFocusable()` — Compose `focusable()` + cyan 3dp outline + `scale(1.06)` + cyan glow shadow.
-* **TV launcher:** `LEANBACK_LAUNCHER` + `LAUNCHER` intent filters, 320×180 vector banner, adaptive icon, landscape locked.
+## Key constraints
 
-## What's been implemented (Apr 22, 2026)
+- Pure native Android TV (Kotlin + Jetpack Compose, Media3/ExoPlayer)
+- D-pad only — no touch gestures
+- TV safe zone (96 dp horizontal, 27 dp vertical)
+- All D-pad-focusable elements must render the spec-compliant focus state
+  (2 dp cyan border + rgba(6,182,212,0.15) fill + scale 1.06 + glow shadow)
+- Xtream host is hardcoded — users only supply username / password / nickname
 
-* Full Kotlin native Android TV app, all 6 screens wired with navigation.
-* Xtream Codes auth/categories/streams/series-info calls, with malformed-JSON repair logic matching the Deno `xtreamProxy`.
-* HLS + MP4 + TS playback via Media3 ExoPlayer; ±10 s D-pad seeking, volume, play/pause, back.
-* Debug APK successfully built for the first time (22 MB) and signed (v2 APK signature verified).
-* APK emitted to `/app/dist/HushTV-android-tv-v1.0.0-debug.apk`.
-* Build system workaround for aarch64 hosts: qemu-x86_64 wrapper for Google's x86_64-only `aapt2`, configured via `android.aapt2FromMavenOverride`.
+---
 
-### Public distribution — Apr 22, 2026
-* APK SCP'd to user's dedicated server `66.163.113.147` (Ubuntu 24.04).
-* nginx installed and configured to serve:
-  * `http://66.163.113.147/` → HushTV-branded landing page with install instructions for Android TV (via the Downloader app) and a direct-download button.
-  * `http://66.163.113.147/hushtv.apk` → APK with `Content-Type: application/vnd.android.package-archive` + `Content-Disposition: attachment; filename="HushTV.apk"` so Android devices trigger a proper download.
-  * `http://66.163.113.147/tv` → 302 → `/`.
-* nginx site file at `/etc/nginx/sites-available/hushtv`, APK served from `/var/www/hushtv/HushTV.apk`.
-* End-to-end verified: external `curl` download MD5 matches the source APK byte-for-byte.
-* **Security debt:** root password for that server was shared in plain chat — user should rotate immediately and switch to SSH keys.
+## Architecture
 
-## Verification done
+```
+/app/androidtv/
+├── app/src/main/
+│   ├── AndroidManifest.xml
+│   ├── kotlin/com/hushtv/tv/
+│   │   ├── MainActivity.kt
+│   │   ├── HushTVApp.kt
+│   │   ├── data/
+│   │   │   ├── XtreamApi.kt          (Xtream Codes HTTP client)
+│   │   │   ├── Models.kt
+│   │   │   ├── PlaylistStore.kt      (SharedPrefs)
+│   │   │   ├── FavoritesStore.kt
+│   │   │   ├── LastChannelStore.kt
+│   │   │   ├── PinStore.kt
+│   │   │   ├── ReminderStore.kt
+│   │   │   ├── NavState.kt
+│   │   │   └── EpgService.kt
+│   │   ├── notifications/
+│   │   │   └── EpgReminderScheduler.kt
+│   │   ├── update/
+│   │   │   ├── UpdateManager.kt      (OTA via /version.json)
+│   │   │   └── UpdateDialog.kt
+│   │   └── ui/
+│   │       ├── TvComponents.kt       (tvFocusable, HushTVLogo)
+│   │       ├── HushSplashScreen.kt   (cinematic splash)
+│   │       ├── theme/
+│   │       │   ├── Colors.kt         (design-spec tokens)
+│   │       │   ├── Typography.kt     (Inter scale)
+│   │       │   └── Theme.kt
+│   │       ├── player/
+│   │       │   ├── AspectMode.kt
+│   │       │   ├── PlayerOptionsMenu.kt
+│   │       │   └── PinDialog.kt
+│   │       └── screens/
+│   │           ├── TVHomeScreen.kt         (account picker)
+│   │           ├── TVAddAccountScreen.kt   (cinema-grade login)
+│   │           ├── TVMainMenuScreen.kt     (Netflix-style home hub)
+│   │           ├── TVBrowseScreen.kt       (movies/series/search)
+│   │           ├── TVLiveBrowseScreen.kt   (Tivimate-style live TV)
+│   │           ├── TVEpgGridScreen.kt
+│   │           ├── TVSeriesDetailScreen.kt
+│   │           ├── TVPlayerScreen.kt
+│   │           ├── TVSettingsScreen.kt     (parental controls)
+│   │           └── ClickWithEnter.kt
+│   └── res/
+│       ├── font/inter.ttf                  (variable font, 400-900)
+│       ├── drawable-xxxhdpi/
+│       │   ├── ic_launcher_foreground.png  (wordmark, 432×432)
+│       │   └── tv_banner.png               (wordmark, 1280×720)
+│       ├── mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/
+│       │   ├── ic_launcher.png
+│       │   └── ic_launcher_round.png
+│       ├── mipmap-anydpi-v26/
+│       │   ├── ic_launcher.xml             (adaptive)
+│       │   └── ic_launcher_round.xml
+│       └── values/{colors,splash,themes,strings}.xml
+└── build.gradle.kts
+```
 
-* `aapt2 dump badging` — confirms package name, version, minSdk 24, targetSdk 34,
-  INTERNET permission, banner, leanback-launchable-activity + launchable-activity.
-* `apksigner verify --verbose` — signature v2 valid, 1 signer.
-* DEX inspection — 9 dex files present with compiled Compose/Kotlin code.
+Deployment: `sshpass scp app-debug.apk root@66.163.113.147:/var/www/hushtv/HushTV.apk`
+OTA: users get an in-app update dialog when `/version.json` reports a newer
+`versionCode` than the installed build.
 
-## Not done / future
+---
 
-* **No runtime test on real Android TV hardware** — requires physical TV or emulator to sideload. The APK is structurally valid and installable; behaviour identical to the React reference unless the Xtream server is down.
-* **Favorites**: screen placeholder only ("coming soon") — the React code also had no storage logic for favorites yet.
-* **EPG** (TV guide overlay) — not in the React reference.
-* **Release signing** — APK is debug-signed; needs a production keystore + `signingConfig` for Play Store / release distribution.
-* **Launcher PNG fallback** for mipmap-xhdpi / mipmap-xxhdpi — current icon uses vector drawable in `mipmap-anydpi`, which works API 21+ but some launchers prefer PNG.
+## Implementation history
 
-## Prioritised backlog
+### Phase 1 — MVP (completed)
+- Scaffolded Android project, 5 screens, ExoPlayer playback, Xtream API client
+- Deployed to `https://hushtv.xyz` (Nginx + Let's Encrypt)
+- In-app OTA updater with changelog
 
-* **P1** Launch once on a real Android TV (or emulator) + test Xtream login with a real account.
-* **P1** Add a proper release `signingConfig` + keystore, produce release APK.
-* **P2** Implement Favorites (persist to SharedPreferences same shape as React would).
-* **P2** Continue watching / resume position for VOD.
-* **P2** EPG timeline for Live TV (call `/xmltv.php`, render as overlay).
-* **P3** Parental PIN, per-profile settings, multi-language.
+### Phase 2 — Tivimate parity (completed)
+- Auto-resume to last-watched channel on cold start
+- Tivimate-style category sidebar + channel list + mini preview
+- Full EPG grid, Favorites (★) category, Info overlay, Number dial
+- Player Options menu: Audio/Subtitle picker, Aspect ratio, Sleep timer
+- Parental PIN scaffolding (store, dialog, settings screen)
+
+### Phase 3 — UI redesign v1.0.8 (2026-04-22 — completed)
+Zero backend changes. Full visual system rebuilt per design-spec:
+
+- **Branding**: Embedded Inter variable font. New launcher icon + TV banner
+  rendered with real Inter Black wordmark ("hush" white + "tv." cyan on pure
+  black) using `rsvg-convert`.
+- **Design tokens** (`theme/Colors.kt`): `BgBlack` #000, `SurfaceNavy` #0F172A,
+  `SurfaceElev` #1E293B, `Cyan` #06B6D4 + `CyanFocusBg` / `CyanRing` / `CyanGlow08`
+  variants, `TextPrimary` / `TextSecondary` / `TextMuted` / `TextDim` scale.
+- **Typography** (`theme/Typography.kt`): Inter 400/500/600/700/900 across
+  displayLarge → labelSmall.
+- **Focus system** (`TvComponents.tvFocusable`): 2 dp cyan border + cyan-tinted
+  fill + 20 dp elevation glow + 1.06× scale spring animation on focus. All
+  callsites keep their existing `shape` param.
+- **Cinematic splash** (`HushSplashScreen`): pure-black hold → logo fade + scale
+  (600 ms FastOutSlowIn) → "tv." offset 150 ms → cyan 2 dp progress bar sweep
+  (1200 ms linear) → tagline fade → fade-to-black to Home.
+- **Login** (`TVAddAccountScreen`): centered 720 dp card on pure black, 64 dp
+  cyan-glow inputs, step-indicator dots, black-on-cyan Connect button, shake
+  animation on error, success → green check + 800 ms hold.
+- **Account picker** (`TVHomeScreen`): pure black with soft cyan radial glow,
+  64 sp logo, 88 dp account cards, chevron → menu hub.
+- **Home Hub** (`TVMainMenuScreen`, ~700 lines): unified Netflix-style canvas
+  with sticky top nav (Home / Live TV / Movies / Series / Search / Settings),
+  500 dp auto-rotating hero billboard (3 static slides), Live Now row (16:9
+  cards + red LIVE badge + cyan progress), Continue Watching (LastChannelStore),
+  Trending This Week (ghost rank numbers), New Movies, Featured Series, and
+  dynamic genre rows — all fed by real Xtream data.
+
+Released as **1.0.8 / versionCode 9**, pushed to `https://hushtv.xyz` with OTA
+auto-update enabled.
+
+---
+
+## Backlog
+
+### P0 — waiting on user feedback
+- Validate the redesign on the user's actual TV (PIN settings, hero D-pad flow,
+  nav bar reachability, card focus transitions)
+- Any visual deltas vs the design-spec page
+
+### P1 — outstanding Tivimate features
+- EPG reminder "Set reminder" action wired into `TVEpgGridScreen.kt`
+  (stores already exist: `ReminderStore`, `EpgReminderScheduler`)
+- Picture-in-Picture support (enable `supportsPictureInPicture`, add HOME-key
+  listener in `TVPlayerScreen.kt`)
+- Stream Catch-up / Archive (Xtream `tv_archive=1` → timeshift URL)
+
+### P2 — nice-to-haves
+- Real backdrop art for the Hero billboard (fetch poster URL per curated title)
+- My List persistence (currently the "+ My List" button routes to Search)
+- Split `TVPlayerScreen.kt` overlays into separate composable files
+- Search history / recent searches
+- Multiple account quick-switch from the profile chip
+
+---
+
+## Deployment runbook
+
+```bash
+# 1. Build
+cd /app/androidtv && ./gradlew assembleDebug
+
+# 2. Upload APK (lowercase URL, uppercase filename on disk)
+sshpass -p '<password>' scp app/build/outputs/apk/debug/app-debug.apk \
+    root@66.163.113.147:/var/www/hushtv/HushTV.apk
+
+# 3. Bump /var/www/hushtv/version.json — increment versionCode + versionName
+```
+
+Users on HushTV 1.0.x auto-receive the update dialog ~3 s after launch.

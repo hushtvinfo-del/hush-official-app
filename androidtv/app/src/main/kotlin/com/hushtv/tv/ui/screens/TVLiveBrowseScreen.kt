@@ -654,7 +654,7 @@ private fun ChannelsPane(
     var favVersion by remember { mutableStateOf(0) }
     val favs = remember(favVersion, playlistId) { FavoritesStore.getAll(ctx, playlistId) }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF0A0E18))) {
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
             loading -> CenterProgress()
             emptyReason != null -> EmptyMessage(emptyReason)

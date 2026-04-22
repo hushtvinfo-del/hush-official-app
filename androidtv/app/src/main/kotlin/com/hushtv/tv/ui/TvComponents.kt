@@ -1,6 +1,8 @@
 package com.hushtv.tv.ui
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,44 +28,88 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hushtv.tv.ui.theme.Cyan
+import com.hushtv.tv.ui.theme.CyanFocusBg
+import com.hushtv.tv.ui.theme.Inter
+import com.hushtv.tv.ui.theme.UnfocusedBorder
 
-/** Shared modifier that scales-up and cyan-glows on D-pad focus (mirrors .tv-card CSS). */
+/**
+ * Design-spec focus state for every D-pad-reachable element.
+ *
+ * Spec (from design-spec page):
+ *  • scale(1.06 → 1.08) on focus
+ *  • 2dp cyan border
+ *  • rgba(6,182,212,0.15) fill
+ *  • outer glow shadow (approximated via elevation shadow)
+ *  • 150 ms transform-only transition (hardware-accelerated)
+ *  • unfocused: 2dp rgba(255,255,255,0.08) border, transparent fill
+ */
 fun Modifier.tvFocusable(
     scaleOnFocus: Float = 1.06f,
-    shape: Shape = RoundedCornerShape(16.dp),
-    borderColor: Color = Cyan
+    shape: Shape = RoundedCornerShape(12.dp),
+    /** If true, paints the cyan fill inside the focus border. Set to false for
+     *  full-bleed artwork (posters, live cards) that already have an image. */
+    fillOnFocus: Boolean = true,
 ): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) scaleOnFocus else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "tv-focus-scale",
+    )
+    val shadowElev by animateFloatAsState(
+        targetValue = if (focused) 20f else 0f,
         animationSpec = tween(150),
-        label = "focusScale"
+        label = "tv-focus-shadow",
     )
     this
         .scale(scale)
         .shadow(
-            elevation = if (focused) 24.dp else 0.dp,
+            elevation = shadowElev.dp,
             shape = shape,
             ambientColor = Cyan,
-            spotColor = Cyan
+            spotColor = Cyan,
+        )
+        .background(
+            color = if (focused && fillOnFocus) CyanFocusBg else Color.Transparent,
+            shape = shape,
         )
         .border(
-            width = if (focused) 3.dp else 0.dp,
-            color = if (focused) borderColor else Color.Transparent,
-            shape = shape
+            width = 2.dp,
+            color = if (focused) Cyan else UnfocusedBorder,
+            shape = shape,
         )
         .onFocusChanged { focused = it.isFocused }
         .focusable()
 }
 
-/** "hush" + "tv." wordmark from the React code. */
+/**
+ * "hushtv." wordmark — white "hush" + cyan "tv."
+ * Inter Black 900, letter-spacing -0.03em.
+ * @param fontSize any scalable size; tracking scales automatically.
+ */
 @Composable
 fun HushTVLogo(
     fontSize: TextUnit = 48.sp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
+    // -0.03em ≈ -3% of em size. sp unit for letter-spacing works visually close.
+    val tracking = (fontSize.value * -0.03f).sp
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text("hush", color = Color.White, fontSize = fontSize, fontWeight = FontWeight.Black)
-        Text("tv.", color = Cyan, fontSize = fontSize, fontWeight = FontWeight.Black)
+        Text(
+            "hush",
+            color = Color.White,
+            fontSize = fontSize,
+            fontWeight = FontWeight.Black,
+            fontFamily = Inter,
+            letterSpacing = tracking,
+        )
+        Text(
+            "tv.",
+            color = Cyan,
+            fontSize = fontSize,
+            fontWeight = FontWeight.Black,
+            fontFamily = Inter,
+            letterSpacing = tracking,
+        )
     }
 }
