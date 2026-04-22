@@ -15,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import com.hushtv.tv.ui.screens.TVAddAccountScreen
 import com.hushtv.tv.ui.screens.TVBrowseScreen
 import com.hushtv.tv.ui.screens.TVHomeScreen
+import com.hushtv.tv.ui.screens.TVLiveBrowseScreen
 import com.hushtv.tv.ui.screens.TVMainMenuScreen
 import com.hushtv.tv.ui.screens.TVPlayerScreen
 import com.hushtv.tv.ui.screens.TVSeriesDetailScreen
@@ -37,11 +38,13 @@ class MainActivity : ComponentActivity() {
                             TVMainMenuScreen(nav, bs.arguments?.getString("playlistId") ?: "")
                         }
                         composable("browse/{playlistId}/{type}") { bs ->
-                            TVBrowseScreen(
-                                nav,
-                                bs.arguments?.getString("playlistId") ?: "",
-                                bs.arguments?.getString("type") ?: "live"
-                            )
+                            val type = bs.arguments?.getString("type") ?: "live"
+                            val playlistId = bs.arguments?.getString("playlistId") ?: ""
+                            if (type == "live") {
+                                TVLiveBrowseScreen(nav, playlistId)
+                            } else {
+                                TVBrowseScreen(nav, playlistId, type)
+                            }
                         }
                         composable("series/{playlistId}/{seriesId}/{seriesName}") { bs ->
                             TVSeriesDetailScreen(
