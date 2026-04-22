@@ -244,12 +244,28 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         )
 
         // ── CONTENT ───────────────────────────────────────────
-        // Intentionally blank canvas — awaiting the next design.
-        // Sidebar still handles all navigation (Live TV / Movies / Series /
-        // Search / Settings), so nothing breaks; this area is just reserved
-        // for the new Home layout.
         Box(Modifier.weight(1f).fillMaxHeight()) {
-            // Placeholder — remove/replace as the new Home design is built.
+            LazyColumn(
+                contentPadding = PaddingValues(bottom = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                // Section 1 — Continue Watching (hero + card row).
+                // Only renders if there are partially-watched titles.
+                item {
+                    com.hushtv.tv.ui.screens.home.HomeContinueWatchingSection(
+                        playlistId = playlistId,
+                        onCardClick = { entry ->
+                            // Entries are all VOD — route to the movie detail
+                            // screen so the Resume prompt in the player can
+                            // pick up the saved position.
+                            nav.navigate(
+                                "moviedetail/$playlistId/${entry.progress.streamId}" +
+                                    "/${Uri.encode(entry.progress.title)}"
+                            )
+                        },
+                    )
+                }
+            }
         }
     }
 }
