@@ -45,6 +45,7 @@ import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.NavState
 import com.hushtv.tv.data.PlaylistStore
+import com.hushtv.tv.data.WatchProgressStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.ui.player.AspectMode
 import com.hushtv.tv.ui.player.PlayerOptionsMenu
@@ -137,6 +138,51 @@ fun TVPlayerScreen(
         showControls = true
         delay(4000)
         showControls = false
+    }
+
+    // Persist watch progress for movies (every 15s + on dispose).
+    // We parse the stream_id from the URL tail — Xtream URLs always end
+    // in /{streamId}.{ext}
+    val vodStreamId: Int? = remember(currentUrl) {
+        if (isLive) return@remember null
+        currentUrl.substringAfterLast('/').substringBeforeLast('.').toIntOrNull()
+    }
+    if (!isLive && vodStreamId != null) {
+        LaunchedEffect(vodStreamId) {
+            while (true) {
+                delay(15_000)
+                val pos = player.currentPosition
+                val dur = player.duration.coerceAtLeast(0)
+                if (dur > 0 && pos > 5_000) {
+                    WatchProgressStore.save(
+                        ctx,
+                        streamId = vodStreamId,
+                        kind = "movie",
+                        title = currentName,
+                        poster = null,
+                        positionMs = pos,
+                        durationMs = dur,
+                    )
+                }
+            }
+        }
+        DisposableEffect(vodStreamId) {
+            onDispose {
+                val pos = player.currentPosition
+                val dur = player.duration.coerceAtLeast(0)
+                if (dur > 0 && pos > 5_000) {
+                    WatchProgressStore.save(
+                        ctx,
+                        streamId = vodStreamId,
+                        kind = "movie",
+                        title = currentName,
+                        poster = null,
+                        positionMs = pos,
+                        durationMs = dur,
+                    )
+                }
+            }
+        }
     }
 
     // ─── Info overlay (OK/INFO) ─────────────────────────────────────────

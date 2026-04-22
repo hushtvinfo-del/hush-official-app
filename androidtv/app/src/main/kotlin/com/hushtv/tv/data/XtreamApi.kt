@@ -178,6 +178,18 @@ object XtreamApi {
             }
     }
 
+    suspend fun getVodInfo(
+        host: String, username: String, password: String, streamId: Int
+    ): XtreamVodInfo? {
+        return runCatching {
+            val body = rawCall(host, username, password, mapOf(
+                "action" to "get_vod_info",
+                "vod_id" to streamId.toString(),
+            ))
+            moshi.adapter(XtreamVodInfo::class.java).fromJson(repairAndParse(body))
+        }.getOrNull()
+    }
+
     suspend fun getSeriesInfo(
         host: String, username: String, password: String, seriesId: String
     ): XtreamSeriesInfo {
@@ -215,6 +227,7 @@ private fun XtreamLiveStream.toCard() = MediaCard(
     kind = "live"
 )
 
+/** Raw extended info we need for `added` timestamp & genre on the VOD card. */
 private fun XtreamVod.toCard() = MediaCard(
     id = stream_id.toString(),
     title = name,
@@ -223,7 +236,8 @@ private fun XtreamVod.toCard() = MediaCard(
     streamId = stream_id,
     seriesId = 0,
     containerExtension = container_extension ?: "mp4",
-    kind = "movie"
+    kind = "movie",
+    addedTs = added?.toLongOrNull() ?: 0L,
 )
 
 private fun XtreamSeries.toCard() = MediaCard(
@@ -234,5 +248,6 @@ private fun XtreamSeries.toCard() = MediaCard(
     streamId = 0,
     seriesId = series_id,
     containerExtension = null,
-    kind = "series"
+    kind = "series",
+    addedTs = last_modified?.toLongOrNull() ?: 0L,
 )

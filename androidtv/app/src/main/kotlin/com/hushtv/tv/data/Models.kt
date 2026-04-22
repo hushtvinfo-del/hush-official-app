@@ -126,6 +126,44 @@ data class XtreamSeriesInfo(
     val episodes: Map<String, List<XtreamEpisode>>? = null
 )
 
+/** Response from `get_vod_info` — rich metadata for a single movie. */
+@JsonClass(generateAdapter = true)
+data class XtreamVodInfoInner(
+    val movie_image: String? = null,
+    val backdrop_path: List<String>? = null,
+    val cover_big: String? = null,
+    val youtube_trailer: String? = null,
+    val plot: String? = null,
+    val description: String? = null,
+    val rating: String? = null,
+    val rating_kinopoisk: String? = null,
+    val genre: String? = null,
+    val duration: String? = null,
+    val duration_secs: Int? = null,
+    val releasedate: String? = null,
+    val release_date: String? = null,
+    val director: String? = null,
+    val cast: String? = null,
+    val country: String? = null,
+    val actors: String? = null,
+    val tmdb_id: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class XtreamVodMovieData(
+    val stream_id: Int? = null,
+    val name: String? = null,
+    val added: String? = null,
+    val category_id: String? = null,
+    val container_extension: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class XtreamVodInfo(
+    val info: XtreamVodInfoInner? = null,
+    val movie_data: XtreamVodMovieData? = null,
+)
+
 /** Unified "card" item the UI uses. */
 data class MediaCard(
     val id: String,
@@ -135,5 +173,6 @@ data class MediaCard(
     val streamId: Int,
     val seriesId: Int,
     val containerExtension: String?,
-    val kind: String // "live" | "movie" | "series"
+    val kind: String, // "live" | "movie" | "series"
+    val addedTs: Long = 0L, // unix seconds — used for "New" filter
 )
