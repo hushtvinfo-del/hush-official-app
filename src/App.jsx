@@ -10,6 +10,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Admin from './pages/Admin';
+import TVApp from './pages/tv/TVApp';
 import BroadcastBanner from './components/BroadcastBanner';
 import { useBroadcast } from './hooks/useBroadcast';
 import { useSessionTracker } from './hooks/useSessionTracker';
@@ -91,6 +92,8 @@ function App() {
           <Routes>
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/*" element={<Admin />} />
+            <Route path="/tv" element={<TVApp />} />
+            <Route path="/tv/*" element={<TVApp />} />
             <Route path="*" element={<AppWithBroadcast />} />
           </Routes>
         </Router>
