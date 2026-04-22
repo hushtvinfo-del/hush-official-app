@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     SplashScreen API theme — shown BEFORE Compose initialises.
-    Pure black background. The "hushtv." wordmark is handled by the
-    Compose HushSplashScreen overlay after Activity.onCreate so we can
-    animate the logo fade + cyan progress bar per design spec.
+    Pure black background. A transparent animated-icon drawable prevents
+    the default launcher icon from appearing (which gets cropped to a
+    circle and looks off-brand). The real "hushtv." wordmark is rendered
+    by HushSplashScreen (Compose) immediately after Activity.onCreate.
 -->
 <resources>
     <style name="Theme.HushTV.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/bg_black</item>
-        <!-- Intentionally NO animated icon: Compose renders the wordmark
-             so we control typography & timing. -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_empty</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/bg_black</item>
         <item name="postSplashScreenTheme">@style/Theme.HushTV</item>
     </style>
 </resources>

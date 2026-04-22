@@ -8,6 +8,7 @@ color surface_elev
 color surface_navy
 color white
 drawable ic_launcher_foreground
+drawable splash_empty
 drawable tv_banner
 font inter
 mipmap ic_launcher

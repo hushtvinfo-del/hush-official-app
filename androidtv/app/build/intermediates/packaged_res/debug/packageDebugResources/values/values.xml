@@ -17,7 +17,8 @@
     </style>
     <style name="Theme.HushTV.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/bg_black</item>
-        
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_empty</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/bg_black</item>
         <item name="postSplashScreenTheme">@style/Theme.HushTV</item>
     </style>
 </resources>

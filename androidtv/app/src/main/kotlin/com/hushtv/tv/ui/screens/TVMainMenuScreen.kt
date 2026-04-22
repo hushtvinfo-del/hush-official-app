@@ -1,8 +1,14 @@
 package com.hushtv.tv.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -18,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -58,7 +65,6 @@ import com.hushtv.tv.ui.theme.SurfaceNavy
 import com.hushtv.tv.ui.theme.TextDim
 import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
-import com.hushtv.tv.ui.theme.UnfocusedBorder
 import com.hushtv.tv.ui.tvFocusable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -67,7 +73,7 @@ import java.util.Date
 import java.util.Locale
 
 /* ──────────────────────────────────────────────────────────────── */
-/*  MODELS                                                          */
+/*  HERO / TAB MODELS                                               */
 /* ──────────────────────────────────────────────────────────────── */
 
 private data class HeroSlide(
@@ -79,29 +85,28 @@ private data class HeroSlide(
     val gradient: List<Color>,
 )
 
-/** Curated static hero slides — pure-black friendly gradient backdrops. */
 private val HERO_SLIDES = listOf(
     HeroSlide(
         title = "Live Sports & Events",
         badge = "LIVE",
-        genres = listOf("Sports", "Premium", "HD"),
-        synopsis = "Catch every match, every moment — Premier League, NBA, UFC and more, streaming right now in premium quality.",
+        genres = listOf("Sports", "HD"),
+        synopsis = "Every match, every moment — Premier League, NBA, UFC and more, streaming right now.",
         accent = Red,
-        gradient = listOf(Color(0xFF7F1D1D), Color(0xFF450A0A), Color(0xFF000000)),
+        gradient = listOf(Color(0xFF7F1D1D), Color(0xFF3F0A0A), Color(0xFF000000)),
     ),
     HeroSlide(
         title = "Thousands of Movies",
         badge = "MOVIES",
-        genres = listOf("Blockbusters", "New Releases", "4K"),
-        synopsis = "From Oscar winners to summer blockbusters — dive into a library that updates every week.",
+        genres = listOf("Blockbusters", "4K"),
+        synopsis = "From Oscar winners to summer blockbusters — a library that updates every week.",
         accent = Cyan,
         gradient = listOf(Color(0xFF164E63), Color(0xFF083344), Color(0xFF000000)),
     ),
     HeroSlide(
         title = "Binge-Worthy Series",
         badge = "SERIES",
-        genres = listOf("Drama", "Comedy", "Thriller"),
-        synopsis = "Follow your favorite shows season by season — full catalogs with the latest episodes ready to stream.",
+        genres = listOf("Drama", "Comedy"),
+        synopsis = "Follow your favorite shows season by season — full catalogs, latest episodes.",
         accent = Amber,
         gradient = listOf(Color(0xFF713F12), Color(0xFF422006), Color(0xFF000000)),
     ),
@@ -111,7 +116,7 @@ private data class NavTab(
     val key: String,
     val label: String,
     val icon: ImageVector,
-    val route: String?, // null for "Home" (we're already here)
+    val route: String?, // null for "Home" (already here)
 )
 
 /* ──────────────────────────────────────────────────────────────── */
@@ -121,10 +126,9 @@ private data class NavTab(
 @Composable
 fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     val playlist = remember { PlaylistStore.find(ctx, playlistId) }
 
-    // Account info — for expiry pill in top nav
+    // Account info
     var expiryStr by remember { mutableStateOf<String?>(null) }
     var daysLeft by remember { mutableStateOf<Long?>(null) }
 
@@ -134,13 +138,11 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     var seriesRow by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var trendingRow by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
 
-    // Continue watching — from last channel store
     val lastChannel = remember { LastChannelStore.load(ctx) }
 
-    // Data fetch
+    // Fetch
     LaunchedEffect(playlistId) {
         val p = playlist ?: return@LaunchedEffect
-        // Expiry
         runCatching { XtreamApi.authenticate(p.host, p.username, p.password) }
             .onSuccess { resp ->
                 val expTs = resp.user_info?.exp_date?.toLongOrNull()
@@ -149,7 +151,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     daysLeft = ((expTs * 1000 - System.currentTimeMillis()) / (1000L * 60 * 60 * 24))
                 }
             }
-        // Live — first category, limited
         coroutineScope {
             launch {
                 runCatching {
@@ -171,7 +172,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         if (items.isNotEmpty()) built += c.category_name to items
                     }
                     movies = built
-                    // Trending — composite of first two categories' top picks
                     trendingRow = built.flatMap { it.second }.take(10)
                 }
             }
@@ -189,19 +189,21 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
 
     val tabs = remember {
         listOf(
-            NavTab("home",    "Home",     Icons.Default.Home,        null),
-            NavTab("live",    "Live TV",  Icons.Default.Tv,          "browse/$playlistId/live"),
-            NavTab("movies",  "Movies",   Icons.Default.Movie,       "browse/$playlistId/movie"),
-            NavTab("series",  "Series",   Icons.Outlined.Slideshow,  "browse/$playlistId/series"),
-            NavTab("search",  "Search",   Icons.Default.Search,      "browse/$playlistId/search"),
-            NavTab("settings","Settings", Icons.Default.Settings,    "settings/$playlistId"),
+            NavTab("home",     "Home",     Icons.Default.Home,       null),
+            NavTab("live",     "Live TV",  Icons.Default.Tv,         "browse/$playlistId/live"),
+            NavTab("movies",   "Movies",   Icons.Default.Movie,      "browse/$playlistId/movie"),
+            NavTab("series",   "Series",   Icons.Outlined.Slideshow, "browse/$playlistId/series"),
+            NavTab("search",   "Search",   Icons.Default.Search,     "browse/$playlistId/search"),
+            NavTab("settings", "Settings", Icons.Default.Settings,   "settings/$playlistId"),
         )
     }
 
-    val heroPlayFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { heroPlayFocus.requestFocus() } }
+    // Focus handling — initial focus on Home tab (top of sidebar)
+    val sidebarHomeFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { sidebarHomeFocus.requestFocus() } }
 
-    // Card click routing
+    var sidebarFocused by remember { mutableStateOf(true) }
+
     val onCardSelect: (MediaCard) -> Unit = sel@{ item ->
         val p = playlist ?: return@sel
         when (item.kind) {
@@ -219,142 +221,137 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(BgBlack)) {
-        LazyColumn(
-            contentPadding = PaddingValues(bottom = 64.dp),
-        ) {
-            // ── ① Top Nav ──────────────────────────────────────────
-            item {
-                TopNavBar(
-                    tabs = tabs,
-                    activeKey = "home",
-                    expiryStr = expiryStr,
-                    daysLeft = daysLeft,
-                    onTab = { t -> t.route?.let { nav.navigate(it) } },
-                    onProfile = { nav.popBackStack() }, // exit to account picker
-                )
-            }
+    Row(
+        Modifier
+            .fillMaxSize()
+            .background(BgBlack),
+    ) {
+        // ── LEFT SIDEBAR ──────────────────────────────────────
+        Sidebar(
+            tabs = tabs,
+            activeKey = "home",
+            expanded = sidebarFocused,
+            expiryStr = expiryStr,
+            daysLeft = daysLeft,
+            homeFocus = sidebarHomeFocus,
+            onExpandChange = { sidebarFocused = it },
+            onTab = { t -> t.route?.let { nav.navigate(it) } },
+            onProfile = { nav.popBackStack() },
+        )
 
-            // ── ② Hero Billboard ───────────────────────────────────
-            item {
-                HeroBillboard(
-                    playFocus = heroPlayFocus,
-                    onPlay = {
-                        // "Play" → jump to Live TV browse (most common user intent)
-                        nav.navigate("browse/$playlistId/live")
-                    },
-                    onMyList = {
-                        nav.navigate("browse/$playlistId/search")
-                    },
-                )
-            }
-
-            // ── ③ Continue Watching ────────────────────────────────
-            lastChannel?.let { lc ->
+        // ── CONTENT ───────────────────────────────────────────
+        Box(Modifier.weight(1f).fillMaxHeight()) {
+            LazyColumn(
+                contentPadding = PaddingValues(bottom = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                // Hero
                 item {
-                    RowHeader(title = "Continue Watching", showSeeAll = false)
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(horizontal = 96.dp, vertical = 12.dp),
-                    ) {
-                        item {
-                            ContinueCard(
-                                title = lc.channelName,
-                                onClick = {
-                                    nav.navigate(
-                                        "player/${lc.playlistId}" +
-                                            "/${Uri.encode(lc.streamUrl)}" +
-                                            "/${Uri.encode(lc.channelName)}/true"
-                                    )
-                                },
-                            )
+                    HeroBillboard(
+                        onPlay = { nav.navigate("browse/$playlistId/live") },
+                        onMyList = { nav.navigate("browse/$playlistId/search") },
+                    )
+                }
+
+                // Continue Watching
+                lastChannel?.let { lc ->
+                    item {
+                        RowHeader("Continue Watching", showSeeAll = false)
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
+                        ) {
+                            item {
+                                ContinueCard(
+                                    title = lc.channelName,
+                                    onClick = {
+                                        nav.navigate(
+                                            "player/${lc.playlistId}" +
+                                                "/${Uri.encode(lc.streamUrl)}" +
+                                                "/${Uri.encode(lc.channelName)}/true"
+                                        )
+                                    },
+                                )
+                            }
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
                 }
-            }
 
-            // ── ④ Live Now ─────────────────────────────────────────
-            if (liveNow.isNotEmpty()) {
-                item {
-                    RowHeader(title = "Live Now", badgeColor = Red, showSeeAll = true) {
-                        nav.navigate("browse/$playlistId/live")
-                    }
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(horizontal = 96.dp, vertical = 12.dp),
-                    ) {
-                        items(liveNow, key = { it.id }) { card ->
-                            LiveCard(card, onSelect = onCardSelect)
+                // Live Now
+                if (liveNow.isNotEmpty()) {
+                    item {
+                        RowHeader("Live Now", badgeColor = Red, showSeeAll = true) {
+                            nav.navigate("browse/$playlistId/live")
+                        }
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
+                        ) {
+                            items(liveNow, key = { it.id }) { c -> LiveCard(c, onCardSelect) }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
                 }
-            }
 
-            // ── ⑤ Trending This Week ──────────────────────────────
-            if (trendingRow.isNotEmpty()) {
-                item {
-                    RowHeader(title = "Trending This Week", showSeeAll = true) {
-                        nav.navigate("browse/$playlistId/movie")
-                    }
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(20.dp),
-                        contentPadding = PaddingValues(horizontal = 96.dp, vertical = 12.dp),
-                    ) {
-                        itemsIndexed(trendingRow.take(10)) { idx, card ->
-                            TrendingCard(rank = idx + 1, card = card, onSelect = onCardSelect)
+                // Trending
+                if (trendingRow.isNotEmpty()) {
+                    item {
+                        RowHeader("Trending This Week", showSeeAll = true) {
+                            nav.navigate("browse/$playlistId/movie")
+                        }
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
+                        ) {
+                            itemsIndexed(trendingRow.take(10)) { idx, card ->
+                                TrendingCard(idx + 1, card, onCardSelect)
+                            }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
                 }
-            }
 
-            // ── ⑥ Movies (first category) ─────────────────────────
-            movies.firstOrNull()?.let { (title, items) ->
-                item {
-                    RowHeader(title = "New Movies · $title", showSeeAll = true) {
-                        nav.navigate("browse/$playlistId/movie")
+                // Movies
+                movies.firstOrNull()?.let { (title, items) ->
+                    item {
+                        RowHeader("New Movies · $title", showSeeAll = true) {
+                            nav.navigate("browse/$playlistId/movie")
+                        }
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
+                        ) {
+                            items(items, key = { it.id }) { c -> PosterCardV2(c, onCardSelect) }
+                        }
                     }
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(horizontal = 96.dp, vertical = 12.dp),
-                    ) {
-                        items(items, key = { it.id }) { c -> PosterCardV2(c, onSelect = onCardSelect) }
-                    }
-                    Spacer(Modifier.height(8.dp))
                 }
-            }
 
-            // ── ⑦ Series ──────────────────────────────────────────
-            if (seriesRow.isNotEmpty()) {
-                item {
-                    RowHeader(title = "Featured Series", showSeeAll = true) {
-                        nav.navigate("browse/$playlistId/series")
+                // Series
+                if (seriesRow.isNotEmpty()) {
+                    item {
+                        RowHeader("Featured Series", showSeeAll = true) {
+                            nav.navigate("browse/$playlistId/series")
+                        }
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
+                        ) {
+                            items(seriesRow, key = { it.id }) { c -> PosterCardV2(c, onCardSelect) }
+                        }
                     }
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(horizontal = 96.dp, vertical = 12.dp),
-                    ) {
-                        items(seriesRow, key = { it.id }) { c -> PosterCardV2(c, onSelect = onCardSelect) }
-                    }
-                    Spacer(Modifier.height(8.dp))
                 }
-            }
 
-            // ── ⑧ Dynamic genre rows (2nd & 3rd movie categories) ─
-            movies.drop(1).forEach { (title, items) ->
-                item {
-                    RowHeader(title = title, showSeeAll = true) {
-                        nav.navigate("browse/$playlistId/movie")
+                // More genre rows
+                movies.drop(1).forEach { (title, items) ->
+                    item {
+                        RowHeader(title, showSeeAll = true) {
+                            nav.navigate("browse/$playlistId/movie")
+                        }
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
+                        ) {
+                            items(items, key = { "$title-${it.id}" }) { c -> PosterCardV2(c, onCardSelect) }
+                        }
                     }
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(horizontal = 96.dp, vertical = 12.dp),
-                    ) {
-                        items(items, key = { "${title}-${it.id}" }) { c -> PosterCardV2(c, onSelect = onCardSelect) }
-                    }
-                    Spacer(Modifier.height(8.dp))
                 }
             }
         }
@@ -362,130 +359,195 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
 }
 
 /* ──────────────────────────────────────────────────────────────── */
-/*  TOP NAV BAR                                                     */
+/*  LEFT SIDEBAR                                                    */
 /* ──────────────────────────────────────────────────────────────── */
 
 @Composable
-private fun TopNavBar(
+private fun Sidebar(
     tabs: List<NavTab>,
     activeKey: String,
+    expanded: Boolean,
     expiryStr: String?,
     daysLeft: Long?,
+    homeFocus: FocusRequester,
+    onExpandChange: (Boolean) -> Unit,
     onTab: (NavTab) -> Unit,
     onProfile: () -> Unit,
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 96.dp, vertical = 24.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        HushTVLogo(fontSize = 28.sp)
-        Spacer(Modifier.width(48.dp))
+    val width by animateDpAsState(
+        targetValue = if (expanded) 220.dp else 76.dp,
+        animationSpec = tween(220),
+        label = "sidebar-width",
+    )
 
-        // Tab strip
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            tabs.forEach { tab ->
-                NavTabItem(
-                    label = tab.label,
-                    active = tab.key == activeKey,
-                    onClick = { onTab(tab) },
+    Column(
+        Modifier
+            .width(width)
+            .fillMaxHeight()
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(Color(0xFF050507), Color.Transparent),
+                )
+            )
+            .onFocusChanged { onExpandChange(it.hasFocus) }
+            .padding(vertical = 20.dp, horizontal = 12.dp),
+    ) {
+        // Logo block
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn(tween(180)) + expandHorizontally(tween(220)),
+                exit = fadeOut(tween(120)) + shrinkHorizontally(tween(180)),
+            ) {
+                HushTVLogo(fontSize = 22.sp)
+            }
+            if (!expanded) {
+                // Collapsed: show only the cyan dot (brand accent)
+                Box(
+                    Modifier
+                        .size(14.dp)
+                        .background(Cyan, CircleShape),
                 )
             }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Tab list
+        tabs.forEachIndexed { i, tab ->
+            val mod = if (i == 0) Modifier.focusRequester(homeFocus) else Modifier
+            SidebarItem(
+                label = tab.label,
+                icon = tab.icon,
+                active = tab.key == activeKey,
+                expanded = expanded,
+                modifier = mod,
+                onClick = { onTab(tab) },
+            )
+            Spacer(Modifier.height(4.dp))
         }
 
         Spacer(Modifier.weight(1f))
 
-        // Expiry pill
-        expiryStr?.let { exp ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .background(SurfaceNavy, RoundedCornerShape(999.dp))
-                    .border(1.dp, UnfocusedBorder, RoundedCornerShape(999.dp))
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-            ) {
-                Icon(Icons.Default.CalendarMonth, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    "Expires $exp",
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    fontFamily = Inter,
-                )
-                daysLeft?.let { d ->
-                    when {
-                        d in 0..7 -> {
-                            Spacer(Modifier.width(8.dp))
-                            Badge(text = "${d}d left", bg = Amber, fg = Color.Black)
-                        }
-                        d < 0 -> {
-                            Spacer(Modifier.width(8.dp))
-                            Badge(text = "Expired", bg = Red, fg = Color.White)
+        // Expiry pill (only when expanded)
+        AnimatedVisibility(
+            visible = expanded && expiryStr != null,
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(120)),
+        ) {
+            expiryStr?.let { exp ->
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.CalendarMonth,
+                            null,
+                            tint = TextSecondary,
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "Expires",
+                            color = TextSecondary,
+                            fontSize = 10.sp,
+                            fontFamily = Inter,
+                            letterSpacing = 1.1.sp,
+                        )
+                    }
+                    Text(
+                        exp,
+                        color = TextPrimary,
+                        fontSize = 11.sp,
+                        fontFamily = Inter,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    daysLeft?.let { d ->
+                        when {
+                            d in 0..7 -> Badge(text = "${d}d left", bg = Amber, fg = Color.Black)
+                            d < 0 -> Badge(text = "Expired", bg = Red, fg = Color.White)
                         }
                     }
                 }
             }
-            Spacer(Modifier.width(12.dp))
         }
 
-        // Profile avatar
-        Box(
-            Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(SurfaceNavy)
-                .tvFocusable(shape = CircleShape, fillOnFocus = false)
-                .clickableWithEnter(onProfile),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.PlayArrow, null, tint = Cyan, modifier = Modifier.size(20.dp))
-        }
+        // Profile → back to account picker
+        SidebarItem(
+            label = "Profile",
+            icon = Icons.Default.Person,
+            active = false,
+            expanded = expanded,
+            onClick = onProfile,
+        )
     }
 }
 
 @Composable
-private fun NavTabItem(label: String, active: Boolean, onClick: () -> Unit) {
+private fun SidebarItem(
+    label: String,
+    icon: ImageVector,
+    active: Boolean,
+    expanded: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.04f else 1f,
-        animationSpec = tween(150),
-        label = "nav-tab-scale",
+        animationSpec = tween(140),
+        label = "sidebar-item-scale",
     )
-    val textColor = when {
+    val tint = when {
         focused -> Cyan
         active -> TextPrimary
         else -> TextDim
     }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .widthIn(min = 120.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp)
             .scale(scale)
             .background(
-                if (focused) Color(0x1F06B6D4) else Color.Transparent,
-                RoundedCornerShape(10.dp),
+                color = when {
+                    focused -> Color(0x2606B6D4)
+                    active -> Color(0x1406B6D4)
+                    else -> Color.Transparent
+                },
+                shape = RoundedCornerShape(10.dp),
+            )
+            .border(
+                width = if (focused) 2.dp else 0.dp,
+                color = if (focused) Cyan else Color.Transparent,
+                shape = RoundedCornerShape(10.dp),
             )
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp),
     ) {
-        Text(
-            label,
-            color = textColor,
-            fontSize = 15.sp,
-            fontFamily = Inter,
-            fontWeight = if (active || focused) FontWeight.SemiBold else FontWeight.Medium,
-        )
-        Spacer(Modifier.height(4.dp))
-        // Active underline
-        Box(
-            Modifier
-                .height(3.dp)
-                .width(if (active) 32.dp else 0.dp)
-                .background(Cyan, RoundedCornerShape(2.dp)),
-        )
+        Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
+        if (expanded) {
+            Spacer(Modifier.width(14.dp))
+            Text(
+                label,
+                color = tint,
+                fontSize = 14.sp,
+                fontFamily = Inter,
+                fontWeight = if (active || focused) FontWeight.SemiBold else FontWeight.Medium,
+            )
+        }
+        // Active dot (collapsed)
+        if (active && !expanded) {
+            Spacer(Modifier.weight(1f))
+            Box(
+                Modifier
+                    .size(4.dp)
+                    .background(Cyan, CircleShape),
+            )
+        }
     }
 }
 
@@ -493,10 +555,17 @@ private fun NavTabItem(label: String, active: Boolean, onClick: () -> Unit) {
 private fun Badge(text: String, bg: Color, fg: Color) {
     Box(
         Modifier
+            .padding(top = 6.dp)
             .background(bg, RoundedCornerShape(999.dp))
             .padding(horizontal = 8.dp, vertical = 2.dp),
     ) {
-        Text(text, color = fg, fontSize = 11.sp, fontFamily = Inter, fontWeight = FontWeight.Bold)
+        Text(
+            text,
+            color = fg,
+            fontSize = 10.sp,
+            fontFamily = Inter,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -506,14 +575,12 @@ private fun Badge(text: String, bg: Color, fg: Color) {
 
 @Composable
 private fun HeroBillboard(
-    playFocus: FocusRequester,
     onPlay: () -> Unit,
     onMyList: () -> Unit,
 ) {
     var slideIdx by remember { mutableStateOf(0) }
     var heroFocused by remember { mutableStateOf(false) }
 
-    // Auto-rotate every 8 s when not focused
     LaunchedEffect(heroFocused) {
         while (!heroFocused) {
             kotlinx.coroutines.delay(8000)
@@ -526,13 +593,11 @@ private fun HeroBillboard(
     Box(
         Modifier
             .fillMaxWidth()
-            .height(500.dp)
-            .background(
-                Brush.verticalGradient(colors = slide.gradient),
-            )
+            .height(380.dp)
+            .background(Brush.verticalGradient(colors = slide.gradient))
             .onFocusChanged { heroFocused = it.hasFocus },
     ) {
-        // Left vignette
+        // Gradients
         Box(
             Modifier
                 .fillMaxSize()
@@ -540,18 +605,17 @@ private fun HeroBillboard(
                     Brush.horizontalGradient(
                         colors = listOf(Color(0xB3000000), Color.Transparent),
                         startX = 0f,
-                        endX = 900f,
+                        endX = 800f,
                     )
                 )
         )
-        // Bottom-to-transparent
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(Color.Transparent, Color(0xE6000000)),
-                        startY = 240f,
+                        startY = 180f,
                     )
                 )
         )
@@ -559,75 +623,74 @@ private fun HeroBillboard(
         Column(
             Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 96.dp, end = 96.dp, bottom = 56.dp)
-                .widthIn(max = 760.dp),
+                .padding(start = 48.dp, end = 48.dp, bottom = 40.dp)
+                .widthIn(max = 620.dp),
         ) {
-            // Badge
             Box(
                 Modifier
-                    .background(slide.accent, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                    .background(slide.accent, RoundedCornerShape(3.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
             ) {
                 Text(
                     slide.badge,
                     color = Color.Black,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontFamily = Inter,
                     fontWeight = FontWeight.Black,
-                    letterSpacing = 2.sp,
+                    letterSpacing = 1.8.sp,
                 )
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             Text(
                 slide.title,
                 color = TextPrimary,
-                fontSize = 56.sp,
+                fontSize = 40.sp,
                 fontFamily = Inter,
                 fontWeight = FontWeight.Black,
-                letterSpacing = (-1.6).sp,
-                lineHeight = 58.sp,
+                letterSpacing = (-1.2).sp,
+                lineHeight = 44.sp,
             )
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 slide.genres.forEach { g ->
                     Box(
                         Modifier
                             .background(Color(0x26FFFFFF), RoundedCornerShape(999.dp))
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                            .padding(horizontal = 10.dp, vertical = 3.dp),
                     ) {
-                        Text(g, color = TextPrimary, fontSize = 12.sp, fontFamily = Inter, fontWeight = FontWeight.SemiBold)
+                        Text(g, color = TextPrimary, fontSize = 11.sp, fontFamily = Inter, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
             if (!heroFocused) {
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
                     slide.synopsis,
                     color = TextSecondary,
-                    fontSize = 15.sp,
+                    fontSize = 13.sp,
                     fontFamily = Inter,
-                    lineHeight = 22.sp,
+                    lineHeight = 18.sp,
                     maxLines = 2,
                 )
             }
-            Spacer(Modifier.height(22.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                HeroPlayButton(focusRequester = playFocus, onClick = onPlay)
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HeroPlayButton(onClick = onPlay)
                 HeroSecondaryButton(onClick = onMyList)
             }
         }
 
         // Progress dots
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 96.dp, bottom = 40.dp),
+                .padding(end = 48.dp, bottom = 28.dp),
         ) {
             HERO_SLIDES.forEachIndexed { i, _ ->
                 Box(
                     Modifier
-                        .size(if (i == slideIdx) 24.dp else 8.dp, 8.dp)
+                        .size(if (i == slideIdx) 18.dp else 6.dp, 6.dp)
                         .background(
                             if (i == slideIdx) Cyan else Color(0x55FFFFFF),
                             RoundedCornerShape(999.dp),
@@ -639,7 +702,7 @@ private fun HeroBillboard(
 }
 
 @Composable
-private fun HeroPlayButton(focusRequester: FocusRequester, onClick: () -> Unit) {
+private fun HeroPlayButton(onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.06f else 1f,
@@ -648,20 +711,19 @@ private fun HeroPlayButton(focusRequester: FocusRequester, onClick: () -> Unit) 
     )
     Row(
         Modifier
-            .height(56.dp)
-            .widthIn(min = 180.dp)
+            .height(44.dp)
+            .widthIn(min = 140.dp)
             .scale(scale)
-            .background(if (focused) Cyan else Color.White, RoundedCornerShape(8.dp))
-            .focusRequester(focusRequester)
+            .background(if (focused) Cyan else Color.White, RoundedCornerShape(7.dp))
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(26.dp))
-        Spacer(Modifier.width(10.dp))
-        Text("Play", color = Color.Black, fontSize = 18.sp, fontFamily = Inter, fontWeight = FontWeight.Bold)
+        Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Play", color = Color.Black, fontSize = 15.sp, fontFamily = Inter, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -675,32 +737,32 @@ private fun HeroSecondaryButton(onClick: () -> Unit) {
     )
     Row(
         Modifier
-            .height(56.dp)
-            .widthIn(min = 180.dp)
+            .height(44.dp)
+            .widthIn(min = 140.dp)
             .scale(scale)
             .background(
                 if (focused) Color(0x3306B6D4) else Color(0x1FFFFFFF),
-                RoundedCornerShape(8.dp),
+                RoundedCornerShape(7.dp),
             )
             .border(
                 2.dp,
                 if (focused) Cyan else Color(0x33FFFFFF),
-                RoundedCornerShape(8.dp),
+                RoundedCornerShape(7.dp),
             )
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.Add, null, tint = TextPrimary, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(10.dp))
-        Text("Search", color = TextPrimary, fontSize = 18.sp, fontFamily = Inter, fontWeight = FontWeight.SemiBold)
+        Icon(Icons.Default.Add, null, tint = TextPrimary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Search", color = TextPrimary, fontSize = 15.sp, fontFamily = Inter, fontWeight = FontWeight.SemiBold)
     }
 }
 
 /* ──────────────────────────────────────────────────────────────── */
-/*  ROWS & CARDS                                                    */
+/*  ROWS & CARDS (compact sizing)                                   */
 /* ──────────────────────────────────────────────────────────────── */
 
 @Composable
@@ -713,21 +775,21 @@ private fun RowHeader(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 96.dp, vertical = 0.dp),
+            .padding(horizontal = 48.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         badgeColor?.let {
             Box(
                 Modifier
-                    .size(10.dp)
+                    .size(8.dp)
                     .background(it, CircleShape),
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
         }
         Text(
             title,
             color = TextPrimary,
-            fontSize = 20.sp,
+            fontSize = 16.sp,
             fontFamily = Inter,
             fontWeight = FontWeight.SemiBold,
         )
@@ -744,14 +806,14 @@ private fun SeeAllLink(onClick: () -> Unit) {
     Text(
         "See All →",
         color = if (focused) TextPrimary else Cyan,
-        fontSize = 13.sp,
+        fontSize = 12.sp,
         fontFamily = Inter,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }
 
@@ -759,11 +821,10 @@ private fun SeeAllLink(onClick: () -> Unit) {
 private fun LiveCard(card: MediaCard, onSelect: (MediaCard) -> Unit) {
     Box(
         Modifier
-            .size(width = 300.dp, height = 168.dp)
-            .tvFocusable(shape = RoundedCornerShape(12.dp), fillOnFocus = false)
+            .size(width = 240.dp, height = 135.dp)
+            .tvFocusable(shape = RoundedCornerShape(10.dp), fillOnFocus = false)
             .clickableWithEnter { onSelect(card) },
     ) {
-        // Thumbnail (channel logo if present, otherwise gradient)
         if (!card.poster.isNullOrBlank()) {
             SubcomposeAsyncImage(
                 model = card.poster,
@@ -771,7 +832,7 @@ private fun LiveCard(card: MediaCard, onSelect: (MediaCard) -> Unit) {
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(SurfaceNavy),
                 error = { LiveFallback() },
                 loading = { LiveFallback() },
@@ -779,49 +840,46 @@ private fun LiveCard(card: MediaCard, onSelect: (MediaCard) -> Unit) {
         } else {
             LiveFallback()
         }
-        // Bottom scrim + name
         Box(
             Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .height(64.dp)
+                .height(50.dp)
                 .background(
                     Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000))),
-                    RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp),
+                    RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp),
                 )
         )
         Text(
             card.title,
             color = TextPrimary,
-            fontSize = 14.sp,
+            fontSize = 12.sp,
             fontFamily = Inter,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 12.dp, bottom = 10.dp, end = 12.dp),
+                .padding(start = 10.dp, bottom = 8.dp, end = 10.dp),
         )
-        // LIVE badge
         Row(
             Modifier
                 .align(Alignment.TopStart)
-                .padding(10.dp)
-                .background(Red, RoundedCornerShape(4.dp))
-                .padding(horizontal = 8.dp, vertical = 3.dp),
+                .padding(8.dp)
+                .background(Red, RoundedCornerShape(3.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(6.dp).background(Color.White, CircleShape))
-            Spacer(Modifier.width(5.dp))
+            Box(Modifier.size(5.dp).background(Color.White, CircleShape))
+            Spacer(Modifier.width(4.dp))
             Text(
                 "LIVE",
                 color = Color.White,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontFamily = Inter,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 1.3.sp,
+                letterSpacing = 1.1.sp,
             )
         }
-        // Cyan 3 dp progress bar at very bottom (static — represents "currently airing")
         Box(
             Modifier
                 .align(Alignment.BottomStart)
@@ -839,11 +897,11 @@ private fun LiveFallback() {
             .fillMaxSize()
             .background(
                 Brush.linearGradient(listOf(SurfaceNavy, BgBlack)),
-                RoundedCornerShape(12.dp),
+                RoundedCornerShape(10.dp),
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Default.Tv, null, tint = BorderSlate, modifier = Modifier.size(42.dp))
+        Icon(Icons.Default.Tv, null, tint = BorderSlate, modifier = Modifier.size(34.dp))
     }
 }
 
@@ -851,8 +909,8 @@ private fun LiveFallback() {
 private fun PosterCardV2(card: MediaCard, onSelect: (MediaCard) -> Unit) {
     Box(
         Modifier
-            .size(width = 160.dp, height = 240.dp)
-            .tvFocusable(shape = RoundedCornerShape(12.dp), fillOnFocus = false)
+            .size(width = 130.dp, height = 195.dp)
+            .tvFocusable(shape = RoundedCornerShape(10.dp), fillOnFocus = false)
             .clickableWithEnter { onSelect(card) },
     ) {
         if (!card.poster.isNullOrBlank()) {
@@ -862,34 +920,33 @@ private fun PosterCardV2(card: MediaCard, onSelect: (MediaCard) -> Unit) {
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp)),
+                    .clip(RoundedCornerShape(10.dp)),
                 error = { PosterFallback() },
                 loading = { PosterFallback() },
             )
         } else {
             PosterFallback()
         }
-        // Bottom gradient + title
         Box(
             Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .height(100.dp)
+                .height(80.dp)
                 .background(
                     Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))),
-                    RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp),
+                    RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp),
                 )
         )
         Text(
             card.title,
             color = TextPrimary,
-            fontSize = 13.sp,
+            fontSize = 11.sp,
             fontFamily = Inter,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
         )
     }
 }
@@ -899,31 +956,30 @@ private fun PosterFallback() {
     Box(
         Modifier
             .fillMaxSize()
-            .background(SurfaceNavy, RoundedCornerShape(12.dp)),
+            .background(SurfaceNavy, RoundedCornerShape(10.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Default.Movie, null, tint = BorderSlate, modifier = Modifier.size(38.dp))
+        Icon(Icons.Default.Movie, null, tint = BorderSlate, modifier = Modifier.size(30.dp))
     }
 }
 
 @Composable
 private fun TrendingCard(rank: Int, card: MediaCard, onSelect: (MediaCard) -> Unit) {
-    // Ghost rank number + poster side-by-side
     Row(verticalAlignment = Alignment.Bottom) {
         Text(
             rank.toString(),
             color = Color(0x1AFFFFFF),
-            fontSize = 120.sp,
+            fontSize = 90.sp,
             fontFamily = Inter,
             fontWeight = FontWeight.Black,
-            letterSpacing = (-6).sp,
-            modifier = Modifier.offset(x = 20.dp, y = 4.dp),
+            letterSpacing = (-4).sp,
+            modifier = Modifier.offset(x = 16.dp, y = 4.dp),
         )
         Box(
             Modifier
-                .size(width = 150.dp, height = 225.dp)
-                .offset(x = (-24).dp)
-                .tvFocusable(shape = RoundedCornerShape(12.dp), fillOnFocus = false)
+                .size(width = 120.dp, height = 180.dp)
+                .offset(x = (-18).dp)
+                .tvFocusable(shape = RoundedCornerShape(10.dp), fillOnFocus = false)
                 .clickableWithEnter { onSelect(card) },
         ) {
             if (!card.poster.isNullOrBlank()) {
@@ -933,7 +989,7 @@ private fun TrendingCard(rank: Int, card: MediaCard, onSelect: (MediaCard) -> Un
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp)),
+                        .clip(RoundedCornerShape(10.dp)),
                     error = { PosterFallback() },
                     loading = { PosterFallback() },
                 )
@@ -948,8 +1004,8 @@ private fun TrendingCard(rank: Int, card: MediaCard, onSelect: (MediaCard) -> Un
 private fun ContinueCard(title: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(width = 240.dp, height = 135.dp)
-            .tvFocusable(shape = RoundedCornerShape(12.dp), fillOnFocus = false)
+            .size(width = 200.dp, height = 112.dp)
+            .tvFocusable(shape = RoundedCornerShape(10.dp), fillOnFocus = false)
             .clickableWithEnter(onClick),
     ) {
         Box(
@@ -957,32 +1013,29 @@ private fun ContinueCard(title: String, onClick: () -> Unit) {
                 .fillMaxSize()
                 .background(
                     Brush.linearGradient(listOf(Color(0xFF164E63), Color(0xFF0F172A))),
-                    RoundedCornerShape(12.dp),
+                    RoundedCornerShape(10.dp),
                 ),
         )
-        // Play overlay
         Box(
             Modifier
                 .align(Alignment.Center)
-                .size(56.dp)
+                .size(44.dp)
                 .background(Cyan, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(30.dp))
+            Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(24.dp))
         }
-        // Title
         Text(
             title,
             color = TextPrimary,
-            fontSize = 13.sp,
+            fontSize = 11.sp,
             fontFamily = Inter,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
         )
-        // Cyan progress bar (represents "resume position")
         Box(
             Modifier
                 .align(Alignment.BottomStart)
