@@ -160,7 +160,7 @@ fun TVSeriesDetailScreen(
 
     // ── Layout ───────────────────────────────────────────────
     Box(Modifier.fillMaxSize().background(BgBlack)) {
-        // Backdrop
+        // Backdrop — no runtime blur for smoother TV perf
         backdropUrl?.let {
             SubcomposeAsyncImage(
                 model = it,
@@ -168,8 +168,7 @@ fun TVSeriesDetailScreen(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = 0.42f }
-                    .blur(8.dp),
+                    .graphicsLayer { alpha = 0.28f },
                 error = { },
                 loading = { },
             )
@@ -179,8 +178,8 @@ fun TVSeriesDetailScreen(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                Color(0x88000000),
-                                Color(0xCC000000),
+                                Color(0xAA000000),
+                                Color(0xDD000000),
                                 Color(0xFF000000),
                             )
                         )
@@ -414,7 +413,7 @@ private fun SeasonTab(number: Int, selected: Boolean, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.06f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "season-scale",
     )
     val bg = when {
@@ -467,7 +466,7 @@ private fun EpisodeRow(
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.02f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "ep-scale",
     )
     val still = TmdbService.img(tmdb?.still_path, "w300")
@@ -614,7 +613,7 @@ private fun SeriesCastCard(member: TmdbCastMember) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.08f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "s-cast-scale",
     )
     Column(
@@ -688,7 +687,7 @@ private fun SeriesRecCard(rec: TmdbRecommendation) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.08f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "s-rec-scale",
     )
     Column(
@@ -841,7 +840,7 @@ private fun SCta(
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.05f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "scta-scale",
     )
     val bg = when {

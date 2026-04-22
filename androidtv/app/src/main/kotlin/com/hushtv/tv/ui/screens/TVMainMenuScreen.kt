@@ -375,7 +375,7 @@ private fun Sidebar(
 ) {
     val width by animateDpAsState(
         targetValue = if (expanded) 220.dp else 76.dp,
-        animationSpec = tween(220),
+        animationSpec = tween(150),
         label = "sidebar-width",
     )
 
@@ -398,8 +398,8 @@ private fun Sidebar(
         ) {
             AnimatedVisibility(
                 visible = expanded,
-                enter = fadeIn(tween(180)) + expandHorizontally(tween(220)),
-                exit = fadeOut(tween(120)) + shrinkHorizontally(tween(180)),
+                enter = fadeIn(tween(120)) + expandHorizontally(tween(150)),
+                exit = fadeOut(tween(120)) + shrinkHorizontally(tween(120)),
             ) {
                 HushTVLogo(fontSize = 22.sp)
             }
@@ -434,7 +434,7 @@ private fun Sidebar(
         // Expiry pill (only when expanded)
         AnimatedVisibility(
             visible = expanded && expiryStr != null,
-            enter = fadeIn(tween(180)),
+            enter = fadeIn(tween(120)),
             exit = fadeOut(tween(120)),
         ) {
             expiryStr?.let { exp ->
@@ -495,7 +495,7 @@ private fun SidebarItem(
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.04f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "sidebar-item-scale",
     )
     val tint = when {
@@ -705,7 +705,7 @@ private fun HeroPlayButton(onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.06f else 1f,
-        animationSpec = tween(150),
+        animationSpec = tween(90),
         label = "hero-play",
     )
     Row(
@@ -731,7 +731,7 @@ private fun HeroSecondaryButton(onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.06f else 1f,
-        animationSpec = tween(150),
+        animationSpec = tween(90),
         label = "hero-mylist",
     )
     Row(

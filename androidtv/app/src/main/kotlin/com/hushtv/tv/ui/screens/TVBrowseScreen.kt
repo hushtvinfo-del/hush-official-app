@@ -49,6 +49,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -274,7 +279,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
         // Animated sidebar width — collapses to 0 when focus is in the grid.
         val sidebarWidth by animateDpAsState(
             targetValue = if (gridHasFocus) 0.dp else 260.dp,
-            animationSpec = tween(180),
+            animationSpec = tween(120),
             label = "vod-sidebar-width",
         )
 
@@ -326,7 +331,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                 val focusedItem = gridItems.getOrNull(focusedIdx)
                 Crossfade(
                     targetState = gridHasFocus && focusedItem != null,
-                    animationSpec = tween(220),
+                    animationSpec = tween(150),
                     label = "detail-panel",
                 ) { showDetail ->
                     if (showDetail) {
@@ -376,30 +381,47 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                             icon = Icons.Default.Movie,
                         )
                     else -> {
-                        LazyVerticalGrid(
-                            state = gridState,
-                            modifier = Modifier.focusProperties { left = selectedSidebarFocus },
-                            columns = GridCells.Adaptive(minSize = 124.dp),
-                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            itemsIndexed(gridItems, key = { i, it -> "${it.kind}-${it.id}-$i" }) { idx, item ->
-                                val progress = remember(watchVersion, item.id) {
-                                    WatchProgressStore.getRatio(ctx, item.streamId, item.kind)
+                        // Track column count so we can tell when the focused cell
+                        // is in the leftmost column (and LEFT should return to sidebar).
+                        var columnCount by remember { mutableStateOf(8) }
+                        BoxWithConstraints(Modifier.fillMaxSize()) {
+                            val cols = ((maxWidth + 12.dp) / (124.dp + 12.dp)).toInt().coerceAtLeast(1)
+                            LaunchedEffect(cols) { columnCount = cols }
+
+                            LazyVerticalGrid(
+                                state = gridState,
+                                modifier = Modifier.onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyDown &&
+                                        event.key == Key.DirectionLeft &&
+                                        focusedIdx >= 0 &&
+                                        focusedIdx % columnCount == 0
+                                    ) {
+                                        selectedSidebarFocus.requestFocus()
+                                        true
+                                    } else false
+                                },
+                                columns = GridCells.Fixed(columnCount),
+                                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                            ) {
+                                itemsIndexed(gridItems, key = { i, it -> "${it.kind}-${it.id}-$i" }) { idx, item ->
+                                    val progress = remember(watchVersion, item.id) {
+                                        WatchProgressStore.getRatio(ctx, item.streamId, item.kind)
+                                    }
+                                    val isInList = remember(myListVersion, item.id) {
+                                        val id = if (item.kind == "series") item.seriesId else item.streamId
+                                        MyListStore.isInList(ctx, playlistId, item.kind, id)
+                                    }
+                                    CompactPoster(
+                                        item = item,
+                                        progress = progress,
+                                        isInList = isInList,
+                                        focusMod = if (idx == 0) Modifier.focusRequester(firstGridFocus) else Modifier,
+                                        onFocus = { focusedIdx = idx },
+                                        onClick = { onCardClick(item) },
+                                    )
                                 }
-                                val isInList = remember(myListVersion, item.id) {
-                                    val id = if (item.kind == "series") item.seriesId else item.streamId
-                                    MyListStore.isInList(ctx, playlistId, item.kind, id)
-                                }
-                                CompactPoster(
-                                    item = item,
-                                    progress = progress,
-                                    isInList = isInList,
-                                    focusMod = if (idx == 0) Modifier.focusRequester(firstGridFocus) else Modifier,
-                                    onFocus = { focusedIdx = idx },
-                                    onClick = { onCardClick(item) },
-                                )
                             }
                         }
                     }
@@ -864,7 +886,7 @@ private fun DetailCta(
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.05f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "cta-scale",
     )
     val bg = when {
@@ -921,8 +943,8 @@ private fun CompactPoster(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.08f else 1f,
-        animationSpec = tween(140),
+        targetValue = if (focused) 1.05f else 1f,
+        animationSpec = tween(90),
         label = "poster-scale",
     )
     Column(
@@ -1049,12 +1071,15 @@ private fun PosterStub() {
 
 @Composable
 private fun BlurredBackdrop(posterUrl: String?, backdropUrl: String?, visible: Boolean) {
-    val url = backdropUrl?.takeIf { it.isNotBlank() } ?: posterUrl
+    // Blur is too expensive on TV boxes — render a soft radial/vertical
+    // vignette instead. Much smoother scrolling, still cinematic.
     val alpha by animateFloatAsState(
-        targetValue = if (visible && !url.isNullOrBlank()) 0.22f else 0f,
-        animationSpec = tween(380),
+        targetValue = if (visible) 0.18f else 0f,
+        animationSpec = tween(280),
         label = "bg-alpha",
     )
+    if (alpha <= 0.01f) return
+    val url = backdropUrl?.takeIf { it.isNotBlank() } ?: posterUrl
     Box(
         Modifier
             .fillMaxSize()
@@ -1065,14 +1090,11 @@ private fun BlurredBackdrop(posterUrl: String?, backdropUrl: String?, visible: B
                 model = url,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(36.dp),
-                error = { /* silent */ },
-                loading = { /* silent */ },
+                modifier = Modifier.fillMaxSize(),
+                error = { },
+                loading = { },
             )
         }
-        // Dark vignette on top
         Box(
             Modifier
                 .fillMaxSize()

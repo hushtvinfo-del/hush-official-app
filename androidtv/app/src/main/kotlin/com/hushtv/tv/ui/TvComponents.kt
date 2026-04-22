@@ -1,8 +1,6 @@
 package com.hushtv.tv.ui
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,11 +16,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -33,42 +30,30 @@ import com.hushtv.tv.ui.theme.Inter
 import com.hushtv.tv.ui.theme.UnfocusedBorder
 
 /**
- * Design-spec focus state for every D-pad-reachable element.
+ * Performance-optimised focus modifier.
  *
- * Spec (from design-spec page):
- *  • scale(1.06 → 1.08) on focus
- *  • 2dp cyan border
- *  • rgba(6,182,212,0.15) fill
- *  • outer glow shadow (approximated via elevation shadow)
- *  • 150 ms transform-only transition (hardware-accelerated)
- *  • unfocused: 2dp rgba(255,255,255,0.08) border, transparent fill
+ *  • Linear tween (100 ms) — no spring physics → cheaper to compute.
+ *  • graphicsLayer scale only (already hardware-accelerated).
+ *  • No shadow elevation animation (that was the biggest GPU sink since
+ *    elevation shadows re-rasterise every frame while animating).
+ *  • 2 dp cyan border on focus, transparent otherwise — cheap.
  */
 fun Modifier.tvFocusable(
     scaleOnFocus: Float = 1.06f,
     shape: Shape = RoundedCornerShape(12.dp),
-    /** If true, paints the cyan fill inside the focus border. Set to false for
-     *  full-bleed artwork (posters, live cards) that already have an image. */
     fillOnFocus: Boolean = true,
 ): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) scaleOnFocus else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = tween(100),
         label = "tv-focus-scale",
     )
-    val shadowElev by animateFloatAsState(
-        targetValue = if (focused) 20f else 0f,
-        animationSpec = tween(150),
-        label = "tv-focus-shadow",
-    )
     this
-        .scale(scale)
-        .shadow(
-            elevation = shadowElev.dp,
-            shape = shape,
-            ambientColor = Cyan,
-            spotColor = Cyan,
-        )
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
         .background(
             color = if (focused && fillOnFocus) CyanFocusBg else Color.Transparent,
             shape = shape,
@@ -84,15 +69,12 @@ fun Modifier.tvFocusable(
 
 /**
  * "hushtv." wordmark — white "hush" + cyan "tv."
- * Inter Black 900, letter-spacing -0.03em.
- * @param fontSize any scalable size; tracking scales automatically.
  */
 @Composable
 fun HushTVLogo(
     fontSize: TextUnit = 48.sp,
     modifier: Modifier = Modifier,
 ) {
-    // -0.03em ≈ -3% of em size. sp unit for letter-spacing works visually close.
     val tracking = (fontSize.value * -0.03f).sp
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(

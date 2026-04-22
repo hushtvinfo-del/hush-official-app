@@ -166,7 +166,8 @@ fun TVMovieDetailScreen(
             .fillMaxSize()
             .background(BgBlack),
     ) {
-        // ── Full-screen backdrop ────────────────────────────────
+        // ── Backdrop (no runtime blur — use a low-alpha image + vignette
+        // gradient instead. blur() is a GPU killer on many TV boxes.) ─
         if (!backdropUrl.isNullOrBlank()) {
             SubcomposeAsyncImage(
                 model = backdropUrl,
@@ -174,8 +175,7 @@ fun TVMovieDetailScreen(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = 0.45f }
-                    .blur(8.dp),
+                    .graphicsLayer { alpha = 0.28f },
                 error = { },
                 loading = { },
             )
@@ -185,8 +185,8 @@ fun TVMovieDetailScreen(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0x88000000),
-                                Color(0xCC000000),
+                                Color(0xAA000000),
+                                Color(0xDD000000),
                                 Color(0xFF000000),
                             ),
                         )
@@ -565,7 +565,7 @@ private fun FilmographyCard(item: MediaCard, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.05f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "fmg-scale",
     )
     Column(
@@ -738,7 +738,7 @@ private fun CastCard(member: TmdbCastMember, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.08f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "cast-scale",
     )
     Column(
@@ -813,7 +813,7 @@ private fun RecommendationCard(rec: TmdbRecommendation) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.08f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "rec-scale",
     )
     Column(
@@ -895,7 +895,7 @@ private fun HeroCta(
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.06f else 1f,
-        animationSpec = tween(140),
+        animationSpec = tween(90),
         label = "cta-scale",
     )
     val bg = when {
