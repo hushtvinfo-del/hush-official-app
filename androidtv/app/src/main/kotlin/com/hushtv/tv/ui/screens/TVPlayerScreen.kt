@@ -84,7 +84,10 @@ fun TVPlayerScreen(
         ExoPlayer.Builder(ctx).build().apply {
             setMediaItem(MediaItem.fromUri(currentUrl))
             prepare()
-            playWhenReady = true
+            // Live channels auto-play. VOD will wait for the Resume-prompt
+            // decision below (if there's saved progress) or auto-play after
+            // a brief moment otherwise.
+            playWhenReady = isLive
         }
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
@@ -149,6 +152,19 @@ fun TVPlayerScreen(
         showControls = false
     }
 
+    // Guards against the double-fire bug in ExoPlayer + Compose where
+    // clickableWithEnter's KeyUp handler AND Modifier.clickable's built-in
+    // Enter-to-click mapping both invoke the onClick — causing play/pause
+    // to toggle twice per OK press (paused for ~300ms then resumed).
+    var lastToggleMs by remember { mutableStateOf(0L) }
+    val togglePlayPause = {
+        val now = System.currentTimeMillis()
+        if (now - lastToggleMs > 250L) {
+            lastToggleMs = now
+            if (player.isPlaying) player.pause() else player.play()
+        }
+    }
+
     // VOD focus target — when the OSD becomes visible, we move focus to the
     // primary Play/Pause button so the user can immediately navigate the
     // control bar with the D-pad. When the OSD hides, we MUST return focus
@@ -176,6 +192,32 @@ fun TVPlayerScreen(
         if (isLive) return@remember null
         currentUrl.substringAfterLast('/').substringBeforeLast('.').toIntOrNull()
     }
+
+    // ─── Resume prompt ────────────────────────────────────────────────
+    // On cold launch, if the user has meaningful saved progress for this
+    // VOD title (more than 30s in, less than 30s from the end), show a
+    // Resume / Start Over prompt. The player stays paused until they pick.
+    var resumePromptMs by remember { mutableStateOf<Long?>(null) }
+    var resumePromptHandled by remember { mutableStateOf(false) }
+    LaunchedEffect(vodStreamId) {
+        if (isLive || vodStreamId == null || resumePromptHandled) return@LaunchedEffect
+        val saved = WatchProgressStore.get(ctx, vodStreamId, "movie") ?: run {
+            // No saved progress — auto-play.
+            player.playWhenReady = true
+            resumePromptHandled = true
+            return@LaunchedEffect
+        }
+        val eligible = saved.durationMs > 0 &&
+            saved.positionMs > 30_000L &&
+            saved.positionMs < saved.durationMs - 30_000L
+        if (eligible) {
+            resumePromptMs = saved.positionMs
+        } else {
+            player.playWhenReady = true
+            resumePromptHandled = true
+        }
+    }
+
     if (!isLive && vodStreamId != null) {
         LaunchedEffect(vodStreamId) {
             while (true) {
@@ -347,7 +389,7 @@ fun TVPlayerScreen(
                                 // consumes the event — we never reach here.
                                 // This branch only fires if somehow focus is
                                 // on the root Box → fall back to toggle.
-                                if (player.isPlaying) player.pause() else player.play()
+                                togglePlayPause()
                                 controlsTick++
                                 true
                             }
@@ -693,7 +735,7 @@ fun TVPlayerScreen(
                             OsdCircleButton(
                                 icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 size = 64.dp,
-                                onClick = { if (player.isPlaying) player.pause() else player.play() },
+                                onClick = togglePlayPause,
                                 onInteract = { controlsTick++ },
                             )
                             Spacer(Modifier.width(20.dp))
@@ -739,9 +781,7 @@ fun TVPlayerScreen(
                                 size = 72.dp,
                                 primary = true,
                                 focusRequester = playPauseFocus,
-                                onClick = {
-                                    if (player.isPlaying) player.pause() else player.play()
-                                },
+                                onClick = togglePlayPause,
                                 onInteract = { controlsTick++ },
                             )
                             Spacer(Modifier.width(14.dp))
@@ -824,6 +864,26 @@ fun TVPlayerScreen(
             }
         }
 
+        // Resume-from-last-position prompt
+        val resumePositionMs = resumePromptMs
+        if (!isLive && resumePositionMs != null && !resumePromptHandled) {
+            ResumePromptOverlay(
+                positionMs = resumePositionMs,
+                onResume = {
+                    player.seekTo(resumePositionMs)
+                    player.playWhenReady = true
+                    resumePromptMs = null
+                    resumePromptHandled = true
+                },
+                onStartOver = {
+                    player.seekTo(0)
+                    player.playWhenReady = true
+                    resumePromptMs = null
+                    resumePromptHandled = true
+                },
+            )
+        }
+
         // Options menu overlay
         if (optionsOpen) {
             PlayerOptionsMenu(
@@ -854,6 +914,113 @@ private fun formatTime(ms: Long): String {
     val m = (totalSec % 3600) / 60
     val s = totalSec % 60
     return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%d:%02d", m, s)
+}
+
+@Composable
+private fun ResumePromptOverlay(
+    positionMs: Long,
+    onResume: () -> Unit,
+    onStartOver: () -> Unit,
+) {
+    val resumeFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(100)
+        runCatching { resumeFocus.requestFocus() }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xE6000000)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            color = Color(0xFF0B111D),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .widthIn(min = 520.dp, max = 640.dp)
+                .border(1.dp, Color(0x4D06B6D4), RoundedCornerShape(20.dp)),
+        ) {
+            Column(
+                Modifier.padding(horizontal = 36.dp, vertical = 32.dp),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(
+                    "RESUME WATCHING",
+                    color = Cyan,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 3.sp,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "You were at ${formatTime(positionMs)}",
+                    color = Color.White,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Pick up where you left off, or start from the beginning.",
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 14.sp,
+                )
+                Spacer(Modifier.height(24.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ResumeButton(
+                        label = "Resume",
+                        icon = Icons.Default.PlayArrow,
+                        primary = true,
+                        focusRequester = resumeFocus,
+                        onClick = onResume,
+                    )
+                    ResumeButton(
+                        label = "Start Over",
+                        icon = Icons.Default.Replay10,
+                        primary = false,
+                        onClick = onStartOver,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResumeButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    primary: Boolean,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+) {
+    val mod = Modifier
+        .height(52.dp)
+        .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+        .tvFocusable(shape = RoundedCornerShape(10.dp))
+        .clickableWithEnter(onClick)
+    Surface(
+        color = if (primary) Cyan else Color(0x33FFFFFF),
+        shape = RoundedCornerShape(10.dp),
+        modifier = mod,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                icon, null,
+                tint = if (primary) Color.Black else Color.White,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                label,
+                color = if (primary) Color.Black else Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
 }
 
 private fun trimTrailingZero(v: Float): String =
