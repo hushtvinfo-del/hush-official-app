@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.hushtv.tv.debug"
-    android:versionCode="3"
-    android:versionName="1.0.2-debug" >
+    android:versionCode="4"
+    android:versionName="1.0.3-debug" >
 
     <uses-sdk
         android:minSdkVersion="24"
@@ -10,6 +10,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- TV features -->
     <uses-feature
@@ -53,6 +56,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Required so the OS package installer can read the APK we download. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.hushtv.tv.debug.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true" >
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="com.hushtv.tv.debug.androidx-startup"

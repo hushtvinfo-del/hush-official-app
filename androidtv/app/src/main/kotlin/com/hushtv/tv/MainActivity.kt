@@ -5,8 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.compose.NavHost
@@ -20,6 +20,9 @@ import com.hushtv.tv.ui.screens.TVMainMenuScreen
 import com.hushtv.tv.ui.screens.TVPlayerScreen
 import com.hushtv.tv.ui.screens.TVSeriesDetailScreen
 import com.hushtv.tv.ui.theme.HushTVTheme
+import com.hushtv.tv.update.UpdateDialog
+import com.hushtv.tv.update.UpdateManager
+import com.hushtv.tv.update.VersionInfo
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,8 +66,33 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+
+                    // Global update-check overlay. Runs once on cold start;
+                    // if the user taps "Later" it stays dismissed until next launch.
+                    UpdateCheckHost()
                 }
             }
         }
+    }
+}
+
+/** Composable helper that fetches /version.json on first composition and shows
+ *  [UpdateDialog] when an update is available. Silent on failures. */
+@Composable
+private fun UpdateCheckHost() {
+    var info by remember { mutableStateOf<VersionInfo?>(null) }
+    var dismissed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val latest = UpdateManager.fetchLatest() ?: return@LaunchedEffect
+        if (UpdateManager.isUpdateAvailable(latest)) info = latest
+    }
+
+    val currentInfo = info
+    if (currentInfo != null && !dismissed) {
+        UpdateDialog(
+            info = currentInfo,
+            onDismiss = { dismissed = true }
+        )
     }
 }

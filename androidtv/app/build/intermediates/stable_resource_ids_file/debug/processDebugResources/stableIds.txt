@@ -1,4 +1,5 @@
-com.hushtv.tv.debug:xml/network_security_config = 0x7f0f0000
+com.hushtv.tv.debug:xml/network_security_config = 0x7f0f0001
+com.hushtv.tv.debug:xml/file_paths = 0x7f0f0000
 com.hushtv.tv.debug:styleable/StateListDrawable = 0x7f0e0017
 com.hushtv.tv.debug:styleable/RecyclerView = 0x7f0e0016
 com.hushtv.tv.debug:styleable/NavInclude = 0x7f0e0012
