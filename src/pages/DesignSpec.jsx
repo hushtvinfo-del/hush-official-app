@@ -78,7 +78,7 @@ const AppIconMockup = ({ size = 120, variant = 'primary' }) => {
       )}
       <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 900, fontSize: size * 0.22, lineHeight: 1, letterSpacing: '-0.02em', zIndex: 1 }}>
         <span style={{ color: '#FFFFFF' }}>hush</span>
-        <span style={{ color: '#06B6D4' }}>+</span>
+        <span style={{ color: '#06B6D4' }}>tv.</span>
       </div>
       <div style={{ width: size * 0.1, height: 2, background: v.dot, borderRadius: 2, marginTop: size * 0.06, opacity: 0.6 }} />
     </div>
@@ -177,7 +177,7 @@ const LoadingScreenMockup = () => {
           marginBottom: 16,
         }}>
           <span style={{ color: '#FFFFFF' }}>hush</span>
-          <span style={{ color: '#06B6D4', opacity: dotOpacity, transition: 'opacity 0.4s ease' }}>+</span>
+          <span style={{ color: '#06B6D4', opacity: dotOpacity, transition: 'opacity 0.4s ease' }}>tv.</span>
         </div>
 
         {/* Tagline */}
@@ -252,7 +252,7 @@ export default function DesignSpec() {
         }} />
         <div style={{ fontWeight: 900, fontSize: 64, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 16 }}>
           <span style={{ color: '#FFFFFF' }}>hush</span>
-          <span style={{ color: '#06B6D4' }}>+</span>
+          <span style={{ color: '#06B6D4' }}>tv.</span>
         </div>
         <p style={{ color: '#94A3B8', fontSize: 18, marginBottom: 8 }}>Design Specification Document</p>
         <p style={{ color: '#475569', fontSize: 14 }}>For Emergent — Android TV App Development</p>
@@ -274,12 +274,12 @@ export default function DesignSpec() {
         <Section title="Project Overview">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
             {[
-              { label: 'App Name', value: 'Hush+' },
+              { label: 'App Name', value: 'HushTV' },
               { label: 'Platform', value: 'Android TV / Fire TV' },
               { label: 'Content', value: 'IPTV via Xtream Codes + Plex' },
               { label: 'Style', value: 'Premium dark streaming UI' },
               { label: 'Reference App', value: 'hushtv.com web player' },
-              { label: 'Branding', value: 'hush + cyan accent dot' },
+              { label: 'Branding', value: 'hushtv. — white + cyan "tv." wordmark' },
             ].map(item => (
               <div key={item.label} style={{
                 background: 'rgba(255,255,255,0.03)',
@@ -297,7 +297,7 @@ export default function DesignSpec() {
         <Section title="App Icon">
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 32 }}>
             <p style={{ color: '#94A3B8', marginBottom: 32, lineHeight: 1.7, fontSize: 15 }}>
-              The icon must use a <strong style={{ color: '#FFFFFF' }}>pure black (#000000) background</strong> with the wordmark "hush" in white and "+" in cyan (#06B6D4). 
+              The icon must use a <strong style={{ color: '#FFFFFF' }}>pure black (#000000) background</strong> with the wordmark "hush" in white and "tv." in cyan (#06B6D4). 
               No gradients on the background. The icon must look clean and premium at all sizes — from 48px notifications to 512px store listings.
             </p>
             <div style={{ display: 'flex', gap: 40, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 40 }}>
@@ -321,7 +321,7 @@ export default function DesignSpec() {
                   ['Background', '#000000 solid black'],
                   ['Border Radius', '~22% of icon size (adaptive)'],
                   ['Primary Text', '"hush" — white, weight 900'],
-                  ['Accent', '"+" — #06B6D4 cyan, weight 900'],
+                  ['Accent', '"tv." — #06B6D4 cyan, weight 900'],
                   ['Font', 'Inter Black / 900 weight'],
                   ['Glow (optional)', 'rgba(6,182,212,0.5) radial'],
                   ['Sizes Required', '48, 96, 192, 512px'],
@@ -366,7 +366,7 @@ export default function DesignSpec() {
               <p style={{ color: '#64748B', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 24 }}>Primary Font — Inter</p>
               <div style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div style={{ fontSize: 64, fontWeight: 900, color: 'white', lineHeight: 1.05, marginBottom: 8, letterSpacing: '-0.03em' }}>
-                  hush<span style={{ color: '#06B6D4' }}>+</span>
+                  hush<span style={{ color: '#06B6D4' }}>tv.</span>
                 </div>
                 <p style={{ color: '#64748B', fontSize: 12, marginBottom: 32 }}>Logo / Display — Inter Black (900) · -0.03em tracking</p>
 
@@ -637,7 +637,7 @@ Card snap:          scroll-snap-align: start
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
                 {[
                   { step: '0–0.3s', label: 'Black screen', desc: 'Instant black. No flash of white.' },
-                  { step: '0.3–1.0s', label: 'Logo Fade In', desc: '"hush" fades + scales from 0.8→1.0. "+" cyan dot appears 150ms later.' },
+                  { step: '0.3–1.0s', label: 'Logo Fade In', desc: '"hush" fades + scales from 0.8→1.0. "tv." in cyan appears 150ms later.' },
                   { step: '1.0–2.0s', label: 'Progress Bar', desc: 'Thin 2dp cyan bar sweeps left→right across the bottom edge.' },
                   { step: '2.0–2.5s', label: 'Tagline', desc: 'Optional: "Your Stream. Your Way." fades in below logo at #475569.' },
                   { step: '2.5–3.0s', label: 'Fade Out', desc: 'Entire screen fades to black, then home screen fades in.' },
@@ -652,10 +652,10 @@ Card snap:          scroll-snap-align: start
 
               <CodeBlock code={`// Loading Screen — Android TV (Compose or XML)
 Background:       #000000 solid (no gradients during load)
-Logo:             "hush" white + "+" cyan, Inter Black 900, centered
+Logo:             "hush" white + "tv." cyan, Inter Black 900, centered
 Logo Animation:   alpha 0→1 over 600ms, scaleX/Y 0.85→1.0, easing: FastOutSlowIn
 Logo Delay:       300ms after Activity onCreate
-Cyan Dot Delay:   150ms after "hush" starts animating
+"tv." Delay:      150ms after "hush" starts animating
 
 // Progress Bar
 Height:           2dp
@@ -732,7 +732,7 @@ styles.xml: <item name="android:windowBackground">@color/black</item>
         <div style={{ textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 48, marginTop: 24 }}>
           <div style={{ fontWeight: 900, fontSize: 40, letterSpacing: '-0.03em', marginBottom: 12 }}>
             <span style={{ color: 'white' }}>hush</span>
-            <span style={{ color: '#06B6D4' }}>+</span>
+            <span style={{ color: '#06B6D4' }}>tv.</span>
           </div>
           <p style={{ color: '#334155', fontSize: 13 }}>Design Spec · Confidential · For Emergent Development Team</p>
           <p style={{ color: '#1E293B', fontSize: 12, marginTop: 8 }}>Reference: hushtv.com web player</p>
