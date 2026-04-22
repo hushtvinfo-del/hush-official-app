@@ -46,11 +46,12 @@ export default function TVApp() {
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
       <Routes>
-        <Route path="/" element={<TVHome />} />
-        <Route path="/add-account" element={<TVAddAccount />} />
-        <Route path="/menu" element={<TVMainMenu />} />
-        <Route path="/browse" element={<TVBrowse />} />
-        <Route path="/player" element={<TVPlayer />} />
+        <Route path="/tv" element={<TVHome />} />
+        <Route path="/tv/add-account" element={<TVAddAccount />} />
+        <Route path="/tv/menu" element={<TVMainMenu />} />
+        <Route path="/tv/browse" element={<TVBrowse />} />
+        <Route path="/tv/player" element={<TVPlayer />} />
+        <Route path="*" element={<TVHome />} />
       </Routes>
     </div>
   );
