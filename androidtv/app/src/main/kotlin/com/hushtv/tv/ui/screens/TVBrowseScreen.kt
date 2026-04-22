@@ -217,6 +217,8 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
     // ── Focus & detail state ─────────────────────────────────────
     var focusedIdx by remember { mutableStateOf(-1) }
     var gridHasFocus by remember { mutableStateOf(false) }
+    // Number of columns in the current grid layout — updated by BoxWithConstraints.
+    var gridColumnCount by remember { mutableStateOf(8) }
     var vodInfo by remember { mutableStateOf<XtreamVodInfo?>(null) }
 
     // Fetch detailed VOD info for the focused movie (debounced, cancellable).
@@ -230,9 +232,6 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
     }
 
     val firstGridFocus = remember { FocusRequester() }
-    // Pinned to the currently-selected sidebar row so LEFT-arrow from the grid
-    // always returns to the same category the user came from.
-    val selectedSidebarFocus = remember { FocusRequester() }
     var pendingJumpToGrid by remember { mutableStateOf(false) }
     LaunchedEffect(gridItems, pendingJumpToGrid) {
         if (pendingJumpToGrid && gridItems.isNotEmpty()) {
@@ -241,6 +240,10 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
             pendingJumpToGrid = false
         }
     }
+
+    // Trigger token — increment to return focus to the sidebar at the
+    // currently-selected entry. Used by LEFT-key interception on the grid.
+    var returnToSidebarToken by remember { mutableStateOf(0) }
 
     // Trailer dialog state
     var trailerVideoId by remember { mutableStateOf<String?>(null) }
@@ -296,7 +299,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                     selectedId = selectedCatId,
                     title = title,
                     loading = loadingCats,
-                    selectedFocusRequester = selectedSidebarFocus,
+                    returnToSidebarToken = returnToSidebarToken,
                     modifier = Modifier.requiredWidth(260.dp),
                     onBack = { nav.popBackStack() },
                     onFocus = { id -> if (id != "__divider__" && id != "__divider2__") selectedCatId = id },
@@ -325,7 +328,21 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .onFocusChanged { gridHasFocus = it.hasFocus },
+                    .onFocusChanged { gridHasFocus = it.hasFocus }
+                    // Parent-level LEFT interception. Fires for ANY focused
+                    // descendant before the child gets to do its own focus
+                    // search. Guarantees LEFT always returns to the selected
+                    // sidebar row, no matter where the user is in the grid.
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                            // Only intercept when on the leftmost column of the grid.
+                            // (If user is in column 2+, let Compose move to column 1 naturally.)
+                            if (focusedIdx >= 0 && focusedIdx % gridColumnCount == 0) {
+                                returnToSidebarToken++
+                                true
+                            } else false
+                        } else false
+                    },
             ) {
                 // Top section: detail panel (only when grid has focus + item exists)
                 val focusedItem = gridItems.getOrNull(focusedIdx)
@@ -381,26 +398,15 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                             icon = Icons.Default.Movie,
                         )
                     else -> {
-                        // Track column count so we can tell when the focused cell
-                        // is in the leftmost column (and LEFT should return to sidebar).
-                        var columnCount by remember { mutableStateOf(8) }
+                        // Track column count — used both for laying out the
+                        // grid AND for the parent-level LEFT interception.
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                             val cols = ((maxWidth + 12.dp) / (124.dp + 12.dp)).toInt().coerceAtLeast(1)
-                            LaunchedEffect(cols) { columnCount = cols }
+                            LaunchedEffect(cols) { gridColumnCount = cols }
 
                             LazyVerticalGrid(
                                 state = gridState,
-                                modifier = Modifier.onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyDown &&
-                                        event.key == Key.DirectionLeft &&
-                                        focusedIdx >= 0 &&
-                                        focusedIdx % columnCount == 0
-                                    ) {
-                                        selectedSidebarFocus.requestFocus()
-                                        true
-                                    } else false
-                                },
-                                columns = GridCells.Fixed(columnCount),
+                                columns = GridCells.Fixed(cols),
                                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -460,7 +466,7 @@ private fun VodSidebar(
     selectedId: String,
     title: String,
     loading: Boolean,
-    selectedFocusRequester: FocusRequester,
+    returnToSidebarToken: Int,
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onFocus: (String) -> Unit,
@@ -484,6 +490,20 @@ private fun VodSidebar(
         runCatching {
             listState.scrollToItem(idx)
             reqFor(idx).requestFocus()
+        }
+    }
+
+    // Return-to-sidebar token. When LEFT is pressed in the grid, the parent
+    // increments this token; we scroll + focus the SELECTED row with retries.
+    LaunchedEffect(returnToSidebarToken) {
+        if (returnToSidebarToken == 0 || entries.isEmpty()) return@LaunchedEffect
+        val idx = entries.indexOfFirst { it.id == selectedId }
+        if (idx < 0) return@LaunchedEffect
+        runCatching { listState.scrollToItem(idx) }
+        repeat(5) {
+            kotlinx.coroutines.delay(40)
+            val ok = runCatching { reqFor(idx).requestFocus() }.isSuccess
+            if (ok) return@LaunchedEffect
         }
     }
 
@@ -562,18 +582,10 @@ private fun VodSidebar(
                                 .background(Color(0x14FFFFFF)),
                         )
                     } else {
-                        val isSelected = entry.id == selectedId
-                        val rowFocusMod = if (isSelected) {
-                            Modifier
-                                .focusRequester(reqFor(i))
-                                .focusRequester(selectedFocusRequester)
-                        } else {
-                            Modifier.focusRequester(reqFor(i))
-                        }
                         SidebarRow(
                             entry = entry,
-                            selected = isSelected,
-                            modifier = rowFocusMod,
+                            selected = entry.id == selectedId,
+                            modifier = Modifier.focusRequester(reqFor(i)),
                             onFocus = { onFocus(entry.id) },
                             onClick = { onEnter(entry.id) },
                         )
