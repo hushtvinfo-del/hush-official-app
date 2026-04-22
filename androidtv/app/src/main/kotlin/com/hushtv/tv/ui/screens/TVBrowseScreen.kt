@@ -425,6 +425,8 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                                         isInList = isInList,
                                         focusMod = if (idx == 0) Modifier.focusRequester(firstGridFocus) else Modifier,
                                         onFocus = { focusedIdx = idx },
+                                        onLeftEdge = { returnToSidebarToken++ },
+                                        isLeftmost = idx % cols == 0,
                                         onClick = { onCardClick(item) },
                                     )
                                 }
@@ -951,6 +953,8 @@ private fun CompactPoster(
     isInList: Boolean,
     focusMod: Modifier,
     onFocus: () -> Unit,
+    onLeftEdge: () -> Unit,
+    isLeftmost: Boolean,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -964,6 +968,12 @@ private fun CompactPoster(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+            }
+            .onPreviewKeyEvent { ev ->
+                if (isLeftmost && ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                    onLeftEdge()
+                    true
+                } else false
             }
             .onFocusChanged {
                 focused = it.isFocused

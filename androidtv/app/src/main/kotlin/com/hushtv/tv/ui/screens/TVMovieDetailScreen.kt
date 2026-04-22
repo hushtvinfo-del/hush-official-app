@@ -221,34 +221,40 @@ fun TVMovieDetailScreen(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = 72.dp, end = 56.dp, top = 72.dp, bottom = 24.dp)
+                .padding(start = 72.dp, end = 56.dp, top = 56.dp, bottom = 24.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // ── Hero row: poster + info ────────────────────────
-            Row(verticalAlignment = Alignment.Top) {
-                // Poster — always use the TMDB poster (known 2:3) for the hero
-                // so nothing ever gets clipped. RPDB appears on grid thumbnails.
-                val heroPoster = posterUrl ?: rpdbPosterUrl
-                Box(
-                    Modifier
-                        .width(200.dp)
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SurfaceNavy),
+            // ── Hero row — constrained height so nothing ever gets clipped ─
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                // Poster height caps at 300dp and scales down for smaller TVs.
+                val posterHeight = 300.dp
+                val posterWidth = posterHeight * 2f / 3f
+                Row(
+                    Modifier.fillMaxWidth().height(posterHeight),
+                    verticalAlignment = Alignment.Top,
                 ) {
-                    if (!heroPoster.isNullOrBlank()) {
-                        SubcomposeAsyncImage(
-                            model = heroPoster,
-                            contentDescription = displayTitle,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize(),
-                            error = { PosterMissing() },
-                            loading = { },
-                        )
-                    } else {
-                        PosterMissing()
+                    // TMDB poster only (known 2:3). Fit to preserve aspect.
+                    val heroPoster = posterUrl ?: rpdbPosterUrl
+                    Box(
+                        Modifier
+                            .width(posterWidth)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SurfaceNavy),
+                    ) {
+                        if (!heroPoster.isNullOrBlank()) {
+                            SubcomposeAsyncImage(
+                                model = heroPoster,
+                                contentDescription = displayTitle,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize(),
+                                error = { PosterMissing() },
+                                loading = { },
+                            )
+                        } else {
+                            PosterMissing()
+                        }
                     }
-                }
 
                 Spacer(Modifier.width(32.dp))
 
@@ -352,6 +358,7 @@ fun TVMovieDetailScreen(
                     }
                 }
             }
+            } // BoxWithConstraints (hero)
 
             Spacer(Modifier.height(40.dp))
 
@@ -394,7 +401,31 @@ fun TVMovieDetailScreen(
                 Spacer(Modifier.height(12.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(recommendations, key = { "rec-${it.id}" }) { r ->
-                        RecommendationCard(rec = r)
+                        RecommendationCard(rec = r) {
+                            // Try to find this title in the user's library.
+                            // If found, open its detail. If not, fallback to a
+                            // cast dialog-style "not in library" notice.
+                            val title = (r.title ?: r.name).orEmpty()
+                            val libMatch = matchLibraryByTitles(listOf(title), library).firstOrNull()
+                            if (libMatch != null) {
+                                when (libMatch.kind) {
+                                    "movie" -> nav.navigate("moviedetail/$playlistId/${libMatch.streamId}/${Uri.encode(libMatch.title)}")
+                                    "series" -> nav.navigate("series/$playlistId/${libMatch.seriesId}/${Uri.encode(libMatch.title)}")
+                                }
+                            } else {
+                                // Show a toast-like temporary notice via dialog
+                                castDialog = CastDialogState(
+                                    TmdbCastMember(
+                                        id = 0,
+                                        name = title,
+                                        character = "Not in your library",
+                                    ),
+                                    emptyList(),
+                                    loading = false,
+                                    notice = "$title isn't in your library yet.",
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -573,8 +604,7 @@ private fun FilmographyCard(item: MediaCard, onClick: () -> Unit) {
             .width(130.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickable(onClick = onClick),
+            .clickableWithEnter(onClick),
     ) {
         Box(
             Modifier
@@ -747,8 +777,7 @@ private fun CastCard(member: TmdbCastMember, onClick: () -> Unit) {
             .width(96.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickable(onClick = onClick),
+            .clickableWithEnter(onClick),
     ) {
         Box(
             Modifier
@@ -809,7 +838,7 @@ private fun CastInitial(name: String) {
 }
 
 @Composable
-private fun RecommendationCard(rec: TmdbRecommendation) {
+private fun RecommendationCard(rec: TmdbRecommendation, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.08f else 1f,
@@ -821,8 +850,7 @@ private fun RecommendationCard(rec: TmdbRecommendation) {
             .width(130.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickable { /* could navigate to that TMDB detail if in library */ },
+            .clickableWithEnter(onClick),
     ) {
         Box(
             Modifier

@@ -213,31 +213,36 @@ fun TVSeriesDetailScreen(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = 72.dp, end = 48.dp, top = 72.dp, bottom = 24.dp)
+                .padding(start = 72.dp, end = 48.dp, top = 56.dp, bottom = 24.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // ── Hero row ───────────────────────────────────
-            Row(verticalAlignment = Alignment.Top) {
-                // Use TMDB poster (known 2:3) for the hero so nothing clips.
-                val heroPoster = posterUrl ?: rpdbPoster
-                Box(
-                    Modifier
-                        .width(190.dp)
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SurfaceNavy),
+            // ── Hero row — constrained height, fits cleanly in viewport ───
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val posterHeight = 300.dp
+                val posterWidth = posterHeight * 2f / 3f
+                Row(
+                    Modifier.fillMaxWidth().height(posterHeight),
+                    verticalAlignment = Alignment.Top,
                 ) {
-                    if (!heroPoster.isNullOrBlank()) {
-                        SubcomposeAsyncImage(
-                            model = heroPoster,
-                            contentDescription = displayTitle,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize(),
-                            error = { },
-                            loading = { },
-                        )
+                    val heroPoster = posterUrl ?: rpdbPoster
+                    Box(
+                        Modifier
+                            .width(posterWidth)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SurfaceNavy),
+                    ) {
+                        if (!heroPoster.isNullOrBlank()) {
+                            SubcomposeAsyncImage(
+                                model = heroPoster,
+                                contentDescription = displayTitle,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize(),
+                                error = { },
+                                loading = { },
+                            )
+                        }
                     }
-                }
                 Spacer(Modifier.width(28.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -328,6 +333,7 @@ fun TVSeriesDetailScreen(
                     }
                 }
             }
+            } // BoxWithConstraints (hero)
 
             Spacer(Modifier.height(28.dp))
 
@@ -622,8 +628,7 @@ private fun SeriesCastCard(member: TmdbCastMember) {
             .width(96.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickable { },
+            .clickableWithEnter { },
     ) {
         Box(
             Modifier
@@ -695,8 +700,7 @@ private fun SeriesRecCard(rec: TmdbRecommendation) {
             .width(130.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickable { },
+            .clickableWithEnter { },
     ) {
         Box(
             Modifier

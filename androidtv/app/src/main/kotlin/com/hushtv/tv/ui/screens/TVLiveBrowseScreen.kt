@@ -328,15 +328,6 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     .weight(1f)
                     .fillMaxHeight()
                     .onFocusChanged { channelsPaneFocused = it.hasFocus }
-                    // ── Bulletproof LEFT interception. Fires BEFORE the
-                    // focused child gets the event → always wins over
-                    // Compose's default geometric focus search. ──
-                    .onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                            returnToSidebarToken++
-                            true
-                        } else false
-                    }
             ) {
                 // ── Tivimate-style preview bar (video + EPG info) ──────────
                 PreviewBar(
@@ -358,6 +349,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     onFocusChange = { focusedChannelIdx = it },
                     initialFocusIndex = focusedChannelIdx,
                     firstChannelFocus = firstChannelFocus,
+                    onLeftEdge = { returnToSidebarToken++ },
                     onPlay = onPlay,
                     emptyReason = when {
                         searchQuery.isNotBlank() && filteredChannels.isEmpty() ->
@@ -870,6 +862,7 @@ private fun ChannelsPane(
     emptyReason: String?,
     initialFocusIndex: Int,
     firstChannelFocus: FocusRequester,
+    onLeftEdge: () -> Unit,
     onFocusChange: (Int) -> Unit,
     onPlay: (Int) -> Unit
 ) {
@@ -950,6 +943,7 @@ private fun ChannelsPane(
                             modifier = rowModifier,
                             onFocus = { onFocusChange(idx) },
                             onPlay = { onPlay(idx) },
+                            onLeftEdge = onLeftEdge,
                             onToggleFav = {
                                 FavoritesStore.toggle(ctx, playlistId, channels[idx].streamId)
                                 favVersion++
@@ -971,6 +965,7 @@ private fun ChannelRow(
     modifier: Modifier = Modifier,
     onFocus: () -> Unit,
     onPlay: () -> Unit,
+    onLeftEdge: () -> Unit,
     onToggleFav: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -987,6 +982,15 @@ private fun ChannelRow(
                 if (focused) Cyan else Color(0x14FFFFFF),
                 RoundedCornerShape(12.dp)
             )
+            // ── Direct LEFT interception on the focusable itself. This is
+            //   the ONLY reliable place to intercept because Compose's
+            //   geometric focus search fires on the focused node.
+            .onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                    onLeftEdge()
+                    true
+                } else false
+            }
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
