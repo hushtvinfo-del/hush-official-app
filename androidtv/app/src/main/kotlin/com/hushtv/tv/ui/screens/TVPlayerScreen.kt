@@ -37,6 +37,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import com.hushtv.tv.data.EpgService
@@ -45,6 +46,8 @@ import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.NavState
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
+import com.hushtv.tv.ui.player.AspectMode
+import com.hushtv.tv.ui.player.PlayerOptionsMenu
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.TextSecondary
 import com.hushtv.tv.ui.tvFocusable
@@ -179,6 +182,28 @@ fun TVPlayerScreen(
         }
     }
 
+    // ─── Options menu (audio, subtitles, aspect, sleep) ────────────────
+    var optionsOpen by remember { mutableStateOf(false) }
+    var aspectMode by remember { mutableStateOf(AspectMode.FIT) }
+    var sleepMinutes by remember { mutableStateOf<Int?>(null) }
+    var sleepExpiresAt by remember { mutableStateOf<Long?>(null) }
+    val sleepMinutesLeft by remember {
+        derivedStateOf {
+            val ts = sleepExpiresAt ?: return@derivedStateOf null
+            ((ts - System.currentTimeMillis()) / 60_000L).toInt().coerceAtLeast(0)
+        }
+    }
+    LaunchedEffect(sleepExpiresAt) {
+        while (sleepExpiresAt != null) {
+            delay(5_000)
+            if (sleepExpiresAt != null && System.currentTimeMillis() >= sleepExpiresAt!!) {
+                player.pause()
+                nav.popBackStack()
+                break
+            }
+        }
+    }
+
     // ─── Back-double-press → previous channel ─────────────────────────────
     var lastBackMs by remember { mutableStateOf(0L) }
 
@@ -280,6 +305,7 @@ fun TVPlayerScreen(
                             nav.popBackStack(); true
                         }
                     }
+                    Key.Menu, Key.F1 -> { optionsOpen = true; true }
                     else -> false
                 }
             },
@@ -287,7 +313,18 @@ fun TVPlayerScreen(
     ) {
         AndroidView(
             factory = { c ->
-                PlayerView(c).apply { useController = false; this.player = player }
+                PlayerView(c).apply {
+                    useController = false
+                    this.player = player
+                }
+            },
+            update = { view ->
+                view.resizeMode = when (aspectMode) {
+                    AspectMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    AspectMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    AspectMode.RATIO_16_9, AspectMode.RATIO_4_3 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                    AspectMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                }
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -536,14 +573,32 @@ fun TVPlayerScreen(
                         Spacer(Modifier.weight(1f))
                         Text(
                             if (isLive)
-                                "↑ ↓ Change channel   ◀◀ Back to list   Back×2 = Last channel"
+                                "↑↓ Channel   0-9 Dial   OK Info   MENU Options   Back×2 Last"
                             else
-                                "← → Skip 10s   ↑ ↓ Volume   Back = Exit",
-                            color = Color(0xFFD1D5DB), fontSize = 15.sp
+                                "← → Skip 10s   ↑ ↓ Volume   MENU Options   Back Exit",
+                            color = Color(0xFFD1D5DB), fontSize = 14.sp
                         )
                     }
                 }
             }
+        }
+
+        // Options menu overlay
+        if (optionsOpen) {
+            PlayerOptionsMenu(
+                player = player,
+                aspectMode = aspectMode,
+                onAspectChange = { aspectMode = it },
+                sleepMinutesLeft = sleepMinutesLeft,
+                onSleepChange = { mins ->
+                    sleepMinutes = mins
+                    sleepExpiresAt = mins?.let {
+                        System.currentTimeMillis() + it * 60_000L
+                    }
+                },
+                onShowInfo = { infoVisible = true; infoTick++ },
+                onDismiss = { optionsOpen = false }
+            )
         }
     }
 }

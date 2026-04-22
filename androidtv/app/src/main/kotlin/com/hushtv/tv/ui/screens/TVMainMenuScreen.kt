@@ -171,10 +171,14 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                             modifier = Modifier.weight(1f).then(mod),
                             item = item,
                             onClick = {
-                                if (item.type == "favorites" || item.type == "search") {
-                                    nav.navigate("browse/$playlistId/${item.type}")
-                                } else {
-                                    nav.navigate("browse/$playlistId/${item.type}")
+                                when (item.type) {
+                                    "favorites" -> {
+                                        // Pre-select the Favorites virtual category (index 0).
+                                        com.hushtv.tv.data.NavState.browsePlaylistId = playlistId
+                                        com.hushtv.tv.data.NavState.selectedCategoryIndex = 0
+                                        nav.navigate("browse/$playlistId/live")
+                                    }
+                                    else -> nav.navigate("browse/$playlistId/${item.type}")
                                 }
                             }
                         )
