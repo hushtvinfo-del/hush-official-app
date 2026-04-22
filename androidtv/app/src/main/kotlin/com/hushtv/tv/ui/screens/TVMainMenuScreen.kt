@@ -244,120 +244,12 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         )
 
         // ── CONTENT ───────────────────────────────────────────
+        // Intentionally blank canvas — awaiting the next design.
+        // Sidebar still handles all navigation (Live TV / Movies / Series /
+        // Search / Settings), so nothing breaks; this area is just reserved
+        // for the new Home layout.
         Box(Modifier.weight(1f).fillMaxHeight()) {
-            LazyColumn(
-                contentPadding = PaddingValues(bottom = 48.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                // Hero
-                item {
-                    HeroBillboard(
-                        onPlay = { nav.navigate("browse/$playlistId/live") },
-                        onMyList = { nav.navigate("browse/$playlistId/search") },
-                    )
-                }
-
-                // Continue Watching
-                lastChannel?.let { lc ->
-                    item {
-                        RowHeader("Continue Watching", showSeeAll = false)
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
-                        ) {
-                            item {
-                                ContinueCard(
-                                    title = lc.channelName,
-                                    onClick = {
-                                        nav.navigate(
-                                            "player/${lc.playlistId}" +
-                                                "/${Uri.encode(lc.streamUrl)}" +
-                                                "/${Uri.encode(lc.channelName)}/true"
-                                        )
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Live Now
-                if (liveNow.isNotEmpty()) {
-                    item {
-                        RowHeader("Live Now", badgeColor = Red, showSeeAll = true) {
-                            nav.navigate("browse/$playlistId/live")
-                        }
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
-                        ) {
-                            items(liveNow, key = { it.id }) { c -> LiveCard(c, onCardSelect) }
-                        }
-                    }
-                }
-
-                // Trending
-                if (trendingRow.isNotEmpty()) {
-                    item {
-                        RowHeader("Trending This Week", showSeeAll = true) {
-                            nav.navigate("browse/$playlistId/movie")
-                        }
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
-                        ) {
-                            itemsIndexed(trendingRow.take(10)) { idx, card ->
-                                TrendingCard(idx + 1, card, onCardSelect)
-                            }
-                        }
-                    }
-                }
-
-                // Movies
-                movies.firstOrNull()?.let { (title, items) ->
-                    item {
-                        RowHeader("New Movies · $title", showSeeAll = true) {
-                            nav.navigate("browse/$playlistId/movie")
-                        }
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
-                        ) {
-                            items(items, key = { it.id }) { c -> PosterCardV2(c, onCardSelect) }
-                        }
-                    }
-                }
-
-                // Series
-                if (seriesRow.isNotEmpty()) {
-                    item {
-                        RowHeader("Featured Series", showSeeAll = true) {
-                            nav.navigate("browse/$playlistId/series")
-                        }
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
-                        ) {
-                            items(seriesRow, key = { it.id }) { c -> PosterCardV2(c, onCardSelect) }
-                        }
-                    }
-                }
-
-                // More genre rows
-                movies.drop(1).forEach { (title, items) ->
-                    item {
-                        RowHeader(title, showSeeAll = true) {
-                            nav.navigate("browse/$playlistId/movie")
-                        }
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
-                        ) {
-                            items(items, key = { "$title-${it.id}" }) { c -> PosterCardV2(c, onCardSelect) }
-                        }
-                    }
-                }
-            }
+            // Placeholder — remove/replace as the new Home design is built.
         }
     }
 }
