@@ -230,6 +230,426 @@ const LoadingScreenMockup = () => {
   );
 };
 
+// ─── Top Nav Mockup ───────────────────────────────────────────
+const TopNavMockup = () => {
+  const [active, setActive] = React.useState('Home');
+  const tabs = [
+    { id: 'Home', icon: '⌂' },
+    { id: 'Live TV', icon: '📡' },
+    { id: 'Movies', icon: '🎬' },
+    { id: 'Series', icon: '📺' },
+    { id: 'Search', icon: '🔍' },
+    { id: 'My List', icon: '♡' },
+  ];
+  return (
+    <div style={{ background: '#0F172A', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 0,
+        padding: '0 24px', height: 64,
+        background: 'rgba(0,0,0,0.6)',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+      }}>
+        {/* Logo */}
+        <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-0.02em', marginRight: 40, flexShrink: 0 }}>
+          <span style={{ color: '#fff' }}>hush</span><span style={{ color: '#06B6D4' }}>tv.</span>
+        </div>
+        {/* Tabs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setActive(t.id)} style={{
+              padding: '0 16px', height: 64, background: 'transparent', border: 'none',
+              borderBottom: active === t.id ? '3px solid #06B6D4' : '3px solid transparent',
+              color: active === t.id ? '#FFFFFF' : '#64748B',
+              fontWeight: active === t.id ? 700 : 500, fontSize: 14,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'all 0.15s ease', fontFamily: 'Inter, sans-serif',
+              whiteSpace: 'nowrap',
+            }}>
+              <span style={{ fontSize: 13 }}>{t.icon}</span> {t.id}
+            </button>
+          ))}
+        </div>
+        {/* Avatar */}
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+          background: 'linear-gradient(135deg, #3B82F6, #06B6D4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, fontWeight: 700, color: 'white',
+        }}>G</div>
+      </div>
+      <div style={{ padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#06B6D4' }} />
+        <p style={{ color: '#475569', fontSize: 12, fontFamily: 'monospace' }}>
+          Active tab: <span style={{ color: '#06B6D4' }}>{active}</span> — click tabs above to preview focus states
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// ─── Hero Billboard Mockup ────────────────────────────────────
+const HeroBillboardMockup = () => {
+  const [current, setCurrent] = React.useState(0);
+  const slides = [
+    { title: 'Breaking Bad', genre: ['Crime', 'Drama', 'Thriller'], synopsis: 'A high school chemistry teacher turned methamphetamine producer partners with a former student to secure his family\'s future.', badge: 'SERIES', color: '#F59E0B' },
+    { title: 'Dune: Part Two', genre: ['Sci-Fi', 'Adventure', 'Action'], synopsis: 'Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.', badge: 'MOVIE', color: '#3B82F6' },
+    { title: 'Premier League Live', genre: ['Live', 'Sports', 'Football'], synopsis: 'Manchester City vs Arsenal — live from the Etihad Stadium. Kick-off 20:45 BST.', badge: '🔴 LIVE', color: '#EF4444' },
+  ];
+  React.useEffect(() => {
+    const t = setInterval(() => setCurrent(c => (c + 1) % slides.length), 5000);
+    return () => clearInterval(t);
+  }, []);
+  const s = slides[current];
+  return (
+    <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', height: 260, background: '#0F172A', border: '1px solid rgba(255,255,255,0.06)' }}>
+      {/* fake backdrop */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: current === 0
+          ? 'linear-gradient(135deg, #1E0A00 0%, #2D1A00 50%, #0F172A 100%)'
+          : current === 1
+          ? 'linear-gradient(135deg, #000D1A 0%, #001833 50%, #0F172A 100%)'
+          : 'linear-gradient(135deg, #0A0000 0%, #1A0000 50%, #0F172A 100%)',
+        transition: 'background 0.6s ease',
+      }} />
+      {/* Gradient overlay */}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 60%, transparent 100%)' }} />
+      {/* Content */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 32px 28px' }}>
+        {/* Badge */}
+        <div style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 4, background: s.color, color: '#000', fontWeight: 700, fontSize: 10, letterSpacing: '0.1em', marginBottom: 10, fontFamily: 'Inter, sans-serif' }}>{s.badge}</div>
+        {/* Title */}
+        <div style={{ fontWeight: 900, fontSize: 36, color: '#fff', lineHeight: 1.1, marginBottom: 10, fontFamily: 'Inter, sans-serif', letterSpacing: '-0.02em' }}>{s.title}</div>
+        {/* Genres */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+          {s.genre.map(g => (
+            <span key={g} style={{ padding: '3px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.1)', color: '#CBD5E1', fontSize: 11, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>{g}</span>
+          ))}
+        </div>
+        {/* Synopsis */}
+        <p style={{ color: '#94A3B8', fontSize: 13, lineHeight: 1.6, marginBottom: 16, maxWidth: 480, fontFamily: 'Inter, sans-serif' }}>{s.synopsis}</p>
+        {/* CTAs */}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button style={{ padding: '10px 24px', borderRadius: 8, background: '#fff', color: '#000', fontWeight: 700, fontSize: 14, border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>▶ Play</button>
+          <button style={{ padding: '10px 20px', borderRadius: 8, background: 'rgba(255,255,255,0.12)', color: '#fff', fontWeight: 600, fontSize: 14, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>+ My List</button>
+          <button style={{ padding: '10px 16px', borderRadius: 8, background: 'transparent', color: '#94A3B8', fontWeight: 600, fontSize: 14, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>ℹ More Info</button>
+        </div>
+      </div>
+      {/* Slide dots */}
+      <div style={{ position: 'absolute', bottom: 14, right: 24, display: 'flex', gap: 6 }}>
+        {slides.map((_, i) => (
+          <button key={i} onClick={() => setCurrent(i)} style={{
+            width: i === current ? 20 : 6, height: 6, borderRadius: 3,
+            background: i === current ? '#06B6D4' : 'rgba(255,255,255,0.2)',
+            border: 'none', cursor: 'pointer', transition: 'all 0.3s ease', padding: 0,
+          }} />
+        ))}
+      </div>
+      {/* Label */}
+      <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '4px 10px' }}>
+        <p style={{ color: '#475569', fontSize: 10, fontFamily: 'monospace' }}>Auto-rotates every 5s · click dots to switch</p>
+      </div>
+    </div>
+  );
+};
+
+// ─── Content Rows Mockup ──────────────────────────────────────
+const ContentRowsMockup = () => {
+  const [focusedLive, setFocusedLive] = React.useState(null);
+  const [focusedTrend, setFocusedTrend] = React.useState(null);
+  const liveChannels = [
+    { name: 'Sky Sports', show: 'Premier League', progress: 62, live: true },
+    { name: 'BBC One', show: 'The Graham Norton Show', progress: 35, live: true },
+    { name: 'CNN', show: 'Breaking News', progress: 88, live: true },
+    { name: 'Discovery', show: 'Planet Earth III', progress: 15, live: true },
+    { name: 'HBO', show: 'House of the Dragon', progress: 50, live: true },
+  ];
+  const trending = [
+    { title: 'Oppenheimer', rank: 1 },
+    { title: 'The Bear', rank: 2 },
+    { title: 'Poor Things', rank: 3 },
+    { title: 'Succession', rank: 4 },
+    { title: 'Dune 2', rank: 5 },
+    { title: 'True Det.', rank: 6 },
+  ];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {/* Live Now Row */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', boxShadow: '0 0 6px #EF4444', animation: 'pulse 1.5s infinite' }} />
+          <p style={{ color: '#fff', fontWeight: 700, fontSize: 16, fontFamily: 'Inter, sans-serif' }}>Live Now</p>
+          <span style={{ background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.08em', fontFamily: 'Inter, sans-serif' }}>LIVE</span>
+        </div>
+        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+          {liveChannels.map((ch, i) => (
+            <div key={i}
+              onMouseEnter={() => setFocusedLive(i)} onMouseLeave={() => setFocusedLive(null)}
+              style={{
+                flexShrink: 0, width: 200, borderRadius: 10, overflow: 'hidden',
+                border: focusedLive === i ? '2px solid #06B6D4' : '2px solid rgba(255,255,255,0.06)',
+                transform: focusedLive === i ? 'scale(1.06)' : 'scale(1)',
+                boxShadow: focusedLive === i ? '0 0 0 3px rgba(6,182,212,0.25), 0 12px 32px rgba(0,0,0,0.8)' : 'none',
+                transition: 'all 0.15s ease', cursor: 'pointer', background: '#0F172A',
+              }}>
+              <div style={{ height: 110, background: `linear-gradient(135deg, hsl(${i * 60}, 40%, 12%), #0F172A)`, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <span style={{ fontSize: 28 }}>📺</span>
+                <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 4, background: '#EF4444', borderRadius: 3, padding: '2px 6px' }}>
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />
+                  <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', fontFamily: 'Inter, sans-serif' }}>LIVE</span>
+                </div>
+              </div>
+              <div style={{ padding: '10px 12px' }}>
+                <p style={{ color: '#fff', fontWeight: 600, fontSize: 12, marginBottom: 2, fontFamily: 'Inter, sans-serif' }}>{ch.name}</p>
+                <p style={{ color: '#64748B', fontSize: 10, marginBottom: 8, fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch.show}</p>
+                <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2 }}>
+                  <div style={{ height: '100%', width: `${ch.progress}%`, background: '#06B6D4', borderRadius: 2 }} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Trending Row */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <p style={{ color: '#fff', fontWeight: 700, fontSize: 16, fontFamily: 'Inter, sans-serif' }}>🔥 Trending This Week</p>
+          <span style={{ color: '#06B6D4', fontSize: 12, fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>See All →</span>
+        </div>
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
+          {trending.map((item, i) => (
+            <div key={i}
+              onMouseEnter={() => setFocusedTrend(i)} onMouseLeave={() => setFocusedTrend(null)}
+              style={{
+                flexShrink: 0, width: 110, borderRadius: 10, overflow: 'hidden', position: 'relative',
+                border: focusedTrend === i ? '2px solid #06B6D4' : '2px solid rgba(255,255,255,0.06)',
+                transform: focusedTrend === i ? 'scale(1.08)' : 'scale(1)',
+                boxShadow: focusedTrend === i ? '0 0 0 3px rgba(6,182,212,0.25)' : 'none',
+                transition: 'all 0.15s ease', cursor: 'pointer', background: '#0F172A',
+              }}>
+              <div style={{ height: 165, background: `linear-gradient(160deg, hsl(${220 + i * 30}, 50%, 15%), #000)`, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <span style={{ fontSize: 24 }}>{['🎬','📺','🎭','👑','🚀','🕵️'][i]}</span>
+                {/* Ghost rank number */}
+                <div style={{ position: 'absolute', bottom: -6, left: 6, fontWeight: 900, fontSize: 64, color: 'rgba(255,255,255,0.08)', lineHeight: 1, fontFamily: 'Inter, sans-serif', userSelect: 'none' }}>{item.rank}</div>
+              </div>
+              <div style={{ padding: '8px 10px' }}>
+                <p style={{ color: '#E2E8F0', fontWeight: 600, fontSize: 11, fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p style={{ color: '#334155', fontSize: 11, fontFamily: 'monospace', marginTop: 10 }}>↑ Hover cards to preview focus states</p>
+      </div>
+    </div>
+  );
+};
+
+// ─── Full Home Screen Overview Mockup ────────────────────────
+const HomeScreenMockup = () => (
+  <div style={{ background: '#000', borderRadius: 16, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+    {/* Mock nav bar */}
+    <div style={{ background: 'rgba(0,0,0,0.9)', borderBottom: '1px solid rgba(255,255,255,0.04)', padding: '0 24px', height: 52, display: 'flex', alignItems: 'center', gap: 24 }}>
+      <span style={{ fontWeight: 900, fontSize: 18, letterSpacing: '-0.02em', flexShrink: 0, fontFamily: 'Inter, sans-serif' }}><span style={{ color: '#fff' }}>hush</span><span style={{ color: '#06B6D4' }}>tv.</span></span>
+      {['Home','Live TV','Movies','Series','Search'].map((t, i) => (
+        <span key={t} style={{ fontSize: 12, fontWeight: i === 0 ? 700 : 500, color: i === 0 ? '#fff' : '#475569', fontFamily: 'Inter, sans-serif', borderBottom: i === 0 ? '2px solid #06B6D4' : 'none', paddingBottom: i === 0 ? 2 : 0, whiteSpace: 'nowrap' }}>{t}</span>
+      ))}
+    </div>
+    {/* Mock hero */}
+    <div style={{ height: 180, background: 'linear-gradient(135deg, #1a0a00, #0F172A)', position: 'relative', display: 'flex', alignItems: 'flex-end' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.3) 60%, transparent 100%)' }} />
+      <div style={{ position: 'relative', padding: '0 24px 20px', zIndex: 1 }}>
+        <div style={{ display: 'inline-block', background: '#F59E0B', color: '#000', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 3, marginBottom: 6, fontFamily: 'Inter, sans-serif' }}>SERIES</div>
+        <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', marginBottom: 6, fontFamily: 'Inter, sans-serif' }}>Breaking Bad</div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          {['Crime','Drama','Thriller'].map(g => <span key={g} style={{ background: 'rgba(255,255,255,0.1)', color: '#CBD5E1', fontSize: 9, fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: 'Inter, sans-serif' }}>{g}</span>)}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={{ padding: '6px 16px', borderRadius: 6, background: '#fff', color: '#000', fontWeight: 700, fontSize: 11, border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>▶ Play</button>
+          <button style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(255,255,255,0.1)', color: '#fff', fontWeight: 600, fontSize: 11, border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>+ My List</button>
+        </div>
+      </div>
+      <div style={{ position: 'absolute', bottom: 10, right: 16, display: 'flex', gap: 5 }}>
+        {[0,1,2].map(i => <div key={i} style={{ width: i===0?14:5, height: 5, borderRadius: 3, background: i===0?'#06B6D4':'rgba(255,255,255,0.2)' }} />)}
+      </div>
+    </div>
+    {/* Row labels as placeholders */}
+    {[
+      { label: '🔴 Live Now', color: '#EF4444', cards: 5, wide: true },
+      { label: '▶ Continue Watching', color: '#F59E0B', cards: 4, wide: true },
+      { label: '🔥 Trending This Week', color: '#8B5CF6', cards: 6, wide: false },
+      { label: '📺 Featured Series', color: '#06B6D4', cards: 6, wide: false },
+      { label: '🎬 New Arrivals — Movies', color: '#3B82F6', cards: 6, wide: false },
+    ].map(row => (
+      <div key={row.label} style={{ padding: '16px 24px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ color: '#fff', fontWeight: 700, fontSize: 13, fontFamily: 'Inter, sans-serif' }}>{row.label}</span>
+          <span style={{ color: '#334155', fontSize: 11, fontFamily: 'Inter, sans-serif' }}>See All →</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {Array.from({ length: row.cards }).map((_, i) => (
+            <div key={i} style={{
+              flexShrink: 0,
+              width: row.wide ? 100 : 70,
+              height: row.wide ? 56 : 100,
+              borderRadius: 8,
+              background: `linear-gradient(135deg, hsl(${row.wide ? 200 : 220 + i*25}, 40%, ${10+i*2}%), #000)`,
+              border: '1px solid rgba(255,255,255,0.05)',
+              position: 'relative', overflow: 'hidden',
+            }}>
+              {row.label.includes('Live') && (
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.08)' }}>
+                  <div style={{ height: '100%', width: `${30 + i * 15}%`, background: '#06B6D4' }} />
+                </div>
+              )}
+              {row.label.includes('Continue') && (
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.08)' }}>
+                  <div style={{ height: '100%', width: `${20 + i * 18}%`, background: '#06B6D4' }} />
+                </div>
+              )}
+              {row.label.includes('Trending') && (
+                <div style={{ position: 'absolute', bottom: -4, left: 4, fontWeight: 900, fontSize: 36, color: 'rgba(255,255,255,0.07)', fontFamily: 'Inter, sans-serif', lineHeight: 1 }}>{i+1}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+    <div style={{ padding: '8px 24px 16px' }}>
+      <p style={{ color: '#1E293B', fontSize: 10, fontFamily: 'monospace' }}>↑ Full home screen overview — rows continue scrolling below (Genre rows, Recommended, etc.)</p>
+    </div>
+  </div>
+);
+
+// ─── Login Screen Mockup ──────────────────────────────────────
+const LoginScreenMockup = () => {
+  const [step, setStep] = React.useState(0);
+  const [host, setHost] = React.useState('');
+  const [user, setUser] = React.useState('');
+  const [pass, setPass] = React.useState('');
+  const [showPass, setShowPass] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [success, setSuccess] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [shake, setShake] = React.useState(false);
+
+  const handleConnect = () => {
+    if (!host || !user || !pass) {
+      setError('Please fill in all fields.');
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+      return;
+    }
+    setError('');
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setSuccess(true);
+    }, 1800);
+  };
+
+  const reset = () => { setHost(''); setUser(''); setPass(''); setSuccess(false); setError(''); setLoading(false); setStep(0); };
+
+  const inputStyle = (focused) => ({
+    width: '100%', height: 52, borderRadius: 10, border: `1px solid ${error && !focused ? '#EF4444' : focused ? '#06B6D4' : '#1E293B'}`,
+    background: '#0F172A', color: '#fff', padding: '0 14px', fontSize: 14,
+    fontFamily: 'Inter, sans-serif', outline: 'none', boxSizing: 'border-box',
+    boxShadow: focused ? '0 0 0 3px rgba(6,182,212,0.15)' : 'none',
+    transition: 'all 0.2s ease',
+  });
+
+  return (
+    <div style={{ background: '#000', borderRadius: 16, padding: '48px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid rgba(255,255,255,0.06)', minHeight: 480 }}>
+      {/* Logo */}
+      <div style={{ fontWeight: 900, fontSize: 36, letterSpacing: '-0.03em', marginBottom: 8, fontFamily: 'Inter, sans-serif' }}>
+        <span style={{ color: '#fff' }}>hush</span><span style={{ color: '#06B6D4' }}>tv.</span>
+      </div>
+      <p style={{ color: '#475569', fontSize: 13, fontFamily: 'Inter, sans-serif', marginBottom: 36, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 400 }}>Your Stream. Your Way.</p>
+
+      {/* Step dots */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 28 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{ width: i === step ? 20 : 8, height: 8, borderRadius: 4, background: i < step ? '#fff' : i === step ? '#06B6D4' : '#1E293B', transition: 'all 0.3s ease' }} />
+        ))}
+      </div>
+
+      {/* Card */}
+      <div style={{
+        width: '100%', maxWidth: 380,
+        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 16, padding: '32px 28px',
+        animation: shake ? 'shake 0.4s ease' : 'none',
+      }}>
+        <style>{`
+          @keyframes shake {
+            0%,100% { transform: translateX(0); }
+            20%      { transform: translateX(-6px); }
+            40%      { transform: translateX(6px); }
+            60%      { transform: translateX(-4px); }
+            80%      { transform: translateX(4px); }
+          }
+        `}</style>
+
+        {success ? (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+            <p style={{ color: '#22C55E', fontWeight: 700, fontSize: 18, fontFamily: 'Inter, sans-serif', marginBottom: 8 }}>Connected!</p>
+            <p style={{ color: '#64748B', fontSize: 13, fontFamily: 'Inter, sans-serif', marginBottom: 20 }}>Loading your content…</p>
+            <button onClick={reset} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#64748B', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>← Reset demo</button>
+          </div>
+        ) : (
+          <>
+            <p style={{ color: '#fff', fontWeight: 700, fontSize: 16, fontFamily: 'Inter, sans-serif', marginBottom: 6 }}>Connect Your Account</p>
+            <p style={{ color: '#475569', fontSize: 13, fontFamily: 'Inter, sans-serif', marginBottom: 24 }}>Enter your Xtream Codes credentials below.</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', color: '#64748B', fontSize: 12, fontWeight: 500, marginBottom: 6, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Server URL</label>
+                <input value={host} onChange={e => setHost(e.target.value)} placeholder="https://your-iptv-host.com" style={inputStyle(false)} />
+              </div>
+              <div>
+                <label style={{ display: 'block', color: '#64748B', fontSize: 12, fontWeight: 500, marginBottom: 6, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Username</label>
+                <input value={user} onChange={e => setUser(e.target.value)} placeholder="Username" style={inputStyle(false)} />
+              </div>
+              <div style={{ position: 'relative' }}>
+                <label style={{ display: 'block', color: '#64748B', fontSize: 12, fontWeight: 500, marginBottom: 6, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Password</label>
+                <input value={pass} onChange={e => setPass(e.target.value)} type={showPass ? 'text' : 'password'} placeholder="Password" style={{ ...inputStyle(false), paddingRight: 44 }} />
+                <button onClick={() => setShowPass(s => !s)} style={{ position: 'absolute', right: 12, top: 34, background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 16 }}>
+                  {showPass ? '🙈' : '👁'}
+                </button>
+              </div>
+            </div>
+
+            {error && <p style={{ color: '#EF4444', fontSize: 12, fontFamily: 'Inter, sans-serif', marginTop: 12 }}>⚠ {error}</p>}
+
+            <button
+              onClick={handleConnect}
+              disabled={loading}
+              style={{
+                width: '100%', height: 52, borderRadius: 10, border: 'none', marginTop: 20,
+                background: loading ? 'rgba(6,182,212,0.4)' : '#06B6D4',
+                color: '#000', fontWeight: 700, fontSize: 15, fontFamily: 'Inter, sans-serif',
+                cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {loading ? (
+                <span style={{ display: 'inline-block', width: 20, height: 20, border: '2px solid rgba(0,0,0,0.2)', borderTop: '2px solid #000', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+              ) : 'Connect →'}
+            </button>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+            <p style={{ textAlign: 'center', color: '#334155', fontSize: 12, fontFamily: 'Inter, sans-serif', marginTop: 16, cursor: 'pointer' }}>
+              Need help finding your credentials? <span style={{ color: '#06B6D4' }}>Contact support →</span>
+            </p>
+          </>
+        )}
+      </div>
+      <p style={{ color: '#1E293B', fontSize: 10, fontFamily: 'monospace', marginTop: 20 }}>↑ Fully interactive mockup — fill fields and click Connect to preview states</p>
+    </div>
+  );
+};
+
 export default function DesignSpec() {
   return (
     <div style={{ background: '#000000', minHeight: '100vh', fontFamily: "'Inter', sans-serif", color: 'white' }}>
@@ -726,6 +1146,236 @@ styles.xml: <item name="android:windowBackground">@color/black</item>
               ))}
             </div>
           </div>
+        </Section>
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* HOME SCREEN */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <Section title="Home Screen — Unified Content Hub">
+
+          {/* Concept overview */}
+          <div style={{ background: 'rgba(6,182,212,0.06)', border: '1px solid rgba(6,182,212,0.25)', borderRadius: 16, padding: 28, marginBottom: 24 }}>
+            <p style={{ color: '#06B6D4', fontWeight: 800, fontSize: 18, marginBottom: 12, letterSpacing: '-0.01em' }}>
+              The Concept — "One Screen. Everything."
+            </p>
+            <p style={{ color: '#94A3B8', fontSize: 15, lineHeight: 1.8, marginBottom: 0 }}>
+              The home screen is a single, continuously scrolling canvas that mixes <strong style={{ color: 'white' }}>Live TV, Movies, and Series</strong> together — 
+              exactly like Netflix or Disney+, but with HushTV's pure-black premium aesthetic. Users land here instantly after the loading screen 
+              and can begin watching within 2 D-pad presses. Navigation to dedicated sections is always available via a fixed top bar, 
+              but the home screen itself provides everything a casual viewer needs without ever leaving it.
+            </p>
+          </div>
+
+          {/* Interactive home screen mockup */}
+          <HomeScreenMockup />
+
+          {/* Row-by-row breakdown */}
+          <div style={{ marginTop: 28 }}>
+            <p style={{ color: '#64748B', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>Screen Anatomy — Row by Row</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+              {[
+                { zone: '① Top Nav Bar', color: '#06B6D4', desc: 'Fixed. Logo left · Tabs: Home / Live TV / Movies / Series / Search / My List. Active tab = cyan underline. Transparent over hero, opaque on scroll.' },
+                { zone: '② Hero Billboard', color: '#3B82F6', desc: 'Full-width featured content (1920×500dp). Auto-rotates every 8s. Backdrop art + gradient overlay. Large title, genre tags, synopsis snippet, two CTA buttons: ▶ Play  +  ⊕ Add to List.' },
+                { zone: '③ 🔴 Live Now', color: '#EF4444', desc: 'Horizontal scroll row. Wide 16:9 cards showing LIVE channels currently airing. Channel logo top-left, red LIVE badge, current show name, progress bar showing how far into the show it is.' },
+                { zone: '④ Continue Watching', color: '#F59E0B', desc: 'Horizontal scroll. Poster cards with cyan progress bar at bottom. Shows series episode label (S2 E4) or movie % complete. Disappears if empty.' },
+                { zone: '⑤ Trending This Week', color: '#8B5CF6', desc: 'Wide poster row. Top 10 numbered overlay on each card (bold white number, bottom-left). Movies + series mixed. Ranked by popularity score.' },
+                { zone: '⑥ Featured Series', color: '#06B6D4', desc: 'Tall poster (2:3 ratio) cards. 6–8 visible. Genre sub-label below title. Focus scale 1.08×. Tap → Series detail page.' },
+                { zone: '⑦ Movies — New Arrivals', color: '#3B82F6', desc: 'Tall poster cards. "NEW" badge top-right on cards added in last 7 days. TMDB rating badge. Tap → Movie info page.' },
+                { zone: '⑧ Genre Rows (Dynamic)', color: '#475569', desc: 'Multiple rows auto-generated per genre: Action, Drama, Comedy, Sci-Fi etc. Each row has a "See All →" label. Collapses/expands with D-pad.' },
+                { zone: '⑨ Recommended For You', color: '#06B6D4', desc: 'AI-curated row based on watch history. "Because you watched Breaking Bad…" label above row. Mixed content types.' },
+              ].map(item => (
+                <div key={item.zone} style={{ background: 'rgba(0,0,0,0.5)', borderRadius: 10, padding: '14px 16px', borderLeft: `3px solid ${item.color}` }}>
+                  <p style={{ color: item.color, fontWeight: 700, fontSize: 12, marginBottom: 6, fontFamily: 'monospace' }}>{item.zone}</p>
+                  <p style={{ color: '#94A3B8', fontSize: 12, lineHeight: 1.6 }}>{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Top nav bar detail */}
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 28, marginTop: 24 }}>
+            <p style={{ color: '#64748B', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 20 }}>Top Navigation Bar — Interactive Preview</p>
+            <TopNavMockup />
+          </div>
+
+          {/* Hero billboard detail */}
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 28, marginTop: 16 }}>
+            <p style={{ color: '#64748B', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 20 }}>Hero Billboard — Detail Spec</p>
+            <HeroBillboardMockup />
+          </div>
+
+          {/* Content row detail */}
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 28, marginTop: 16 }}>
+            <p style={{ color: '#64748B', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 20 }}>Content Rows — Live Now & Trending</p>
+            <ContentRowsMockup />
+          </div>
+
+          {/* Code spec */}
+          <CodeBlock code={`// HOME SCREEN — Layout Spec
+Screen:           Full 1920×1080, black background
+Scroll:           Vertical page scroll (rows stack top to bottom)
+Nav Bar Height:   72dp (transparent over hero, #0F172A opaque on scroll)
+Hero Height:      500dp (≈46% of 1080p screen)
+Row Height:       Poster rows: 220dp cards · Live rows: 160dp cards
+Row Gap:          32dp between rows
+Row Label:        Inter SemiBold 18sp, white, 24dp left margin
+"See All" Link:   Inter Medium 13sp, #06B6D4, right of row label
+
+// TOP NAV TABS
+Tab States:
+  Active:         color white, border-bottom 3dp #06B6D4
+  Focused (TV):   background rgba(6,182,212,0.12), scale 1.04×
+  Inactive:       color #64748B
+Tab Icons:        24dp, shown on TV (hidden on smaller screens)
+Logo:             "hushtv." Inter 900, 28sp, fixed left
+
+// HERO BILLBOARD
+Background:       Full-bleed backdrop image
+Overlay:          gradient: transparent (top) → #000 (60% from bottom)
+                  + left vignette: rgba(0,0,0,0.7) on left 50%
+Title:            Inter Black 900, 52–60sp, white, max 2 lines
+Genre Tags:       Pill badges, Inter 600 12sp, rgba(255,255,255,0.2) bg
+Synopsis:         Inter 400 15sp, #94A3B8, max 3 lines, line-clamp
+CTA Primary:      "▶ Play"   — white bg, black text, 56dp height
+CTA Secondary:    "+ My List" — rgba(255,255,255,0.15) bg, white text
+Auto-rotate:      Every 8000ms, crossfade 600ms transition
+Progress Dots:    Small dots bottom-right of hero, cyan = active
+
+// LIVE NOW ROW
+Card size:        16:9, 280×158dp
+Red LIVE badge:   top-left, Inter 700 10sp, red bg, blinking dot
+Channel Logo:     top-right, max 48×28dp, white tinted
+Show Progress:    cyan bar at card bottom, 3dp height
+Current Show:     Inter 600 13sp white, below card
+Channel Name:     Inter 400 11sp #64748B
+
+// TRENDING ROW — Numbered
+Rank Number:      Inter Black 900, 96sp, white 10% opacity, bottom-left
+                  (huge ghost number behind card — Netflix style)
+Card:             2:3 poster, 140×210dp
+Focus:            scale 1.08×, cyan border 2px, glow shadow
+
+// CONTINUE WATCHING ROW  
+Card:             16:9, 240×135dp
+Progress Bar:     cyan, 3dp, overlaid at bottom of card
+Episode Label:    "S2 E4 · 42 min left" — Inter 500 11sp, #94A3B8
+Resume Button:    appears on focus: "▶ Resume" pill, cyan bg`} />
+        </Section>
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* LOGIN SCREEN */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <Section title="Login / Account Setup Screen">
+
+          <div style={{ background: 'rgba(6,182,212,0.06)', border: '1px solid rgba(6,182,212,0.25)', borderRadius: 16, padding: 28, marginBottom: 24 }}>
+            <p style={{ color: '#06B6D4', fontWeight: 800, fontSize: 18, marginBottom: 12 }}>
+              The Concept — "Cinema-Grade Onboarding"
+            </p>
+            <p style={{ color: '#94A3B8', fontSize: 15, lineHeight: 1.8 }}>
+              The login screen must feel like opening night at a cinema — pure black, centred logo, minimal inputs, maximum confidence. 
+              No clutter. No distractions. Just the brand and the bare minimum fields to get the user watching in under 30 seconds. 
+              Think Apple TV+ first-launch meets a high-end streaming portal.
+            </p>
+          </div>
+
+          <LoginScreenMockup />
+
+          <div style={{ marginTop: 28, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+            {[
+              { label: 'Background', value: 'Pure #000000 — no gradients, no noise, no texture. Absolute black.' },
+              { label: 'Logo Position', value: 'Top-center. 48dp from top edge. "hushtv." at 40sp, Inter 900.' },
+              { label: 'Tagline', value: '"Your Stream. Your Way." — 13sp, Inter 400, #475569, below logo, 8dp gap.' },
+              { label: 'Card Container', value: 'Centered card, max-width 400dp. Border: 1px rgba(255,255,255,0.08). Background: rgba(255,255,255,0.03). Radius: 16dp. Padding: 40dp.' },
+              { label: 'Input Fields', value: 'Height 56dp. Background #0F172A. Border 1px #1E293B → #06B6D4 on focus. Radius 10dp. Label floats above on focus.' },
+              { label: 'Submit Button', value: 'Full width. Height 56dp. Cyan #06B6D4 fill. "Connect →" text. Inter 700 16sp. Radius 10dp. Pressed: scale 0.97×.' },
+              { label: 'Error State', value: 'Input border turns #EF4444. Brief shake animation (translateX ±6dp, 3 cycles, 200ms). Error text in red below field.' },
+              { label: 'Success State', value: 'Button morphs: cyan → green, text → "✓ Connected". Hold 600ms, then fade out entire screen → home.' },
+              { label: 'Loading State', value: 'Button shows a spinning arc (cyan, 20dp, border-top colored). Text hides. No layout shift.' },
+              { label: 'Step Indicator', value: 'If multi-step (host → credentials): 3 dots top of card. Active = cyan filled. Previous = white. Upcoming = #1E293B.' },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 10, padding: '14px 16px', borderLeft: '2px solid rgba(6,182,212,0.3)' }}>
+                <p style={{ color: '#475569', fontSize: 11, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</p>
+                <p style={{ color: '#E2E8F0', fontSize: 13, lineHeight: 1.55 }}>{value}</p>
+              </div>
+            ))}
+          </div>
+
+          <CodeBlock code={`// LOGIN SCREEN — Full Spec
+Background:       #000000 (never white-flash — set windowBackground in theme)
+Layout:           Single centered column, vertically centered on screen
+
+// LOGO BLOCK (top of card or above card)
+Logo:             "hushtv." Inter Black 900, 40sp
+Logo Color:       "hush" #FFFFFF · "tv." #06B6D4
+Tagline:          "Your Stream. Your Way." Inter 400 13sp #475569
+Logo → Card Gap: 32dp
+
+// INPUT CARD
+Width:            min(400dp, screen_width - 96dp)
+Background:       rgba(255, 255, 255, 0.03)
+Border:           1px solid rgba(255, 255, 255, 0.08)
+Border Radius:    16dp
+Padding:          40dp all sides
+Shadow:           none (pure black BG makes shadow unnecessary)
+
+// INPUT FIELDS (3 fields: Host URL · Username · Password)
+Height:           56dp
+Background:       #0F172A
+Border default:   1px solid #1E293B
+Border focus:     1px solid #06B6D4 + box-shadow 0 0 0 3px rgba(6,182,212,0.15)
+Radius:           10dp
+Font:             Inter 400 15sp white
+Label:            Inter 500 12sp #64748B, floats above on focus, 10dp above field
+Placeholder:      #334155
+
+// FIELDS
+Field 1 — Server / Host URL:
+  Placeholder:    "https://your-iptv-host.com"
+  Keyboard:       URL type (shows .com key)
+  Validate:       must start with http:// or https://
+
+Field 2 — Username:
+  Placeholder:    "Username"
+  Keyboard:       Default
+
+Field 3 — Password:
+  Placeholder:    "Password"
+  Keyboard:       Password (dots)
+  Toggle:         Eye icon right side, tap to reveal
+
+// SUBMIT BUTTON
+Text:             "Connect  →"
+Height:           56dp
+Background:       #06B6D4
+Text Color:       #000000 (black on cyan — high contrast)
+Font:             Inter Bold 700 16sp
+Radius:           10dp
+Margin Top:       24dp from last field
+Press:            scale(0.97) 100ms ease
+
+// STATES
+Loading:          Spinning ring replaces text. No layout shift.
+Success:          BG → #22C55E, text → "✓ Connected", hold 600ms, fade out
+Error:            Border → #EF4444, shake animation, red message below
+
+// SECONDARY LINK (below button)
+Text:             "Need help finding your credentials? →"
+Color:            #334155 → #06B6D4 on hover/focus
+Font:             Inter 400 13sp
+
+// STEP INDICATOR (if multi-step flow)
+Dots:             3 dots, 8dp each, 6dp gap
+Active:           #06B6D4 filled
+Complete:         #FFFFFF filled
+Pending:          #1E293B filled
+
+// TV D-PAD BEHAVIOR
+Tab order:        Host URL → Username → Password → Submit → Help Link
+Focus ring:       2px #06B6D4, 0 0 0 4px rgba(6,182,212,0.2)
+Back button:      Clears current field or navigates back to previous step
+Enter on field:   Moves focus to next field (like tab)
+Enter on submit:  Triggers form submission`} />
+
         </Section>
 
         {/* Footer */}
