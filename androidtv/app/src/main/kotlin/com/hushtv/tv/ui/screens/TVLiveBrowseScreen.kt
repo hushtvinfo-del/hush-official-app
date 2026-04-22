@@ -207,17 +207,52 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     }
     DisposableEffect(Unit) { onDispose { previewPlayer.release() } }
 
-    // Debounced preview: 700ms after focus settles, start playing that channel.
-    LaunchedEffect(focusedChannelIdx, filteredChannels, playlist) {
+    // Track whether focus is currently inside the channels pane. The preview
+    // only plays while the user is actively browsing channels — not while
+    // navigating the category sidebar.
+    var channelsPaneFocused by remember { mutableStateOf(false) }
+
+    // Focus requester for the first channel in the list — used to jump focus
+    // when the user presses ENTER on a category.
+    val firstChannelFocus = remember { FocusRequester() }
+
+    // "Please focus the first channel once the list has populated" flag.
+    // Set by ENTER-on-category; cleared after the focus request succeeds.
+    var pendingJumpToFirstChannel by remember { mutableStateOf(false) }
+
+    // Wait for channels to actually load before moving focus — this avoids
+    // trying to focus a node that hasn't been composed yet.
+    LaunchedEffect(filteredChannels, pendingJumpToFirstChannel) {
+        if (pendingJumpToFirstChannel && filteredChannels.isNotEmpty()) {
+            delay(80)
+            runCatching { firstChannelFocus.requestFocus() }
+            pendingJumpToFirstChannel = false
+        }
+    }
+
+    // Debounced preview: starts ~600 ms after the user settles on a channel,
+    // but ONLY while their focus is inside the channels pane.
+    LaunchedEffect(focusedChannelIdx, filteredChannels, channelsPaneFocused, playlist) {
+        if (!channelsPaneFocused) {
+            previewPlayer.pause()
+            return@LaunchedEffect
+        }
         val p = playlist ?: return@LaunchedEffect
         val ch = filteredChannels.getOrNull(focusedChannelIdx) ?: run {
             previewPlayer.stop(); return@LaunchedEffect
         }
-        delay(700)
+        delay(600)
         val url = XtreamApi.liveUrl(p.host, p.username, p.password, ch.streamId)
         previewPlayer.setMediaItem(MediaItem.fromUri(url))
         previewPlayer.prepare()
         previewPlayer.play()
+    }
+
+    // Pre-fetch the EPG for the channel under focus (short EPG → now + next).
+    LaunchedEffect(focusedChannelIdx, filteredChannels) {
+        val p = playlist ?: return@LaunchedEffect
+        val ch = filteredChannels.getOrNull(focusedChannelIdx) ?: return@LaunchedEffect
+        runCatching { EpgService.fetchShortEpg(p.host, p.username, p.password, ch.streamId) }
     }
 
     val onPlay: (Int) -> Unit = sel@{ idx ->
@@ -258,15 +293,39 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                 selectedIndex = selectedCatIndex,
                 loading = loadingCats,
                 onSelect = {
+                    // Focus change on a category row — load channels silently
+                    // in the background but DO NOT steal focus to the channels pane.
                     if (selectedCatIndex != it) focusedChannelIdx = 0
                     selectedCatIndex = it
+                },
+                onEnter = {
+                    // ENTER on a category — commit + jump focus to first channel.
+                    if (selectedCatIndex != it) focusedChannelIdx = 0
+                    selectedCatIndex = it
+                    pendingJumpToFirstChannel = true
                 },
                 restoreFocusIndex = if (NavState.browsePlaylistId == playlistId) NavState.selectedCategoryIndex else 0
             )
 
             Box(Modifier.width(1.dp).fillMaxHeight().background(Color(0x1FFFFFFF)))
 
-            Box(Modifier.weight(1f).fillMaxHeight()) {
+            // Right pane — Preview bar at top + scrollable channels below
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .onFocusChanged { channelsPaneFocused = it.hasFocus }
+            ) {
+                // ── Tivimate-style preview bar (video + EPG info) ──────────
+                PreviewBar(
+                    channel = filteredChannels.getOrNull(focusedChannelIdx),
+                    player = previewPlayer,
+                    showVideo = channelsPaneFocused,
+                )
+
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FFFFFFF)))
+
+                // ── Channel list (scrolls below the preview bar) ──────────
                 ChannelsPane(
                     playlistId = playlistId,
                     host = playlist?.host ?: "",
@@ -276,6 +335,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     loading = loadingChans,
                     onFocusChange = { focusedChannelIdx = it },
                     initialFocusIndex = focusedChannelIdx,
+                    firstChannelFocus = firstChannelFocus,
                     onPlay = onPlay,
                     emptyReason = when {
                         searchQuery.isNotBlank() && filteredChannels.isEmpty() ->
@@ -284,45 +344,42 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                         else -> null
                     }
                 )
-
-                // Mini preview overlay (top-right)
-                val previewChannel = filteredChannels.getOrNull(focusedChannelIdx)
-                if (previewChannel != null) {
-                    Box(
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(20.dp)
-                    ) {
-                        MiniPreview(channel = previewChannel, player = previewPlayer)
-                    }
-                }
             }
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mini preview window
+// Tivimate-style Preview Bar — video on the left, EPG info on the right.
+// Sits as a fixed header at the top of the right pane. Never steals focus.
+// Shows the channel the user currently has focus on in the channels list.
 // ─────────────────────────────────────────────────────────────────────────────
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-private fun MiniPreview(channel: MediaCard?, player: ExoPlayer) {
-    if (channel == null) return
-    Surface(
-        color = Color(0xFF000000),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .width(340.dp)
-            .border(1.dp, Color(0x5506B6D4), RoundedCornerShape(12.dp))
+private fun PreviewBar(
+    channel: MediaCard?,
+    player: ExoPlayer,
+    showVideo: Boolean,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .background(Color(0xFF050A15))
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .background(Color.Black)
-            ) {
+        // Left — 16:9 video box (fixed aspect, fills vertical space)
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .aspectRatio(16f / 9f)
+                .background(Color.Black, RoundedCornerShape(10.dp))
+                .border(1.dp, Color(0x3306B6D4), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (channel != null && showVideo) {
                 AndroidView(
                     factory = { c ->
                         PlayerView(c).apply {
@@ -330,40 +387,197 @@ private fun MiniPreview(channel: MediaCard?, player: ExoPlayer) {
                             this.player = player
                         }
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
                 )
-                // Tiny red "LIVE" pill
+            } else if (channel != null) {
+                // Focus is in sidebar — show a static placeholder poster
+                ChannelLogoLarge(channel.poster, channel.title)
+            } else {
+                Icon(
+                    Icons.Default.Tv, null,
+                    tint = Color(0x55FFFFFF),
+                    modifier = Modifier.size(44.dp),
+                )
+            }
+            // LIVE badge
+            if (channel != null && showVideo) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
+                        .align(Alignment.TopStart)
                         .padding(8.dp)
-                        .background(Color(0xCCDC2626), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .background(Color(0xDCDC2626), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
-                    Box(
-                        Modifier.size(6.dp).background(Color.White, CircleShape)
-                    )
+                    Box(Modifier.size(5.dp).background(Color.White, CircleShape))
                     Spacer(Modifier.width(4.dp))
-                    Text("LIVE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        "LIVE",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.1.sp,
+                    )
                 }
             }
-            Column(Modifier.padding(10.dp)) {
+        }
+
+        Spacer(Modifier.width(18.dp))
+
+        // Right — EPG info panel
+        Column(
+            Modifier.weight(1f).fillMaxHeight(),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            if (channel == null) {
                 Text(
-                    channel.title,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "Preview — press ENTER to watch fullscreen",
+                    "Select a channel to preview",
                     color = TextSecondary,
-                    fontSize = 10.sp
+                    fontSize = 14.sp,
                 )
+                return@Column
             }
+            EpgInfoPanel(channel = channel)
         }
     }
+}
+
+@Composable
+private fun EpgInfoPanel(channel: MediaCard) {
+    val now = EpgService.nowPlaying(channel.streamId)
+    val next = EpgService.nextUp(channel.streamId)
+
+    // Channel name
+    Text(
+        channel.title,
+        color = Color.White,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+    )
+    Spacer(Modifier.height(8.dp))
+
+    if (now != null) {
+        // NOW PLAYING
+        Text(
+            "NOW",
+            color = Cyan,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.6.sp,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            now.title,
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "${formatClock(now.startMs)} – ${formatClock(now.stopMs)}  •  ${now.minutesLeft} min left",
+            color = TextSecondary,
+            fontSize = 11.sp,
+        )
+        // Progress bar
+        Spacer(Modifier.height(6.dp))
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(Color(0x22FFFFFF), RoundedCornerShape(2.dp))
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(now.progressPct)
+                    .height(3.dp)
+                    .background(Cyan, RoundedCornerShape(2.dp))
+            )
+        }
+        // Description (truncated)
+        if (now.description.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                now.description,
+                color = Color(0xFFB3B8C1),
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                maxLines = 2,
+            )
+        }
+    } else {
+        Text(
+            "No program information",
+            color = TextSecondary,
+            fontSize = 12.sp,
+        )
+    }
+
+    if (next != null) {
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "NEXT",
+                color = Color(0xFFFACC15),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.5.sp,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                formatClock(next.startMs),
+                color = TextSecondary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                next.title,
+                color = Color(0xFFD1D5DB),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelLogoLarge(url: String?, name: String) {
+    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        if (!url.isNullOrBlank()) {
+            SubcomposeAsyncImage(
+                model = url,
+                contentDescription = name,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+                error = {
+                    Text(
+                        name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                        color = Cyan,
+                        fontSize = 48.sp,
+                        fontWeight = FontWeight.Black,
+                    )
+                },
+                loading = {
+                    CircularProgressIndicator(color = Cyan, modifier = Modifier.size(28.dp))
+                },
+            )
+        } else {
+            Text(
+                name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                color = Cyan,
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Black,
+            )
+        }
+    }
+}
+
+private fun formatClock(ms: Long): String {
+    val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+    return fmt.format(java.util.Date(ms))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -497,6 +711,7 @@ private fun CategorySidebar(
     selectedIndex: Int,
     loading: Boolean,
     onSelect: (Int) -> Unit,
+    onEnter: (Int) -> Unit,
     restoreFocusIndex: Int
 ) {
     val listState = rememberLazyListState(
@@ -544,7 +759,7 @@ private fun CategorySidebar(
                         selected = idx == selectedIndex,
                         modifier = Modifier.focusRequester(reqFor(idx)),
                         onFocus = { onSelect(idx) },
-                        onClick = { onSelect(idx) }
+                        onClick = { onEnter(idx) }
                     )
                 }
             }
@@ -613,6 +828,7 @@ private fun ChannelsPane(
     loading: Boolean,
     emptyReason: String?,
     initialFocusIndex: Int,
+    firstChannelFocus: FocusRequester,
     onFocusChange: (Int) -> Unit,
     onPlay: (Int) -> Unit
 ) {
@@ -625,14 +841,27 @@ private fun ChannelsPane(
     // Re-render when EPG arrives
     var epgVersion by remember { mutableStateOf(0) }
 
-    // When the list (re)populates, restore focus to previously-watched channel.
+    // Track whether we've already hijacked focus once (only for nav-back restore).
+    var hasRestoredFocus by remember { mutableStateOf(false) }
+    val shouldRestoreOnFirstLoad = remember {
+        NavState.browsePlaylistId == playlistId && initialFocusIndex > 0
+    }
+
+    // When the list populates, scroll to the target. Only steal focus ONCE on
+    // the initial nav-back restore — never when the user is browsing categories
+    // with focus still in the sidebar.
     LaunchedEffect(channels) {
-        if (channels.isNotEmpty()) {
-            val target = initialFocusIndex.coerceIn(0, channels.size - 1)
+        if (channels.isEmpty()) return@LaunchedEffect
+        val target = initialFocusIndex.coerceIn(0, channels.size - 1)
+        if (shouldRestoreOnFirstLoad && !hasRestoredFocus) {
+            hasRestoredFocus = true
             runCatching {
                 listState.scrollToItem(target.coerceAtLeast(0))
                 reqFor(target).requestFocus()
             }
+        } else {
+            // New category loaded silently — just reset scroll to top.
+            runCatching { listState.scrollToItem(0) }
         }
     }
 
@@ -665,12 +894,19 @@ private fun ChannelsPane(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(count = channels.size, key = { idx -> channels[idx].id + "-$idx" }) { idx ->
+                        val rowModifier = if (idx == 0) {
+                            Modifier
+                                .focusRequester(firstChannelFocus)
+                                .focusRequester(reqFor(idx))
+                        } else {
+                            Modifier.focusRequester(reqFor(idx))
+                        }
                         ChannelRow(
                             number = idx + 1,
                             channel = channels[idx],
                             nowPlaying = EpgService.nowPlaying(channels[idx].streamId).also { epgVersion },
                             isFavorite = favs.contains(channels[idx].streamId),
-                            modifier = Modifier.focusRequester(reqFor(idx)),
+                            modifier = rowModifier,
                             onFocus = { onFocusChange(idx) },
                             onPlay = { onPlay(idx) },
                             onToggleFav = {
