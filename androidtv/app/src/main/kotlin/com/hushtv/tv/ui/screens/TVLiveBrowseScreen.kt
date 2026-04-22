@@ -1,6 +1,9 @@
 package com.hushtv.tv.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -16,7 +19,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -31,40 +33,37 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import coil.compose.SubcomposeAsyncImage
 import com.hushtv.tv.data.MediaCard
+import com.hushtv.tv.data.NavState
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamCategory
 import com.hushtv.tv.ui.HushTVLogo
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.TextSecondary
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Tivimate-style Live TV browser.
- *
- *  ┌──────────────┬────────────────────────────────────────────┐
- *  │              │  <Category Name>                           │
- *  │  Categories  │  [logo] 101  CBS                           │
- *  │              │  [logo] 102  NBC                           │
- *  │  > US Ent    │  [logo] 103  ABC                           │
- *  │    UK        │  ...                                       │
- *  │    Sports    │                                            │
- *  └──────────────┴────────────────────────────────────────────┘
+ * Tivimate-style Live TV browser with:
+ *  • persistent sidebar of ALL categories
+ *  • scrollable channel list on the right
+ *  • mini video preview in the top-right showing the focused channel
+ *  • navigation memory: back from player restores exact position
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     val ctx = LocalContext.current
@@ -72,7 +71,11 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     val playlist = remember { PlaylistStore.find(ctx, playlistId) }
 
     var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
-    var selectedCatIndex by remember { mutableStateOf(0) }
+    var selectedCatIndex by remember {
+        mutableStateOf(
+            if (NavState.browsePlaylistId == playlistId) NavState.selectedCategoryIndex else 0
+        )
+    }
     var channels by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var loadingCats by remember { mutableStateOf(true) }
     var loadingChans by remember { mutableStateOf(false) }
@@ -80,10 +83,9 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
-    // Channel cache so switching back to a previously-loaded category is instant.
     val channelCache = remember { mutableStateMapOf<String, List<MediaCard>>() }
 
-    // Load categories once.
+    // Load categories once (or reuse cached).
     LaunchedEffect(playlistId) {
         val p = playlist ?: return@LaunchedEffect
         scope.launch {
@@ -94,13 +96,14 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         }
     }
 
-    // Load channels when the selected category changes.
+    // Load channels when selected category changes.
     LaunchedEffect(selectedCatIndex, categories) {
         val p = playlist ?: return@LaunchedEffect
         val cat = categories.getOrNull(selectedCatIndex) ?: return@LaunchedEffect
         val cached = channelCache[cat.category_id]
         if (cached != null) {
-            channels = cached; return@LaunchedEffect
+            channels = cached
+            return@LaunchedEffect
         }
         loadingChans = true
         scope.launch {
@@ -121,22 +124,66 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         else channels.filter { it.title.contains(searchQuery, ignoreCase = true) }
     }
 
-    val onPlay: (MediaCard) -> Unit = sel@{ c ->
+    // Persist "what the player needs to know for CH+/-".
+    LaunchedEffect(filteredChannels, playlistId) {
+        NavState.browsePlaylistId = playlistId
+        NavState.liveChannels = filteredChannels
+    }
+
+    // Track focused channel; use it both for state-restore and mini-preview.
+    var focusedChannelIdx by remember {
+        mutableStateOf(
+            if (NavState.browsePlaylistId == playlistId) NavState.focusedChannelIndex else 0
+        )
+    }
+    LaunchedEffect(focusedChannelIdx) {
+        NavState.selectedCategoryIndex = selectedCatIndex
+        NavState.focusedChannelIndex = focusedChannelIdx
+    }
+    LaunchedEffect(selectedCatIndex) {
+        NavState.selectedCategoryIndex = selectedCatIndex
+    }
+
+    // ─── Mini preview player ─────────────────────────────────────────────
+    val previewPlayer = remember {
+        ExoPlayer.Builder(ctx).build().apply {
+            volume = 0f  // muted — audio only starts in fullscreen
+            playWhenReady = true
+        }
+    }
+    DisposableEffect(Unit) { onDispose { previewPlayer.release() } }
+
+    // Debounced preview: 700ms after focus settles, start playing that channel.
+    LaunchedEffect(focusedChannelIdx, filteredChannels, playlist) {
+        val p = playlist ?: return@LaunchedEffect
+        val ch = filteredChannels.getOrNull(focusedChannelIdx) ?: run {
+            previewPlayer.stop(); return@LaunchedEffect
+        }
+        delay(700)
+        val url = XtreamApi.liveUrl(p.host, p.username, p.password, ch.streamId)
+        previewPlayer.setMediaItem(MediaItem.fromUri(url))
+        previewPlayer.prepare()
+        previewPlayer.play()
+    }
+
+    val onPlay: (Int) -> Unit = sel@{ idx ->
         val p = playlist ?: return@sel
-        val url = XtreamApi.liveUrl(p.host, p.username, p.password, c.streamId)
-        nav.navigate("player/${p.id}/${Uri.encode(url)}/${Uri.encode(c.title)}/true")
+        val ch = filteredChannels.getOrNull(idx) ?: return@sel
+        NavState.liveChannels = filteredChannels
+        NavState.rememberPlayback(idx)
+        NavState.browsePlaylistId = playlistId
+        previewPlayer.stop()
+        val url = XtreamApi.liveUrl(p.host, p.username, p.password, ch.streamId)
+        nav.navigate("player/${p.id}/${Uri.encode(url)}/${Uri.encode(ch.title)}/true")
     }
 
     Column(
         Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    0f to Color(0xFF050B18), 1f to Color(0xFF000000)
-                )
+                Brush.verticalGradient(0f to Color(0xFF050B18), 1f to Color(0xFF000000))
             )
     ) {
-        // Top bar
         TopBar(
             title = currentCategory?.category_name ?: "Live TV",
             count = filteredChannels.size,
@@ -147,34 +194,112 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
             onBack = { nav.popBackStack() }
         )
 
-        // Main pane: sidebar + channel list
         Row(Modifier.weight(1f).fillMaxWidth()) {
             CategorySidebar(
                 categories = categories,
                 selectedIndex = selectedCatIndex,
                 loading = loadingCats,
-                onSelect = { selectedCatIndex = it }
+                onSelect = {
+                    if (selectedCatIndex != it) focusedChannelIdx = 0
+                    selectedCatIndex = it
+                },
+                restoreFocusIndex = if (NavState.browsePlaylistId == playlistId) NavState.selectedCategoryIndex else 0
             )
 
-            // Vertical divider
+            Box(Modifier.width(1.dp).fillMaxHeight().background(Color(0x1FFFFFFF)))
+
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                ChannelsPane(
+                    channels = filteredChannels,
+                    loading = loadingChans,
+                    onFocusChange = { focusedChannelIdx = it },
+                    initialFocusIndex = focusedChannelIdx,
+                    onPlay = onPlay,
+                    emptyReason = when {
+                        searchQuery.isNotBlank() && filteredChannels.isEmpty() ->
+                            "No channels matching \"$searchQuery\""
+                        channels.isEmpty() && !loadingChans -> "No channels in this category"
+                        else -> null
+                    }
+                )
+
+                // Mini preview overlay (top-right)
+                val previewChannel = filteredChannels.getOrNull(focusedChannelIdx)
+                if (previewChannel != null) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(20.dp)
+                    ) {
+                        MiniPreview(channel = previewChannel, player = previewPlayer)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mini preview window
+// ─────────────────────────────────────────────────────────────────────────────
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun MiniPreview(channel: MediaCard?, player: ExoPlayer) {
+    if (channel == null) return
+    Surface(
+        color = Color(0xFF000000),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .width(340.dp)
+            .border(1.dp, Color(0x5506B6D4), RoundedCornerShape(12.dp))
+    ) {
+        Column {
             Box(
                 Modifier
-                    .width(1.dp)
-                    .fillMaxHeight()
-                    .background(Color(0x1FFFFFFF))
-            )
-
-            ChannelsPane(
-                channels = filteredChannels,
-                loading = loadingChans,
-                emptyReason = when {
-                    searchQuery.isNotBlank() && filteredChannels.isEmpty() ->
-                        "No channels matching \"$searchQuery\""
-                    channels.isEmpty() && !loadingChans -> "No channels in this category"
-                    else -> null
-                },
-                onPlay = onPlay
-            )
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(Color.Black)
+            ) {
+                AndroidView(
+                    factory = { c ->
+                        PlayerView(c).apply {
+                            useController = false
+                            this.player = player
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                // Tiny red "LIVE" pill
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .background(Color(0xCCDC2626), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Box(
+                        Modifier.size(6.dp).background(Color.White, CircleShape)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("LIVE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                }
+            }
+            Column(Modifier.padding(10.dp)) {
+                Text(
+                    channel.title,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Preview — press ENTER to watch fullscreen",
+                    color = TextSecondary,
+                    fontSize = 10.sp
+                )
+            }
         }
     }
 }
@@ -203,10 +328,7 @@ private fun TopBar(
         Surface(
             color = Color(0x1AFFFFFF),
             shape = CircleShape,
-            modifier = Modifier
-                .size(44.dp)
-                .focusTvCircle()
-                .clickableWithEnter(onBack)
+            modifier = Modifier.size(44.dp).focusTvCircle().clickableWithEnter(onBack)
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(22.dp))
@@ -222,18 +344,12 @@ private fun TopBar(
             if (count > 0) {
                 Text(
                     "$count channel${if (count == 1) "" else "s"}",
-                    color = TextSecondary,
-                    fontSize = 13.sp
+                    color = TextSecondary, fontSize = 13.sp
                 )
             }
         }
-
         if (searchOpen) {
-            SearchField(
-                value = searchQuery,
-                onChange = onSearchChange,
-                onClose = onSearchToggle
-            )
+            SearchField(value = searchQuery, onChange = onSearchChange, onClose = onSearchToggle)
         } else {
             Surface(
                 color = Color(0x14FFFFFF),
@@ -257,11 +373,7 @@ private fun TopBar(
 }
 
 @Composable
-private fun SearchField(
-    value: String,
-    onChange: (String) -> Unit,
-    onClose: () -> Unit
-) {
+private fun SearchField(value: String, onChange: (String) -> Unit, onClose: () -> Unit) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     var focused by remember { mutableStateOf(false) }
@@ -274,22 +386,17 @@ private fun SearchField(
                 .padding(horizontal = 18.dp, vertical = 10.dp)
         ) {
             BasicTextField(
-                value = value,
-                onValueChange = onChange,
-                singleLine = true,
+                value = value, onValueChange = onChange, singleLine = true,
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
                 cursorBrush = SolidColor(Cyan),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focus)
+                modifier = Modifier.fillMaxWidth().focusRequester(focus)
                     .onFocusChanged { focused = it.isFocused }
             )
             if (value.isEmpty()) Text("Search channels…", color = TextSecondary, fontSize = 16.sp)
         }
         Spacer(Modifier.width(8.dp))
         Surface(
-            color = Color(0x1AFFFFFF),
-            shape = CircleShape,
+            color = Color(0x1AFFFFFF), shape = CircleShape,
             modifier = Modifier.size(40.dp).focusTvCircle().clickableWithEnter(onClose)
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -308,31 +415,36 @@ private fun CategorySidebar(
     categories: List<XtreamCategory>,
     selectedIndex: Int,
     loading: Boolean,
-    onSelect: (Int) -> Unit
+    onSelect: (Int) -> Unit,
+    restoreFocusIndex: Int
 ) {
-    val listState = rememberLazyListState()
-    val firstFocus = remember { FocusRequester() }
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = restoreFocusIndex.coerceAtLeast(0)
+    )
+    val focusByIndex = remember { mutableMapOf<Int, FocusRequester>() }
+    fun reqFor(idx: Int) = focusByIndex.getOrPut(idx) { FocusRequester() }
+
+    // Restore focus to the previously-selected category (on first render with data).
     LaunchedEffect(categories.size) {
-        if (categories.isNotEmpty()) runCatching { firstFocus.requestFocus() }
+        if (categories.isNotEmpty()) {
+            val target = restoreFocusIndex.coerceIn(0, categories.size - 1)
+            runCatching { reqFor(target).requestFocus() }
+        }
     }
+    // Keep the selected category visible as user D-pads down.
     LaunchedEffect(selectedIndex) {
-        if (selectedIndex >= 0 && categories.isNotEmpty()) {
+        if (selectedIndex in categories.indices) {
             runCatching { listState.animateScrollToItem(selectedIndex) }
         }
     }
 
     Column(
-        Modifier
-            .width(300.dp)
-            .fillMaxHeight()
-            .background(Color(0x33000000))
+        Modifier.width(300.dp).fillMaxHeight().background(Color(0x33000000))
     ) {
         Text(
             "CATEGORIES",
-            color = TextSecondary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 2.5.sp,
+            color = TextSecondary, fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
             modifier = Modifier.padding(start = 24.dp, top = 18.dp, bottom = 8.dp)
         )
         if (loading) {
@@ -340,20 +452,16 @@ private fun CategorySidebar(
                 CircularProgressIndicator(color = Cyan, modifier = Modifier.size(28.dp))
             }
         } else {
-            LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(vertical = 4.dp)
-            ) {
+            LazyColumn(state = listState, contentPadding = PaddingValues(vertical = 4.dp)) {
                 items(
                     count = categories.size,
                     key = { idx -> categories[idx].category_id }
                 ) { idx ->
                     val cat = categories[idx]
-                    val mod = if (idx == 0) Modifier.focusRequester(firstFocus) else Modifier
                     CategoryRow(
                         name = cat.category_name,
                         selected = idx == selectedIndex,
-                        modifier = mod,
+                        modifier = Modifier.focusRequester(reqFor(idx)),
                         onFocus = { onSelect(idx) },
                         onClick = { onSelect(idx) }
                     )
@@ -382,10 +490,7 @@ private fun CategoryRow(
         selected -> Cyan
         else -> Color(0xFFD1D5DB)
     }
-    val leftBar = when {
-        selected || focused -> Cyan
-        else -> Color.Transparent
-    }
+    val leftBar = if (selected || focused) Cyan else Color.Transparent
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -402,26 +507,21 @@ private fun CategoryRow(
             .padding(vertical = 12.dp)
     ) {
         Box(
-            Modifier
-                .width(4.dp)
-                .height(28.dp)
+            Modifier.width(4.dp).height(28.dp)
                 .background(leftBar, RoundedCornerShape(2.dp))
         )
         Spacer(Modifier.width(14.dp))
         Text(
-            name,
-            color = textColor,
-            fontSize = 15.sp,
+            name, color = textColor, fontSize = 15.sp,
             fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.Medium,
-            maxLines = 1,
-            modifier = Modifier.weight(1f, fill = true)
+            maxLines = 1, modifier = Modifier.weight(1f, fill = true)
         )
         Spacer(Modifier.width(8.dp))
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Channel list pane
+// Channels pane
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -429,29 +529,42 @@ private fun ChannelsPane(
     channels: List<MediaCard>,
     loading: Boolean,
     emptyReason: String?,
-    onPlay: (MediaCard) -> Unit
+    initialFocusIndex: Int,
+    onFocusChange: (Int) -> Unit,
+    onPlay: (Int) -> Unit
 ) {
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0A0E18))
-    ) {
+    val focusByIndex = remember { mutableMapOf<Int, FocusRequester>() }
+    fun reqFor(idx: Int) = focusByIndex.getOrPut(idx) { FocusRequester() }
+    val listState = rememberLazyListState()
+
+    // When the list (re)populates, restore focus to previously-watched channel.
+    LaunchedEffect(channels) {
+        if (channels.isNotEmpty()) {
+            val target = initialFocusIndex.coerceIn(0, channels.size - 1)
+            runCatching {
+                listState.scrollToItem(target.coerceAtLeast(0))
+                reqFor(target).requestFocus()
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Color(0xFF0A0E18))) {
         when {
             loading -> CenterProgress()
             emptyReason != null -> EmptyMessage(emptyReason)
             else -> {
                 LazyColumn(
+                    state = listState,
                     contentPadding = PaddingValues(vertical = 8.dp, horizontal = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(
-                        count = channels.size,
-                        key = { idx -> channels[idx].id + "-$idx" }
-                    ) { idx ->
+                    items(count = channels.size, key = { idx -> channels[idx].id + "-$idx" }) { idx ->
                         ChannelRow(
                             number = idx + 1,
                             channel = channels[idx],
-                            onPlay = { onPlay(channels[idx]) }
+                            modifier = Modifier.focusRequester(reqFor(idx)),
+                            onFocus = { onFocusChange(idx) },
+                            onPlay = { onPlay(idx) }
                         )
                     }
                 }
@@ -464,12 +577,14 @@ private fun ChannelsPane(
 private fun ChannelRow(
     number: Int,
     channel: MediaCard,
+    modifier: Modifier = Modifier,
+    onFocus: () -> Unit,
     onPlay: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(
                 if (focused) Color(0x3306B6D4) else Color(0x08FFFFFF),
@@ -480,48 +595,34 @@ private fun ChannelRow(
                 if (focused) Cyan else Color(0x14FFFFFF),
                 RoundedCornerShape(12.dp)
             )
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus()
+            }
             .focusable()
             .clickableWithEnter(onPlay)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Channel number
         Box(
-            Modifier
-                .width(56.dp)
-                .padding(end = 12.dp),
+            Modifier.width(56.dp).padding(end = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 number.toString().padStart(3, '0'),
                 color = if (focused) Cyan else TextSecondary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = 18.sp, fontWeight = FontWeight.Bold
             )
         }
-
-        // Logo
         ChannelLogo(channel.poster, channel.title)
-
         Spacer(Modifier.width(14.dp))
-
-        // Name
         Column(Modifier.weight(1f)) {
             Text(
-                channel.title,
-                color = Color.White,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
+                channel.title, color = Color.White, fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold, maxLines = 1
             )
         }
-
         if (focused) {
-            Surface(
-                color = Cyan,
-                shape = CircleShape,
-                modifier = Modifier.size(36.dp)
-            ) {
+            Surface(color = Cyan, shape = CircleShape, modifier = Modifier.size(36.dp)) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(20.dp))
                 }
@@ -533,23 +634,16 @@ private fun ChannelRow(
 @Composable
 private fun ChannelLogo(url: String?, name: String) {
     Box(
-        Modifier
-            .size(52.dp)
-            .background(Color(0xFF1F2937), RoundedCornerShape(8.dp)),
+        Modifier.size(52.dp).background(Color(0xFF1F2937), RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
     ) {
         if (!url.isNullOrBlank()) {
             SubcomposeAsyncImage(
-                model = url,
-                contentDescription = name,
-                contentScale = ContentScale.Fit,
+                model = url, contentDescription = name, contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().padding(4.dp),
-                error = { LogoFallback(name) },
-                loading = { LogoFallback(name) }
+                error = { LogoFallback(name) }, loading = { LogoFallback(name) }
             )
-        } else {
-            LogoFallback(name)
-        }
+        } else LogoFallback(name)
     }
 }
 
@@ -560,10 +654,6 @@ private fun LogoFallback(name: String) {
         Text(initial, color = Cyan, fontSize = 20.sp, fontWeight = FontWeight.Black)
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun CenterProgress() {
@@ -591,9 +681,6 @@ private fun EmptyMessage(msg: String) {
     }
 }
 
-/** A small helper that makes circle-shaped interactive surfaces show the
- *  focus ring without the scale-bump that tvFocusable applies (used only
- *  for the back/search icons in the top bar). */
 @Composable
 private fun Modifier.focusTvCircle(): Modifier {
     var focused by remember { mutableStateOf(false) }
