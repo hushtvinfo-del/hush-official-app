@@ -3,6 +3,7 @@ package com.hushtv.tv.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -43,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -269,31 +271,49 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
             visible = gridHasFocus,
         )
 
-        Row(Modifier.fillMaxSize()) {
-            // ── LEFT SIDEBAR ────────────────────────────────────
-            VodSidebar(
-                entries = sidebarEntries,
-                selectedId = selectedCatId,
-                title = title,
-                loading = loadingCats,
-                selectedFocusRequester = selectedSidebarFocus,
-                onBack = { nav.popBackStack() },
-                onFocus = { id -> if (id != "__divider__" && id != "__divider2__") selectedCatId = id },
-                onEnter = { id ->
-                    if (id == "__divider__" || id == "__divider2__") return@VodSidebar
-                    selectedCatId = id
-                    pendingJumpToGrid = true
-                },
-                searchQuery = searchQuery,
-                onSearchChange = { searchQuery = it },
-                isSearchActive = selectedCatId == CAT_SEARCH,
-                aiQuery = aiQuery,
-                onAiQueryChange = { aiQuery = it },
-                isAiActive = selectedCatId == CAT_AI,
-                aiLoading = aiLoading,
-            )
+        // Animated sidebar width — collapses to 0 when focus is in the grid.
+        val sidebarWidth by animateDpAsState(
+            targetValue = if (gridHasFocus) 0.dp else 260.dp,
+            animationSpec = tween(180),
+            label = "vod-sidebar-width",
+        )
 
-            Box(Modifier.width(1.dp).fillMaxHeight().background(Color(0x14FFFFFF)))
+        Row(Modifier.fillMaxSize()) {
+            // ── LEFT SIDEBAR — animated-width wrapper ──────────
+            Box(
+                Modifier
+                    .width(sidebarWidth)
+                    .fillMaxHeight()
+                    .clipToBounds(),
+            ) {
+                VodSidebar(
+                    entries = sidebarEntries,
+                    selectedId = selectedCatId,
+                    title = title,
+                    loading = loadingCats,
+                    selectedFocusRequester = selectedSidebarFocus,
+                    modifier = Modifier.requiredWidth(260.dp),
+                    onBack = { nav.popBackStack() },
+                    onFocus = { id -> if (id != "__divider__" && id != "__divider2__") selectedCatId = id },
+                    onEnter = { id ->
+                        if (id == "__divider__" || id == "__divider2__") return@VodSidebar
+                        selectedCatId = id
+                        pendingJumpToGrid = true
+                    },
+                    searchQuery = searchQuery,
+                    onSearchChange = { searchQuery = it },
+                    isSearchActive = selectedCatId == CAT_SEARCH,
+                    aiQuery = aiQuery,
+                    onAiQueryChange = { aiQuery = it },
+                    isAiActive = selectedCatId == CAT_AI,
+                    aiLoading = aiLoading,
+                )
+            }
+
+            // Thin divider — only visible when sidebar is expanded
+            if (sidebarWidth > 20.dp) {
+                Box(Modifier.width(1.dp).fillMaxHeight().background(Color(0x14FFFFFF)))
+            }
 
             // ── RIGHT PANE ──────────────────────────────────────
             Column(
@@ -419,6 +439,7 @@ private fun VodSidebar(
     title: String,
     loading: Boolean,
     selectedFocusRequester: FocusRequester,
+    modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onFocus: (String) -> Unit,
     onEnter: (String) -> Unit,
@@ -445,7 +466,7 @@ private fun VodSidebar(
     }
 
     Column(
-        Modifier
+        modifier
             .width(260.dp)
             .fillMaxHeight()
             .background(Color(0x80000000)),

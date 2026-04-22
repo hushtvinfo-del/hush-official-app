@@ -88,6 +88,9 @@ fun TVMovieDetailScreen(
     var vodInfo by remember { mutableStateOf<com.hushtv.tv.data.XtreamVodInfo?>(null) }
     var tmdbMovie by remember { mutableStateOf<TmdbMovie?>(null) }
     var loading by remember { mutableStateOf(true) }
+    // Full library (movies + series) — used for cross-referencing an actor's
+    // filmography against titles the user can actually play.
+    var library by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
 
     // Fetch Xtream VOD info → tmdb_id (if present) → TMDB details.
     LaunchedEffect(streamId) {
@@ -102,6 +105,17 @@ fun TVMovieDetailScreen(
         }
         loading = false
     }
+
+    // Lazy-fetch the full library in the background (for cast filmography lookup).
+    LaunchedEffect(streamId) {
+        val p = playlist ?: return@LaunchedEffect
+        val movies = runCatching { XtreamApi.getAllStreams(p.host, p.username, p.password, "movie") }.getOrDefault(emptyList())
+        val series = runCatching { XtreamApi.getAllStreams(p.host, p.username, p.password, "series") }.getOrDefault(emptyList())
+        library = movies + series
+    }
+
+    // Cast-filmography dialog state
+    var castDialog by remember { mutableStateOf<CastDialogState?>(null) }
 
     // My-list state
     var myListVersion by remember { mutableStateOf(0) }
@@ -207,16 +221,17 @@ fun TVMovieDetailScreen(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 56.dp, vertical = 40.dp)
+                .padding(start = 72.dp, end = 56.dp, top = 72.dp, bottom = 24.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
             // ── Hero row: poster + info ────────────────────────
             Row(verticalAlignment = Alignment.Top) {
-                // Poster (prefer RPDB rated poster for the immediate visual "ratings baked in" effect)
-                val heroPoster = rpdbPosterUrl ?: posterUrl
+                // Poster — always use the TMDB poster (known 2:3) for the hero
+                // so nothing ever gets clipped. RPDB appears on grid thumbnails.
+                val heroPoster = posterUrl ?: rpdbPosterUrl
                 Box(
                     Modifier
-                        .width(220.dp)
+                        .width(200.dp)
                         .aspectRatio(2f / 3f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(SurfaceNavy),
@@ -225,20 +240,13 @@ fun TVMovieDetailScreen(
                         SubcomposeAsyncImage(
                             model = heroPoster,
                             contentDescription = displayTitle,
-                            contentScale = ContentScale.Crop,
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize(),
-                            error = {
-                                if (!posterUrl.isNullOrBlank() && heroPoster != posterUrl) {
-                                    SubcomposeAsyncImage(
-                                        model = posterUrl,
-                                        contentDescription = displayTitle,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            },
+                            error = { PosterMissing() },
                             loading = { },
                         )
+                    } else {
+                        PosterMissing()
                     }
                 }
 
@@ -354,8 +362,26 @@ fun TVMovieDetailScreen(
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(castList, key = { "cast-${it.id}" }) { c ->
                         CastCard(member = c) {
-                            // Show a bottom sheet of this actor's other library titles
-                            scope.launch { /* handled below */ }
+                            // Open filmography dialog — fetch TMDB person credits
+                            // and cross-reference against the user's library.
+                            if (library.isEmpty()) {
+                                castDialog = CastDialogState(c, emptyList(), loading = true, notice = "Loading library…")
+                            } else {
+                                castDialog = CastDialogState(c, emptyList(), loading = true)
+                            }
+                            scope.launch {
+                                val titles = TmdbService.personCombinedCredits(c.id)
+                                // Wait for library if still loading
+                                var lib = library
+                                var waits = 0
+                                while (lib.isEmpty() && waits < 20) {
+                                    kotlinx.coroutines.delay(200)
+                                    lib = library
+                                    waits++
+                                }
+                                val matches = matchLibraryByTitles(titles, lib)
+                                castDialog = CastDialogState(c, matches, loading = false)
+                            }
                         }
                     }
                 }
@@ -373,7 +399,271 @@ fun TVMovieDetailScreen(
                 }
             }
         }
+
+        // ── Cast filmography dialog (overlay) ──────────────────────
+        castDialog?.let { state ->
+            CastFilmographyDialog(
+                state = state,
+                onDismiss = { castDialog = null },
+                onTitleClick = { item ->
+                    castDialog = null
+                    when (item.kind) {
+                        "movie" -> nav.navigate("moviedetail/$playlistId/${item.streamId}/${Uri.encode(item.title)}")
+                        "series" -> nav.navigate("series/$playlistId/${item.seriesId}/${Uri.encode(item.title)}")
+                    }
+                },
+            )
+        }
     }
+}
+
+/* ──────────────────────────────────────────────────────────────── */
+/*  CAST FILMOGRAPHY DIALOG                                         */
+/* ──────────────────────────────────────────────────────────────── */
+
+data class CastDialogState(
+    val member: TmdbCastMember,
+    val matches: List<MediaCard>,
+    val loading: Boolean,
+    val notice: String? = null,
+)
+
+@Composable
+private fun CastFilmographyDialog(
+    state: CastDialogState,
+    onDismiss: () -> Unit,
+    onTitleClick: (MediaCard) -> Unit,
+) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xCC000000))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                Modifier
+                    .widthIn(max = 1000.dp)
+                    .fillMaxWidth(0.8f)
+                    .heightIn(max = 620.dp)
+                    .background(Color(0xFF0B111D), RoundedCornerShape(16.dp))
+                    .border(1.dp, Color(0x3306B6D4), RoundedCornerShape(16.dp))
+                    .padding(28.dp),
+            ) {
+                // Header
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceNavy),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val img = TmdbService.img(state.member.profile_path, "w185")
+                        if (!img.isNullOrBlank()) {
+                            SubcomposeAsyncImage(
+                                model = img,
+                                contentDescription = state.member.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                error = { Text(
+                                    state.member.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Black
+                                ) },
+                                loading = { },
+                            )
+                        } else {
+                            Text(
+                                state.member.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Black,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            state.member.name,
+                            color = TextPrimary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "Also in your library",
+                            color = Cyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 1.3.sp,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(18.dp))
+
+                when {
+                    state.loading -> {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = Cyan, modifier = Modifier.size(34.dp))
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    state.notice ?: "Searching your library…",
+                                    color = TextSecondary,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                    state.matches.isEmpty() -> {
+                        Box(
+                            Modifier.fillMaxWidth().height(200.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "No other titles with ${state.member.name} in your library.",
+                                color = TextMuted,
+                                fontSize = 14.sp,
+                            )
+                        }
+                    }
+                    else -> {
+                        androidx.compose.foundation.lazy.grid.LazyHorizontalGrid(
+                            rows = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(440.dp),
+                        ) {
+                            items(
+                                count = state.matches.size,
+                                key = { idx -> "fmg-${state.matches[idx].kind}-${state.matches[idx].id}" },
+                            ) { idx ->
+                                val item = state.matches[idx]
+                                FilmographyCard(item = item, onClick = { onTitleClick(item) })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilmographyCard(item: MediaCard, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.05f else 1f,
+        animationSpec = tween(140),
+        label = "fmg-scale",
+    )
+    Column(
+        Modifier
+            .width(130.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(SurfaceNavy)
+                .border(
+                    width = if (focused) 2.dp else 0.dp,
+                    color = if (focused) Cyan else Color.Transparent,
+                    shape = RoundedCornerShape(8.dp),
+                ),
+        ) {
+            if (!item.poster.isNullOrBlank()) {
+                SubcomposeAsyncImage(
+                    model = item.poster,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    error = { PosterMissing() },
+                    loading = { },
+                )
+            } else {
+                PosterMissing()
+            }
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(5.dp)
+                    .background(Color(0xCC000000), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    if (item.kind == "series") "SERIES" else "MOVIE",
+                    color = Cyan,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp,
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            item.title,
+            color = if (focused) Cyan else TextPrimary,
+            fontSize = 10.sp,
+            fontFamily = Inter,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            lineHeight = 12.sp,
+        )
+    }
+}
+
+@Composable
+private fun PosterMissing() {
+    Box(
+        Modifier.fillMaxSize().background(SurfaceNavy),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "?",
+            color = BorderSlate,
+            fontSize = 36.sp,
+            fontFamily = Inter,
+            fontWeight = FontWeight.Black,
+        )
+    }
+}
+
+/** Cross-reference a list of title strings from TMDB against the library. */
+private fun matchLibraryByTitles(
+    titles: List<String>,
+    library: List<MediaCard>,
+): List<MediaCard> {
+    if (titles.isEmpty() || library.isEmpty()) return emptyList()
+    val libLower = library.map { it to it.title.lowercase() }
+    val seen = mutableSetOf<String>()
+    val out = mutableListOf<MediaCard>()
+    titles.forEach { raw ->
+        val t = raw.trim().lowercase()
+        if (t.isBlank() || t.length < 2) return@forEach
+        val hit = libLower.firstOrNull { (_, lt) ->
+            lt == t || lt.startsWith("$t ") || lt.startsWith("$t:") ||
+                (t.length >= 5 && (lt.contains(" $t") || lt.contains(" $t:")))
+        }?.first
+        if (hit != null && seen.add("${hit.kind}-${hit.id}")) out += hit
+    }
+    return out.take(30)
 }
 
 /* ──────────────────────────────────────────────────────────────── */

@@ -214,15 +214,16 @@ fun TVSeriesDetailScreen(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 48.dp, vertical = 32.dp)
+                .padding(start = 72.dp, end = 48.dp, top = 72.dp, bottom = 24.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
             // ── Hero row ───────────────────────────────────
             Row(verticalAlignment = Alignment.Top) {
-                val heroPoster = rpdbPoster ?: posterUrl
+                // Use TMDB poster (known 2:3) for the hero so nothing clips.
+                val heroPoster = posterUrl ?: rpdbPoster
                 Box(
                     Modifier
-                        .width(200.dp)
+                        .width(190.dp)
                         .aspectRatio(2f / 3f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(SurfaceNavy),
@@ -231,18 +232,9 @@ fun TVSeriesDetailScreen(
                         SubcomposeAsyncImage(
                             model = heroPoster,
                             contentDescription = displayTitle,
-                            contentScale = ContentScale.Crop,
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize(),
-                            error = {
-                                if (!posterUrl.isNullOrBlank() && heroPoster != posterUrl) {
-                                    SubcomposeAsyncImage(
-                                        model = posterUrl,
-                                        contentDescription = displayTitle,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            },
+                            error = { },
                             loading = { },
                         )
                     }
