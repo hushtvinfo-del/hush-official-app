@@ -45,6 +45,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -768,13 +769,13 @@ private fun CategorySidebar(
     }
 
     Column(
-        Modifier.width(300.dp).fillMaxHeight().background(Color(0x33000000))
+        Modifier.width(220.dp).fillMaxHeight().background(Color(0x33000000))
     ) {
         Text(
             "CATEGORIES",
             color = TextSecondary, fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
-            modifier = Modifier.padding(start = 24.dp, top = 18.dp, bottom = 8.dp)
+            modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 8.dp)
         )
         if (loading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -843,7 +844,9 @@ private fun CategoryRow(
         Text(
             name, color = textColor, fontSize = 15.sp,
             fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.Medium,
-            maxLines = 1, modifier = Modifier.weight(1f, fill = true)
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = true)
         )
         Spacer(Modifier.width(8.dp))
     }
