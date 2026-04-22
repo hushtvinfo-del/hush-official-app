@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -150,12 +151,21 @@ fun TVPlayerScreen(
 
     // VOD focus target — when the OSD becomes visible, we move focus to the
     // primary Play/Pause button so the user can immediately navigate the
-    // control bar with the D-pad instead of the root Box capturing OK.
+    // control bar with the D-pad. When the OSD hides, we MUST return focus
+    // to the root Box — otherwise the removed-from-composition button takes
+    // focus with it, key events have nowhere to land, and pressing OK does
+    // nothing (the bug shipped in 1.5.1).
     val playPauseFocus = remember { FocusRequester() }
+    val rootFocus = remember { FocusRequester() }
     LaunchedEffect(showControls, isLive) {
-        if (showControls && !isLive) {
+        if (isLive) return@LaunchedEffect
+        if (showControls) {
             delay(50)
             runCatching { playPauseFocus.requestFocus() }
+        } else {
+            // Send focus back home so the root's onKeyEvent handler can
+            // catch the next key press and re-show the OSD.
+            runCatching { rootFocus.requestFocus() }
         }
     }
 
@@ -280,7 +290,6 @@ fun TVPlayerScreen(
     // ─── Back-double-press → previous channel ─────────────────────────────
     var lastBackMs by remember { mutableStateOf(0L) }
 
-    val rootFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { rootFocus.requestFocus() } }
 
     Box(
@@ -288,6 +297,7 @@ fun TVPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(rootFocus)
+            .focusable()
             .onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
                 controlsTick++
