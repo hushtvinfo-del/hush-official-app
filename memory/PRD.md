@@ -43,6 +43,16 @@ Constraint: the React web repo must **not** be modified.
 * APK emitted to `/app/dist/HushTV-android-tv-v1.0.0-debug.apk`.
 * Build system workaround for aarch64 hosts: qemu-x86_64 wrapper for Google's x86_64-only `aapt2`, configured via `android.aapt2FromMavenOverride`.
 
+### Public distribution — Apr 22, 2026
+* APK SCP'd to user's dedicated server `66.163.113.147` (Ubuntu 24.04).
+* nginx installed and configured to serve:
+  * `http://66.163.113.147/` → HushTV-branded landing page with install instructions for Android TV (via the Downloader app) and a direct-download button.
+  * `http://66.163.113.147/hushtv.apk` → APK with `Content-Type: application/vnd.android.package-archive` + `Content-Disposition: attachment; filename="HushTV.apk"` so Android devices trigger a proper download.
+  * `http://66.163.113.147/tv` → 302 → `/`.
+* nginx site file at `/etc/nginx/sites-available/hushtv`, APK served from `/var/www/hushtv/HushTV.apk`.
+* End-to-end verified: external `curl` download MD5 matches the source APK byte-for-byte.
+* **Security debt:** root password for that server was shared in plain chat — user should rotate immediately and switch to SSH keys.
+
 ## Verification done
 
 * `aapt2 dump badging` — confirms package name, version, minSdk 24, targetSdk 34,
