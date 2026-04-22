@@ -148,12 +148,12 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
         }
     }
 
-    // Virtual sidebar: [Favorites, Search] + [All] + real categories
+    // Virtual sidebar: [Search] + [Favorites, All] + real categories
     val sidebarEntries: List<SidebarEntry> = remember(allCategories, type) {
         buildList {
-            add(SidebarEntry(CAT_FAV, "Favorites", Icons.Default.Star))
             add(SidebarEntry(CAT_SEARCH, "Search", Icons.Default.Search))
             add(SidebarEntry("__divider__", "", Icons.Default.Info, isDivider = true))
+            add(SidebarEntry(CAT_FAV, "Favorites", Icons.Default.Star))
             add(SidebarEntry(CAT_ALL, "All", Icons.Outlined.Slideshow))
             allCategories.forEach { c ->
                 add(SidebarEntry(c.category_id, c.category_name, Icons.Default.Movie))
