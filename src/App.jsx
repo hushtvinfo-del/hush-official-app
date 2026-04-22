@@ -10,6 +10,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Admin from './pages/Admin';
+import DesignSpec from './pages/DesignSpec';
 import TVApp from './pages/tv/TVApp';
 import BroadcastBanner from './components/BroadcastBanner';
 import { useBroadcast } from './hooks/useBroadcast';
@@ -90,6 +91,7 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <Routes>
+            <Route path="/design-spec" element={<DesignSpec />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/*" element={<Admin />} />
             <Route path="/tv" element={<TVApp />} />
