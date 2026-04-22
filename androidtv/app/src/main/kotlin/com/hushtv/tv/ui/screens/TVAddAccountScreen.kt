@@ -3,9 +3,11 @@ package com.hushtv.tv.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Error
@@ -63,34 +65,35 @@ fun TVAddAccountScreen(nav: NavController) {
                     colors = listOf(Color(0xFF0F2657), Color.Black),
                     radius = 1600f
                 )
-            ),
-        contentAlignment = Alignment.Center
+            )
     ) {
         Column(
             Modifier
-                .widthIn(max = 800.dp)
+                .widthIn(max = 760.dp)
                 .fillMaxWidth()
-                .padding(horizontal = 64.dp)
+                .align(Alignment.Center)
+                .padding(horizontal = 64.dp, vertical = 24.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            HushTVLogo(fontSize = 64.sp)
-            Spacer(Modifier.height(40.dp))
+            HushTVLogo(fontSize = 52.sp)
+            Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.PersonAdd, null, tint = Cyan, modifier = Modifier.size(40.dp))
-                Spacer(Modifier.width(12.dp))
+                Icon(Icons.Default.PersonAdd, null, tint = Cyan, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.width(10.dp))
                 Text(
                     "Sign In to HushTV",
                     color = Color.White,
-                    fontSize = 38.sp,
+                    fontSize = 30.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 "Enter your credentials to add an account",
                 color = TextSecondary,
-                fontSize = 20.sp
+                fontSize = 16.sp
             )
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(20.dp))
 
             FieldLabel("Username")
             TVTextField(
@@ -100,7 +103,7 @@ fun TVAddAccountScreen(nav: NavController) {
                 keyboardType = KeyboardType.Text,
                 modifier = Modifier.focusRequester(userFocus)
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
             FieldLabel("Password")
             TVTextField(
                 value = password,
@@ -109,7 +112,7 @@ fun TVAddAccountScreen(nav: NavController) {
                 keyboardType = KeyboardType.Password,
                 password = true
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
             FieldLabel("Account Nickname")
             TVTextField(
                 value = nickname,
@@ -117,7 +120,7 @@ fun TVAddAccountScreen(nav: NavController) {
                 placeholder = "e.g., Living Room TV",
                 keyboardType = KeyboardType.Text
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
 
             error?.let {
                 Row(
@@ -183,18 +186,18 @@ fun TVAddAccountScreen(nav: NavController) {
                             Brush.linearGradient(listOf(Color(0xFF3B82F6), Cyan)),
                             RoundedCornerShape(16.dp)
                         )
-                        .padding(vertical = 22.dp),
+                        .padding(vertical = 18.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (loading) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(28.dp))
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(26.dp))
                     } else {
                         Text("Sign In", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(10.dp))
 
             Surface(
                 color = Color(0x0DFFFFFF),
@@ -206,13 +209,13 @@ fun TVAddAccountScreen(nav: NavController) {
                     .clickableWithEnter { nav.popBackStack() }
             ) {
                 Row(
-                    Modifier.padding(vertical = 16.dp),
+                    Modifier.padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.ArrowBack, null, tint = TextSecondary)
                     Spacer(Modifier.width(8.dp))
-                    Text("Back", color = TextSecondary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Back", color = TextSecondary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -224,9 +227,9 @@ private fun FieldLabel(text: String) {
     Text(
         text,
         color = Color(0xFFD1D5DB),
-        fontSize = 18.sp,
+        fontSize = 15.sp,
         fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(bottom = 8.dp)
+        modifier = Modifier.padding(bottom = 6.dp)
     )
 }
 
@@ -249,12 +252,12 @@ private fun TVTextField(
                 if (focused) Cyan else Color(0x26FFFFFF),
                 RoundedCornerShape(12.dp)
             )
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+            .padding(horizontal = 18.dp, vertical = 12.dp)
     ) {
         BasicTextField(
             value = value,
             onValueChange = onValue,
-            textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
+            textStyle = TextStyle(color = Color.White, fontSize = 18.sp),
             cursorBrush = SolidColor(Cyan),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
@@ -264,7 +267,7 @@ private fun TVTextField(
                 .onFocusChanged { focused = it.isFocused }
         )
         if (value.isEmpty()) {
-            Text(placeholder, color = TextSecondary, fontSize = 20.sp)
+            Text(placeholder, color = TextSecondary, fontSize = 18.sp)
         }
     }
 }
