@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
@@ -70,7 +69,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.SubcomposeAsyncImage
-import com.hushtv.tv.data.GeminiService
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.MyListStore
 import com.hushtv.tv.data.PlaylistStore
@@ -101,7 +99,6 @@ import kotlin.random.Random
 
 private const val CAT_ALL = "__all__"
 private const val CAT_SEARCH = "__search__"
-private const val CAT_AI = "__ai__"
 
 /** Days considered "new" — retained for internal use but not exposed in UI. */
 private const val NEW_WINDOW_DAYS = 14L
@@ -131,8 +128,6 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
 
     var selectedCatId by remember { mutableStateOf(if (type == "search") CAT_SEARCH else CAT_ALL) }
     var searchQuery by remember { mutableStateOf("") }
-    var aiQuery by remember { mutableStateOf("") }
-    var aiLoading by remember { mutableStateOf(false) }
 
     // ── Fetch categories + All pool once ──────────────────────────
     LaunchedEffect(playlistId, effectiveKind) {
@@ -150,11 +145,10 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
         }
     }
 
-    // Virtual sidebar: [Search, AI Search] + [All] + real categories
+    // Virtual sidebar: [Search] + [All] + real categories
     val sidebarEntries: List<SidebarEntry> = remember(allCategories, type) {
         buildList {
             add(SidebarEntry(CAT_SEARCH, "Search", Icons.Default.Search))
-            add(SidebarEntry(CAT_AI, "AI Search", Icons.Default.Casino))
             add(SidebarEntry("__divider__", "", Icons.Default.Info, isDivider = true))
             add(SidebarEntry(CAT_ALL, "All", Icons.Outlined.Slideshow))
             allCategories.forEach { c ->
@@ -168,7 +162,7 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
     var myListVersion by remember { mutableStateOf(0) }
     var watchVersion by remember { mutableStateOf(0) }
 
-    LaunchedEffect(selectedCatId, allItems, myListVersion, watchVersion, aiQuery) {
+    LaunchedEffect(selectedCatId, allItems, myListVersion, watchVersion) {
         val p = playlist ?: return@LaunchedEffect
         when (selectedCatId) {
             CAT_ALL -> gridItems = allItems
@@ -176,23 +170,6 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                 val q = searchQuery.trim().lowercase()
                 gridItems = if (q.length < 2) emptyList()
                 else allItems.filter { it.title.lowercase().contains(q) }.take(200)
-            }
-            CAT_AI -> {
-                val q = aiQuery.trim()
-                if (q.length < 3 || allItems.isEmpty()) {
-                    gridItems = emptyList()
-                    aiLoading = false
-                } else {
-                    aiLoading = true
-                    // Debounce while user keeps typing
-                    delay(900)
-                    if (q == aiQuery.trim()) {
-                        val kind = if (effectiveKind == "series") "series" else "movies"
-                        val suggestions = GeminiService.suggestTitles(q, kind)
-                        gridItems = GeminiService.matchAgainstLibrary(suggestions, allItems)
-                        aiLoading = false
-                    }
-                }
             }
             "__divider__", "__divider2__" -> gridItems = emptyList()
             else -> {
@@ -311,10 +288,6 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                     searchQuery = searchQuery,
                     onSearchChange = { searchQuery = it },
                     isSearchActive = selectedCatId == CAT_SEARCH,
-                    aiQuery = aiQuery,
-                    onAiQueryChange = { aiQuery = it },
-                    isAiActive = selectedCatId == CAT_AI,
-                    aiLoading = aiLoading,
                 )
             }
 
@@ -380,19 +353,10 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                     loadingItems -> CenterLoader()
                     selectedCatId == CAT_SEARCH && searchQuery.trim().length < 2 ->
                         InfoBox("Type at least 2 characters to search.", Icons.Default.Search)
-                    selectedCatId == CAT_AI && aiQuery.trim().length < 3 ->
-                        InfoBox(
-                            "Tell AI what you feel like watching. e.g.\n\"movies based on true stories\"\n\"feel-good comedies from the 90s\"\n\"mind-bending thrillers\"",
-                            Icons.Default.Casino,
-                        )
-                    selectedCatId == CAT_AI && aiLoading ->
-                        CenterLoader()
                     gridItems.isEmpty() ->
                         InfoBox(
                             msg = when (selectedCatId) {
                                 CAT_SEARCH -> "No results for \"$searchQuery\"."
-                                CAT_AI -> if (aiQuery.length < 3) "Type at least 3 characters. Try: \"feel-good comedies from the 90s\" or \"movies based on true stories\"."
-                                else "AI couldn't find matches in your library for \"$aiQuery\"."
                                 else -> "Nothing here yet."
                             },
                             icon = Icons.Default.Movie,
@@ -476,10 +440,6 @@ private fun VodSidebar(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
     isSearchActive: Boolean,
-    aiQuery: String,
-    onAiQueryChange: (String) -> Unit,
-    isAiActive: Boolean,
-    aiLoading: Boolean,
 ) {
     val listState = rememberLazyListState()
     val focusByIndex = remember { mutableMapOf<Int, FocusRequester>() }
@@ -548,16 +508,6 @@ private fun VodSidebar(
                 value = searchQuery,
                 onChange = onSearchChange,
                 placeholder = "Search titles…",
-            )
-        }
-
-        // AI search box
-        if (isAiActive) {
-            SearchBox(
-                value = aiQuery,
-                onChange = onAiQueryChange,
-                placeholder = "Ask AI: \"true story movies\"",
-                trailingLoader = aiLoading,
             )
         }
 

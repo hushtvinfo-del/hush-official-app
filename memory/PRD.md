@@ -146,16 +146,47 @@ Zero backend changes. Full visual system rebuilt per design-spec:
 Released as **1.0.8 / versionCode 9**, pushed to `https://hushtv.xyz` with OTA
 auto-update enabled.
 
+### Phase 4 — VOD metadata + performance (1.1.x → 1.3.1 — completed)
+- TMDB + RPDB integration for rich Movie/Series detail pages (posters,
+  backdrops, cast, trailers, recommendations, ratings).
+- Gemini 2.5 Flash AI Search ("find me movies based on true stories").
+- Performance: removed `Modifier.blur()`, tuned Coil caching.
+- Live TV: sticky sidebar FocusRequester token → fixed "wrong category on back".
+- Movie detail: Play/My-List/Trailer moved into info column (no poster cut-off),
+  Back button snaps scroll to top.
+- OTA updater stall fix.
+
+### Phase 5 — v1.3.2 (2026-04-22 — completed, deployed)
+- **Cast filmography fix** (`TVMovieDetailScreen.kt`): clicking an actor now
+  reliably matches messy Xtream titles (`[EN] VIP | Den of Thieves (2018)`)
+  against clean TMDB cast filmography via a heavy `normaliseTitle()` regex
+  (strips brackets, lang prefixes like `US | `, quality tags `4K/HD/FHD`,
+  trailing years, and collapses whitespace) + substring/word-boundary matcher.
+  Bug that shipped to 1.3.1: `libByExact[t]?.let { addIfNew(it); continue }`
+  fails to compile — `continue` isn't legal inside a `let` lambda. Replaced
+  with an `if (exactHit != null) { addIfNew(exactHit); continue }` block.
+- **AI Search removed** from Movies/Series sidebars per user — quality wasn't
+  there yet. Deleted `GeminiService.kt`, removed `GEMINI*` keys from `ApiKeys.kt`,
+  stripped `CAT_AI` state + sidebar row + search box + empty-state branches +
+  `VodSidebar` AI params from `TVBrowseScreen.kt`. Imports pruned.
+- Shipped as versionCode=25 / versionName="1.3.2" — APK uploaded to
+  `/var/www/hushtv/HushTV.apk` (23,395,348 bytes), `version.json` bumped.
+
 ---
 
 ## Backlog
 
 ### P0 — waiting on user feedback
-- Validate the redesign on the user's actual TV (PIN settings, hero D-pad flow,
-  nav bar reachability, card focus transitions)
+- Validate v1.3.2 on the user's actual TV: open a Movie detail, click any
+  cast member, confirm their other titles from YOUR Xtream library now show up
+  (the "zero movies found" bug from 1.3.1)
 - Any visual deltas vs the design-spec page
 
-### P1 — outstanding Tivimate features
+### P1 — outstanding
+- **Wire up Series cast click parity**: `TVSeriesDetailScreen.kt` →
+  `SeriesCastCard` currently has `.clickableWithEnter { }` (empty). Mirror the
+  movie flow: on click, call `TmdbService.personCredits`, run TV-side hits
+  through `matchLibraryByTitles()`, open a results grid/dialog.
 - EPG reminder "Set reminder" action wired into `TVEpgGridScreen.kt`
   (stores already exist: `ReminderStore`, `EpgReminderScheduler`)
 - Picture-in-Picture support (enable `supportsPictureInPicture`, add HOME-key
@@ -164,10 +195,11 @@ auto-update enabled.
 
 ### P2 — nice-to-haves
 - Real backdrop art for the Hero billboard (fetch poster URL per curated title)
-- My List persistence (currently the "+ My List" button routes to Search)
 - Split `TVPlayerScreen.kt` overlays into separate composable files
 - Search history / recent searches
 - Multiple account quick-switch from the profile chip
+- Re-evaluate AI Search once we have a better prompt + library-matching
+  strategy (removed in v1.3.2; keys + service file deleted)
 
 ---
 
