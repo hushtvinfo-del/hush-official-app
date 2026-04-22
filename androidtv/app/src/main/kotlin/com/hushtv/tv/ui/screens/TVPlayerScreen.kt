@@ -31,12 +31,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -172,12 +174,16 @@ fun TVPlayerScreen(
     // focus with it, key events have nowhere to land, and pressing OK does
     // nothing (the bug shipped in 1.5.1).
     val playPauseFocus = remember { FocusRequester() }
+    val scrubberFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
     LaunchedEffect(showControls, isLive) {
         if (isLive) return@LaunchedEffect
         if (showControls) {
             delay(50)
-            runCatching { playPauseFocus.requestFocus() }
+            // Default focus → the scrubber. D-pad DOWN moves to the button row.
+            // This matches Tivimate/Netflix: the scrubber is the primary
+            // interaction and most users want to seek, not pause.
+            runCatching { scrubberFocus.requestFocus() }
         } else {
             // Send focus back home so the root's onKeyEvent handler can
             // catch the next key press and re-show the OSD.
@@ -706,25 +712,98 @@ fun TVPlayerScreen(
                 ) {
                     if (!isLive && durationMs > 0) {
                         val pct = (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-                        Box(
-                            Modifier.fillMaxWidth().height(6.dp)
-                                .background(Color(0x40FFFFFF), RoundedCornerShape(3.dp))
+                        // Tivimate-style scrubber. Focusable; LEFT/RIGHT seek
+                        // with acceleration (tap 10s, rapid taps scale up to
+                        // 60s per press). DOWN moves to the button row below.
+                        // OK toggles play/pause — most common user intent.
+                        var scrubFocused by remember { mutableStateOf(false) }
+                        var lastSeekMs by remember { mutableStateOf(0L) }
+                        var seekChainCount by remember { mutableStateOf(0) }
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .focusRequester(scrubberFocus)
+                                .onFocusChanged { scrubFocused = it.isFocused }
+                                .focusable()
+                                .onPreviewKeyEvent { ev ->
+                                    if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                    when (ev.key) {
+                                        Key.DirectionLeft, Key.DirectionRight -> {
+                                            controlsTick++
+                                            val forward = ev.key == Key.DirectionRight
+                                            val now = System.currentTimeMillis()
+                                            // Escalate step size on rapid
+                                            // consecutive presses (adaptive).
+                                            seekChainCount = if (now - lastSeekMs < 400L) {
+                                                (seekChainCount + 1).coerceAtMost(10)
+                                            } else 1
+                                            lastSeekMs = now
+                                            val stepMs = when {
+                                                seekChainCount >= 6 -> 60_000L
+                                                seekChainCount >= 3 -> 30_000L
+                                                else -> 10_000L
+                                            }
+                                            val target = if (forward)
+                                                (player.currentPosition + stepMs).coerceAtMost(
+                                                    player.duration.coerceAtLeast(0)
+                                                )
+                                            else
+                                                (player.currentPosition - stepMs).coerceAtLeast(0)
+                                            player.seekTo(target)
+                                            true
+                                        }
+                                        Key.Enter, Key.DirectionCenter, Key.NumPadEnter -> {
+                                            controlsTick++
+                                            togglePlayPause()
+                                            true
+                                        }
+                                        else -> false
+                                    }
+                                },
+                            verticalArrangement = Arrangement.Center,
                         ) {
+                            // Progress track. When focused the bar grows to
+                            // 10 dp and gets a visible thumb; unfocused 6 dp.
+                            val barHeight = if (scrubFocused) 10.dp else 6.dp
                             Box(
-                                Modifier.fillMaxWidth(pct).height(6.dp)
-                                    .background(Cyan, RoundedCornerShape(3.dp))
-                            )
-                        }
-                        Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                            Text(formatTime(positionMs), color = Color(0xFF9CA3AF), fontSize = 13.sp)
-                            Spacer(Modifier.weight(1f))
-                            val remaining = (durationMs - positionMs).coerceAtLeast(0)
-                            Text(
-                                "-${formatTime(remaining)}",
-                                color = Color(0xFF9CA3AF), fontSize = 13.sp,
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(formatTime(durationMs), color = Color(0xFF9CA3AF), fontSize = 13.sp)
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(barHeight)
+                                    .background(Color(0x40FFFFFF), RoundedCornerShape(5.dp))
+                            ) {
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth(pct)
+                                        .height(barHeight)
+                                        .background(Cyan, RoundedCornerShape(5.dp))
+                                )
+                            }
+                            Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                                Text(
+                                    formatTime(positionMs),
+                                    color = if (scrubFocused) Cyan else Color(0xFF9CA3AF),
+                                    fontSize = 13.sp,
+                                    fontWeight = if (scrubFocused) FontWeight.Bold else FontWeight.Normal,
+                                )
+                                Spacer(Modifier.weight(1f))
+                                val remaining = (durationMs - positionMs).coerceAtLeast(0)
+                                Text(
+                                    "-${formatTime(remaining)}",
+                                    color = Color(0xFF9CA3AF), fontSize = 13.sp,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    formatTime(durationMs),
+                                    color = Color(0xFF9CA3AF), fontSize = 13.sp,
+                                )
+                            }
+                            if (scrubFocused) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "← → to seek   ↓ for controls   OK to play/pause",
+                                    color = Color(0xFF9CA3AF), fontSize = 11.sp,
+                                )
+                            }
                         }
                         Spacer(Modifier.height(16.dp))
                     }
