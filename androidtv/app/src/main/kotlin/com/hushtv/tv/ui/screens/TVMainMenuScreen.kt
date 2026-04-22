@@ -291,6 +291,25 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     }
                 }
             }
+
+            // Layer 3 — edge blend. A soft dark-to-transparent horizontal
+            // gradient on the left edge of the content so the sidebar melts
+            // into the home screen instead of ending with a hard seam. The
+            // gradient is purely visual; it's not a focus target and has no
+            // clickable modifier so it can't steal D-pad focus.
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .width(56.dp)
+                    .fillMaxHeight()
+                    .background(
+                        Brush.horizontalGradient(
+                            0.0f to Color(0xD0000000),
+                            0.45f to Color(0x66000000),
+                            1.0f to Color.Transparent,
+                        )
+                    )
+            )
         }
     }
 }
@@ -312,7 +331,7 @@ private fun Sidebar(
     onProfile: () -> Unit,
 ) {
     val width by animateDpAsState(
-        targetValue = if (expanded) 134.dp else 68.dp,
+        targetValue = if (expanded) 116.dp else 52.dp,
         animationSpec = tween(150),
         label = "sidebar-width",
     )
@@ -322,12 +341,17 @@ private fun Sidebar(
             .width(width)
             .fillMaxHeight()
             .background(
+                // Slow horizontal fade — dark at the icon column, gently
+                // transparent at the right edge so it can blend into the
+                // Home content's edge overlay without a hard seam.
                 Brush.horizontalGradient(
-                    colors = listOf(Color(0xFF050507), Color.Transparent),
+                    0.0f to Color(0xFF050507),
+                    0.7f to Color(0xFF050507),
+                    1.0f to Color(0xD0050507),
                 )
             )
             .onFocusChanged { onExpandChange(it.hasFocus) }
-            .padding(vertical = 20.dp, horizontal = 6.dp),
+            .padding(vertical = 20.dp, horizontal = 4.dp),
     ) {
         // Logo block
         Row(
@@ -463,7 +487,7 @@ private fun SidebarItem(
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 6.dp),
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
         if (expanded) {

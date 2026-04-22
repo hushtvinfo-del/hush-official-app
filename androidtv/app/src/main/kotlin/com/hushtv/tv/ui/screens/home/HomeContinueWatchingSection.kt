@@ -85,7 +85,7 @@ fun HomeContinueWatchingRow(
 ) {
     if (entries.isEmpty()) return
 
-    Column(Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, top = 20.dp, bottom = 20.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 64.dp, end = 48.dp, top = 20.dp, bottom = 20.dp)) {
         Text(
             "Continue Watching",
             color = Color.White,

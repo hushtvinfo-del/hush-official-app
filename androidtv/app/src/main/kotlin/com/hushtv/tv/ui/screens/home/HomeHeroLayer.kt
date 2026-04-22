@@ -85,7 +85,7 @@ fun HomeHeroLayer(entry: ContinueEntry?) {
             Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(start = 48.dp, top = 40.dp, end = 48.dp),
+                    .padding(start = 64.dp, top = 40.dp, end = 48.dp),
             ) {
                 HeroTextBlock(entry)
             }
