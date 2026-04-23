@@ -442,9 +442,9 @@ private fun PreviewBar(
     Row(
         Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(130.dp)
             .background(Color(0xFF050A15))
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Left — 16:9 video box (fixed aspect, fills vertical space)
@@ -975,26 +975,36 @@ private fun LiveCategoryPanel(
         runCatching { firstItemFocus.requestFocus() }
     }
 
+    // Full-height, fully opaque overlay — was previously a short 440 dp
+    // window so the preview/channel list bled through below it (including
+    // the big hushtv. branding, which looked terrible). Now it claims the
+    // whole screen under the top nav for a proper picker experience.
     Box(
         Modifier
-            .fillMaxWidth()
-            .background(Color(0xF2020409))
+            .fillMaxSize()
+            .background(Color(0xFF05080F))
             .onPreviewKeyEvent { ev ->
                 if (ev.type == KeyEventType.KeyDown && ev.key == Key.Back) {
                     onDismiss(); true
                 } else false
             }
-            .padding(horizontal = 32.dp, vertical = 16.dp),
+            .padding(horizontal = 32.dp, vertical = 20.dp),
     ) {
-        Column {
+        Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                Box(
+                    Modifier
+                        .size(width = 4.dp, height = 24.dp)
+                        .background(Cyan, RoundedCornerShape(2.dp))
+                )
+                Spacer(Modifier.width(12.dp))
                 Text(
                     "PICK A CHANNEL CATEGORY",
                     color = Cyan,
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     letterSpacing = 3.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = Inter,
@@ -1003,25 +1013,26 @@ private fun LiveCategoryPanel(
                 Text(
                     "${categories.size} categories · press BACK to close",
                     color = Color(0xFF94A3B8),
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontFamily = Inter,
                 )
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(18.dp))
 
-            BoxWithConstraints {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                // Give users as many visible categories as possible.
+                // 5 cols on big TVs, 4 on most, 3 on narrow.
                 val cols = when {
-                    maxWidth > 1400.dp -> 4
-                    maxWidth > 900.dp -> 3
-                    else -> 2
+                    maxWidth > 1600.dp -> 6
+                    maxWidth > 1300.dp -> 5
+                    maxWidth > 1000.dp -> 4
+                    else -> 3
                 }
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(cols),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 440.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     itemsIndexed(categories, key = { _, c -> c.category_id }) { idx, cat ->
                         LiveCategoryPill(
