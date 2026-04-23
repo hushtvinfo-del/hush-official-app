@@ -266,39 +266,36 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 }
             }
 
-            // Layer 1 — sticky hero backdrop. 0 dp left padding here since
-            // the outer content Box already provides the gap to the sidebar.
+            // Hero fills the full Box — backdrop bleeds edge to edge; the
+            // text column is anchored top-left inside the hero.
             com.hushtv.tv.ui.screens.home.HomeHeroLayer(
                 entry = heroEntry,
                 contentStartPadding = 0.dp,
             )
 
-            // Layer 2 — scrollable rows. Transparent until a row reaches
-            // the "fold", after which each row renders on its own dark tile
-            // so it has a clean backdrop when scrolled up past the hero text.
-            LazyColumn(
-                contentPadding = PaddingValues(bottom = 48.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-            ) {
-                // Push the first row down to ~55% of the viewport so the
-                // hero text is legible above it on initial render.
-                item { Spacer(Modifier.fillParentMaxHeight(0.55f)) }
-
-                if (continueEntries.isNotEmpty()) {
-                    item {
-                        com.hushtv.tv.ui.screens.home.HomeContinueWatchingRow(
-                            playlistId = playlistId,
-                            entries = continueEntries,
-                            contentStartPadding = 0.dp,
-                            onFocusedEntryChange = { heroEntry = it },
-                            onCardClick = { entry ->
-                                nav.navigate(
-                                    "moviedetail/$playlistId/${entry.progress.streamId}" +
-                                        "/${Uri.encode(entry.progress.title)}"
-                                )
-                            },
-                        )
-                    }
+            // Continue Watching row is PINNED TO THE BOTTOM of the content
+            // Box via Alignment.BottomStart. No LazyColumn, no focus-driven
+            // auto-scroll, no chance of the row riding up into the hero
+            // description. This is what the user kept asking for: the hero
+            // block stays put and the cards stay put, regardless of focus.
+            if (continueEntries.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(),
+                ) {
+                    com.hushtv.tv.ui.screens.home.HomeContinueWatchingRow(
+                        playlistId = playlistId,
+                        entries = continueEntries,
+                        contentStartPadding = 0.dp,
+                        onFocusedEntryChange = { heroEntry = it },
+                        onCardClick = { entry ->
+                            nav.navigate(
+                                "moviedetail/$playlistId/${entry.progress.streamId}" +
+                                    "/${Uri.encode(entry.progress.title)}"
+                            )
+                        },
+                    )
                 }
             }
         }
