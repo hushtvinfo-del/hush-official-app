@@ -421,27 +421,64 @@ object TmdbService {
      * calling `/discover/{movie|tv}?with_genres={id}&sort_by=popularity.desc`
      * in parallel. For each genre we pull the top ~15 popular candidates
      * (id + backdrop_path) and then run a CROSS-GENRE DEDUPE PASS so no
-     * two genre cards end up with the same movie's backdrop. This fixes
-     * the bug where a single blockbuster like Super Mario Bros. (which
-     * is tagged Adventure + Animation + Comedy + Family + Fantasy)
-     * appeared as the hero for every one of those genres.
+     * two genre cards end up with the same movie's backdrop.
+     *
+     * [overrides] maps `genreId → tmdbMovieId`. When present the genre
+     * skips `/discover` entirely and pulls the backdrop of that movie
+     * (or TV show) directly — lets callers hand-pick a hero image for
+     * specific genres (e.g. "Adventure" → Jurassic Park).
+     *
+     * For genres WITHOUT an override, movies tagged Animation (TMDB
+     * genre 16) are excluded unless the target genre is itself
+     * Animation or Family. That stops blockbuster cartoons (Super
+     * Mario Bros., Inside Out 2) dominating the Action / Adventure /
+     * Comedy / Drama heroes.
      *
      * Returns `{genreId → URL}` for ids where we found something.
      */
     suspend fun backdropsForGenres(
         kind: String,
         genreIds: List<Int>,
+        overrides: Map<Int, Int> = emptyMap(),
     ): Map<Int, String> = withContext(Dispatchers.IO) {
         if (genreIds.isEmpty()) return@withContext emptyMap()
-        val endpoint = if (kind == "series") "discover/tv" else "discover/movie"
+        val discoverEndpoint = if (kind == "series") "discover/tv" else "discover/movie"
+        val detailEndpoint = if (kind == "series") "tv" else "movie"
+        // Animation = 16, Family = 10751 (TV Family = 10751 too).
+        // These keep animated content visible when it's ACTUALLY the
+        // target genre.
+        val animationFriendlyGenres = setOf(16, 10751)
 
         // Step 1 — fetch top candidates per genre in parallel.
         // Each candidate is (tmdbId, backdropUrl). Ordered by popularity.
+        // Genres with an override resolve via `/movie|tv/{id}` instead.
         val candidatesByGenre: Map<Int, List<Pair<Int, String>>> =
             genreIds.map { gid ->
                 async {
                     runCatching {
-                        val url = "$BASE/$endpoint?with_genres=$gid&sort_by=popularity.desc" +
+                        val overrideMovieId = overrides[gid]
+                        if (overrideMovieId != null) {
+                            // Direct detail fetch for the hand-picked title.
+                            val url = "$BASE/$detailEndpoint/$overrideMovieId" +
+                                "?language=en-US&api_key=${ApiKeys.TMDB}"
+                            val body = client.newCall(Request.Builder().url(url).build())
+                                .execute().body?.string()
+                                ?: return@runCatching gid to emptyList()
+                            val parsed = moshi.adapter(TmdbSearchHit::class.java)
+                                .fromJson(body)
+                            val imgUrl = img(parsed?.backdrop_path, "w1280")
+                            val list = if (imgUrl != null) listOf(overrideMovieId to imgUrl)
+                            else emptyList()
+                            return@runCatching gid to list
+                        }
+
+                        // Discover path — add `without_genres=16` for
+                        // every non-animation-friendly genre so e.g.
+                        // Mario / Frozen don't surface in Action.
+                        val exclude = if (gid !in animationFriendlyGenres) "&without_genres=16"
+                        else ""
+                        val url = "$BASE/$discoverEndpoint?with_genres=$gid" +
+                            "&sort_by=popularity.desc$exclude" +
                             "&include_adult=false&include_video=false&language=en-US" +
                             "&api_key=${ApiKeys.TMDB}"
                         val body = client.newCall(Request.Builder().url(url).build())
@@ -467,12 +504,13 @@ object TmdbService {
 
         // Step 2 — cross-genre dedupe. Walk genres in input order and
         // pick the first candidate whose TMDB id hasn't been claimed by
-        // a previously-resolved genre. Falls back to the genre's own
-        // top candidate if every option was claimed (extremely unlikely
-        // once there are 15 candidates per genre).
+        // a previously-resolved genre. Overridden genres ALWAYS win
+        // their claim first so explicit picks never get bumped.
         val claimedIds = mutableSetOf<Int>()
         val result = mutableMapOf<Int, String>()
-        for (gid in genreIds) {
+        // Overrides resolve first to guarantee their id is claimed.
+        val orderedIds = genreIds.sortedByDescending { it in overrides.keys }
+        for (gid in orderedIds) {
             val candidates = candidatesByGenre[gid].orEmpty()
             if (candidates.isEmpty()) continue
             val unique = candidates.firstOrNull { it.first !in claimedIds }

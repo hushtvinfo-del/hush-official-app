@@ -36,6 +36,11 @@ data class Genre(
     // Bulletproof deep-link without name fuzzy-matching; null here
     // falls back to the name-based matcher in TVBrowseScreen.
     val xtreamCategoryId: String? = null,
+    // Optional manual backdrop override. When set, skips `/discover`
+    // entirely and pulls the backdrop of this specific TMDB movie or
+    // tv show. Use for genres where you want a hand-picked hero image
+    // instead of whatever is trending this week.
+    val preferredMovieId: Int? = null,
 )
 
 // ── MOVIE GENRES ────────────────────────────────────────────────────
@@ -46,11 +51,13 @@ private val MOVIE_GENRES_BASE = listOf(
     Genre("action", "Action", "Action", 28,
         "Heart-pounding chases, explosive showdowns, non-stop adrenaline.",
         Color(0xFFF97316), Color(0xFF3A0A04), Color(0xFF7F1D1D),
-        xtreamCategoryId = "107"),
+        xtreamCategoryId = "107",
+        preferredMovieId = 1168190),  // The Wrecking Crew (2026)
     Genre("adventure", "Adventure", "Adventure", 12,
         "Epic quests and untamed journeys to places far from home.",
         Color(0xFFFCD34D), Color(0xFF1E3A2B), Color(0xFF3F4C1F),
-        xtreamCategoryId = "109"),
+        xtreamCategoryId = "109",
+        preferredMovieId = 329),      // Jurassic Park (1993)
     Genre("animation", "Animation", "Animation", 16,
         "Worlds only imagination can draw — for all ages.",
         Color(0xFFF472B6), Color(0xFF2D1040), Color(0xFF5B2180),
@@ -211,6 +218,9 @@ fun rememberGenres(kind: String): List<Genre> {
             TmdbService.backdropsForGenres(
                 kind = kind,
                 genreIds = base.map { it.tmdbGenreId }.filter { it > 0 },
+                overrides = base
+                    .filter { it.tmdbGenreId > 0 && it.preferredMovieId != null }
+                    .associate { it.tmdbGenreId to it.preferredMovieId!! },
             )
         }.getOrDefault(emptyMap())
 
