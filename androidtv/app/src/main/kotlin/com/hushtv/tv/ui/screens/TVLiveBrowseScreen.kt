@@ -720,48 +720,44 @@ private fun LiveCategoryToolbar(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 48.dp, vertical = 18.dp),
+            .padding(horizontal = 40.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // ── Page title accent bar ──
         Box(
             Modifier
-                .size(width = 4.dp, height = 30.dp)
+                .size(width = 3.dp, height = 22.dp)
                 .background(Cyan, RoundedCornerShape(2.dp))
         )
-        Spacer(Modifier.width(14.dp))
-        Column {
+        Spacer(Modifier.width(10.dp))
+        // widthIn(max = …) caps the title block so a long category name
+        // can never touch the dropdown button on the right.
+        Column(
+            Modifier.widthIn(max = 360.dp),
+        ) {
             Text(
-                "LIVE TV",
+                "LIVE TV  ·  ${categoryCount} CH",
                 color = Cyan,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 3.sp,
+                letterSpacing = 2.5.sp,
                 fontFamily = Inter,
+                maxLines = 1,
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(1.dp))
             Text(
                 selectedLabel,
                 color = Color.White,
-                fontSize = 22.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Black,
-                lineHeight = 24.sp,
+                lineHeight = 18.sp,
                 fontFamily = Inter,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                "$categoryCount channels",
-                color = Color(0xFF94A3B8),
-                fontSize = 11.sp,
-                fontFamily = Inter,
-            )
         }
 
-        // Flex spacer pushes the Browse + Search cluster to the right
-        // third of the toolbar, so the page title has breathing room
-        // on the left and the controls feel intentional on the right.
+        // Flex spacer pushes the Browse + Search cluster to the right.
         Spacer(Modifier.weight(1f))
 
         // ── Category dropdown button ──
@@ -775,16 +771,15 @@ private fun LiveCategoryToolbar(
             rightTarget = searchFocus,
         )
 
-        Spacer(Modifier.width(20.dp))
+        Spacer(Modifier.width(14.dp))
 
-        // ── Inline search — takes Guide's old slot. Fixed width so
-        // it doesn't grow indefinitely on ultra-wide TVs.
+        // ── Inline search — fixed width so it doesn't sprawl. ──
         LiveInlineSearch(
             value = searchQuery,
             onChange = onSearchChange,
             focusRequester = searchFocus,
             downTarget = downTarget,
-            modifier = Modifier.width(420.dp),
+            modifier = Modifier.width(340.dp),
         )
     }
     // NOTE: the dropdown panel is rendered at the ROOT Box level
@@ -805,14 +800,14 @@ private fun LiveDropdownButton(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .height(48.dp)
-            .background(Color(0xFF0A121F), RoundedCornerShape(12.dp))
+            .height(40.dp)
+            .background(Color(0xFF0A121F), RoundedCornerShape(10.dp))
             .border(
                 width = if (focused || expanded) 2.dp else 1.dp,
                 color = if (focused || expanded) Cyan else Color(0x33FFFFFF),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
             )
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 14.dp)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
             .focusProperties {
@@ -825,23 +820,23 @@ private fun LiveDropdownButton(
         Text(
             "BROWSE",
             color = Cyan,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Black,
             fontFamily = Inter,
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         Text(
             if (totalCount > 0) label else "Loading…",
             color = Color.White,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = Inter,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 220.dp),
+            modifier = Modifier.widthIn(max = 180.dp),
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(8.dp))
         val rot by animateFloatAsState(
             targetValue = if (expanded) 180f else 0f,
             animationSpec = tween(160),
@@ -850,7 +845,7 @@ private fun LiveDropdownButton(
         Text(
             "▼",
             color = if (focused || expanded) Cyan else Color.White,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.graphicsLayer { rotationZ = rot },
         )
@@ -869,22 +864,22 @@ private fun LiveInlineSearch(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .height(48.dp)
-            .background(Color(0xFF0A121F), RoundedCornerShape(12.dp))
+            .height(40.dp)
+            .background(Color(0xFF0A121F), RoundedCornerShape(10.dp))
             .border(
                 width = if (focused) 2.dp else 1.dp,
                 color = if (focused) Cyan else Color(0x33FFFFFF),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
             )
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 14.dp),
     ) {
         Icon(
             imageVector = Icons.Default.Search,
             contentDescription = null,
             tint = if (focused) Cyan else Color(0xFF64748B),
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         Box(Modifier.weight(1f)) {
             BasicTextField(
                 value = value,

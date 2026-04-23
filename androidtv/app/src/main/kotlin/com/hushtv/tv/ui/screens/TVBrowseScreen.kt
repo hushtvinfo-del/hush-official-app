@@ -690,40 +690,43 @@ private fun CategoryToolbar(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 14.dp),
+            .padding(horizontal = 40.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // ── Page title accent bar ──
         Box(
             Modifier
-                .size(width = 4.dp, height = 28.dp)
+                .size(width = 3.dp, height = 22.dp)
                 .background(Cyan, RoundedCornerShape(2.dp))
         )
-        Spacer(Modifier.width(12.dp))
-        Column {
+        Spacer(Modifier.width(10.dp))
+        // widthIn caps the title block so a long category name can't
+        // grow into the dropdown button.
+        Column(Modifier.widthIn(max = 360.dp)) {
             Text(
                 title.uppercase(),
                 color = Cyan,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 3.sp,
+                letterSpacing = 2.5.sp,
                 fontFamily = Inter,
+                maxLines = 1,
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(1.dp))
             Text(
                 selectedLabel,
                 color = Color.White,
-                fontSize = 22.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Black,
-                lineHeight = 24.sp,
+                lineHeight = 18.sp,
                 fontFamily = Inter,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.width(28.dp))
+        Spacer(Modifier.weight(1f))
 
-        // ── Category dropdown button + panel ──
+        // ── Category dropdown button ──
         CategoryDropdownButton(
             label = selectedLabel,
             totalCount = totalCategoryCount,
@@ -734,17 +737,16 @@ private fun CategoryToolbar(
             rightTarget = searchFocus,
         )
 
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(14.dp))
 
-        // ── Inline search ──
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            InlineSearchBar(
-                value = searchQuery,
-                onChange = onSearchChange,
-                focusRequester = searchFocus,
-                downTarget = downTarget,
-            )
-        }
+        // ── Inline search (fixed width, not flex) ──
+        InlineSearchBar(
+            value = searchQuery,
+            onChange = onSearchChange,
+            focusRequester = searchFocus,
+            downTarget = downTarget,
+            modifier = Modifier.width(340.dp),
+        )
     }
 
     // NOTE: the dropdown panel is rendered at the ROOT Box level (see
@@ -767,14 +769,14 @@ private fun CategoryDropdownButton(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .height(48.dp)
-            .background(SurfaceNavy, RoundedCornerShape(12.dp))
+            .height(40.dp)
+            .background(SurfaceNavy, RoundedCornerShape(10.dp))
             .border(
                 width = if (focused || expanded) 2.dp else 1.dp,
                 color = if (focused || expanded) Cyan else Color(0x33FFFFFF),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
             )
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 14.dp)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
             .focusProperties {
@@ -787,23 +789,23 @@ private fun CategoryDropdownButton(
         Text(
             "BROWSE",
             color = Cyan,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Black,
             fontFamily = Inter,
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         Text(
             if (totalCount > 0) "$label" else "Loading…",
             color = Color.White,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = Inter,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 220.dp),
+            modifier = Modifier.widthIn(max = 180.dp),
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(8.dp))
         // Chevron rotates when expanded — gives a clear open/closed cue.
         val rot by animateFloatAsState(
             targetValue = if (expanded) 180f else 0f,
@@ -813,7 +815,7 @@ private fun CategoryDropdownButton(
         Text(
             "▼",
             color = if (focused || expanded) Cyan else Color.White,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.graphicsLayer { rotationZ = rot },
         )
@@ -981,28 +983,28 @@ private fun InlineSearchBar(
     onChange: (String) -> Unit,
     focusRequester: FocusRequester,
     downTarget: FocusRequester,
+    modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .width(360.dp)
-            .height(48.dp)
-            .background(SurfaceNavy, RoundedCornerShape(12.dp))
+        modifier = modifier
+            .height(40.dp)
+            .background(SurfaceNavy, RoundedCornerShape(10.dp))
             .border(
                 width = if (focused) 2.dp else 1.dp,
                 color = if (focused) Cyan else Color(0x33FFFFFF),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
             )
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 14.dp),
     ) {
         Icon(
             imageVector = Icons.Default.Search,
             contentDescription = null,
             tint = if (focused) Cyan else TextMuted,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         Box(Modifier.weight(1f)) {
             BasicTextField(
                 value = value,
