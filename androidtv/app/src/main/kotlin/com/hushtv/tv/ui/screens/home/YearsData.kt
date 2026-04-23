@@ -28,6 +28,8 @@ data class MovieYear(
     val gradientTop: Color,
     val gradientBottom: Color,
     val backdropUrl: String? = null,
+    // Exact Xtream category ID on the user's primary provider.
+    val xtreamCategoryId: String? = null,
 )
 
 // Hand-curated palette + copy per year. Three entries matches exactly
@@ -40,6 +42,7 @@ private val MOVIE_YEARS_BASE = listOf(
         accent = Color(0xFF22D3EE),
         gradientTop = Color(0xFF051B2E),
         gradientBottom = Color(0xFF083A5E),
+        xtreamCategoryId = "475",
     ),
     MovieYear(
         year = 2025,
@@ -48,6 +51,7 @@ private val MOVIE_YEARS_BASE = listOf(
         accent = Color(0xFFF97316),
         gradientTop = Color(0xFF2A1204),
         gradientBottom = Color(0xFF5A2908),
+        xtreamCategoryId = "414",
     ),
     MovieYear(
         year = 2024,
@@ -56,6 +60,7 @@ private val MOVIE_YEARS_BASE = listOf(
         accent = Color(0xFFC084FC),
         gradientTop = Color(0xFF1B0B3A),
         gradientBottom = Color(0xFF3D1769),
+        xtreamCategoryId = "325",
     ),
 )
 

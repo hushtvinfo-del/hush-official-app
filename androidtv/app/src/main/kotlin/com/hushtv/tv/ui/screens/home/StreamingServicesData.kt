@@ -34,6 +34,12 @@ data class StreamingService(
     // padding so they look tiny inside our 140×74 dp box; per-service
     // scale >1.0 corrects for that without affecting well-cropped logos.
     val logoScale: Float = 1.0f,
+    // Exact Xtream category IDs on the user's primary provider — used
+    // for bulletproof deep-link opening without name fuzzy-matching.
+    // Null on providers that don't have this service; falls back to
+    // `searchKeyword` name match in that case.
+    val xtreamMovieCategoryId: String? = null,
+    val xtreamSeriesCategoryId: String? = null,
 )
 
 /** Hand-curated brand palette. Order matches the user's spec. */
@@ -41,38 +47,46 @@ private val MOVIE_SERVICES_BASE = listOf(
     StreamingService(
         id = "amc",
         displayName = "AMC+",
-        searchKeyword = "AMC",
+        searchKeyword = "AMC+",
         tmdbProviderId = 526,
         brandTop = Color(0xFF2A0A0A),
         brandBottom = Color(0xFF8C1515),
         accent = Color(0xFFE53935),
+        xtreamMovieCategoryId = "421",
+        xtreamSeriesCategoryId = "439",
     ),
     StreamingService(
         id = "appletv",
         displayName = "Apple TV+",
-        searchKeyword = "Apple TV",
+        searchKeyword = "Apple TV+",
         tmdbProviderId = 350,
         brandTop = Color(0xFF0B0B0F),
         brandBottom = Color(0xFF1C1C24),
         accent = Color(0xFFEAEAEA),
+        xtreamMovieCategoryId = "417",
+        xtreamSeriesCategoryId = "220",
     ),
     StreamingService(
         id = "crave",
         displayName = "CRAVE / STARZ",
-        searchKeyword = "STARZ",
+        searchKeyword = "CRAVE/STARZ",
         tmdbProviderId = 43,
         brandTop = Color(0xFF120202),
         brandBottom = Color(0xFF4C0A0A),
         accent = Color(0xFFE50914),
+        xtreamMovieCategoryId = "422",
+        xtreamSeriesCategoryId = "238",
     ),
     StreamingService(
         id = "disney",
         displayName = "Disney+",
-        searchKeyword = "Disney",
+        searchKeyword = "Disney+",
         tmdbProviderId = 337,
         brandTop = Color(0xFF050E2B),
         brandBottom = Color(0xFF0E2B70),
         accent = Color(0xFF00C2FF),
+        xtreamMovieCategoryId = "267",
+        xtreamSeriesCategoryId = "228",
     ),
     StreamingService(
         id = "netflix",
@@ -82,24 +96,30 @@ private val MOVIE_SERVICES_BASE = listOf(
         brandTop = Color(0xFF0A0A0A),
         brandBottom = Color(0xFF2C0404),
         accent = Color(0xFFE50914),
+        xtreamMovieCategoryId = "415",
+        xtreamSeriesCategoryId = "237",
     ),
     StreamingService(
         id = "paramount",
         displayName = "Paramount+",
-        searchKeyword = "Paramount",
+        searchKeyword = "Paramount+",
         tmdbProviderId = 531,
         brandTop = Color(0xFF001C48),
         brandBottom = Color(0xFF0064FF),
         accent = Color(0xFF3BA0FF),
+        xtreamMovieCategoryId = "420",
+        xtreamSeriesCategoryId = "261",
     ),
     StreamingService(
         id = "prime",
         displayName = "Prime Video",
-        searchKeyword = "Prime",
+        searchKeyword = "Prime Video",
         tmdbProviderId = 9,
         brandTop = Color(0xFF00050D),
         brandBottom = Color(0xFF012040),
         accent = Color(0xFF00A8E1),
+        xtreamMovieCategoryId = "416",
+        xtreamSeriesCategoryId = "217",
     ),
 )
 

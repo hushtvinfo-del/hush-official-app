@@ -1472,7 +1472,10 @@ private fun SsPage(
                     onFocusedServiceChange = onFocusedChange,
                     onServiceClick = { svc ->
                         val encoded = Uri.encode(svc.searchKeyword)
-                        nav.navigate("browse/$playlistId/$kind?category=$encoded")
+                        val catId = if (kind == "series")
+                            svc.xtreamSeriesCategoryId else svc.xtreamMovieCategoryId
+                        val catParam = if (catId != null) "&catId=$catId" else ""
+                        nav.navigate("browse/$playlistId/$kind?category=$encoded$catParam")
                     },
                     firstItemFocus = firstItemFocus,
                     onUpFromRow = onUpFromRow,
@@ -1515,7 +1518,8 @@ private fun GenresPage(
                     onFocusedGenreChange = onFocusedChange,
                     onGenreClick = { g ->
                         val encoded = Uri.encode(g.searchKeyword)
-                        nav.navigate("browse/$playlistId/$kind?category=$encoded")
+                        val catParam = g.xtreamCategoryId?.let { "&catId=$it" }.orEmpty()
+                        nav.navigate("browse/$playlistId/$kind?category=$encoded$catParam")
                     },
                     firstItemFocus = firstItemFocus,
                     onUpFromRow = onUpFromRow,
@@ -1554,7 +1558,8 @@ private fun YearsPage(
                     onFocusedYearChange = onFocusedChange,
                     onYearClick = { y ->
                         val encoded = Uri.encode(y.searchKeyword)
-                        nav.navigate("browse/$playlistId/movie?category=$encoded")
+                        val catParam = y.xtreamCategoryId?.let { "&catId=$it" }.orEmpty()
+                        nav.navigate("browse/$playlistId/movie?category=$encoded$catParam")
                     },
                     firstItemFocus = firstItemFocus,
                     onUpFromRow = onUpFromRow,

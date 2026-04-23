@@ -118,6 +118,7 @@ fun TVBrowseScreen(
     playlistId: String,
     type: String,
     initialCategoryName: String? = null,
+    initialCategoryId: String? = null,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -136,7 +137,19 @@ fun TVBrowseScreen(
     var loadingCats by remember { mutableStateOf(true) }
     var loadingItems by remember { mutableStateOf(false) }
 
-    var selectedCatId by remember { mutableStateOf(if (type == "search") CAT_SEARCH else CAT_ALL) }
+    // Deep-link default: when caller provides a specific category ID
+    // (from home Streaming-Services / Genres / Years cards), open the
+    // screen ALREADY selected on that category — no name fuzzy-match
+    // race condition, instant correct content.
+    var selectedCatId by remember {
+        mutableStateOf(
+            when {
+                type == "search" -> CAT_SEARCH
+                !initialCategoryId.isNullOrBlank() -> initialCategoryId
+                else -> CAT_ALL
+            }
+        )
+    }
     var searchQuery by remember { mutableStateOf("") }
 
     // ── Fetch categories + All pool once ──────────────────────────
@@ -145,6 +158,11 @@ fun TVBrowseScreen(
         loadingCats = true
         runCatching {
             allCategories = XtreamApi.getCategories(p.host, p.username, p.password, effectiveKind)
+            android.util.Log.i(
+                "BrowseDeepLink",
+                "loaded ${allCategories.size} $effectiveKind categories " +
+                    "(deep-link id=$initialCategoryId name=$initialCategoryName)",
+            )
         }
         loadingCats = false
         // Kick off an "all" fetch in the background so virtual categories (New, Top, A-Z, Search) are ready.
@@ -155,21 +173,74 @@ fun TVBrowseScreen(
         }
     }
 
-    // Auto-select an initial category once the list loads. Used by Home's
-    // "Latest Movies" / "Latest Series" discovery cards to deep-link into a
-    // specific Xtream category. Matches on normalised contains so minor
-    // formatting differences ("- NEW RELEASES -" vs "NEW RELEASES") don't
-    // break the shortcut.
-    LaunchedEffect(initialCategoryName, allCategories) {
-        if (initialCategoryName.isNullOrBlank() || allCategories.isEmpty()) return@LaunchedEffect
-        val needle = initialCategoryName.lowercase()
-            .replace(Regex("[^a-z0-9 ]"), "").trim()
-        val match = allCategories.firstOrNull {
-            val hay = it.category_name.lowercase()
-                .replace(Regex("[^a-z0-9 ]"), "").trim()
-            hay.contains(needle) || needle.contains(hay)
+    // Auto-select an initial category once the list loads. Priority:
+    //   1. initialCategoryId  — caller passed an EXACT Xtream category
+    //      ID (home Streaming-Services / Genres / Years cards). Most
+    //      reliable; no string matching required.
+    //   2. initialCategoryName — legacy Home Discovery cards use this.
+    //      Matches EXACT normalized name first, then falls back to
+    //      substring contains. Rejects dangerous "needle-in-haystack"
+    //      partial matches that used to send short keywords to the
+    //      wrong category.
+    LaunchedEffect(initialCategoryId, initialCategoryName, allCategories) {
+        if (allCategories.isEmpty()) return@LaunchedEffect
+
+        // 1. ID-based deep-link wins and is always safe.
+        if (!initialCategoryId.isNullOrBlank()) {
+            val hit = allCategories.firstOrNull { it.category_id == initialCategoryId }
+            if (hit != null) {
+                selectedCatId = hit.category_id
+                android.util.Log.i(
+                    "BrowseDeepLink",
+                    "direct-ID match: $initialCategoryId → ${hit.category_name}",
+                )
+                return@LaunchedEffect
+            } else {
+                android.util.Log.w(
+                    "BrowseDeepLink",
+                    "deep-link ID $initialCategoryId not found in $effectiveKind categories — falling back to name",
+                )
+            }
         }
-        if (match != null) selectedCatId = match.category_id
+
+        // 2. Name-based fallback.
+        if (initialCategoryName.isNullOrBlank()) return@LaunchedEffect
+        val needle = normaliseCatName(initialCategoryName)
+        if (needle.isBlank()) return@LaunchedEffect
+
+        // Prefer EXACT normalized match (e.g. "netflix" == "netflix").
+        val exact = allCategories.firstOrNull {
+            normaliseCatName(it.category_name) == needle
+        }
+        if (exact != null) {
+            selectedCatId = exact.category_id
+            android.util.Log.i(
+                "BrowseDeepLink",
+                "exact-name match: '$initialCategoryName' → ${exact.category_name} (${exact.category_id})",
+            )
+            return@LaunchedEffect
+        }
+
+        // Then SUBSTRING contains — but ONLY in the longer direction
+        // (needle inside category name). Rejects the old buggy
+        // "category name inside needle" path that let 2-char category
+        // names like "A&E" hijack 3-char needles like "AMC".
+        val sub = allCategories.firstOrNull {
+            val hay = normaliseCatName(it.category_name)
+            hay.isNotBlank() && hay.contains(needle)
+        }
+        if (sub != null) {
+            selectedCatId = sub.category_id
+            android.util.Log.i(
+                "BrowseDeepLink",
+                "substring-name match: '$initialCategoryName' → ${sub.category_name} (${sub.category_id})",
+            )
+        } else {
+            android.util.Log.w(
+                "BrowseDeepLink",
+                "NO MATCH for '$initialCategoryName' among ${allCategories.size} categories",
+            )
+        }
     }
 
     // Virtual sidebar: [Search] + [Favorites, All] + real categories
@@ -1361,3 +1432,28 @@ private fun extractYoutubeId(raw: String): String? {
     segments.lastOrNull()?.takeIf { it.length in 8..16 }?.let { return it }
     return null
 }
+
+/**
+ * Normalise a raw Xtream category / card-keyword label so they can
+ * be compared reliably:
+ *   - lowercases
+ *   - strips possessive apostrophes ("Hallmark Movie's" → "hallmark movies")
+ *   - strips any non-alphanumeric char (emoji, punctuation, hyphens)
+ *   - collapses whitespace runs into single spaces
+ *   - trims
+ *
+ * Used by the deep-link matcher in TVBrowseScreen — NOT the franchise
+ * TitleMatcher (which has different, title-specific rules).
+ */
+private fun normaliseCatName(raw: String): String {
+    var s = raw.lowercase()
+    // Drop possessive apostrophes BEFORE stripping non-alnum so the
+    // "s" stays attached ("movie's" → "movies" rather than "movie s").
+    s = s.replace(Regex("""[\u2019']s\b"""), "s")
+    // Strip every char that isn't a-z, 0-9 or space.
+    s = s.replace(Regex("""[^a-z0-9 ]"""), " ")
+    // Collapse runs of whitespace.
+    s = s.replace(Regex("""\s+"""), " ").trim()
+    return s
+}
+

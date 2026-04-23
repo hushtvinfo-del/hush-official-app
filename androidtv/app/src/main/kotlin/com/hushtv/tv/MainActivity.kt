@@ -88,9 +88,14 @@ private fun AppContent() {
             TVMainMenuScreen(nav, bs.arguments?.getString("playlistId") ?: "")
         }
         composable(
-            route = "browse/{playlistId}/{type}?category={category}",
+            route = "browse/{playlistId}/{type}?category={category}&catId={catId}",
             arguments = listOf(
                 navArgument("category") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("catId") {
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
@@ -100,10 +105,17 @@ private fun AppContent() {
             val type = bs.arguments?.getString("type") ?: "live"
             val playlistId = bs.arguments?.getString("playlistId") ?: ""
             val category = bs.arguments?.getString("category")
+            val catId = bs.arguments?.getString("catId")
             if (type == "live") {
                 TVLiveBrowseScreen(nav, playlistId)
             } else {
-                TVBrowseScreen(nav, playlistId, type, initialCategoryName = category)
+                TVBrowseScreen(
+                    nav,
+                    playlistId,
+                    type,
+                    initialCategoryName = category,
+                    initialCategoryId = catId,
+                )
             }
         }
         composable("series/{playlistId}/{seriesId}/{seriesName}") { bs ->
