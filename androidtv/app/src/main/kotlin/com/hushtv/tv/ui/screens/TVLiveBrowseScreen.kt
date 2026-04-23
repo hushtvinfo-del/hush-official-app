@@ -298,7 +298,82 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     val guideFocus = remember { FocusRequester() }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
+    // Current layout mode — re-read on every composition so
+    // toggling in Settings takes effect immediately when the user
+    // returns to this screen.
+    val layoutMode = com.hushtv.tv.data.LayoutPrefsStore.mode(ctx)
+    val useSidebar = layoutMode == com.hushtv.tv.data.LayoutPrefsStore.MODE_SIDEBAR
+    val sidebarFirstItemFocus = remember { FocusRequester() }
+    val sidebarItems = remember(uiCategories) {
+        uiCategories.map {
+            com.hushtv.tv.ui.screens.home.SidebarItem(
+                id = it.category_id,
+                label = it.category_name,
+            )
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
+    if (useSidebar) {
+        // ── SIDEBAR MODE ──
+        // Classic Tivimate-style layout. No top toolbar. Sidebar on
+        // the left; PreviewBar + ChannelsPane fill the rest.
+        Row(
+            Modifier
+                .fillMaxSize()
+                .padding(top = 72.dp)
+                .background(
+                    Brush.verticalGradient(0f to Color(0xFF050B18), 1f to Color(0xFF000000))
+                )
+        ) {
+            com.hushtv.tv.ui.screens.home.CategorySidebar(
+                items = sidebarItems,
+                selectedId = uiCategories.getOrNull(selectedCatIndex)?.category_id,
+                title = "Live TV",
+                firstItemFocus = sidebarFirstItemFocus,
+                onFocus = { /* no preview-on-focus; ENTER commits */ },
+                onEnter = { item ->
+                    val idx = uiCategories.indexOfFirst { it.category_id == item.id }
+                    if (idx >= 0) {
+                        if (selectedCatIndex != idx) focusedChannelIdx = 0
+                        selectedCatIndex = idx
+                        pendingJumpToFirstChannel = true
+                    }
+                },
+                rightTarget = firstChannelFocus,
+            )
+            Box(Modifier.width(1.dp).fillMaxHeight().background(Color(0x1FFFFFFF)))
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .onFocusChanged { channelsPaneFocused = it.hasFocus && focusedChannelIdx >= 0 }
+            ) {
+                PreviewBar(
+                    channel = filteredChannels.getOrNull(focusedChannelIdx),
+                    player = previewPlayer,
+                    showVideo = channelsPaneFocused,
+                )
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FFFFFFF)))
+                ChannelsPane(
+                    playlistId = playlistId,
+                    host = playlist?.host ?: "",
+                    username = playlist?.username ?: "",
+                    password = playlist?.password ?: "",
+                    channels = filteredChannels,
+                    loading = loadingChans,
+                    onFocusChange = { focusedChannelIdx = it },
+                    initialFocusIndex = focusedChannelIdx,
+                    firstChannelFocus = firstChannelFocus,
+                    onLeftEdge = { runCatching { sidebarFirstItemFocus.requestFocus() } },
+                    onPlay = onPlay,
+                    emptyReason = if (channels.isEmpty() && !loadingChans)
+                        "No channels in this category" else null,
+                    topRowUpTarget = null,
+                )
+            }
+        }
+    } else {
     Column(
         Modifier
             .fillMaxSize()
@@ -382,6 +457,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
             )
         }
     }
+    } // end useSidebar branch
     // ── TOP NAV overlay ─────────────────────────────────────
     val navTabs = remember {
         listOf(
@@ -435,7 +511,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     // above every other pane (preview bar, channel list, toolbar) —
     // fixes the "CTV logo bleed-through" the user reported. Top nav
     // stays on top thanks to the preceding Box overlay ordering.
-    if (dropdownExpanded) {
+    if (dropdownExpanded && !useSidebar) {
         Box(
             Modifier
                 .fillMaxSize()

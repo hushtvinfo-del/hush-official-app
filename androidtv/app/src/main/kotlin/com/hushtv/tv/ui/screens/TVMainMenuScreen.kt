@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.SubcomposeAsyncImage
 import com.hushtv.tv.data.LastChannelStore
+import com.hushtv.tv.data.LayoutPrefsStore
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
@@ -134,6 +135,15 @@ private data class NavTab(
 fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val ctx = LocalContext.current
     val playlist = remember { PlaylistStore.find(ctx, playlistId) }
+
+    // First-run layout chooser. Shown once per install — flips
+    // `firstRunShown` to true the first time the user makes a choice
+    // (or dismisses). Runs INDEPENDENT of the user explicitly opening
+    // Settings → Change Layout.
+    var showLayoutChooser by remember {
+        mutableStateOf(!LayoutPrefsStore.firstRunShown(ctx))
+    }
+    var currentLayoutMode by remember { mutableStateOf(LayoutPrefsStore.mode(ctx)) }
 
     // Account info
     var expiryStr by remember { mutableStateOf<String?>(null) }
@@ -1346,6 +1356,24 @@ private fun ContinueCard(title: String, onClick: () -> Unit) {
                 .fillMaxWidth(0.35f)
                 .height(3.dp)
                 .background(Cyan),
+        )
+    }
+
+    // ── First-run / Settings layout chooser modal ──
+    if (showLayoutChooser) {
+        com.hushtv.tv.ui.screens.home.LayoutChooserDialog(
+            currentMode = currentLayoutMode,
+            dismissable = LayoutPrefsStore.firstRunShown(ctx),
+            onPicked = { mode ->
+                LayoutPrefsStore.setMode(ctx, mode)
+                LayoutPrefsStore.markFirstRunShown(ctx)
+                currentLayoutMode = mode
+                showLayoutChooser = false
+            },
+            onDismiss = {
+                LayoutPrefsStore.markFirstRunShown(ctx)
+                showLayoutChooser = false
+            },
         )
     }
 }
