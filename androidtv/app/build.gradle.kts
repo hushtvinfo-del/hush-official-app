@@ -11,8 +11,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 106
-        versionName = "1.13.3"
+        versionCode = 107
+        versionName = "1.13.4"
     }
 
     buildTypes {

@@ -151,18 +151,23 @@ fun rememberMovieCollections(): List<MovieCollection> {
             )
         }
 
-        // (B) If the discovered cache is missing or stale, refresh it.
-        // IMPORTANT: never cache empty results — if discovery returns
-        // nothing, we want to retry on the next launch rather than sit
-        // on an empty cache for 7 days (previous bug: discovery
-        // silently failed once → cached empty list → user saw only the
-        // curated 20 until the TTL expired).
         val cachedDiscovered = DiscoveryCache.loadDiscoveredCollections(ctx)
+        // If the cached list is smaller than our expected yield (a hint
+        // that it was produced by an older, smaller discovery scan),
+        // force a refresh too so users get the full 100+ catalog.
+        val expectedMinYield = 80
         val shouldRefresh = cachedDiscovered.isEmpty() ||
+            cachedDiscovered.size < expectedMinYield ||
             DiscoveryCache.shouldRefreshDiscoveredCollections(ctx)
         val discovered = if (shouldRefresh) {
             val fresh = runCatching {
-                TmdbService.discoverPopularCollections(pages = 5)
+                // Bigger pool: 20 pages of /movie/popular + 10 pages of
+                // /movie/top_rated → ~600 movies scanned → yields 100+
+                // unique franchise collections after dedupe.
+                TmdbService.discoverPopularCollections(
+                    popularPages = 20,
+                    topRatedPages = 10,
+                )
             }.getOrDefault(emptyList())
             if (fresh.isNotEmpty()) {
                 DiscoveryCache.saveDiscoveredCollections(ctx, fresh)

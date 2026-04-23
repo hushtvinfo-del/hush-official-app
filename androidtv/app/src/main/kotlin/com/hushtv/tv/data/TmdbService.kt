@@ -524,22 +524,31 @@ object TmdbService {
         }
 
     /**
-     * Discover popular movie collections by scanning the TMDB popular-
-     * movies list and pulling `belongs_to_collection` from each movie.
-     * Returns `{collectionId → DiscoveredCollection}` deduped.
+     * Discover popular & top-rated movie collections by scanning TMDB
+     * and pulling `belongs_to_collection` from each movie.
      *
-     * Fires `pages` concurrent `/movie/popular` calls, then up to
-     * `pages * 20` concurrent `/movie/{id}` calls to extract the
-     * collection metadata. All parallel on Dispatchers.IO so the
-     * whole run completes in ~3-5 s on a decent connection.
+     * Two source pools are scanned in parallel:
+     *   • `/movie/popular`   — currently-trending films (catches modern
+     *     franchises, reboots and upcoming sequels)
+     *   • `/movie/top_rated` — all-time acclaimed films (catches older
+     *     classic franchises like Rocky, Alien, Halloween, Back to
+     *     the Future pre-Craig-era Bond)
+     *
+     * After de-duping the combined movie-ID set, we fan out parallel
+     * `/movie/{id}` calls in batches of 25 to extract collection
+     * metadata, then dedupe collection IDs. On a decent connection
+     * this finishes in ~8-12 s for the default 600-movie scan.
      */
-    suspend fun discoverPopularCollections(pages: Int = 5): List<DiscoveredCollection> =
+    suspend fun discoverPopularCollections(
+        popularPages: Int = 20,
+        topRatedPages: Int = 10,
+    ): List<DiscoveredCollection> =
         withContext(Dispatchers.IO) {
             val listAdapter = moshi.adapter(TmdbMovieListResp::class.java)
             val detailAdapter = moshi.adapter(TmdbMovieDetailWithCollection::class.java)
 
-            // Step 1: fetch N pages of popular movies concurrently.
-            val movieIds = (1..pages).map { page ->
+            // Step 1: fetch movie lists from BOTH sources concurrently.
+            val popularJobs = (1..popularPages).map { page ->
                 async {
                     runCatching {
                         val url = "$BASE/movie/popular?language=en-US&page=$page&api_key=${ApiKeys.TMDB}"
@@ -550,13 +559,31 @@ object TmdbService {
                         android.util.Log.w("TmdbDiscover", "popular page $page failed", it)
                     }.getOrDefault(emptyList())
                 }
-            }.awaitAll().flatten().distinct()
+            }
+            val topRatedJobs = (1..topRatedPages).map { page ->
+                async {
+                    runCatching {
+                        val url = "$BASE/movie/top_rated?language=en-US&page=$page&api_key=${ApiKeys.TMDB}"
+                        val body = client.newCall(Request.Builder().url(url).build())
+                            .execute().body?.string() ?: return@runCatching emptyList<Int>()
+                        listAdapter.fromJson(body)?.results?.map { it.id } ?: emptyList()
+                    }.onFailure {
+                        android.util.Log.w("TmdbDiscover", "top_rated page $page failed", it)
+                    }.getOrDefault(emptyList())
+                }
+            }
 
-            android.util.Log.i("TmdbDiscover", "fetched ${movieIds.size} popular movies")
+            val movieIds = (popularJobs.awaitAll() + topRatedJobs.awaitAll())
+                .flatten().distinct()
+            android.util.Log.i(
+                "TmdbDiscover",
+                "fetched ${movieIds.size} unique movies (popular=$popularPages, top_rated=$topRatedPages)",
+            )
 
             // Step 2: fetch each movie's belongs_to_collection field in parallel.
-            // Batch into chunks of 20 concurrent requests to be polite.
-            val discovered = movieIds.chunked(20).flatMap { batch ->
+            // Batch into chunks of 25 concurrent requests — TMDB v3
+            // handles ~40 req/s comfortably.
+            val discovered = movieIds.chunked(25).flatMap { batch ->
                 batch.map { mid ->
                     async {
                         runCatching {
