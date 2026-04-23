@@ -297,6 +297,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     val dropdownFocus = remember { FocusRequester() }
     val searchFocusTB = remember { FocusRequester() }
     val guideFocus = remember { FocusRequester() }
+    val resumeChipFocus = remember { FocusRequester() }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
     // Watching-Now resume state. Re-read on every recomposition so the
@@ -354,6 +355,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     )
                 }
             },
+            resumeChipFocus = resumeChipFocus,
         )
 
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
@@ -393,7 +395,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     channels.isEmpty() && !loadingChans -> "No channels in this category"
                     else -> null
                 },
-                topRowUpTarget = dropdownFocus,
+                topRowUpTarget = if (resumeChannel != null) resumeChipFocus else dropdownFocus,
             )
         }
     }
@@ -733,6 +735,7 @@ private fun LiveCategoryToolbar(
     downTarget: FocusRequester,
     resumeChannel: LastChannelStore.LastChannel?,
     onResumeChannel: () -> Unit,
+    resumeChipFocus: FocusRequester,
 ) {
     Row(
         Modifier
@@ -776,13 +779,18 @@ private fun LiveCategoryToolbar(
 
         // "Watching Now" resume chip — shown only when we have a
         // persisted last-watched channel. One-click jump straight
-        // back into playback. Sits between title and controls so it
-        // reads as "your progress" on the left side.
+        // back into playback. Explicit focusRequester + focusProperties
+        // so the chip is always reachable via D-pad (the flex spacer
+        // between it and the dropdown otherwise breaks 2D focus
+        // search's left/right resolution).
         if (resumeChannel != null) {
             Spacer(Modifier.width(20.dp))
             WatchingNowChip(
                 channelName = resumeChannel.channelName,
                 onClick = onResumeChannel,
+                focusRequester = resumeChipFocus,
+                downTarget = downTarget,
+                rightTarget = dropdownFocus,
             )
         }
 
@@ -798,6 +806,8 @@ private fun LiveCategoryToolbar(
             focusRequester = dropdownFocus,
             downTarget = downTarget,
             rightTarget = searchFocus,
+            // When the resume chip exists, LEFT from Browse → chip.
+            leftTarget = if (resumeChannel != null) resumeChipFocus else null,
         )
 
         Spacer(Modifier.width(14.dp))
@@ -824,6 +834,9 @@ private fun LiveCategoryToolbar(
 private fun WatchingNowChip(
     channelName: String,
     onClick: () -> Unit,
+    focusRequester: FocusRequester,
+    downTarget: FocusRequester,
+    rightTarget: FocusRequester,
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
@@ -839,8 +852,13 @@ private fun WatchingNowChip(
                 color = if (focused) Cyan else Cyan.copy(alpha = 0.45f),
                 shape = RoundedCornerShape(18.dp),
             )
-            .focusable()
+            .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
+            .focusProperties {
+                down = downTarget
+                right = rightTarget
+            }
+            .focusable()
             .clickableWithEnter(onClick)
             .padding(horizontal = 12.dp),
     ) {
@@ -882,6 +900,7 @@ private fun LiveDropdownButton(
     focusRequester: FocusRequester,
     downTarget: FocusRequester,
     rightTarget: FocusRequester,
+    leftTarget: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
@@ -900,6 +919,7 @@ private fun LiveDropdownButton(
             .focusProperties {
                 down = downTarget
                 right = rightTarget
+                if (leftTarget != null) left = leftTarget
             }
             .focusable()
             .clickableWithEnter(onToggle),
