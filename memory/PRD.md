@@ -197,6 +197,36 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 24 — v1.12.0 Unified top nav across browse screens (2026-04-23 — completed, deployed)
+User: "Bring the same top-nav + page indicator + hero treatment to the
+Movies and Series browse screens — yes, unifying them would give the
+whole app one cohesive Netflix-grade design language."
+
+Surgical minimum-viable change: drop the existing `TopNavBar` overlay
+onto `TVBrowseScreen` (which powers Movies, Series, Live TV, and Search
+via the `type` param). The category sidebar stays untouched (it's a
+content filter, not navigation), the grid stays untouched, ONLY the
+top nav is added so the primary navigation is consistent with Home.
+
+- `TVBrowseScreen.kt`:
+  - Added `padding(top = 72.dp)` to the main `Row` containing the
+    category sidebar + content grid so they start below the nav.
+  - Added an `Icons.Default.Tv` import (was missing for the Live TV tab
+    icon).
+  - Inserted the `TopNavBar` overlay at `Alignment.TopStart` of the
+    root Box, right before it closes. Tabs mirror the Home tabs: Home →
+    `menu/$playlistId`, Live TV / Movies / Series / Search → their own
+    `browse/$playlistId/{kind}` routes.
+  - `activeKey` is derived from `type` (`live` / `series` / `search` /
+    default `movies`) so the underline highlights the current screen.
+  - Nav handler guards against re-navigating to the current screen and
+    uses `popUpTo("menu/$playlistId") { inclusive = false }` +
+    `launchSingleTop = true` so back-stack stays sensible when users
+    hop between Movies ↔ Series ↔ Live.
+  - Settings gear jumps to `settings/$playlistId` same as Home.
+- Shipped as versionCode=96 / versionName="1.12.0" — APK (md5
+  `3c88fc879cc0370e1b37f53ae1b07847`) live on `https://hushtv.xyz`.
+
 ### Phase 23 — v1.11.3 Custom SS logos + layout cleanup (2026-04-23 — completed, deployed)
 User supplied 7 exact logo URLs (AMC+, Apple TV+, CRAVE/STARZ, Disney+,
 Netflix, Paramount+, Prime Video) and asked for consistent sizing +

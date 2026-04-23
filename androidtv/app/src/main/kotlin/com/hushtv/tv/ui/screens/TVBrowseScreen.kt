@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.outlined.Slideshow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -329,7 +331,7 @@ fun TVBrowseScreen(
             label = "vod-sidebar-width",
         )
 
-        Row(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize().padding(top = 72.dp)) {
             // ── LEFT SIDEBAR — animated-width wrapper ──────────
             Box(
                 Modifier
@@ -497,6 +499,70 @@ fun TVBrowseScreen(
                     }
                 }
             }
+        }
+
+        // ── TOP NAV overlay ──────────────────────────────────────────
+        // Same nav as Home so Movies/Series/Live feel like siblings of
+        // Home instead of drill-down sub-screens. Active tab highlights
+        // based on the current screen kind.
+        val navTabs = remember {
+            listOf(
+                com.hushtv.tv.ui.screens.home.TopNavTab(
+                    "home", "Home",
+                    Icons.Default.Home,
+                    "menu/$playlistId",
+                ),
+                com.hushtv.tv.ui.screens.home.TopNavTab(
+                    "live", "Live TV",
+                    Icons.Default.Tv,
+                    "browse/$playlistId/live",
+                ),
+                com.hushtv.tv.ui.screens.home.TopNavTab(
+                    "movies", "Movies",
+                    Icons.Default.Movie,
+                    "browse/$playlistId/movie",
+                ),
+                com.hushtv.tv.ui.screens.home.TopNavTab(
+                    "series", "Series",
+                    Icons.Outlined.Slideshow,
+                    "browse/$playlistId/series",
+                ),
+                com.hushtv.tv.ui.screens.home.TopNavTab(
+                    "search", "Search",
+                    Icons.Default.Search,
+                    "browse/$playlistId/search",
+                ),
+            )
+        }
+        val activeTabKey = when (type) {
+            "live" -> "live"
+            "series" -> "series"
+            "search" -> "search"
+            else -> "movies"
+        }
+        val homeTabFocus = remember { FocusRequester() }
+        Box(
+            Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth(),
+        ) {
+            com.hushtv.tv.ui.screens.home.TopNavBar(
+                tabs = navTabs,
+                activeKey = activeTabKey,
+                homeFocus = homeTabFocus,
+                onTab = { t ->
+                    // Don't re-navigate to our current screen.
+                    if (t.key == activeTabKey) return@TopNavBar
+                    t.route?.let { route ->
+                        nav.navigate(route) {
+                            // Replace so back still works sensibly.
+                            popUpTo("menu/$playlistId") { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                onSettings = { nav.navigate("settings/$playlistId") },
+            )
         }
     }
 
