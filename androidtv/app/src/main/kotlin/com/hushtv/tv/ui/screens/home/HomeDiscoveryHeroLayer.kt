@@ -156,13 +156,13 @@ fun HomeDiscoveryHeroLayer(
                 )
         )
 
-        // Text column — offset past the sidebar and vertically positioned
-        // a bit lower so it sits in a better balanced proportion against
-        // the card row at the bottom.
+        // Text column — offset past the sidebar. Positioned high so the
+        // title + subtitle + count chip block has plenty of empty space
+        // between itself and the card row below.
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = contentStartPadding, top = 96.dp, end = 48.dp),
+                .padding(start = contentStartPadding, top = 32.dp, end = 48.dp),
         ) {
             DiscoveryTitleBlock(card)
         }
