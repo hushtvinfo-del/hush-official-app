@@ -102,6 +102,65 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 33 — v1.19.0 Dual layout: Top-Bar vs Left-Sidebar (2026-04-23 — completed, deployed)
+User asked for a choice: some prefer the new compact "Top Bar + BROWSE
+dropdown" introduced in v1.18.x, others want the classic Tivimate-style
+persistent left sidebar. Both must work for Live TV, Movies AND Series,
+with a first-run chooser and a Settings toggle.
+
+Files already in place from previous session:
+- `data/LayoutPrefsStore.kt` — SharedPreferences wrapper with
+  `MODE_TOP` / `MODE_SIDEBAR` plus a `firstRunShown` flag so the modal
+  only auto-fires once.
+- `ui/screens/home/CategorySidebar.kt` — reusable 240 dp vertical
+  category rail (header with count chip, auto-scroll to selected, cyan
+  focus ring + border, optional `rightTarget` focus-handoff to grid,
+  optional `topRowUpTarget` for top-nav reachability).
+- `ui/screens/home/LayoutChooserDialog.kt` — full-screen cinematic
+  modal with two large cards showing mini-mockups of each layout.
+  Focus auto-routes to whichever card matches the user's current
+  setting. Dismissable flag (`true` in Settings, `false` on first run)
+  controls back-press behaviour.
+
+Fork-blocker fix:
+- `TVMainMenuScreen.kt` was failing to compile because the dialog
+  invocation was accidentally dropped INSIDE the `ContinueCard`
+  composable (line 1362+) while the referenced `showLayoutChooser`
+  state lives in `TVMainMenuScreen` which ends at line 658. Moved the
+  `if (showLayoutChooser) { LayoutChooserDialog(...) }` block to the
+  correct spot — just before the root Box closes inside
+  `TVMainMenuScreen`. Build now passes clean.
+
+New wiring:
+- `TVBrowseScreen.kt` (Movies + Series) — added layout mode read +
+  `useSidebar` branch. In sidebar mode renders `Row(CategorySidebar +
+  grid)` with no toolbar; in top-bar mode keeps the existing
+  `Column(CategoryToolbar + grid)`. Grid body factored into a shared
+  `@Composable () -> Unit` lambda to avoid duplication. Grid D-pad
+  wiring: top-row Up lifts to `dropdownFocus` only in top-bar mode;
+  leftmost cards' Left key routes back to the sidebar's first item in
+  sidebar mode (else no-op). Initial focus lands on the sidebar's
+  first item in sidebar mode, on the BROWSE dropdown otherwise.
+- `TVLiveBrowseScreen.kt` — dual-layout branching was already wired
+  in this session's previous agent pass. Verified against the new
+  `CategorySidebar` signature — no changes needed.
+- `TVSettingsScreen.kt` — added a new `LAYOUT` section between
+  PROFILE and PARENTAL CONTROLS with a "Change Layout" card that
+  shows the current mode in its subtitle and opens the
+  `LayoutChooserDialog` when pressed. Dialog closes on ENTER (saves
+  via `LayoutPrefsStore.setMode`) or BACK (simple dismiss).
+
+D-pad matrix verified at compile-time:
+- Sidebar → RIGHT → first grid card (via `rightTarget`).
+- Grid leftmost → LEFT → sidebar first item (via `onLeftEdge`).
+- Sidebar top row → UP → top nav Home tab (via `topRowUpTarget`).
+- Grid top row → UP → top nav (2D focus search) in both modes; plus
+  explicit `up = dropdownFocus` in top-bar mode for stability.
+
+- Shipped as versionCode=122 / versionName="1.19.0" — APK (md5
+  `d7924b22e1824314e3557df49c57cca7`, 23,968,884 bytes) live on
+  `https://hushtv.xyz`, `version.json` bumped with changelog.
+
 ### Phase 32 — v1.13.2 Discovery fix — actually populate 100+ franchises (2026-04-23 — completed, deployed)
 User reported that the "See All" grid still showed only the 20 curated
 franchises despite v1.13.0 shipping dynamic discovery. Investigated

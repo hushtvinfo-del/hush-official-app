@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Person
@@ -27,12 +28,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.hushtv.tv.data.LayoutPrefsStore
 import com.hushtv.tv.data.PinStore
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamCategory
 import com.hushtv.tv.ui.player.PinDialog
 import com.hushtv.tv.ui.player.PinMode
+import com.hushtv.tv.ui.screens.home.LayoutChooserDialog
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
@@ -54,6 +57,14 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
 
     var showPinDialog by remember { mutableStateOf(false) }
     var pinAction by remember { mutableStateOf<() -> Unit>({}) }
+
+    // Layout chooser (reuses the first-run modal).
+    var showLayoutChooser by remember { mutableStateOf(false) }
+    var currentLayoutMode by remember { mutableStateOf(LayoutPrefsStore.mode(ctx)) }
+    val currentLayoutLabel = when (currentLayoutMode) {
+        LayoutPrefsStore.MODE_SIDEBAR -> "Left Sidebar"
+        else -> "Top Bar"
+    }
 
     LaunchedEffect(playlistId) {
         val p = playlist ?: return@LaunchedEffect
@@ -99,6 +110,19 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 subtitle = "Sign in with a different Xtream account",
                 icon = { Icon(Icons.Default.PersonAdd, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                 onClick = { nav.navigate("add") },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "LAYOUT",
+                color = TextSecondary, fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+            )
+            SettingsCard(
+                title = "Change Layout",
+                subtitle = "Currently using $currentLayoutLabel — applies to Live TV, Movies, Series",
+                icon = { Icon(Icons.Default.Dashboard, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                onClick = { showLayoutChooser = true },
             )
 
             Spacer(Modifier.height(12.dp))
@@ -204,6 +228,19 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 }
             )
         }
+    }
+
+    if (showLayoutChooser) {
+        LayoutChooserDialog(
+            currentMode = currentLayoutMode,
+            dismissable = true,
+            onPicked = { mode ->
+                LayoutPrefsStore.setMode(ctx, mode)
+                currentLayoutMode = mode
+                showLayoutChooser = false
+            },
+            onDismiss = { showLayoutChooser = false },
+        )
     }
 }
 

@@ -654,6 +654,27 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 daysLeft = daysLeft,
             )
         }
+
+        // ── First-run / Settings layout chooser modal ──
+        // Declared at the end of the root Box so it composes last and
+        // sits on top of the whole screen. Variables are hoisted at the
+        // top of TVMainMenuScreen so ContinueCard can't read them.
+        if (showLayoutChooser) {
+            com.hushtv.tv.ui.screens.home.LayoutChooserDialog(
+                currentMode = currentLayoutMode,
+                dismissable = LayoutPrefsStore.firstRunShown(ctx),
+                onPicked = { mode ->
+                    LayoutPrefsStore.setMode(ctx, mode)
+                    LayoutPrefsStore.markFirstRunShown(ctx)
+                    currentLayoutMode = mode
+                    showLayoutChooser = false
+                },
+                onDismiss = {
+                    LayoutPrefsStore.markFirstRunShown(ctx)
+                    showLayoutChooser = false
+                },
+            )
+        }
     }
 }
 // End TVMainMenuScreen
@@ -1356,24 +1377,6 @@ private fun ContinueCard(title: String, onClick: () -> Unit) {
                 .fillMaxWidth(0.35f)
                 .height(3.dp)
                 .background(Cyan),
-        )
-    }
-
-    // ── First-run / Settings layout chooser modal ──
-    if (showLayoutChooser) {
-        com.hushtv.tv.ui.screens.home.LayoutChooserDialog(
-            currentMode = currentLayoutMode,
-            dismissable = LayoutPrefsStore.firstRunShown(ctx),
-            onPicked = { mode ->
-                LayoutPrefsStore.setMode(ctx, mode)
-                LayoutPrefsStore.markFirstRunShown(ctx)
-                currentLayoutMode = mode
-                showLayoutChooser = false
-            },
-            onDismiss = {
-                LayoutPrefsStore.markFirstRunShown(ctx)
-                showLayoutChooser = false
-            },
         )
     }
 }

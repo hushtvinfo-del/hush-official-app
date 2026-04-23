@@ -377,6 +377,22 @@ fun TVBrowseScreen(
     val searchFocus = remember { FocusRequester() }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
+    // ── Current layout mode (Top-Bar vs Left Sidebar) ──
+    // Re-read on every composition so toggling in Settings takes
+    // effect immediately when the user returns to this screen.
+    val layoutMode = com.hushtv.tv.data.LayoutPrefsStore.mode(ctx)
+    val useSidebar = layoutMode == com.hushtv.tv.data.LayoutPrefsStore.MODE_SIDEBAR
+    val sidebarFirstItemFocus = remember { FocusRequester() }
+    val browseSidebarItems = remember(allCategories, type) {
+        buildList {
+            add(com.hushtv.tv.ui.screens.home.SidebarItem(CAT_FAV, "Favorites"))
+            add(com.hushtv.tv.ui.screens.home.SidebarItem(CAT_ALL, "All"))
+            allCategories.forEach {
+                add(com.hushtv.tv.ui.screens.home.SidebarItem(it.category_id, it.category_name))
+            }
+        }
+    }
+
     var pendingJumpToGrid by remember { mutableStateOf(false) }
     LaunchedEffect(displayedItems, pendingJumpToGrid) {
         if (pendingJumpToGrid && displayedItems.isNotEmpty()) {
@@ -387,10 +403,14 @@ fun TVBrowseScreen(
     }
 
     // Initial focus: put cursor on the dropdown so user can immediately
-    // open the category picker or arrow down into the grid.
+    // open the category picker or arrow down into the grid. In sidebar
+    // mode, focus the first sidebar item instead.
     LaunchedEffect(Unit) {
         delay(260)
-        runCatching { dropdownFocus.requestFocus() }
+        runCatching {
+            if (useSidebar) sidebarFirstItemFocus.requestFocus()
+            else dropdownFocus.requestFocus()
+        }
     }
 
     // Trailer dialog state
@@ -428,42 +448,13 @@ fun TVBrowseScreen(
         )
 
         // ── Full-width content: toolbar + detail + grid ────────────
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(top = 72.dp) // room for the global top nav
-                .onFocusChanged { gridHasFocus = it.hasFocus && focusedIdx >= 0 },
-        ) {
-            // ── TOOLBAR — dropdown + inline search. Pinned directly
-            //     below the top nav. Always visible.
-            CategoryToolbar(
-                title = title,
-                totalCategoryCount = allCategories.size,
-                selectedLabel = sidebarEntries.firstOrNull { it.id == selectedCatId }?.label
-                    ?: "All",
-                searchQuery = searchQuery,
-                onSearchChange = { searchQuery = it },
-                dropdownExpanded = dropdownExpanded,
-                onDropdownToggle = { dropdownExpanded = !dropdownExpanded },
-                onDropdownClose = { dropdownExpanded = false },
-                entries = sidebarEntries.filter { !it.isDivider && it.id != CAT_SEARCH },
-                selectedId = selectedCatId,
-                onCategoryPick = { id ->
-                    selectedCatId = id
-                    dropdownExpanded = false
-                    pendingJumpToGrid = true
-                },
-                dropdownFocus = dropdownFocus,
-                searchFocus = searchFocus,
-                downTarget = firstGridFocus,
-            )
-
-            // Divider line under toolbar.
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
-
+        // In TOP-BAR mode: Column(CategoryToolbar + grid).
+        // In SIDEBAR mode: Row(CategorySidebar + grid).
+        // Grid body is factored into a lambda to avoid duplication.
+        val gridBody: @Composable () -> Unit = {
             // ── Poster grid (claims all remaining space) ──
             val gridState = rememberLazyGridState()
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.fillMaxSize()) {
                 when {
                     loadingItems -> CenterLoader()
                     displayedItems.isEmpty() && searchQuery.trim().isNotEmpty() ->
@@ -507,9 +498,12 @@ fun TVBrowseScreen(
                                             MyListStore.isInList(ctx, playlistId, item.kind, id)
                                         }
                                         // Only the TOP ROW lifts focus up to
-                                        // the toolbar — rows below navigate
-                                        // within the grid normally.
+                                        // the toolbar (top-bar mode) — rows
+                                        // below navigate within the grid
+                                        // normally. In sidebar mode there's
+                                        // no toolbar so top row Up is a no-op.
                                         val isTopRow = idx < cols
+                                        val upTarget = if (useSidebar) null else dropdownFocus
                                         CompactPoster(
                                             item = item,
                                             progress = progress,
@@ -518,12 +512,16 @@ fun TVBrowseScreen(
                                                 Modifier.focusRequester(firstGridFocus)
                                                 else Modifier)
                                                 .then(
-                                                    if (isTopRow)
-                                                        Modifier.focusProperties { up = dropdownFocus }
+                                                    if (isTopRow && upTarget != null)
+                                                        Modifier.focusProperties { up = upTarget }
                                                     else Modifier
                                                 ),
                                             onFocus = { focusedIdx = idx },
-                                            onLeftEdge = { /* no sidebar to return to */ },
+                                            onLeftEdge = {
+                                                if (useSidebar) runCatching {
+                                                    sidebarFirstItemFocus.requestFocus()
+                                                }
+                                            },
                                             isLeftmost = idx % cols == 0,
                                             onClick = { onCardClick(item) },
                                             onLongPressFavorite = {
@@ -542,6 +540,72 @@ fun TVBrowseScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        if (useSidebar) {
+            // ── SIDEBAR MODE ──
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = 72.dp)
+                    .onFocusChanged { gridHasFocus = it.hasFocus && focusedIdx >= 0 },
+            ) {
+                com.hushtv.tv.ui.screens.home.CategorySidebar(
+                    items = browseSidebarItems,
+                    selectedId = selectedCatId,
+                    title = title,
+                    firstItemFocus = sidebarFirstItemFocus,
+                    onFocus = { /* no preview-on-focus; ENTER commits */ },
+                    onEnter = { item ->
+                        selectedCatId = item.id
+                        pendingJumpToGrid = true
+                    },
+                    rightTarget = firstGridFocus,
+                )
+                Box(Modifier.width(1.dp).fillMaxHeight().background(Color(0x1FFFFFFF)))
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    gridBody()
+                }
+            }
+        } else {
+            // ── TOP-BAR MODE ── (default)
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = 72.dp) // room for the global top nav
+                    .onFocusChanged { gridHasFocus = it.hasFocus && focusedIdx >= 0 },
+            ) {
+                // ── TOOLBAR — dropdown + inline search. Pinned directly
+                //     below the top nav. Always visible.
+                CategoryToolbar(
+                    title = title,
+                    totalCategoryCount = allCategories.size,
+                    selectedLabel = sidebarEntries.firstOrNull { it.id == selectedCatId }?.label
+                        ?: "All",
+                    searchQuery = searchQuery,
+                    onSearchChange = { searchQuery = it },
+                    dropdownExpanded = dropdownExpanded,
+                    onDropdownToggle = { dropdownExpanded = !dropdownExpanded },
+                    onDropdownClose = { dropdownExpanded = false },
+                    entries = sidebarEntries.filter { !it.isDivider && it.id != CAT_SEARCH },
+                    selectedId = selectedCatId,
+                    onCategoryPick = { id ->
+                        selectedCatId = id
+                        dropdownExpanded = false
+                        pendingJumpToGrid = true
+                    },
+                    dropdownFocus = dropdownFocus,
+                    searchFocus = searchFocus,
+                    downTarget = firstGridFocus,
+                )
+
+                // Divider line under toolbar.
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
+
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    gridBody()
                 }
             }
         }
