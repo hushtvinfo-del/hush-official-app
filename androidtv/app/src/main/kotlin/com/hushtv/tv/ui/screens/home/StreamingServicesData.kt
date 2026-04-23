@@ -105,15 +105,13 @@ private val MOVIE_SERVICES_BASE = listOf(
  * over image quality, cropping, and background transparency.
  */
 private val CUSTOM_LOGO_URLS = mapOf(
-    "amc" to "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/AMC_logo_2019.svg/960px-AMC_logo_2019.svg.png",
+    "amc" to "https://raw.githubusercontent.com/tv-logo/tv-logos/refs/heads/main/countries/united-states/amc-us.png",
     "appletv" to "https://clipart-library.com/new_gallery/456504_apple-tv-logo-png.png",
-    "crave" to "https://www.bellmedia.ca/lede/wp-content/uploads/2021/06/crave-logo-color-2025.png",
-    "disney" to "https://static.vecteezy.com/system/resources/previews/022/636/380/non_2x/disney-logo-disney-icon-transparent-free-png.png",
+    "crave" to "https://raw.githubusercontent.com/tv-logo/tv-logos/refs/heads/main/countries/canada/crave-1-ca.png",
+    "disney" to "https://github.com/tv-logo/tv-logos/blob/main/countries/united-states/disney-plus-us.png?raw=true",
     "netflix" to "https://static.vecteezy.com/system/resources/previews/017/396/804/non_2x/netflix-mobile-application-logo-free-png.png",
-    // Raw SVG — decoded by SvgDecoder registered on the Coil ImageLoader
-    // in HushTVApp. Zero-loss scaling on any TV size.
-    "paramount" to "https://upload.wikimedia.org/wikipedia/commons/a/a5/Paramount_Plus.svg",
-    "prime" to "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Amazon_Prime_Video_logo_%282024%29.svg/960px-Amazon_Prime_Video_logo_%282024%29.svg.png",
+    "paramount" to "https://github.com/tv-logo/tv-logos/blob/main/countries/france/paramount-channel-fr.png?raw=true",
+    "prime" to "https://image.pngaaa.com/361/480361-middle.png",
 )
 
 /**
