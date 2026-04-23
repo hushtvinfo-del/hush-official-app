@@ -102,6 +102,35 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 34 — v1.19.1 Layout hint chip on top nav (2026-04-23 — completed, deployed)
+Potential-improvement enhancement approved by the user. Adds a subtle
+discoverability cue to the top nav on Live TV / Movies / Series so new
+users always know which layout mode they're in, and can switch with a
+single click of OK.
+
+Files changed:
+- `ui/screens/home/TopNavBar.kt`: added two new optional params
+  `layoutHint: String?` and `onLayoutHintClick: (() -> Unit)?`. When
+  both are provided, renders a `LayoutHintChip` between the tab rail
+  and the expiry badge. Chip is a compact 28 dp cyan pill
+  (`0x5506B6D4` ring over a 12% cyan fill) containing a Dashboard icon
+  + the uppercase label ("SIDEBAR" / "TOP BAR"). Focusable; focus
+  bumps the border to 1.5 dp solid cyan, lifts the fill to 22% alpha,
+  and scales the icon 1.04×. ENTER calls `onLayoutHintClick`.
+- `ui/screens/TVBrowseScreen.kt` + `TVLiveBrowseScreen.kt`: switched
+  the `layoutMode` val to a `currentLayoutMode` mutableStateOf so
+  picking a new mode via the chip re-composes the screen instantly
+  (no need to exit + re-enter). Added a `showLayoutChooser` state
+  guarding a `LayoutChooserDialog` invocation at the bottom of the
+  composable. TopNavBar call-sites now pass
+  `layoutHint = if (useSidebar) "SIDEBAR" else "TOP BAR"` and
+  `onLayoutHintClick = { showLayoutChooser = true }`.
+- `TVMainMenuScreen.kt`: Home screen intentionally does NOT show the
+  chip — the layout mode only affects browse screens.
+
+- Shipped as versionCode=123 / versionName="1.19.1" — APK (md5
+  `7229a0a133cec5c7709f2848d674b31c`) live on `https://hushtv.xyz`.
+
 ### Phase 33 — v1.19.0 Dual layout: Top-Bar vs Left-Sidebar (2026-04-23 — completed, deployed)
 User asked for a choice: some prefer the new compact "Top Bar + BROWSE
 dropdown" introduced in v1.18.x, others want the classic Tivimate-style

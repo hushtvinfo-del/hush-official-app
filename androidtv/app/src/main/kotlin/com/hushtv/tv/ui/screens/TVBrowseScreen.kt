@@ -378,10 +378,12 @@ fun TVBrowseScreen(
     var dropdownExpanded by remember { mutableStateOf(false) }
 
     // ── Current layout mode (Top-Bar vs Left Sidebar) ──
-    // Re-read on every composition so toggling in Settings takes
-    // effect immediately when the user returns to this screen.
-    val layoutMode = com.hushtv.tv.data.LayoutPrefsStore.mode(ctx)
-    val useSidebar = layoutMode == com.hushtv.tv.data.LayoutPrefsStore.MODE_SIDEBAR
+    // State-backed so picking a new mode via the chooser re-composes
+    // this screen instantly without needing to leave + re-enter.
+    var currentLayoutMode by remember {
+        mutableStateOf(com.hushtv.tv.data.LayoutPrefsStore.mode(ctx))
+    }
+    val useSidebar = currentLayoutMode == com.hushtv.tv.data.LayoutPrefsStore.MODE_SIDEBAR
     val sidebarFirstItemFocus = remember { FocusRequester() }
     val browseSidebarItems = remember(allCategories, type) {
         buildList {
@@ -392,6 +394,8 @@ fun TVBrowseScreen(
             }
         }
     }
+    // Layout chooser invoked via the TopNavBar hint chip.
+    var showLayoutChooser by remember { mutableStateOf(false) }
 
     var pendingJumpToGrid by remember { mutableStateOf(false) }
     LaunchedEffect(displayedItems, pendingJumpToGrid) {
@@ -671,6 +675,8 @@ fun TVBrowseScreen(
                     }
                 },
                 onSettings = { nav.navigate("settings/$playlistId") },
+                layoutHint = if (useSidebar) "SIDEBAR" else "TOP BAR",
+                onLayoutHintClick = { showLayoutChooser = true },
             )
         }
 
@@ -704,6 +710,22 @@ fun TVBrowseScreen(
         TrailerDialog(
             videoId = vid,
             onClose = { trailerVideoId = null },
+        )
+    }
+
+    // ── Layout chooser ───────────────────────────────────────────
+    // Opens when the user clicks the SIDEBAR / TOP BAR hint chip in
+    // the top nav. Settings → Change Layout shows the same modal.
+    if (showLayoutChooser) {
+        com.hushtv.tv.ui.screens.home.LayoutChooserDialog(
+            currentMode = currentLayoutMode,
+            dismissable = true,
+            onPicked = { mode ->
+                com.hushtv.tv.data.LayoutPrefsStore.setMode(ctx, mode)
+                currentLayoutMode = mode
+                showLayoutChooser = false
+            },
+            onDismiss = { showLayoutChooser = false },
         )
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -36,6 +37,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -83,6 +85,8 @@ fun TopNavBar(
     onTab: (TopNavTab) -> Unit,
     onSettings: () -> Unit,
     daysLeft: Long? = null,
+    layoutHint: String? = null,
+    onLayoutHintClick: (() -> Unit)? = null,
 ) {
     Box(
         Modifier
@@ -129,6 +133,14 @@ fun TopNavBar(
             }
 
             Spacer(Modifier.weight(1f))
+
+            // ── Layout hint chip ───────────────────────────────────
+            // Subtle discoverability cue for the Sidebar / Top-Bar
+            // layout mode. Focusable; ENTER opens the layout chooser.
+            if (layoutHint != null && onLayoutHintClick != null) {
+                LayoutHintChip(label = layoutHint, onClick = onLayoutHintClick)
+                Spacer(Modifier.width(10.dp))
+            }
 
             // ── Subscription expiry badge ──────────────────────────
             if (daysLeft != null) {
@@ -295,6 +307,56 @@ private fun SettingsIconButton(onClick: () -> Unit) {
             contentDescription = "Settings",
             tint = if (focused) Cyan else Color.White,
             modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/**
+ * Tiny layout-mode hint chip. Tucked between the tab rail and the
+ * expiry badge. Cyan-tinted pill shows a Dashboard icon + the current
+ * layout label ("SIDEBAR" or "TOP BAR"). Focusable; ENTER opens the
+ * layout chooser so power-users can toggle with a single click.
+ */
+@Composable
+private fun LayoutHintChip(label: String, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.04f else 1f,
+        animationSpec = tween(140),
+        label = "layout-hint-scale",
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(28.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (focused) Cyan.copy(alpha = 0.22f) else Color(0x1F06B6D4))
+            .border(
+                width = if (focused) 1.5.dp else 1.dp,
+                color = if (focused) Cyan else Color(0x5506B6D4),
+                shape = RoundedCornerShape(14.dp),
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
+            .padding(horizontal = 10.dp),
+    ) {
+        Icon(
+            Icons.Default.Dashboard,
+            contentDescription = null,
+            tint = Cyan,
+            modifier = Modifier
+                .size(12.dp)
+                .graphicsLayer { scaleX = scale; scaleY = scale },
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            label.uppercase(),
+            color = if (focused) Color.White else Color(0xFFB7EAF3),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.8.sp,
+            fontFamily = Inter,
         )
     }
 }
