@@ -13,7 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.NavHost
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import androidx.navigation.compose.rememberNavController
 import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.LastProfileStore
@@ -83,13 +85,23 @@ private fun AppContent() {
         composable("menu/{playlistId}") { bs ->
             TVMainMenuScreen(nav, bs.arguments?.getString("playlistId") ?: "")
         }
-        composable("browse/{playlistId}/{type}") { bs ->
+        composable(
+            route = "browse/{playlistId}/{type}?category={category}",
+            arguments = listOf(
+                navArgument("category") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { bs ->
             val type = bs.arguments?.getString("type") ?: "live"
             val playlistId = bs.arguments?.getString("playlistId") ?: ""
+            val category = bs.arguments?.getString("category")
             if (type == "live") {
                 TVLiveBrowseScreen(nav, playlistId)
             } else {
-                TVBrowseScreen(nav, playlistId, type)
+                TVBrowseScreen(nav, playlistId, type, initialCategoryName = category)
             }
         }
         composable("series/{playlistId}/{seriesId}/{seriesName}") { bs ->

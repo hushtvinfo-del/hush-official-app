@@ -111,7 +111,12 @@ private const val NEW_WINDOW_DAYS = 14L
 /* ──────────────────────────────────────────────────────────────── */
 
 @Composable
-fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
+fun TVBrowseScreen(
+    nav: NavController,
+    playlistId: String,
+    type: String,
+    initialCategoryName: String? = null,
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val playlist = remember { PlaylistStore.find(ctx, playlistId) }
@@ -146,6 +151,23 @@ fun TVBrowseScreen(nav: NavController, playlistId: String, type: String) {
                 allItems = XtreamApi.getAllStreams(p.host, p.username, p.password, effectiveKind)
             }
         }
+    }
+
+    // Auto-select an initial category once the list loads. Used by Home's
+    // "Latest Movies" / "Latest Series" discovery cards to deep-link into a
+    // specific Xtream category. Matches on normalised contains so minor
+    // formatting differences ("- NEW RELEASES -" vs "NEW RELEASES") don't
+    // break the shortcut.
+    LaunchedEffect(initialCategoryName, allCategories) {
+        if (initialCategoryName.isNullOrBlank() || allCategories.isEmpty()) return@LaunchedEffect
+        val needle = initialCategoryName.lowercase()
+            .replace(Regex("[^a-z0-9 ]"), "").trim()
+        val match = allCategories.firstOrNull {
+            val hay = it.category_name.lowercase()
+                .replace(Regex("[^a-z0-9 ]"), "").trim()
+            hay.contains(needle) || needle.contains(hay)
+        }
+        if (match != null) selectedCatId = match.category_id
     }
 
     // Virtual sidebar: [Search] + [Favorites, All] + real categories

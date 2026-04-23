@@ -272,12 +272,31 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null)
             }
 
-            // Hero fills the full Box — backdrop bleeds edge to edge; the
-            // text column is anchored top-left inside the hero.
-            com.hushtv.tv.ui.screens.home.HomeHeroLayer(
-                entry = heroEntry,
-                contentStartPadding = 0.dp,
-            )
+            // Discovery — shown when Continue Watching is empty.
+            val discoveryCards = com.hushtv.tv.ui.screens.home.rememberDiscoveryCards(playlistId)
+            var focusedDiscoveryCard by remember {
+                mutableStateOf<com.hushtv.tv.ui.screens.home.DiscoveryCard?>(null)
+            }
+            LaunchedEffect(discoveryCards.firstOrNull()) {
+                if (focusedDiscoveryCard == null ||
+                    discoveryCards.none { it === focusedDiscoveryCard }
+                ) {
+                    focusedDiscoveryCard = discoveryCards.firstOrNull()
+                }
+            }
+
+            val showDiscovery = continueEntries.isEmpty()
+
+            // Hero layer — Continue Watching artwork OR Discovery mosaic,
+            // depending on what the user is seeing below.
+            if (showDiscovery) {
+                com.hushtv.tv.ui.screens.home.HomeDiscoveryHeroLayer(card = focusedDiscoveryCard)
+            } else {
+                com.hushtv.tv.ui.screens.home.HomeHeroLayer(
+                    entry = heroEntry,
+                    contentStartPadding = 0.dp,
+                )
+            }
 
             // Continue Watching row is PINNED TO THE BOTTOM of the content
             // Box via Alignment.BottomStart. No LazyColumn, no focus-driven
@@ -302,6 +321,22 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                             )
                         },
                         onLongPressRemove = { removePromptFor = it },
+                    )
+                }
+            } else if (discoveryCards.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(),
+                ) {
+                    com.hushtv.tv.ui.screens.home.HomeDiscoveryRow(
+                        cards = discoveryCards,
+                        contentStartPadding = 0.dp,
+                        onFocusedCardChange = { focusedDiscoveryCard = it },
+                        onCardClick = { card ->
+                            val encoded = Uri.encode(card.categoryName)
+                            nav.navigate("browse/$playlistId/${card.type}?category=$encoded")
+                        },
                     )
                 }
             }
