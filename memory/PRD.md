@@ -197,6 +197,33 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 12 — v1.9.5 Full-bleed backdrop + scale-only Ken-Burns (2026-04-23 — completed, deployed)
+User feedback: "The Ken-Burns effect is still messing it up and stretching
+the right side. Our main screen overlay should fill the whole screen to
+the right and the Ken-Burns cannot interfere — it needs to be completely
+adaptive."
+
+- **Root padding removed** (`TVMainMenuScreen.kt`): the root Box had a
+  leftover `padding(end = 32.dp)` (a pre-redesign TV overscan safe zone)
+  which pushed ALL children — including the full-bleed hero backdrop —
+  32 dp away from the right screen edge. That left the visible vertical
+  strip the user screenshotted. Removed from the root Box so the hero
+  reaches the actual screen edge; moved the 32 dp `end` padding onto the
+  inner interactive content Box so the Browse buttons still stay inside
+  the TV safe zone.
+- **Ken-Burns: scale-only, no translation** (`HomeDiscoveryHeroLayer.kt`):
+  dropped both `translationX` and `translationY` animators. Translation
+  — even with a 1.10 base scale buffer — can momentarily shift the image
+  off-centre and, combined with the crossfade into a fresh image that
+  starts its own animation cycle, looked like the backdrop was
+  "stretching" toward one side. Replaced with a pure centred scale pulse
+  (1.06 → 1.12 over 22 s linear loop) so the image is mathematically
+  centred on every frame and every edge is always covered regardless of
+  viewport size. Still cinematic, but now "completely adaptive" — the
+  effect cannot interfere with viewport fill.
+- Shipped as versionCode=69 / versionName="1.9.5" — APK (md5
+  `609cc975515656c6e65d641eeb1888b9`) live on `https://hushtv.xyz`.
+
 ### Phase 11 — v1.9.4 Edge fill fix on Ken-Burns (2026-04-23 — completed, deployed)
 User feedback: "When the new background pics change there's some effect
 making the background not fill the right side of the screen — need it to

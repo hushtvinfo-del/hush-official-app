@@ -168,42 +168,24 @@ fun HomeDiscoveryHeroLayer(
 }
 
 /**
- * Single Ken-Burns backdrop cell — slowly pans + zooms the image so a
- * static poster feels cinematic. 20 s linear loop, 1.10 → 1.18 scale
- * (always over-filling so the translation buffer can never expose a
- * bare edge), subtle ±12 px x / ±8 px y drift that alternates
- * direction per [panIndex] so consecutive posters feel distinct.
+ * Single Ken-Burns backdrop cell — a SCALE-ONLY slow pulse that keeps
+ * the image mathematically centered at all times. We deliberately
+ * dropped all x/y translation: any translation risks exposing an edge
+ * regardless of how much buffer you bake in, and the user wants the
+ * hero to stay perfectly full-bleed on every side. The scale range
+ * (1.06 → 1.12 over 22 s linear loop) still gives the poster a subtle
+ * cinematic breath without ever shifting off-centre.
  */
 @Composable
 private fun KenBurnsBackdrop(url: String, panIndex: Int) {
     val transition = rememberInfiniteTransition(label = "ken-burns-$panIndex")
     val scale by transition.animateFloat(
-        initialValue = 1.10f,
-        targetValue = 1.18f,
+        initialValue = 1.06f,
+        targetValue = 1.12f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 20_000, easing = LinearEasing),
+            animation = tween(durationMillis = 22_000, easing = LinearEasing),
         ),
         label = "ken-burns-scale",
-    )
-    // Alternate pan direction per index so consecutive posters feel
-    // distinct. Even = pan right-down, odd = pan left-up. Drift kept
-    // small so the 1.10+ base scale always covers every edge.
-    val direction = if (panIndex % 2 == 0) 1f else -1f
-    val translateX by transition.animateFloat(
-        initialValue = -12f * direction,
-        targetValue = 12f * direction,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 20_000, easing = LinearEasing),
-        ),
-        label = "ken-burns-tx",
-    )
-    val translateY by transition.animateFloat(
-        initialValue = -8f * direction,
-        targetValue = 8f * direction,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 20_000, easing = LinearEasing),
-        ),
-        label = "ken-burns-ty",
     )
     val ctx = LocalContext.current
     // Request with aggressive caching + crossfade disabled (we're doing
@@ -224,8 +206,8 @@ private fun KenBurnsBackdrop(url: String, panIndex: Int) {
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                translationX = translateX
-                translationY = translateY
+                // No translation — keeping the image perfectly centred
+                // guarantees every edge is covered at every frame.
             },
     )
 }

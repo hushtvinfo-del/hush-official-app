@@ -238,8 +238,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(BgBlack)
-            .padding(end = 32.dp),
+            .background(BgBlack),
     ) {
         // ── CONTENT (full-width, fixed position) ──────────────────────
 
@@ -303,10 +302,12 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // ── 2. INTERACTIVE CONTENT layer ─────────────────────────────
         // Padded so the card row never overlaps the sidebar; everything
         // focusable (Discovery / Continue Watching cards) lives here.
+        // 32 dp right padding = TV overscan safe zone for cards only —
+        // NOT applied to the hero backdrop, which stays edge-to-edge.
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(start = 156.dp),
+                .padding(start = 156.dp, end = 32.dp),
         ) {
             // Continue Watching row pinned to the bottom of the screen.
             if (continueEntries.isNotEmpty()) {
