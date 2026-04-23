@@ -419,7 +419,13 @@ object TmdbService {
     /**
      * Resolve a high-res backdrop (w1280) for each TMDB genre ID by
      * calling `/discover/{movie|tv}?with_genres={id}&sort_by=popularity.desc`
-     * in parallel. Picks the most popular title with a `backdrop_path`.
+     * in parallel. For each genre we pull the top ~15 popular candidates
+     * (id + backdrop_path) and then run a CROSS-GENRE DEDUPE PASS so no
+     * two genre cards end up with the same movie's backdrop. This fixes
+     * the bug where a single blockbuster like Super Mario Bros. (which
+     * is tagged Adventure + Animation + Comedy + Family + Fantasy)
+     * appeared as the hero for every one of those genres.
+     *
      * Returns `{genreId → URL}` for ids where we found something.
      */
     suspend fun backdropsForGenres(
@@ -428,26 +434,53 @@ object TmdbService {
     ): Map<Int, String> = withContext(Dispatchers.IO) {
         if (genreIds.isEmpty()) return@withContext emptyMap()
         val endpoint = if (kind == "series") "discover/tv" else "discover/movie"
-        // Run all lookups concurrently.
-        val deferred = genreIds.map { gid ->
-            async {
-                runCatching {
-                    val url = "$BASE/$endpoint?with_genres=$gid&sort_by=popularity.desc" +
-                        "&include_adult=false&include_video=false&language=en-US" +
-                        "&api_key=${ApiKeys.TMDB}"
-                    val body = client.newCall(Request.Builder().url(url).build()).execute()
-                        .body?.string() ?: return@runCatching null
-                    val parsed = moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)
-                    val backdropPath = parsed?.results
-                        ?.filter { !it.backdrop_path.isNullOrBlank() }
-                        ?.firstOrNull()
-                        ?.backdrop_path
-                    val imgUrl = img(backdropPath, "w1280")
-                    if (imgUrl != null) gid to imgUrl else null
-                }.getOrNull()
-            }
+
+        // Step 1 — fetch top candidates per genre in parallel.
+        // Each candidate is (tmdbId, backdropUrl). Ordered by popularity.
+        val candidatesByGenre: Map<Int, List<Pair<Int, String>>> =
+            genreIds.map { gid ->
+                async {
+                    runCatching {
+                        val url = "$BASE/$endpoint?with_genres=$gid&sort_by=popularity.desc" +
+                            "&include_adult=false&include_video=false&language=en-US" +
+                            "&api_key=${ApiKeys.TMDB}"
+                        val body = client.newCall(Request.Builder().url(url).build())
+                            .execute().body?.string()
+                            ?: return@runCatching gid to emptyList()
+                        val parsed = moshi.adapter(TmdbSearchResponse::class.java)
+                            .fromJson(body)
+                        val candidates = parsed?.results
+                            ?.asSequence()
+                            ?.filter { !it.backdrop_path.isNullOrBlank() && it.id != 0 }
+                            ?.take(15)
+                            ?.mapNotNull { hit ->
+                                val imgUrl = img(hit.backdrop_path, "w1280")
+                                    ?: return@mapNotNull null
+                                hit.id to imgUrl
+                            }
+                            ?.toList()
+                            .orEmpty()
+                        gid to candidates
+                    }.getOrElse { gid to emptyList() }
+                }
+            }.awaitAll().toMap()
+
+        // Step 2 — cross-genre dedupe. Walk genres in input order and
+        // pick the first candidate whose TMDB id hasn't been claimed by
+        // a previously-resolved genre. Falls back to the genre's own
+        // top candidate if every option was claimed (extremely unlikely
+        // once there are 15 candidates per genre).
+        val claimedIds = mutableSetOf<Int>()
+        val result = mutableMapOf<Int, String>()
+        for (gid in genreIds) {
+            val candidates = candidatesByGenre[gid].orEmpty()
+            if (candidates.isEmpty()) continue
+            val unique = candidates.firstOrNull { it.first !in claimedIds }
+            val pick = unique ?: candidates.first()
+            claimedIds += pick.first
+            result[gid] = pick.second
         }
-        deferred.awaitAll().filterNotNull().toMap()
+        result
     }
 
     /**
