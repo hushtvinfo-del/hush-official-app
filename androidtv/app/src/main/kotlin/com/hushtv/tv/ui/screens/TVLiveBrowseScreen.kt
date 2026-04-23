@@ -720,16 +720,16 @@ private fun LiveCategoryToolbar(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 14.dp),
+            .padding(horizontal = 48.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // ── Page title accent bar ──
         Box(
             Modifier
-                .size(width = 4.dp, height = 28.dp)
+                .size(width = 4.dp, height = 30.dp)
                 .background(Cyan, RoundedCornerShape(2.dp))
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(14.dp))
         Column {
             Text(
                 "LIVE TV",
@@ -758,7 +758,11 @@ private fun LiveCategoryToolbar(
                 fontFamily = Inter,
             )
         }
-        Spacer(Modifier.width(28.dp))
+
+        // Flex spacer pushes the Browse + Search cluster to the right
+        // third of the toolbar, so the page title has breathing room
+        // on the left and the controls feel intentional on the right.
+        Spacer(Modifier.weight(1f))
 
         // ── Category dropdown button ──
         LiveDropdownButton(
@@ -771,24 +775,16 @@ private fun LiveCategoryToolbar(
             rightTarget = searchFocus,
         )
 
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(20.dp))
 
-        // ── Inline search ──
+        // ── Inline search — takes Guide's old slot. Fixed width so
+        // it doesn't grow indefinitely on ultra-wide TVs.
         LiveInlineSearch(
             value = searchQuery,
             onChange = onSearchChange,
             focusRequester = searchFocus,
             downTarget = downTarget,
-            modifier = Modifier.weight(1f),
-        )
-
-        Spacer(Modifier.width(14.dp))
-
-        // ── GUIDE button ── jumps to the full EPG grid.
-        GuideButton(
-            focusRequester = guideFocus,
-            onClick = onOpenGuide,
-            downTarget = downTarget,
+            modifier = Modifier.width(420.dp),
         )
     }
     // NOTE: the dropdown panel is rendered at the ROOT Box level
