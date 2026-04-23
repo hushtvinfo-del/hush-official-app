@@ -99,18 +99,12 @@ fun HomePageIndicator(
 
 @Composable
 private fun PageDot(label: String, active: Boolean) {
-    // Active pill expands horizontally to reveal the page label; inactive
-    // dots are compact round circles. Smooth animation so transitions
-    // feel polished when the user pages up/down.
-    val width by animateDpAsState(
-        targetValue = if (active) 88.dp else 10.dp,
+    // Active dot grows to a bigger filled circle; inactive dots stay
+    // small + translucent. No pill, no label — clean minimal indicator.
+    val size by animateDpAsState(
+        targetValue = if (active) 14.dp else 8.dp,
         animationSpec = tween(220),
-        label = "page-dot-width",
-    )
-    val height by animateDpAsState(
-        targetValue = if (active) 24.dp else 10.dp,
-        animationSpec = tween(220),
-        label = "page-dot-height",
+        label = "page-dot-size",
     )
     val bg by animateColorAsState(
         targetValue = if (active) Cyan else Color(0x66FFFFFF),
@@ -120,21 +114,9 @@ private fun PageDot(label: String, active: Boolean) {
 
     Box(
         Modifier
-            .size(width = width, height = height)
-            .clip(if (active) RoundedCornerShape(12.dp) else CircleShape)
+            .size(size)
+            .clip(CircleShape)
             .background(bg),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (active) {
-            Text(
-                label,
-                color = Color(0xFF0A0F1C),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.2.sp,
-                fontFamily = Inter,
-            )
-        }
-    }
-    @Suppress("UNUSED_EXPRESSION") height  // silence unused-var warning
+    )
+    @Suppress("UNUSED_EXPRESSION") label  // label kept in API for future tooltip/aria
 }

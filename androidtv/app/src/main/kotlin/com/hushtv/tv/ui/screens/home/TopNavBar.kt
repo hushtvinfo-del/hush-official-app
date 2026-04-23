@@ -1,5 +1,7 @@
 package com.hushtv.tv.ui.screens.home
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -7,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -151,65 +154,72 @@ private fun TopNavTabView(
 ) {
     var focused by remember { mutableStateOf(false) }
 
-    // Visual treatment:
-    //   • active + focused  → bright cyan fill, black text
-    //   • active only       → dimmer cyan fill, black text
-    //   • focused only      → translucent white fill, cyan ring, white text
-    //   • neither           → fully transparent, grey text
-    val bg: Color
-    val contentColor: Color
-    val borderColor: Color
-    val borderW = if (focused) 2.dp else 0.dp
-    when {
-        focused && active -> {
-            bg = Cyan; contentColor = Color(0xFF0A0F1C); borderColor = Cyan
-        }
-        active -> {
-            bg = Color(0xFF0891B2); contentColor = Color(0xFF0A0F1C); borderColor = Color.Transparent
-        }
-        focused -> {
-            bg = Color(0x26FFFFFF); contentColor = Color.White; borderColor = Cyan
-        }
-        else -> {
-            bg = Color.Transparent; contentColor = Color(0xFFCBD5E1); borderColor = Color.Transparent
-        }
+    // Modern underline style — no pill, no rounded background fill.
+    // Only the underneath cyan bar shifts with state:
+    //   • active         → solid cyan 3 dp underline (fills 100% of label)
+    //   • focused        → solid cyan 2 dp underline
+    //   • active+focused → same as active (3 dp) with slightly brighter text
+    //   • neither        → no underline, muted grey text
+    val contentColor = when {
+        active -> Color.White
+        focused -> Color.White
+        else -> Color(0xFFCBD5E1)
     }
-
-    val scale by animateFloatAsState(
-        targetValue = if (focused) 1.04f else 1f,
-        animationSpec = tween(140),
-        label = "top-nav-scale",
+    val underlineColor by animateColorAsState(
+        targetValue = when {
+            active || focused -> Cyan
+            else -> Color.Transparent
+        },
+        animationSpec = tween(160),
+        label = "top-nav-underline-color",
+    )
+    val underlineThickness by animateDpAsState(
+        targetValue = when {
+            active -> 3.dp
+            focused -> 2.dp
+            else -> 0.dp
+        },
+        animationSpec = tween(160),
+        label = "top-nav-underline-thickness",
     )
 
-    Row(
+    Column(
         modifier
             .height(40.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(bg)
-            .border(width = borderW, color = borderColor, shape = RoundedCornerShape(20.dp))
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            tab.icon,
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            tab.label,
-            color = contentColor,
-            fontSize = 13.sp,
-            fontWeight = if (active || focused) FontWeight.Black else FontWeight.SemiBold,
-            fontFamily = Inter,
-            letterSpacing = 0.3.sp,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                tab.icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(15.dp),
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(
+                tab.label,
+                color = contentColor,
+                fontSize = 13.sp,
+                fontWeight = if (active || focused) FontWeight.Black else FontWeight.SemiBold,
+                fontFamily = Inter,
+                letterSpacing = 0.3.sp,
+            )
+        }
+        // Underline — 5 dp gap below the text, width scales with label.
+        Spacer(Modifier.height(5.dp))
+        val underlineWidth = (24 + tab.label.length * 7).dp
+        Box(
+            Modifier
+                .width(underlineWidth)
+                .height(underlineThickness)
+                .background(underlineColor, RoundedCornerShape(2.dp))
         )
     }
-    @Suppress("UNUSED_EXPRESSION") scale
 }
 
 @Composable
