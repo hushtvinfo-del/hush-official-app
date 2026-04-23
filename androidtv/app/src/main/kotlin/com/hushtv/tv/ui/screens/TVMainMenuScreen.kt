@@ -273,35 +273,17 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // it lands on the first Discovery card.
         val navDownTarget = if (continueEntries.isNotEmpty()) "cw" else "discovery"
 
-        // Auto-hide state for the top nav. We track it via the wrapper's
-        // focus state: if any nav element has focus → visible, else hide.
-        var navVisible by remember { mutableStateOf(true) }
-
-        // Callback the first card fires on D-pad UP — flips the nav back on
-        // and requests focus on the Home tab.
+        // Top nav is ALWAYS visible — static, never hides. The auto-hide
+        // behaviour was causing visual "breaks" when the user D-padded
+        // back up from a content card; a static nav keeps the hero art
+        // perfectly framed at all times.
+        //
+        // Callback the first card fires on D-pad UP — just focuses the
+        // Home tab. No visibility toggle any more.
         val showNavAndFocus: () -> Unit = {
-            navVisible = true
             runCatching { topNavHomeFocus.requestFocus() }
         }
 
-        // ── 1. HERO + CONTENT container ──────────────────────────────
-        // The hero backdrop + the interactive card row share an animated
-        // top padding that matches the nav visibility: when the nav is
-        // visible the hero sits BELOW the 72 dp nav container (zero
-        // overlap); when the nav auto-hides the hero expands up to fill
-        // the full viewport. This keeps the backdrop fully visible and
-        // never cut off behind the nav.
-        val navHeightDp = 72.dp
-        val heroTopOffset by androidx.compose.animation.core.animateDpAsState(
-            targetValue = if (navVisible) navHeightDp else 0.dp,
-            animationSpec = androidx.compose.animation.core.tween(220),
-            label = "hero-top-offset",
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(top = heroTopOffset),
-        ) {
         // ── 1. PAGER ── CW page and Discovery page are SEPARATE screens.
         // Each page owns its own hero backdrop + card row, so the two
         // sections never fight for space or overlap each other's art.
@@ -320,10 +302,13 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
 
         val showCwPage = currentPage == "cw" && hasCw
 
+        // Static top nav height — hero + content start right below it
+        // at a constant 72 dp offset. No animation.
+        val navHeightDp = 72.dp
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(top = heroTopOffset),
+                .padding(top = navHeightDp),
         ) {
             androidx.compose.animation.AnimatedContent(
                 targetState = showCwPage,
@@ -460,18 +445,15 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             }
         }
 
-        // ── 3. TOP NAV overlay ───────────────────────────────────────
-        // Wrapper reads focus state so we know when to auto-hide. When
-        // the user D-pad-downs off a tab, the focus moves to the first
-        // card → wrapper loses focus → navVisible flips to false.
+        // ── 3. STATIC TOP NAV ─────────────────────────────────────────
+        // Always visible — no auto-hide, no animation. Sits pinned to
+        // the top of the screen. D-pad Down from any tab still focuses
+        // the first content card; D-pad Up from the first card focuses
+        // the Home tab (no visual break — the nav was already there).
         Box(
             Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
-                .onFocusChanged { state ->
-                    if (state.hasFocus) navVisible = true
-                    else navVisible = false
-                }
                 .onPreviewKeyEvent { ev ->
                     // D-pad DOWN from any top-nav tab → focus first card.
                     // Lands on CW first card if user has Continue Watching
@@ -486,26 +468,17 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     } else false
                 },
         ) {
-            AnimatedVisibility(
-                visible = navVisible,
-                enter = fadeIn(tween(220)) +
-                    androidx.compose.animation.slideInVertically(tween(220)) { -it / 2 },
-                exit = fadeOut(tween(180)) +
-                    androidx.compose.animation.slideOutVertically(tween(180)) { -it / 2 },
-            ) {
-                com.hushtv.tv.ui.screens.home.TopNavBar(
-                    tabs = tabs,
-                    activeKey = "home",
-                    homeFocus = topNavHomeFocus,
-                    onTab = { t -> t.route?.let { nav.navigate(it) } },
-                    onSettings = { nav.navigate("settings/$playlistId") },
-                )
-            }
+            com.hushtv.tv.ui.screens.home.TopNavBar(
+                tabs = tabs,
+                activeKey = "home",
+                homeFocus = topNavHomeFocus,
+                onTab = { t -> t.route?.let { nav.navigate(it) } },
+                onSettings = { nav.navigate("settings/$playlistId") },
+            )
         }
     }
 }
 // End TVMainMenuScreen
-}
 
 /* ──────────────────────────────────────────────────────────────── */
 /*  LEFT SIDEBAR                                                    */

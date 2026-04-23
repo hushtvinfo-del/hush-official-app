@@ -197,6 +197,29 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 20 — v1.10.5 Static top nav (no more auto-hide) (2026-04-23 — completed, deployed)
+User feedback: "When you go back up to the menu it's breaking the image
+just like the previous left menu collapse one was. The obvious fix here
+and long term solution is to just make it stay static at the top and not
+disappear."
+
+- **Removed auto-hide entirely** (`TVMainMenuScreen.kt`): deleted
+  `navVisible` state + the `animateDpAsState heroTopOffset` + the
+  `AnimatedVisibility` wrapper around the nav + the `onFocusChanged`
+  on the nav wrapper. The nav is now rendered directly inside a
+  static `Box` at `Alignment.TopStart`, always visible.
+- **Hero+content permanently offset 72 dp**: the hero+content container
+  Box uses `padding(top = 72.dp)` (constant — no animation). The hero
+  sits perfectly below the nav at all times, so the backdrop never
+  shifts when the user D-pads between the nav and the content.
+- **Focus handoff preserved**: Down from nav still focuses the first
+  card; Up from first card still refocuses Home via `showNavAndFocus`
+  (simplified to just call `topNavHomeFocus.requestFocus()` with no
+  visibility flag to toggle). The nav was always there, so no visual
+  break.
+- Shipped as versionCode=78 / versionName="1.10.5" — APK (md5
+  `ddbce52ca429af059ca0ce472f74af7a`) live on `https://hushtv.xyz`.
+
 ### Phase 19 — v1.10.4 Continue Watching + Discovery as separate pages (2026-04-23 — completed, deployed)
 User feedback: "The continue watching section and card is overlapping
 and in the way of the whole discovery background — each section needs
