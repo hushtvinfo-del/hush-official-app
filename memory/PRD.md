@@ -102,6 +102,68 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 27 — v1.12.3 Movie Collections page (2026-04-23 — completed, deployed)
+User asked for a new Home page showcasing the top 20 most iconic movie
+box-sets / franchises. Clicking one should open a dedicated results
+screen that only lists that franchise's movies from the user's Xtream
+library, sorted CHRONOLOGICALLY (oldest → newest release year).
+
+Files added:
+- `ui/screens/home/CollectionsData.kt`: `MovieCollection` data class
+  (id, displayName, tagline, tmdbCollectionId, accent, backdropUrl)
+  + hand-curated list of 20 iconic franchises (Star Wars, Harry Potter,
+  Avengers, Fast & Furious, LOTR, John Wick, Mission: Impossible,
+  James Bond, Jurassic Park, Terminator, Matrix, Pirates, Back to the
+  Future, Godfather, Indiana Jones, Rocky, Hobbit, Toy Story, Shrek,
+  Bourne). Each entry has a one-line tagline and an accent colour
+  tuned to the franchise. `rememberMovieCollections()` composable uses
+  the same cache-first + background-refresh pattern as Genres/Years.
+- `ui/screens/home/HomeCollectionsRow.kt`: `LazyRow` of 260 × 156 dp
+  landscape tiles. Each tile: full-bleed TMDB backdrop, dark vertical
+  veil so the franchise name is always crisp, accent-tinted focus glow,
+  franchise name in 20 sp Inter Black at bottom-left, "FRANCHISE" chip
+  top-right.
+- `ui/screens/home/HomeCollectionsHeroLayer.kt`: full-bleed hero with
+  `AnimatedContent` 700 ms crossfade between franchise backdrops.
+  Ken-Burns scale pulse (1.06 → 1.12, 22 s). Left-column copy: accent
+  "FRANCHISE" eyebrow + massive 52 sp franchise name + two-line
+  tagline + "WATCH IN ORDER" chip signalling chronological sort.
+- `ui/screens/TVCollectionDetailScreen.kt`: dedicated screen that
+  fetches the collection parts from TMDB in parallel with the user's
+  Xtream movie library, matches titles via aggressive normalisation
+  (lowercase, strips `[TAG]`, lang prefixes, quality tags, trailing
+  years, "the", and collapses non-alphanumerics) against the user's
+  library, and renders a 6-column grid of posters IN CHRONOLOGICAL
+  ORDER. Matched entries play through the normal movie detail flow;
+  unmatched entries render as LOCKED posters with a year chip +
+  TMDB poster fallback so the user can see what's missing from their
+  plan. Includes the unified Top Nav bar for consistency.
+
+Files changed:
+- `data/TmdbService.kt`: added `TmdbCollectionDetail`, `TmdbCollectionPart`
+  data classes; added `backdropsForCollections(collectionIds)` to
+  resolve hero backdrops in parallel; added `getCollectionParts(id)`
+  that fetches + sorts a single collection's parts chronologically.
+- `data/DiscoveryCache.kt`: added `saveCollectionBackdrop` /
+  `loadCollectionBackdrop` keyed by `collection:$id` for cold-start
+  paints.
+- `TVMainMenuScreen.kt`: added `firstCollectionsFocus` requester,
+  extended `pageOrder` with `"collections"` between `discovery` and
+  `ss_movies`, added `rememberMovieCollections()` state +
+  `focusedCollection` var, added `"collections"` branch to
+  AnimatedContent + LaunchedEffect focus handoff + Nav-Down target
+  map + indicator label "COLLECT". New private `CollectionsPage`
+  helper composable at the file bottom wires the hero + row + click
+  routing to the new `collection/...` route.
+- `MainActivity.kt`: added `collection/{playlistId}/{collectionId}/{name}`
+  route bound to `TVCollectionDetailScreen`.
+
+Page flow: Discovery → Down → Collections → Down → SS Movies → … .
+Up reverses. Channel Up/Down walks the whole list.
+
+- Shipped as versionCode=99 / versionName="1.12.3" — APK (md5
+  `9bcd1d9ee44abe4b1c0d355c4f7c1889`) live on `https://hushtv.xyz`.
+
 ### Phase 1 — MVP (completed)
 - Scaffolded Android project, 5 screens, ExoPlayer playback, Xtream API client
 - Deployed to `https://hushtv.xyz` (Nginx + Let's Encrypt)

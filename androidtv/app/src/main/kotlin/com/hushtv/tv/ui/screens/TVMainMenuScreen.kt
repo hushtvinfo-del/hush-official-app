@@ -215,6 +215,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val firstGenresMoviesFocus = remember { FocusRequester() }
     val firstGenresSeriesFocus = remember { FocusRequester() }
     val firstYearsMoviesFocus = remember { FocusRequester() }
+    val firstCollectionsFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { topNavHomeFocus.requestFocus() } }
 
     val onCardSelect: (MediaCard) -> Unit = sel@{ item ->
@@ -250,6 +251,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         buildList {
             if (hasCw) add("cw")
             add("discovery")
+            add("collections")
             add("ss_movies")
             add("ss_series")
             add("genres_movies")
@@ -386,6 +388,15 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             if (focusedMovieYear == null) focusedMovieYear = movieYears.firstOrNull()
         }
 
+        // Movie collections (franchises / boxsets) state.
+        val movieCollections = com.hushtv.tv.ui.screens.home.rememberMovieCollections()
+        var focusedCollection by remember {
+            mutableStateOf<com.hushtv.tv.ui.screens.home.MovieCollection?>(null)
+        }
+        LaunchedEffect(movieCollections.firstOrNull()) {
+            if (focusedCollection == null) focusedCollection = movieCollections.firstOrNull()
+        }
+
         // Nav-Down target — follows the CURRENTLY VISIBLE page so the
         // requestFocus() call always hits a composable that's actually
         // attached to the tree.
@@ -449,7 +460,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         kindLabel = "STREAMING SERVICES · MOVIES",
                         kind = "movie",
                         firstItemFocus = firstSsMoviesFocus,
-                        onUpFromRow = { currentPage = "discovery" },
+                        onUpFromRow = { currentPage = "collections" },
                         onDownFromRow = { currentPage = "ss_series" },
                     )
                     "ss_series" -> SsPage(
@@ -498,6 +509,16 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         onUpFromRow = { currentPage = "genres_series" },
                         onDownFromRow = null,
                     )
+                    "collections" -> CollectionsPage(
+                        playlistId = playlistId,
+                        nav = nav,
+                        collections = movieCollections,
+                        focused = focusedCollection,
+                        onFocusedChange = { focusedCollection = it },
+                        firstItemFocus = firstCollectionsFocus,
+                        onUpFromRow = { currentPage = "discovery" },
+                        onDownFromRow = { currentPage = "ss_movies" },
+                    )
                     else -> DiscoveryPage(
                         playlistId = playlistId,
                         nav = nav,
@@ -513,7 +534,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         onUpFromRow = {
                             if (hasCw) currentPage = "cw" else showNavAndFocus()
                         },
-                        onDownFromRow = { currentPage = "ss_movies" },
+                        onDownFromRow = { currentPage = "collections" },
                     )
                 }
             }
@@ -526,6 +547,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     when (currentPage) {
                         "cw" -> if (hasCw) firstCwFocus.requestFocus()
                         "discovery" -> firstDiscoveryFocus.requestFocus()
+                        "collections" -> firstCollectionsFocus.requestFocus()
                         "ss_movies" -> firstSsMoviesFocus.requestFocus()
                         "ss_series" -> firstSsSeriesFocus.requestFocus()
                         "genres_movies" -> firstGenresMoviesFocus.requestFocus()
@@ -560,6 +582,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     label = when (k) {
                         "cw" -> "WATCHING"
                         "discovery" -> "DISCOVER"
+                        "collections" -> "COLLECT"
                         "ss_movies" -> "MOVIES"
                         "ss_series" -> "SERIES"
                         "genres_movies" -> "G·MOV"
@@ -599,6 +622,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     ) {
                         val target = when (navDownTarget) {
                             "cw" -> firstCwFocus
+                            "collections" -> firstCollectionsFocus
                             "ss_movies" -> firstSsMoviesFocus
                             "ss_series" -> firstSsSeriesFocus
                             "genres_movies" -> firstGenresMoviesFocus
@@ -1541,3 +1565,45 @@ private fun YearsPage(
     }
 }
 
+
+
+@Composable
+private fun CollectionsPage(
+    playlistId: String,
+    nav: NavController,
+    collections: List<com.hushtv.tv.ui.screens.home.MovieCollection>,
+    focused: com.hushtv.tv.ui.screens.home.MovieCollection?,
+    onFocusedChange: (com.hushtv.tv.ui.screens.home.MovieCollection) -> Unit,
+    firstItemFocus: FocusRequester,
+    onUpFromRow: () -> Unit,
+    onDownFromRow: (() -> Unit)?,
+) {
+    Box(Modifier.fillMaxSize()) {
+        com.hushtv.tv.ui.screens.home.HomeCollectionsHeroLayer(
+            coll = focused,
+            contentStartPadding = 80.dp,
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(start = 48.dp, end = 32.dp),
+        ) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
+                com.hushtv.tv.ui.screens.home.HomeCollectionsRow(
+                    collections = collections,
+                    contentStartPadding = 0.dp,
+                    onFocusedCollectionChange = onFocusedChange,
+                    onCollectionClick = { c ->
+                        nav.navigate(
+                            "collection/$playlistId/${c.tmdbCollectionId}/" +
+                                Uri.encode(c.displayName)
+                        )
+                    },
+                    firstItemFocus = firstItemFocus,
+                    onUpFromRow = onUpFromRow,
+                    onDownFromRow = onDownFromRow,
+                )
+            }
+        }
+    }
+}
