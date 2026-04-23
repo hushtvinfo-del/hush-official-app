@@ -126,10 +126,11 @@ private val MOVIE_GENRES_BASE = listOf(
         "Dust, grit, and showdowns under a setting sun.",
         Color(0xFFEA580C), Color(0xFF2A0D04), Color(0xFF5A1D08),
         xtreamCategoryId = "133"),
-    Genre("standup", "Standup", "Standup", 0, // no TMDB equivalent
+    Genre("standup", "Standup", "Standup", 99001, // synthetic id — no real TMDB genre; uses override
         "One mic, one room, all laughs.",
         Color(0xFFFACC15), Color(0xFF1A1407), Color(0xFF3A2E10),
-        xtreamCategoryId = "204"),
+        xtreamCategoryId = "204",
+        preferredMovieId = 1065890),  // Chris Rock: Selective Outrage (2023)
 )
 
 // ── SERIES GENRES ───────────────────────────────────────────────────
