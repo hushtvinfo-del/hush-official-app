@@ -30,6 +30,10 @@ data class StreamingService(
     val accent: Color,
     // Populated asynchronously from TMDB. Null while loading.
     val logoUrl: String? = null,
+    // Visual-fit override. Some source PNGs ship with generous transparent
+    // padding so they look tiny inside our 140×74 dp box; per-service
+    // scale >1.0 corrects for that without affecting well-cropped logos.
+    val logoScale: Float = 1.0f,
 )
 
 /** Hand-curated brand palette. Order matches the user's spec. */
@@ -104,6 +108,16 @@ private val MOVIE_SERVICES_BASE = listOf(
  * whatever TMDB returns for these providers — gives us full control
  * over image quality, cropping, and background transparency.
  */
+/**
+ * Per-service visual scale override. The image box is always the same
+ * (140 × 74 dp) so this only tweaks the logo's RENDERED size inside
+ * that box, not the tile dimensions. Used to compensate for PNGs that
+ * ship with generous transparent padding around the actual wordmark.
+ */
+private val CUSTOM_LOGO_SCALE = mapOf(
+    "prime" to 1.35f,
+)
+
 private val CUSTOM_LOGO_URLS = mapOf(
     "amc" to "https://raw.githubusercontent.com/tv-logo/tv-logos/refs/heads/main/countries/united-states/amc-us.png",
     "appletv" to "https://clipart-library.com/new_gallery/456504_apple-tv-logo-png.png",
@@ -111,7 +125,7 @@ private val CUSTOM_LOGO_URLS = mapOf(
     "disney" to "https://github.com/tv-logo/tv-logos/blob/main/countries/united-states/disney-plus-us.png?raw=true",
     "netflix" to "https://static.vecteezy.com/system/resources/previews/017/396/804/non_2x/netflix-mobile-application-logo-free-png.png",
     "paramount" to "https://github.com/tv-logo/tv-logos/blob/main/countries/france/paramount-channel-fr.png?raw=true",
-    "prime" to "https://logodownload.org/wp-content/uploads/2018/07/prime-video-logo-0.png",
+    "prime" to "https://image.pngaaa.com/361/480361-middle.png",
 )
 
 /**
@@ -124,7 +138,10 @@ fun rememberStreamingServices(kind: String): List<StreamingService> {
     val ctx = LocalContext.current
     val services = remember(kind) {
         MOVIE_SERVICES_BASE.map { s ->
-            s.copy(logoUrl = CUSTOM_LOGO_URLS[s.id])
+            s.copy(
+                logoUrl = CUSTOM_LOGO_URLS[s.id],
+                logoScale = CUSTOM_LOGO_SCALE[s.id] ?: 1.0f,
+            )
         }
     }
     LaunchedEffect(services) {

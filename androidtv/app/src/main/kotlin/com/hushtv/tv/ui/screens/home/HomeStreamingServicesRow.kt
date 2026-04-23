@@ -34,6 +34,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -203,7 +204,11 @@ private fun ServiceCardView(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .width(140.dp)
-                        .height(74.dp),
+                        .height(74.dp)
+                        .graphicsLayer {
+                            scaleX = service.logoScale
+                            scaleY = service.logoScale
+                        },
                 )
             } else {
                 Text(
