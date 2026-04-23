@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -104,6 +106,8 @@ fun HomeContinueWatchingRow(
     onCardClick: (ContinueEntry) -> Unit,
     onLongPressRemove: (ContinueEntry) -> Unit = {},
     contentStartPadding: androidx.compose.ui.unit.Dp = 96.dp,
+    firstItemFocus: androidx.compose.ui.focus.FocusRequester? = null,
+    onUpFromFirstItem: (() -> Unit)? = null,
 ) {
     if (entries.isEmpty()) return
 
@@ -120,12 +124,14 @@ fun HomeContinueWatchingRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            items(entries, key = { "cw-${it.progress.kind}-${it.progress.streamId}" }) { e ->
+            itemsIndexed(entries, key = { _, it -> "cw-${it.progress.kind}-${it.progress.streamId}" }) { idx, e ->
                 ContinueCard(
                     entry = e,
                     onFocus = { onFocusedEntryChange(e) },
                     onClick = { onCardClick(e) },
                     onLongPress = { onLongPressRemove(e) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
+                    onUpKey = if (idx == 0) onUpFromFirstItem else null,
                 )
             }
         }
@@ -209,6 +215,8 @@ private fun ContinueCard(
     onFocus: () -> Unit,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
+    onUpKey: (() -> Unit)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(12.dp)
@@ -226,41 +234,51 @@ private fun ContinueCard(
     // fired onClick — removing the item without the user clicking "Remove".
     var keyDownAtMs by remember { mutableStateOf(0L) }
 
-    Column(
-        Modifier
-            .width(240.dp)
-            .onFocusChanged {
-                focused = it.isFocused
-                if (it.isFocused) onFocus()
+    val base = Modifier
+        .width(240.dp)
+        .onFocusChanged {
+            focused = it.isFocused
+            if (it.isFocused) onFocus()
+        }
+        .onPreviewKeyEvent { ev ->
+            // D-pad UP from this first card should reveal + focus the
+            // top nav bar when [onUpKey] is wired in by the parent.
+            if (onUpKey != null && ev.type == KeyEventType.KeyDown &&
+                ev.key == Key.DirectionUp
+            ) {
+                onUpKey.invoke()
+                return@onPreviewKeyEvent true
             }
-            .onPreviewKeyEvent { ev ->
-                val isEnterKey = ev.key == Key.Enter ||
-                    ev.key == Key.DirectionCenter ||
-                    ev.key == Key.NumPadEnter
-                if (!isEnterKey) return@onPreviewKeyEvent false
-                when (ev.type) {
-                    KeyEventType.KeyDown -> {
-                        if (keyDownAtMs == 0L) keyDownAtMs = System.currentTimeMillis()
-                        // Do NOT return true — letting KeyDown pass lets
-                        // clickableWithEnter see it for short-press behavior.
-                        false
-                    }
-                    KeyEventType.KeyUp -> {
-                        val held = System.currentTimeMillis() - keyDownAtMs
-                        keyDownAtMs = 0L
-                        if (held >= 500L) {
-                            // Long press — fire remove prompt + consume the
-                            // KeyUp so clickableWithEnter doesn't also fire.
-                            onLongPress()
-                            true
-                        } else false
-                    }
-                    else -> false
+            val isEnterKey = ev.key == Key.Enter ||
+                ev.key == Key.DirectionCenter ||
+                ev.key == Key.NumPadEnter
+            if (!isEnterKey) return@onPreviewKeyEvent false
+            when (ev.type) {
+                KeyEventType.KeyDown -> {
+                    if (keyDownAtMs == 0L) keyDownAtMs = System.currentTimeMillis()
+                    // Do NOT return true — letting KeyDown pass lets
+                    // clickableWithEnter see it for short-press behavior.
+                    false
                 }
+                KeyEventType.KeyUp -> {
+                    val held = System.currentTimeMillis() - keyDownAtMs
+                    keyDownAtMs = 0L
+                    if (held >= 500L) {
+                        // Long press — fire remove prompt + consume the
+                        // KeyUp so clickableWithEnter doesn't also fire.
+                        onLongPress()
+                        true
+                    } else false
+                }
+                else -> false
             }
-            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
-            .focusable()
-            .clickableWithEnter(onClick),
+        }
+        .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
+        .focusable()
+        .clickableWithEnter(onClick)
+
+    Column(
+        modifier = if (focusRequester != null) base.then(Modifier.focusRequester(focusRequester)) else base,
     ) {
         Box(
             Modifier

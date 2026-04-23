@@ -41,6 +41,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -190,20 +195,20 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
 
     val tabs = remember {
         listOf(
-            NavTab("home",     "Home",     Icons.Default.Home,       null),
-            NavTab("live",     "Live TV",  Icons.Default.Tv,         "browse/$playlistId/live"),
-            NavTab("movies",   "Movies",   Icons.Default.Movie,      "browse/$playlistId/movie"),
-            NavTab("series",   "Series",   Icons.Outlined.Slideshow, "browse/$playlistId/series"),
-            NavTab("search",   "Search",   Icons.Default.Search,     "browse/$playlistId/search"),
-            NavTab("settings", "Settings", Icons.Default.Settings,   "settings/$playlistId"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("home",   "Home",    Icons.Default.Home,       null),
+            com.hushtv.tv.ui.screens.home.TopNavTab("live",   "Live TV", Icons.Default.Tv,         "browse/$playlistId/live"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("movies", "Movies",  Icons.Default.Movie,      "browse/$playlistId/movie"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("series", "Series",  Icons.Outlined.Slideshow, "browse/$playlistId/series"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("search", "Search",  Icons.Default.Search,     "browse/$playlistId/search"),
         )
     }
 
-    // Focus handling — initial focus on Home tab (top of sidebar)
-    val sidebarHomeFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { sidebarHomeFocus.requestFocus() } }
-
-    var sidebarFocused by remember { mutableStateOf(true) }
+    // Focus: first tab (Home) gets initial focus.
+    val topNavHomeFocus = remember { FocusRequester() }
+    // Focus requester for the first content card — used when the user
+    // D-pad-downs from the top nav to drop into the content grid.
+    val firstCardFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { topNavHomeFocus.requestFocus() } }
 
     val onCardSelect: (MediaCard) -> Unit = sel@{ item ->
         val p = playlist ?: return@sel
@@ -221,43 +226,18 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         }
     }
 
-    // Netflix-style layered layout: content is a fixed-width canvas that
-    // NEVER shifts when the sidebar expands/collapses. The sidebar overlays
-    // the content's left edge — content always starts at the same screen-x
-    // regardless of sidebar state. This is what fixes the "content jumps /
-    // text overflows when I move into the content" bug.
-    //
-    // Geometry:
-    //   • Root Box fills the screen with BgBlack, minus 32 dp right overscan
-    //   • Content fills the Box but has fixed left padding = 132 dp (sidebar
-    //     expanded width 116 dp + 16 dp breathing room). This leaves a tiny
-    //     sliver visible when the sidebar collapses to 52 dp — that gap is
-    //     filled by the blend gradient so it looks seamless.
-    //   • Sidebar is aligned CenterStart on top; its own width animates
-    //     116 <-> 52 dp but the CONTENT underneath NEVER REFLOWS.
+    // Netflix / YouTube-TV layered layout:
+    //   1. HERO backdrop (full-bleed, edge-to-edge — behind everything)
+    //   2. CONTENT (card row pinned near the bottom)
+    //   3. TOP NAV overlay (auto-hides when focus leaves it; reappears when
+    //      the user D-pad-ups from the first content card)
     Box(
         Modifier
             .fillMaxSize()
             .background(BgBlack),
     ) {
-        // ── CONTENT (full-width, fixed position) ──────────────────────
-
-        // ── CONTENT ───────────────────────────────────────────
-        // Layered:
-        //   1. Fixed hero backdrop (behind, never scrolls — stays on screen
-        //      as user moves down through rows).
-        //   2. Scrollable rows (in front, transparent top so hero peeks
-        //      through; first row sits at ~55% of the viewport so the hero
-        //      text is fully visible on first render).
-        // ── CONTENT layer (fixed-position canvas) ─────────────────────
-        // The HERO BACKDROP renders FULL-BLEED (edge-to-edge, x=0 → screen
-        // right) so it passes cleanly beneath the sidebar — no hard seam
-        // where the backdrop starts. Only the INTERACTIVE content (title
-        // text + card row) respects the 156 dp sidebar-avoiding padding
-        // (sidebar width 140 + 16 dp gap).
-        //
-        // State for Home content. Hoisted here so BOTH the full-bleed
-        // hero layer and the padded card row can read them.
+        // State for Home content. Hoisted here so BOTH the hero layer and
+        // the content layer can read them.
         val continueHandle = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
         val continueEntries = continueHandle.entries
         var heroEntry by remember { mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null) }
@@ -284,32 +264,40 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         }
         val showDiscovery = continueEntries.isEmpty()
 
-        // ── 1. HERO LAYER ── Full-bleed, beneath the sidebar.
-        // The text column inside each hero layer receives a 156 dp start
-        // padding so the massive title doesn't sit under the sidebar.
+        // Auto-hide state for the top nav. We track it via the wrapper's
+        // focus state: if any nav element has focus → visible, else hide.
+        var navVisible by remember { mutableStateOf(true) }
+
+        // Callback the first card fires on D-pad UP — flips the nav back on
+        // and requests focus on the Home tab.
+        val showNavAndFocus: () -> Unit = {
+            navVisible = true
+            runCatching { topNavHomeFocus.requestFocus() }
+        }
+
+        // ── 1. HERO LAYER ── Full-bleed, edge-to-edge behind everything.
+        // A TV overscan-safe 80 dp left padding keeps the title legible
+        // without the sidebar constraint of the old design.
         if (showDiscovery) {
             com.hushtv.tv.ui.screens.home.HomeDiscoveryHeroLayer(
                 card = focusedDiscoveryCard,
-                contentStartPadding = 156.dp,
+                contentStartPadding = 80.dp,
             )
         } else {
             com.hushtv.tv.ui.screens.home.HomeHeroLayer(
                 entry = heroEntry,
-                contentStartPadding = 156.dp,
+                contentStartPadding = 80.dp,
             )
         }
 
         // ── 2. INTERACTIVE CONTENT layer ─────────────────────────────
-        // Padded so the card row never overlaps the sidebar; everything
-        // focusable (Discovery / Continue Watching cards) lives here.
-        // 32 dp right padding = TV overscan safe zone for cards only —
-        // NOT applied to the hero backdrop, which stays edge-to-edge.
+        // 32 dp right padding = TV overscan safe zone. Left 48 dp just
+        // aligns with the hero text column.
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(start = 156.dp, end = 32.dp),
+                .padding(start = 48.dp, end = 32.dp),
         ) {
-            // Continue Watching row pinned to the bottom of the screen.
             if (continueEntries.isNotEmpty()) {
                 Box(
                     Modifier
@@ -328,6 +316,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                             )
                         },
                         onLongPressRemove = { removePromptFor = it },
+                        firstItemFocus = firstCardFocus,
+                        onUpFromFirstItem = showNavAndFocus,
                     )
                 }
             } else if (discoveryCards.isNotEmpty()) {
@@ -344,6 +334,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                             val encoded = Uri.encode(card.categoryName)
                             nav.navigate("browse/$playlistId/${card.type}?category=$encoded")
                         },
+                        firstItemFocus = firstCardFocus,
+                        onUpFromFirstItem = showNavAndFocus,
                     )
                 }
             }
@@ -361,43 +353,45 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             }
         }
 
-        // ── SIDEBAR blend veil ───────────────────────────────────────
-        // A wide horizontal gradient that sits BENEATH the sidebar but
-        // extends past its 140 dp edge all the way to ~300 dp, giving
-        // the nav a long, gentle fade into the content instead of a
-        // sharp seam. Nothing in here is focusable — it's purely visual.
+        // ── 3. TOP NAV overlay ───────────────────────────────────────
+        // Wrapper reads focus state so we know when to auto-hide. When
+        // the user D-pad-downs off a tab, the focus moves to the first
+        // card → wrapper loses focus → navVisible flips to false.
         Box(
             Modifier
-                .align(Alignment.CenterStart)
-                .width(300.dp)
-                .fillMaxHeight()
-                .background(
-                    Brush.horizontalGradient(
-                        0.0f to Color(0xFF0B1220),
-                        0.40f to Color(0xE60B1220),
-                        0.70f to Color(0x800B1220),
-                        1.0f to Color(0x000B1220),
-                    )
+                .align(Alignment.TopStart)
+                .fillMaxWidth()
+                .onFocusChanged { state ->
+                    if (state.hasFocus) navVisible = true
+                    else navVisible = false
+                }
+                .onPreviewKeyEvent { ev ->
+                    // D-pad DOWN from any top-nav tab → focus first card.
+                    if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                        ev.key == androidx.compose.ui.input.key.Key.DirectionDown
+                    ) {
+                        runCatching { firstCardFocus.requestFocus() }
+                        true
+                    } else false
+                },
+        ) {
+            AnimatedVisibility(
+                visible = navVisible,
+                enter = fadeIn(tween(220)) +
+                    androidx.compose.animation.slideInVertically(tween(220)) { -it / 2 },
+                exit = fadeOut(tween(180)) +
+                    androidx.compose.animation.slideOutVertically(tween(180)) { -it / 2 },
+            ) {
+                com.hushtv.tv.ui.screens.home.TopNavBar(
+                    tabs = tabs,
+                    activeKey = "home",
+                    profileNickname = playlist?.name ?: "Profile",
+                    homeFocus = topNavHomeFocus,
+                    onTab = { t -> t.route?.let { nav.navigate(it) } },
+                    onProfile = { nav.navigate("home") },
+                    onSettings = { nav.navigate("settings/$playlistId") },
                 )
-        )
-
-        // ── SIDEBAR overlay (on top, aligned left, never pushes content) ─
-        // Always expanded — the collapsed/icon-only state caused focus-
-        // traversal weirdness with the content to its right, so we lock it
-        // to its full expanded width at all times. Still focusable, still
-        // D-pad navigable, just no animation.
-        Box(Modifier.align(Alignment.CenterStart)) {
-            Sidebar(
-                tabs = tabs,
-                activeKey = "home",
-                expanded = true,
-                expiryStr = expiryStr,
-                daysLeft = daysLeft,
-                homeFocus = sidebarHomeFocus,
-                onExpandChange = { /* no-op — sidebar always expanded */ },
-                onTab = { t -> t.route?.let { nav.navigate(it) } },
-                onProfile = { nav.navigate("home") },
-            )
+            }
         }
     }
 }

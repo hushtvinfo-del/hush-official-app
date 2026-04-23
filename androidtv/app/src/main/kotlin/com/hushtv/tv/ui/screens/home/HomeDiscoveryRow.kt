@@ -33,7 +33,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +69,8 @@ fun HomeDiscoveryRow(
     onFocusedCardChange: (DiscoveryCard) -> Unit,
     onCardClick: (DiscoveryCard) -> Unit,
     contentStartPadding: androidx.compose.ui.unit.Dp = 96.dp,
+    firstItemFocus: androidx.compose.ui.focus.FocusRequester? = null,
+    onUpFromFirstItem: (() -> Unit)? = null,
 ) {
     if (cards.isEmpty()) return
 
@@ -94,11 +102,13 @@ fun HomeDiscoveryRow(
         // Plain Row — exactly 2 cards, zero auto-scroll, zero bringIntoView.
         // The hero backdrop above never shifts regardless of focus.
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            cards.forEach { card ->
+            cards.forEachIndexed { idx, card ->
                 DiscoveryCardView(
                     card = card,
                     onFocus = { onFocusedCardChange(card) },
                     onClick = { onCardClick(card) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
+                    onUpKey = if (idx == 0) onUpFromFirstItem else null,
                 )
             }
         }
@@ -110,6 +120,8 @@ private fun DiscoveryCardView(
     card: DiscoveryCard,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
+    onUpKey: (() -> Unit)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(16.dp)
@@ -125,31 +137,44 @@ private fun DiscoveryCardView(
         label = "discovery-card-shadow",
     )
 
+    val base = Modifier
+        .width(360.dp)
+        .height(168.dp)
+        .onFocusChanged {
+            focused = it.isFocused
+            if (it.isFocused) onFocus()
+        }
+        .onPreviewKeyEvent { ev ->
+            // D-pad UP from the first Discovery card pops the top nav
+            // back in (when wired by the parent screen).
+            if (onUpKey != null &&
+                ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                ev.key == androidx.compose.ui.input.key.Key.DirectionUp
+            ) {
+                onUpKey.invoke()
+                true
+            } else false
+        }
+        // No scale — keeps cards safely inside TV overscan.
+        .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
+        .focusable()
+        .shadow(
+            elevation = shadowElev.value.dp,
+            shape = cardShape,
+            ambientColor = accent,
+            spotColor = accent,
+        )
+        .clip(cardShape)
+        .background(Brush.verticalGradient(listOf(fillTop, fillBottom)))
+        .border(
+            width = if (focused) 2.dp else 1.dp,
+            color = borderColor,
+            shape = cardShape,
+        )
+        .clickableWithEnter(onClick)
+
     Box(
-        Modifier
-            .width(360.dp)
-            .height(168.dp)
-            .onFocusChanged {
-                focused = it.isFocused
-                if (it.isFocused) onFocus()
-            }
-            // No scale — keeps cards safely inside TV overscan.
-            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
-            .focusable()
-            .shadow(
-                elevation = shadowElev.value.dp,
-                shape = cardShape,
-                ambientColor = accent,
-                spotColor = accent,
-            )
-            .clip(cardShape)
-            .background(Brush.verticalGradient(listOf(fillTop, fillBottom)))
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = borderColor,
-                shape = cardShape,
-            )
-            .clickableWithEnter(onClick),
+        modifier = if (focusRequester != null) base.then(Modifier.focusRequester(focusRequester)) else base,
     ) {
         // Accent stripe — thin vertical bar on the left edge.
         Box(

@@ -197,6 +197,56 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 15 — v1.10.0 Top Navigation Bar (2026-04-23 — completed, deployed)
+User feedback: "The left side scroll menu is making the app too dark and
+grey with the gradient etc... let's try a top menu instead like Netflix
+does... put the main sections in the top — Home, Live TV, Movies, Series,
+then Settings gear icon top right and Profile like Netflix does top left.
+This would have to be done super smart, clean and responsive."
+
+MAJOR REDESIGN — goodbye 140 dp left sidebar + 300 dp blend veil. Brand
+new Netflix / YouTube-TV style top nav.
+
+- **New file** `TopNavBar.kt` (~260 lines): renders a 96 dp tall top bar
+  with a top-down dark-to-transparent gradient background
+  (`0xB8000000 → 0x00000000`). Layout from left to right: `HushTVLogo`
+  (22 sp) → `ProfileChip` (circular cyan initial avatar + nickname) →
+  pill-tab rail (Home / Live TV / Movies / Series / Search) → `Spacer
+  weight(1f)` → `SettingsIconButton` (circular gear). Active tab fills
+  with cyan and flips text to `0xFF0A0F1C`; focused tab gets a 2 dp cyan
+  ring + translucent white fill. Profile chip + settings circle both use
+  the same focus-ring language for consistency. `TopNavTab` model
+  hoisted public so the parent owns tab config.
+- **`TVMainMenuScreen.kt` rewrite** (~170 lines net change): deleted
+  the whole Sidebar overlay Box + 300 dp blend veil Box. Content layer
+  went from `padding(start = 156.dp, end = 32.dp)` to
+  `padding(start = 48.dp, end = 32.dp)` — the hero title column now uses
+  the same 48 dp left anchor as the card row below. Hero layers' own
+  `contentStartPadding` dropped from 156 dp → 80 dp so the title sits
+  in a comfortable TV-safe-zone position. Added `firstCardFocus`
+  `FocusRequester`, `navVisible` state, and a `showNavAndFocus` callback
+  wired into both row composables.
+- **Auto-hide logic**: the TopNavBar sits in a wrapper Box aligned
+  `TopStart`. That wrapper has `.onFocusChanged { navVisible = it.hasFocus }`
+  plus a `.onPreviewKeyEvent` that intercepts `DirectionDown` and calls
+  `firstCardFocus.requestFocus()`. When focus lands on a content card →
+  wrapper has no focus → navVisible flips to false → `AnimatedVisibility`
+  slides + fades the nav up and out (220 ms in / 180 ms out). The first
+  `ContinueCard` / `DiscoveryCardView` now accepts an optional
+  `focusRequester` + `onUpKey` callback; both watch `DirectionUp` and
+  fire `showNavAndFocus` to bring the nav back in + refocus the Home tab.
+- **Row signature upgrades** (`HomeContinueWatchingSection.kt`,
+  `HomeDiscoveryRow.kt`): added `firstItemFocus` + `onUpFromFirstItem`
+  params (both optional — defaults preserve backwards compatibility).
+  Switched `LazyRow items(...)` → `itemsIndexed(...)` for the Continue
+  Watching row so the `idx == 0` branch can attach the focus requester.
+- **Result**: the blue-tinted dark zone on the left third of the screen
+  is gone. Hero backdrop is edge-to-edge bright. Top nav auto-fades
+  when the user is exploring content, slides back in on Up. All on the
+  same D-pad language the rest of the app uses.
+- Shipped as versionCode=73 / versionName="1.10.0" — APK (md5
+  `2fe6b670489e4db0c6e172cf059354f6`) live on `https://hushtv.xyz`.
+
 ### Phase 14 — v1.9.8 CRITICAL: fix player launch lag + ANR crashes (2026-04-23 — completed, deployed)
 User feedback: "There is something wrong with the functionality in the
 app when you click play on movies or series — it's really dragging and
