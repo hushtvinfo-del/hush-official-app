@@ -197,6 +197,28 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 13 — v1.9.6 Hero title one-line + card proportion tune (2026-04-23 — completed, deployed)
+User feedback: "Can you make the latest movies background text say Latest
+Movies all in the same line (the same way you have latest series) and
+can we move the discovery cards up a bit higher — they should be
+perfectly proportioned with the background layout and font text content."
+
+- **Title single-line** (`HomeDiscoveryHeroLayer.kt` → `DiscoveryTitleBlock`):
+  widened the title column from `fillMaxWidth(0.45f)` → `0.58f` and
+  dropped the title font from 52 sp → 48 sp Inter Black with
+  `lineHeight 52 sp`, `maxLines = 1`, ellipsis overflow. "Latest Movies"
+  (the wider of the two titles) now comfortably fits on a single line
+  matching the "Latest Series" rendering. Also pushed the title column
+  down the hero — `top` padding 44 dp → 96 dp — so the massive title
+  sits more centred against the card row below.
+- **Card row raised** (`HomeDiscoveryRow.kt`): bottom padding increased
+  from 24 dp → 72 dp so the two Discovery cards sit noticeably above
+  the bottom screen edge. With the title block now dropped to 96 dp
+  from the top, the composition reads as one balanced block instead of
+  title-at-top + cards-jammed-at-bottom.
+- Shipped as versionCode=70 / versionName="1.9.6" — APK (md5
+  `1aa46b080c7b17cce307eedae0587436`) live on `https://hushtv.xyz`.
+
 ### Phase 12 — v1.9.5 Full-bleed backdrop + scale-only Ken-Burns (2026-04-23 — completed, deployed)
 User feedback: "The Ken-Burns effect is still messing it up and stretching
 the right side. Our main screen overlay should fill the whole screen to

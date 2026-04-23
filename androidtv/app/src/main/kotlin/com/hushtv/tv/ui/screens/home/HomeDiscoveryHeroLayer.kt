@@ -156,11 +156,13 @@ fun HomeDiscoveryHeroLayer(
                 )
         )
 
-        // Text column — left 45% of the hero, offset past the sidebar.
+        // Text column — offset past the sidebar and vertically positioned
+        // a bit lower so it sits in a better balanced proportion against
+        // the card row at the bottom.
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = contentStartPadding, top = 44.dp, end = 48.dp),
+                .padding(start = contentStartPadding, top = 96.dp, end = 48.dp),
         ) {
             DiscoveryTitleBlock(card)
         }
@@ -214,7 +216,9 @@ private fun KenBurnsBackdrop(url: String, panIndex: Int) {
 
 @Composable
 private fun DiscoveryTitleBlock(card: DiscoveryCard) {
-    Column(Modifier.fillMaxWidth(0.45f)) {
+    // Widened to 58% so "Latest Movies" (wider than "Latest Series")
+    // always fits on a single line at the 48 sp Inter Black weight.
+    Column(Modifier.fillMaxWidth(0.58f)) {
         val accent = if (card.type == "series") Color(0xFFA78BFA) else Cyan
 
         // Eyebrow row.
@@ -237,18 +241,19 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
         }
         Spacer(Modifier.height(12.dp))
 
-        // Title — Inter Black, sized for two lines max.
+        // Title — Inter Black, single line. Sized to fit "Latest Movies"
+        // (the widest of the two) on one line inside the 58% column.
         Text(
             card.title,
             color = Color.White,
-            fontSize = 52.sp,
+            fontSize = 48.sp,
             fontWeight = FontWeight.Black,
-            lineHeight = 54.sp,
+            lineHeight = 52.sp,
             fontFamily = Inter,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
 
         Text(
             card.subtitle,

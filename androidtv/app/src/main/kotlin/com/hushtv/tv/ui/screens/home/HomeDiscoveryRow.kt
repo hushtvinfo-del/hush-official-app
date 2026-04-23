@@ -71,7 +71,7 @@ fun HomeDiscoveryRow(
             start = contentStartPadding,
             end = 48.dp,
             top = 16.dp,
-            bottom = 24.dp,
+            bottom = 72.dp,
         ),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
