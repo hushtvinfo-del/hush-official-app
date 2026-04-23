@@ -1,5 +1,8 @@
 package com.hushtv.tv.ui.screens.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,10 +15,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,7 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -158,7 +168,12 @@ private fun ContinueCard(
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val cardShape = RoundedCornerShape(10.dp)
+    val cardShape = RoundedCornerShape(12.dp)
+    // Elevation shadow softly grows when focused to add depth against the
+    // hero backdrop behind the row. 2 dp idle → 14 dp focused with a cyan
+    // ambient color for a premium "lifted" feel.
+    val shadowColor = if (focused) Cyan else Color.Black
+    val shadowElevation = if (focused) 14.dp else 2.dp
 
     Column(
         Modifier
@@ -177,10 +192,17 @@ private fun ContinueCard(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(135.dp)
+                .height(150.dp)
+                .shadow(
+                    elevation = shadowElevation,
+                    shape = cardShape,
+                    ambientColor = shadowColor,
+                    spotColor = shadowColor,
+                )
                 .clip(cardShape)
-                .background(Color(0xFF141922)),
+                .background(Color(0xFF0C101A)),
         ) {
+            // Backdrop image
             entry.backdropUrl?.let { url ->
                 AsyncImage(
                     model = url,
@@ -189,57 +211,128 @@ private fun ContinueCard(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+
+            // Bottom-up gradient so the title/meta sits cleanly on any art.
+            // Runs top→transparent → bottom→~92% black.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Transparent,
+                            0.45f to Color(0x66000000),
+                            1.0f to Color(0xEB000000),
+                        )
+                    )
+            )
+
+            // Un-focused cards get a subtle dim so the focused one pops.
             if (!focused) {
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(Color(0x66000000))
+                        .background(Color(0x33000000))
                 )
             }
 
+            // Time-left chip — glass-morphism style pill top-right.
             Surface(
-                color = Color(0xE0000000),
-                shape = RoundedCornerShape(6.dp),
+                color = Color(0xCC0B0F1A),
+                shape = RoundedCornerShape(20.dp),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(8.dp),
+                    .padding(10.dp)
+                    .shadow(2.dp, RoundedCornerShape(20.dp)),
             ) {
                 Text(
                     formatLeft(entry),
                     color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
                     fontFamily = Inter,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                 )
             }
 
+            // Play button pops in on focus — centered, semi-transparent cyan
+            // circle. Purely decorative; clicking the whole card still plays.
+            if (focused) {
+                Box(
+                    Modifier
+                        .align(Alignment.Center)
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xCC06B6D4)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(30.dp),
+                    )
+                }
+            }
+
+            // Title + meta overlay on the bottom of the image itself.
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+            ) {
+                // Meta (Movie / Series · Genre) — small caps style
+                val metaParts = buildList {
+                    add(if (entry.progress.kind == "series") "SERIES" else "MOVIE")
+                    entry.genre?.uppercase()?.let { add(it) }
+                }
+                Text(
+                    metaParts.joinToString(" · "),
+                    color = Cyan,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = Inter,
+                    letterSpacing = 1.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    entry.progress.title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = Inter,
+                    lineHeight = 18.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            // Progress bar at the very bottom. 4 dp tall; glows cyan when
+            // focused thanks to a subtle outer shadow.
             val ratio = entry.progress.ratio.coerceIn(0f, 1f)
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(3.dp)
+                    .height(4.dp)
                     .align(Alignment.BottomStart)
-                    .background(Color(0x40FFFFFF)),
+                    .background(Color(0x33FFFFFF)),
             ) {
                 Box(
                     Modifier
                         .fillMaxWidth(ratio)
                         .fillMaxHeight()
-                        .background(Cyan),
+                        .background(
+                            Brush.horizontalGradient(
+                                0.0f to Color(0xFF06B6D4),
+                                1.0f to Color(0xFF22D3EE),
+                            )
+                        ),
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            entry.progress.title,
-            color = if (focused) Color.White else Color(0xFFCBD5E1),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = Inter,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
