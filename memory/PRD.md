@@ -197,6 +197,38 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 18 — v1.10.3 Always-on Discovery + stacked CW (2026-04-23 — completed, deployed)
+User feedback: "Where is the Discovery section — it should be under
+Continue Watching section. Discovery will always be the main top default
+section of main home, but Continue Watching will show above it if there
+are movies/series in progress."
+
+- **Both sections now visible** (`TVMainMenuScreen.kt`): replaced the
+  old `if (CW) {...} else if (Discovery) {...}` branch with a Column
+  pinned `Alignment.BottomStart` containing `HomeContinueWatchingRow`
+  (rendered only when `continueEntries.isNotEmpty()`) stacked above
+  `HomeDiscoveryRow` (rendered whenever `discoveryCards.isNotEmpty()`,
+  which is always true after the TMDB fetch). Discovery is now the
+  permanent bottom anchor with CW floating above when present.
+- **Smart hero backdrop**: new `heroSection` state ("cw" | "discovery")
+  defaults to "discovery". `HomeContinueWatchingRow`'s
+  `onFocusedEntryChange` now also flips `heroSection = "cw"`; likewise
+  `HomeDiscoveryRow`'s `onFocusedCardChange` flips it to "discovery".
+  The layered hero draws `HomeHeroLayer` only when both
+  `heroSection == "cw"` AND `heroEntry != null`; otherwise falls back
+  to `HomeDiscoveryHeroLayer` so the default state on launch is the
+  Discovery rotation (user's explicit preference).
+- **Two focus requesters** (renamed `firstCardFocus` → `firstCwFocus`
+  + added `firstDiscoveryFocus`): nav's `onPreviewKeyEvent` picks the
+  right target based on `navDownTarget` ("cw" if CW has entries, else
+  "discovery"). `HomeDiscoveryRow`'s `onUpFromFirstItem` callback now
+  routes to `firstCwFocus.requestFocus()` when CW exists, otherwise
+  pops the nav back in. CW row's Up-from-first still pops the nav.
+- Default Compose 2D focus traversal handles Down between CW → Discovery
+  (nearest focusable below) — no explicit handoff needed there.
+- Shipped as versionCode=76 / versionName="1.10.3" — APK (md5
+  `449923735945c65777c13ce4e9060f19`) live on `https://hushtv.xyz`.
+
 ### Phase 17 — v1.10.2 Hero adapts below nav + D-pad Down fix (2026-04-23 — completed, deployed)
 User feedback: "The background is still behind the top menu — it needs
 to adapt below it and not interfere. Also you can't even scroll down from
