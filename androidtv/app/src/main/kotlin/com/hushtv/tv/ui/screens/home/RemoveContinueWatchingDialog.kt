@@ -22,7 +22,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -57,9 +60,16 @@ fun RemoveContinueWatchingDialog(
     onDismiss: () -> Unit,
 ) {
     val removeFocus = remember { FocusRequester() }
+    // Debounce window — ignore any Enter/OK events for the first 400 ms after
+    // the dialog appears. Belt-and-suspenders protection against the OK key
+    // press that triggered the long-press still being physically held down
+    // when focus arrives on the Remove button.
+    var ready by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(80)
         runCatching { removeFocus.requestFocus() }
+        delay(400)
+        ready = true
     }
 
     Box(
@@ -68,6 +78,14 @@ fun RemoveContinueWatchingDialog(
             .background(Color(0xE6000000))
             .focusable()
             .onKeyEvent { ev ->
+                // Eat all Enter/OK events during the debounce window so the
+                // leftover KeyUp from the long-press can't auto-confirm.
+                if (!ready &&
+                    (ev.key == Key.Enter || ev.key == Key.DirectionCenter ||
+                        ev.key == Key.NumPadEnter)
+                ) {
+                    return@onKeyEvent true
+                }
                 if (ev.type == KeyEventType.KeyDown &&
                     (ev.key == Key.Back || ev.key == Key.Escape)
                 ) {

@@ -217,10 +217,14 @@ private fun ContinueCard(
 
     // Long-press detection on OK / D-pad center. Tivimate-style: hold the
     // select button for ~500 ms to open the "Remove from Continue Watching"
-    // prompt. We track KeyDown timestamp and fire on KeyUp if held long
-    // enough — consuming the event so the short-press click doesn't fire.
+    // prompt.
+    //
+    // IMPORTANT bug fix: we fire `onLongPress` on KeyUp (not during KeyDown)
+    // so the KeyUp event is fully consumed by THIS card's handler before the
+    // dialog appears. Firing during KeyDown caused a cascade: dialog opened,
+    // Remove button auto-focused, then the user's KeyUp landed on it and
+    // fired onClick — removing the item without the user clicking "Remove".
     var keyDownAtMs by remember { mutableStateOf(0L) }
-    var longPressFired by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -236,26 +240,17 @@ private fun ContinueCard(
                 if (!isEnterKey) return@onPreviewKeyEvent false
                 when (ev.type) {
                     KeyEventType.KeyDown -> {
-                        if (keyDownAtMs == 0L) {
-                            keyDownAtMs = System.currentTimeMillis()
-                        } else if (!longPressFired &&
-                            System.currentTimeMillis() - keyDownAtMs > 500L
-                        ) {
-                            longPressFired = true
-                            onLongPress()
-                            return@onPreviewKeyEvent true
-                        }
+                        if (keyDownAtMs == 0L) keyDownAtMs = System.currentTimeMillis()
+                        // Do NOT return true — letting KeyDown pass lets
+                        // clickableWithEnter see it for short-press behavior.
                         false
                     }
                     KeyEventType.KeyUp -> {
                         val held = System.currentTimeMillis() - keyDownAtMs
                         keyDownAtMs = 0L
-                        if (longPressFired) {
-                            longPressFired = false
-                            true
-                        } else if (held > 500L) {
-                            // Long-press fired at KeyUp boundary — prevent
-                            // short-press click from also firing.
+                        if (held >= 500L) {
+                            // Long press — fire remove prompt + consume the
+                            // KeyUp so clickableWithEnter doesn't also fire.
                             onLongPress()
                             true
                         } else false
