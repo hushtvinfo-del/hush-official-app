@@ -293,35 +293,148 @@ private fun LayoutCard(
     }
 }
 
-/** Mini mockup of the Top-Bar layout. */
+/* ──────────────────────────────────────────────────────────────── */
+/*  MINI MOCKUPS — rendered to look like actual app screenshots     */
+/* ──────────────────────────────────────────────────────────────── */
+
+/**
+ * Palette of gradient pairs used as faux-posters in the preview grids.
+ * Each poster in the mock uses a different pair so the grid reads as
+ * "a collection of movie posters" at a glance, not as flat rectangles.
+ */
+private val PosterPalette = listOf(
+    Color(0xFF1E3A8A) to Color(0xFF0F172A),
+    Color(0xFF831843) to Color(0xFF4C0519),
+    Color(0xFF064E3B) to Color(0xFF022C22),
+    Color(0xFF78350F) to Color(0xFF431407),
+    Color(0xFF581C87) to Color(0xFF2E1065),
+    Color(0xFF155E75) to Color(0xFF0E3543),
+    Color(0xFF9F1239) to Color(0xFF4C0519),
+    Color(0xFF1E293B) to Color(0xFF020617),
+    Color(0xFF7E22CE) to Color(0xFF3B0764),
+    Color(0xFFB45309) to Color(0xFF451A03),
+    Color(0xFF0891B2) to Color(0xFF083344),
+    Color(0xFF334155) to Color(0xFF0F172A),
+)
+
+@Composable
+private fun MiniPoster(seed: Int, modifier: Modifier = Modifier) {
+    val (top, bottom) = PosterPalette[seed.mod(PosterPalette.size)]
+    Box(
+        modifier
+            .clip(RoundedCornerShape(2.dp))
+            .background(Brush.verticalGradient(listOf(top, bottom))),
+    ) {
+        // Thin cyan "progress" bar at the bottom of some posters so the
+        // grid feels alive, not static. Every 3rd poster gets one.
+        if (seed % 3 == 0) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth(0.6f)
+                    .height(1.dp)
+                    .background(Cyan),
+            )
+        }
+    }
+}
+
+/** Mini mockup of the Top-Bar layout — looks like a real app screenshot. */
 @Composable
 private fun TopBarPreview() {
-    Column(Modifier.fillMaxSize().padding(10.dp)) {
-        // Top bar.
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(18.dp)
-                .background(Color(0xFF14223A), RoundedCornerShape(4.dp))
-                .padding(horizontal = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(width = 34.dp, height = 8.dp).background(Cyan, RoundedCornerShape(2.dp)))
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.size(width = 22.dp, height = 8.dp).background(Color(0x55FFFFFF), RoundedCornerShape(2.dp)))
-        }
-        Spacer(Modifier.height(8.dp))
-        // Grid.
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            repeat(3) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    repeat(6) {
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .height(24.dp)
-                                .background(Color(0xFF1E293B), RoundedCornerShape(3.dp)),
-                        )
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    0f to Color(0xFF050B18),
+                    1f to Color(0xFF000000),
+                )
+            ),
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            // ── Top nav bar ──
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(16.dp)
+                    .background(Color(0xEB0B1220))
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Logo pill
+                Box(
+                    Modifier
+                        .size(width = 22.dp, height = 6.dp)
+                        .background(Cyan, RoundedCornerShape(1.dp)),
+                )
+                Spacer(Modifier.width(10.dp))
+                // Tabs (5)
+                repeat(5) { i ->
+                    Box(
+                        Modifier
+                            .size(width = 14.dp, height = 6.dp)
+                            .background(
+                                if (i == 2) Color.White else Color(0x66FFFFFF),
+                                RoundedCornerShape(1.dp),
+                            ),
+                    )
+                    if (i < 4) Spacer(Modifier.width(4.dp))
+                }
+                Spacer(Modifier.weight(1f))
+                // Settings gear
+                Box(
+                    Modifier
+                        .size(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color(0x55FFFFFF)),
+                )
+            }
+            // Cyan separator
+            Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x5506B6D4)))
+
+            // ── Category toolbar ──
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(14.dp)
+                    .background(Color(0xFF05080F))
+                    .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // BROWSE ▾ pill
+                Box(
+                    Modifier
+                        .size(width = 34.dp, height = 8.dp)
+                        .background(Cyan.copy(alpha = 0.22f), RoundedCornerShape(4.dp))
+                        .border(0.5.dp, Cyan, RoundedCornerShape(4.dp)),
+                )
+                Spacer(Modifier.weight(1f))
+                // Title on the right
+                Box(
+                    Modifier
+                        .size(width = 28.dp, height = 6.dp)
+                        .background(Color(0x99FFFFFF), RoundedCornerShape(1.dp)),
+                )
+            }
+            Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x14FFFFFF)))
+
+            // ── Poster grid ── (fills remaining space)
+            Column(
+                Modifier.fillMaxSize().padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                repeat(3) { row ->
+                    Row(
+                        Modifier.fillMaxWidth().weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        repeat(7) { col ->
+                            MiniPoster(
+                                seed = row * 7 + col,
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                            )
+                        }
                     }
                 }
             }
@@ -329,42 +442,141 @@ private fun TopBarPreview() {
     }
 }
 
-/** Mini mockup of the Sidebar layout. */
+/** Mini mockup of the Left-Sidebar layout — looks like a real app screenshot. */
 @Composable
 private fun SidebarPreview() {
-    Row(Modifier.fillMaxSize().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        // Sidebar.
-        Column(
-            Modifier
-                .width(54.dp)
-                .fillMaxHeight()
-                .background(Color(0xFF0F1A2D), RoundedCornerShape(4.dp))
-                .padding(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            repeat(7) { i ->
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    0f to Color(0xFF050B18),
+                    1f to Color(0xFF000000),
+                )
+            ),
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            // ── Top nav bar ──
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(16.dp)
+                    .background(Color(0xEB0B1220))
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Box(
                     Modifier
-                        .fillMaxWidth()
-                        .height(10.dp)
-                        .background(
-                            if (i == 1) Cyan.copy(alpha = 0.6f) else Color(0xFF1E293B),
-                            RoundedCornerShape(2.dp),
-                        ),
+                        .size(width = 22.dp, height = 6.dp)
+                        .background(Cyan, RoundedCornerShape(1.dp)),
+                )
+                Spacer(Modifier.width(10.dp))
+                repeat(5) { i ->
+                    Box(
+                        Modifier
+                            .size(width = 14.dp, height = 6.dp)
+                            .background(
+                                if (i == 2) Color.White else Color(0x66FFFFFF),
+                                RoundedCornerShape(1.dp),
+                            ),
+                    )
+                    if (i < 4) Spacer(Modifier.width(4.dp))
+                }
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier
+                        .size(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color(0x55FFFFFF)),
                 )
             }
-        }
-        // Grid.
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            repeat(4) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    repeat(5) {
+            Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x5506B6D4)))
+
+            // ── Sidebar + grid ──
+            Row(Modifier.fillMaxSize()) {
+                // Sidebar column
+                Column(
+                    Modifier
+                        .width(62.dp)
+                        .fillMaxHeight()
+                        .background(Color(0xFF05080F))
+                        .padding(horizontal = 5.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    // Header with accent bar + title
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier
-                                .weight(1f)
-                                .height(20.dp)
-                                .background(Color(0xFF1E293B), RoundedCornerShape(3.dp)),
+                                .size(width = 1.5.dp, height = 7.dp)
+                                .background(Cyan, RoundedCornerShape(1.dp)),
                         )
+                        Spacer(Modifier.width(3.dp))
+                        Box(
+                            Modifier
+                                .size(width = 28.dp, height = 5.dp)
+                                .background(Cyan, RoundedCornerShape(1.dp)),
+                        )
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(Color(0x14FFFFFF)),
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    // Category rows — row #2 is the "selected" one (cyan)
+                    repeat(8) { i ->
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .background(
+                                    if (i == 2) Cyan.copy(alpha = 0.28f)
+                                    else Color.Transparent,
+                                    RoundedCornerShape(2.dp),
+                                )
+                                .border(
+                                    width = if (i == 2) 0.5.dp else 0.dp,
+                                    color = if (i == 2) Cyan else Color.Transparent,
+                                    shape = RoundedCornerShape(2.dp),
+                                )
+                                .padding(horizontal = 3.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(
+                                        width = (38 - (i * 2).coerceAtMost(14)).dp,
+                                        height = 3.dp,
+                                    )
+                                    .background(
+                                        if (i == 2) Color.White else Color(0x99FFFFFF),
+                                        RoundedCornerShape(1.dp),
+                                    ),
+                            )
+                        }
+                    }
+                }
+                // Vertical divider
+                Box(Modifier.width(0.5.dp).fillMaxHeight().background(Color(0x1FFFFFFF)))
+                // Poster grid
+                Column(
+                    Modifier.fillMaxSize().padding(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    repeat(3) { row ->
+                        Row(
+                            Modifier.fillMaxWidth().weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            repeat(6) { col ->
+                                MiniPoster(
+                                    seed = row * 6 + col + 3,
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                )
+                            }
+                        }
                     }
                 }
             }
