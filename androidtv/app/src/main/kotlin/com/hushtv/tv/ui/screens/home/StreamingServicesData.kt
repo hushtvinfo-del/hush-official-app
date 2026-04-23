@@ -111,7 +111,7 @@ private val CUSTOM_LOGO_URLS = mapOf(
     "disney" to "https://github.com/tv-logo/tv-logos/blob/main/countries/united-states/disney-plus-us.png?raw=true",
     "netflix" to "https://static.vecteezy.com/system/resources/previews/017/396/804/non_2x/netflix-mobile-application-logo-free-png.png",
     "paramount" to "https://github.com/tv-logo/tv-logos/blob/main/countries/france/paramount-channel-fr.png?raw=true",
-    "prime" to "https://image.pngaaa.com/361/480361-middle.png",
+    "prime" to "https://logodownload.org/wp-content/uploads/2018/07/prime-video-logo-0.png",
 )
 
 /**
