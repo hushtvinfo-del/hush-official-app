@@ -1,6 +1,5 @@
 package com.hushtv.tv.ui.screens.home
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -141,48 +140,52 @@ private fun ServiceCardView(
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
-    val scale by animateFloatAsState(
-        targetValue = if (focused) 1.04f else 1f,
-        animationSpec = tween(160),
-        label = "service-card-scale",
-    )
-
     val base: Modifier = if (focusRequester != null)
         Modifier.focusRequester(focusRequester) else Modifier
 
+    // The whole unit = card + label below. Focus applies to the outer
+    // Column so the label and card glow together.
     Column(
         base
-            .width(180.dp)
-            .height(196.dp)
+            .width(196.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()
-            .shadow(
-                elevation = if (focused) 22.dp else 6.dp,
-                shape = cardShape,
-                ambientColor = service.accent,
-                spotColor = service.accent,
-            )
-            .clip(cardShape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(service.brandTop, service.brandBottom)
-                )
-            )
-            .border(
-                width = if (focused) 2.5.dp else 1.dp,
-                color = if (focused) service.accent else service.accent.copy(alpha = 0.15f),
-                shape = cardShape,
-            )
             .clickableWithEnter(onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Ambient brand accent glow emanating from top-right — gives
-        // the tile depth and makes it feel alive without needing any
-        // foreground art.
-        Box(Modifier.fillMaxSize()) {
+        // ── CARD ──  pure logo-on-gradient. No internal text so each
+        // brand's logo has maximum visual weight. All logos rendered in
+        // an IDENTICAL 120 × 80 dp box with ContentScale.Fit, so they
+        // look the same visual size regardless of aspect ratio.
+        Box(
+            Modifier
+                .width(196.dp)
+                .height(118.dp)
+                .shadow(
+                    elevation = if (focused) 22.dp else 6.dp,
+                    shape = cardShape,
+                    ambientColor = service.accent,
+                    spotColor = service.accent,
+                )
+                .clip(cardShape)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(service.brandTop, service.brandBottom)
+                    )
+                )
+                .border(
+                    width = if (focused) 2.5.dp else 1.dp,
+                    color = if (focused) service.accent
+                        else service.accent.copy(alpha = 0.15f),
+                    shape = cardShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Ambient brand accent glow from top-right.
             Box(
                 Modifier
                     .fillMaxSize()
@@ -195,48 +198,41 @@ private fun ServiceCardView(
                     )
             )
 
-            Column(
-                Modifier.fillMaxSize().padding(18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                // Logo — transparent PNG fetched from TMDB. Coil caches
-                // it after first fetch; nothing paints until it loads
-                // (keeps the card clean during the brief wait).
-                Box(
-                    Modifier.fillMaxWidth().height(108.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val logoUrl = service.logoUrl
-                    if (logoUrl != null) {
-                        AsyncImage(
-                            model = logoUrl,
-                            contentDescription = service.displayName,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        // Fallback wordmark while the logo loads.
-                        Text(
-                            service.displayName,
-                            color = service.accent,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = Inter,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
+            // Logo — identically-sized 140 × 74 dp box, ContentScale.Fit
+            // so the logo fills the box proportionally. No over-scaling
+            // (we clamp with bounded size), no stretching, no spillover.
+            val logoUrl = service.logoUrl
+            if (logoUrl != null) {
+                AsyncImage(
+                    model = logoUrl,
+                    contentDescription = service.displayName,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .width(140.dp)
+                        .height(74.dp),
+                )
+            } else {
+                // Fallback wordmark while the logo loads / fails.
                 Text(
                     service.displayName,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
+                    color = service.accent,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
                     fontFamily = Inter,
                 )
             }
         }
-    }
 
-    @Suppress("UNUSED_EXPRESSION") scale
+        // ── LABEL below the card ── same line for every tile, no chance
+        // of collision with the logo art inside the card.
+        Spacer(Modifier.height(10.dp))
+        Text(
+            service.displayName,
+            color = if (focused) Color.White else Color(0xFFCBD5E1),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.4.sp,
+            fontFamily = Inter,
+        )
+    }
 }

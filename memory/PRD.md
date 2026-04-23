@@ -197,6 +197,26 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 23 — v1.11.3 Custom SS logos + layout cleanup (2026-04-23 — completed, deployed)
+User supplied 7 exact logo URLs (AMC+, Apple TV+, CRAVE/STARZ, Disney+,
+Netflix, Paramount+, Prime Video) and asked for consistent sizing +
+names outside the cards.
+
+- `StreamingServicesData.kt`: added `CUSTOM_LOGO_URLS` map, changed
+  `rememberStreamingServices` to apply overrides synchronously on first
+  composition (no more TMDB async wait). Coil prefetch warms disk cache
+  so first paint is flicker-free. Removed unused imports / stale
+  `mutableStateOf` / `getValue`/`setValue`.
+- `HomeStreamingServicesRow.kt` → `ServiceCardView`: gutted the internal
+  text + wordmark fallback. Card is now a pure 196 × 118 dp
+  logo-on-gradient tile. Every logo renders inside an IDENTICAL
+  140 × 74 dp box with `ContentScale.Fit` — guarantees every tile
+  looks the same visual size regardless of native aspect ratio. Service
+  name moved UNDERNEATH the card (outer Column, 10 dp gap) so there's
+  zero chance of text / logo overlap. Labels brighten to white on focus.
+- Shipped as versionCode=84 / versionName="1.11.3" — APK (md5
+  `9071f3194af88a51aa163d6f530ab6aa`) live on `https://hushtv.xyz`.
+
 ### Phase 22 — v1.11.2 Page indicator + Channel shortcuts (2026-04-23 — completed, deployed)
 User: "Page quick-jump dots pinned to the right edge + Channel Up/Down
 shortcuts → YES."

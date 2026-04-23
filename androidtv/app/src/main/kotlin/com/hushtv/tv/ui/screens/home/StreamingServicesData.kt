@@ -2,15 +2,11 @@ package com.hushtv.tv.ui.screens.home
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import coil.imageLoader
 import coil.request.ImageRequest
-import com.hushtv.tv.data.TmdbService
 
 /**
  * A single streaming service tile. Logos are fetched from TMDB's
@@ -104,33 +100,39 @@ private val MOVIE_SERVICES_BASE = listOf(
 )
 
 /**
- * Enriches the base service list with TMDB logo URLs fetched once per
- * kind. Also warms Coil's image cache so the logos render instantly on
- * first paint. Returns the base list immediately (with logoUrl=null) so
- * the UI never blocks waiting for TMDB.
+ * Hand-picked official logo URLs, provided by the user. Overrides
+ * whatever TMDB returns for these providers — gives us full control
+ * over image quality, cropping, and background transparency.
+ */
+private val CUSTOM_LOGO_URLS = mapOf(
+    "amc" to "https://e7.pngegg.com/pngimages/852/748/png-clipart-amc-logo-television-show-graphic-design-amc-television-text.png",
+    "appletv" to "https://clipart-library.com/new_gallery/456504_apple-tv-logo-png.png",
+    "crave" to "https://pbs.twimg.com/media/GVVosjrXQAAHX0A.jpg",
+    "disney" to "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Disney%2B_logo.svg/3840px-Disney%2B_logo.svg.png",
+    "netflix" to "https://static.vecteezy.com/system/resources/previews/017/396/804/non_2x/netflix-mobile-application-logo-free-png.png",
+    // Paramount+ Wikipedia PNG thumb (the raw .svg would need a decoder).
+    "paramount" to "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Paramount_Plus.svg/960px-Paramount_Plus.svg.png",
+    "prime" to "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Amazon_Prime_Video_logo_%282024%29.svg/960px-Amazon_Prime_Video_logo_%282024%29.svg.png",
+)
+
+/**
+ * Returns the 7 services with their custom logo URLs applied immediately
+ * (no async wait for TMDB since we have hand-picked high-res images).
+ * Also warms the Coil disk cache so logos paint flicker-free.
  */
 @Composable
 fun rememberStreamingServices(kind: String): List<StreamingService> {
     val ctx = LocalContext.current
-    var services by remember(kind) { mutableStateOf(MOVIE_SERVICES_BASE) }
-
-    LaunchedEffect(kind) {
-        val logos = runCatching {
-            TmdbService.watchProviderLogos(kind)
-        }.getOrDefault(emptyMap())
-
-        if (logos.isEmpty()) return@LaunchedEffect
-
-        services = MOVIE_SERVICES_BASE.map { s ->
-            s.copy(logoUrl = logos[s.tmdbProviderId])
+    val services = remember(kind) {
+        MOVIE_SERVICES_BASE.map { s ->
+            s.copy(logoUrl = CUSTOM_LOGO_URLS[s.id])
         }
-
-        // Warm the Coil disk cache so the logos paint instantly.
+    }
+    LaunchedEffect(services) {
         val loader = ctx.imageLoader
         services.mapNotNull { it.logoUrl }.forEach { url ->
             loader.enqueue(ImageRequest.Builder(ctx).data(url).build())
         }
     }
-
     return services
 }
