@@ -251,12 +251,12 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         //      through; first row sits at ~55% of the viewport so the hero
         //      text is fully visible on first render).
         // ── CONTENT layer (fixed-position canvas) ─────────────────────
-        // 132 dp left padding = sidebar expanded width (116) + 16 dp gap, so
-        // content never overlaps the sidebar even when it's fully expanded.
+        // 192 dp left padding = sidebar width (176) + 16 dp gap, so content
+        // never overlaps the sidebar even when it's fully expanded.
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(start = 132.dp),
+                .padding(start = 192.dp),
         ) {
             val continueHandle = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
             val continueEntries = continueHandle.entries
@@ -357,7 +357,7 @@ private fun Sidebar(
     onProfile: () -> Unit,
 ) {
     val width by animateDpAsState(
-        targetValue = if (expanded) 116.dp else 52.dp,
+        targetValue = if (expanded) 176.dp else 68.dp,
         animationSpec = tween(150),
         label = "sidebar-width",
     )
@@ -367,43 +367,48 @@ private fun Sidebar(
             .width(width)
             .fillMaxHeight()
             .background(
-                // Slow horizontal fade — dark at the icon column, gently
-                // transparent at the right edge so it can blend into the
-                // Home content's edge overlay without a hard seam.
+                // Premium glass-morphism backdrop — solid deep navy at the
+                // left edge, softly transparent on the right so the home
+                // backdrop bleeds through behind the sidebar. Zero hard
+                // seams between the nav and the content.
                 Brush.horizontalGradient(
-                    0.0f to Color(0xFF050507),
-                    0.7f to Color(0xFF050507),
-                    1.0f to Color(0xD0050507),
+                    0.0f to Color(0xF20B1220),
+                    0.55f to Color(0xCC0B1220),
+                    1.0f to Color(0x000B1220),
                 )
             )
             .onFocusChanged { onExpandChange(it.hasFocus) }
-            .padding(vertical = 20.dp, horizontal = 4.dp),
+            .padding(vertical = 28.dp, horizontal = 0.dp),
     ) {
-        // Logo block
+        // Brand mark — Inter Black "hush.tv" when expanded, cyan dot when
+        // collapsed. Animates cleanly.
         Row(
-            Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 18.dp, end = 12.dp, bottom = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AnimatedVisibility(
                 visible = expanded,
-                enter = fadeIn(tween(120)) + expandHorizontally(tween(150)),
-                exit = fadeOut(tween(120)) + shrinkHorizontally(tween(120)),
+                enter = fadeIn(tween(120)),
+                exit = fadeOut(tween(90)),
             ) {
                 HushTVLogo(fontSize = 22.sp)
             }
             if (!expanded) {
-                // Collapsed: show only the cyan dot (brand accent)
                 Box(
                     Modifier
-                        .size(14.dp)
+                        .padding(start = 22.dp)
+                        .size(10.dp)
                         .background(Cyan, CircleShape),
                 )
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(8.dp))
 
-        // Tab list
+        // Nav tabs. No background boxes. Focus = cyan left accent bar +
+        // white text + cyan icon. Active (non-focused) = white dim.
         tabs.forEachIndexed { i, tab ->
             val mod = if (i == 0) Modifier.focusRequester(homeFocus) else Modifier
             SidebarItem(
@@ -414,53 +419,60 @@ private fun Sidebar(
                 modifier = mod,
                 onClick = { onTab(tab) },
             )
-            Spacer(Modifier.height(4.dp))
         }
 
         Spacer(Modifier.weight(1f))
 
-        // Expiry pill (only when expanded)
+        // Expiry pill (only when expanded). Subtle — no background, just
+        // quiet text in the corner.
         AnimatedVisibility(
             visible = expanded && expiryStr != null,
             enter = fadeIn(tween(120)),
             exit = fadeOut(tween(120)),
         ) {
             expiryStr?.let { exp ->
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.CalendarMonth,
-                            null,
-                            tint = TextSecondary,
-                            modifier = Modifier.size(13.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "Expires",
-                            color = TextSecondary,
-                            fontSize = 10.sp,
-                            fontFamily = Inter,
-                            letterSpacing = 1.1.sp,
-                        )
-                    }
+                Column(Modifier.padding(start = 18.dp, end = 12.dp, bottom = 8.dp)) {
+                    Text(
+                        "EXPIRES",
+                        color = TextDim,
+                        fontSize = 9.sp,
+                        fontFamily = Inter,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp,
+                    )
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         exp,
-                        color = TextPrimary,
-                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        fontSize = 12.sp,
                         fontFamily = Inter,
                         fontWeight = FontWeight.SemiBold,
                     )
                     daysLeft?.let { d ->
                         when {
-                            d in 0..7 -> Badge(text = "${d}d left", bg = Amber, fg = Color.Black)
-                            d < 0 -> Badge(text = "Expired", bg = Red, fg = Color.White)
+                            d in 0..7 -> {
+                                Spacer(Modifier.height(4.dp))
+                                Badge(text = "${d}d left", bg = Amber, fg = Color.Black)
+                            }
+                            d < 0 -> {
+                                Spacer(Modifier.height(4.dp))
+                                Badge(text = "Expired", bg = Red, fg = Color.White)
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Profile → back to account picker
+        // Divider above Profile — very subtle.
+        Box(
+            Modifier
+                .padding(horizontal = 18.dp, vertical = 10.dp)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Color(0x1AFFFFFF))
+        )
+
         SidebarItem(
             label = "Profile",
             icon = Icons.Default.Person,
@@ -481,60 +493,63 @@ private fun SidebarItem(
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (focused) 1.04f else 1f,
-        animationSpec = tween(90),
-        label = "sidebar-item-scale",
+    // Cyan accent bar slides in from the left on focus. Width animates
+    // 0 → 3 dp. Matches the Netflix / Disney+ / Prime focus language: no
+    // chunky highlight pills, just a clean vertical indicator and a
+    // color change on icon + label.
+    val accentWidth by animateDpAsState(
+        targetValue = if (focused) 3.dp else 0.dp,
+        animationSpec = tween(140),
+        label = "accent-width",
     )
-    val tint = when {
+    val iconTint = when {
         focused -> Cyan
         active -> TextPrimary
-        else -> TextDim
+        else -> Color(0xFF94A3B8)
     }
+    val textColor = when {
+        focused -> TextPrimary
+        active -> TextPrimary
+        else -> Color(0xFFCBD5E1)
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp)
-            .scale(scale)
-            .background(
-                color = when {
-                    focused -> Color(0x2606B6D4)
-                    active -> Color(0x1406B6D4)
-                    else -> Color.Transparent
-                },
-                shape = RoundedCornerShape(10.dp),
-            )
-            .border(
-                width = if (focused) 2.dp else 0.dp,
-                color = if (focused) Cyan else Color.Transparent,
-                shape = RoundedCornerShape(10.dp),
-            )
+            .height(46.dp)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clickableWithEnter(onClick)
-            .padding(horizontal = 6.dp),
+            .clickableWithEnter(onClick),
     ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
+        // Left accent bar (fixed-width slot of 3 dp so icons don't shift
+        // horizontally when focus arrives — only the cyan bar's alpha/width
+        // animates within the slot).
+        Box(
+            Modifier
+                .padding(start = 0.dp)
+                .width(3.dp)
+                .height(24.dp)
+                .background(
+                    if (accentWidth > 0.dp) Cyan else Color.Transparent,
+                    RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp),
+                )
+        )
+        Spacer(Modifier.width(if (expanded) 15.dp else 18.dp))
+
+        Icon(icon, null, tint = iconTint, modifier = Modifier.size(22.dp))
+
         if (expanded) {
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(14.dp))
             Text(
                 label,
-                color = tint,
+                color = textColor,
                 fontSize = 13.sp,
                 fontFamily = Inter,
-                fontWeight = if (active || focused) FontWeight.SemiBold else FontWeight.Medium,
+                fontWeight = if (active || focused) FontWeight.Bold else FontWeight.Medium,
+                letterSpacing = 0.3.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-            )
-        }
-        // Active dot (collapsed)
-        if (active && !expanded) {
-            Spacer(Modifier.weight(1f))
-            Box(
-                Modifier
-                    .size(4.dp)
-                    .background(Cyan, CircleShape),
             )
         }
     }
