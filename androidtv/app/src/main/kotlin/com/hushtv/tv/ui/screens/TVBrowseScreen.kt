@@ -461,42 +461,6 @@ fun TVBrowseScreen(
             // Divider line under toolbar.
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
 
-            // ── Detail panel (only while grid focused + item exists) ──
-            // Fixed height so the grid below never reflows on focus change.
-            val focusedItem = displayedItems.getOrNull(focusedIdx)
-            Box(Modifier.fillMaxWidth().height(210.dp)) {
-                Crossfade(
-                    targetState = gridHasFocus && focusedItem != null,
-                    animationSpec = tween(150),
-                    label = "detail-panel",
-                ) { showDetail ->
-                    if (showDetail) {
-                        DetailPanel(
-                            item = focusedItem!!,
-                            info = vodInfo,
-                            isInMyList = remember(myListVersion) {
-                                val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
-                                MyListStore.isInList(ctx, playlistId, focusedItem.kind, id)
-                            },
-                            onPlay = { onCardClick(focusedItem) },
-                            onToggleMyList = {
-                                val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
-                                MyListStore.toggle(ctx, playlistId, focusedItem.kind, id)
-                                myListVersion++
-                            },
-                            onTrailer = { vid ->
-                                trailerVideoId = vid
-                            },
-                        )
-                    } else {
-                        // Empty placeholder — keeps the grid pinned at the
-                        // same vertical position whether focus is in the
-                        // toolbar or the grid.
-                        Box(Modifier.fillMaxSize())
-                    }
-                }
-            }
-
             // ── Poster grid (claims all remaining space) ──
             val gridState = rememberLazyGridState()
             Box(Modifier.weight(1f).fillMaxWidth()) {
