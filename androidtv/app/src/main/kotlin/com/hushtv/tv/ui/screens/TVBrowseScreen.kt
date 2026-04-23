@@ -581,27 +581,17 @@ fun TVBrowseScreen(
                     .padding(top = 72.dp) // room for the global top nav
                     .onFocusChanged { gridHasFocus = it.hasFocus && focusedIdx >= 0 },
             ) {
-                // ── TOOLBAR — dropdown + inline search. Pinned directly
-                //     below the top nav. Always visible.
+                // ── TOOLBAR — BROWSE dropdown on the LEFT, category
+                //     title cluster on the RIGHT. Matches Live TV.
                 CategoryToolbar(
                     title = title,
                     totalCategoryCount = allCategories.size,
                     selectedLabel = sidebarEntries.firstOrNull { it.id == selectedCatId }?.label
                         ?: "All",
-                    searchQuery = searchQuery,
-                    onSearchChange = { searchQuery = it },
+                    itemCount = displayedItems.size,
                     dropdownExpanded = dropdownExpanded,
                     onDropdownToggle = { dropdownExpanded = !dropdownExpanded },
-                    onDropdownClose = { dropdownExpanded = false },
-                    entries = sidebarEntries.filter { !it.isDivider && it.id != CAT_SEARCH },
-                    selectedId = selectedCatId,
-                    onCategoryPick = { id ->
-                        selectedCatId = id
-                        dropdownExpanded = false
-                        pendingJumpToGrid = true
-                    },
                     dropdownFocus = dropdownFocus,
-                    searchFocus = searchFocus,
                     downTarget = firstGridFocus,
                 )
 
@@ -746,31 +736,24 @@ private data class SidebarEntry(
 /* ──────────────────────────────────────────────────────────────── */
 
 /**
- * Pinned toolbar below the top nav. Holds the category dropdown on
- * the left and a live inline search field on the right. Search
- * filters the CURRENT category's items (or All if no category is
- * picked) so users can e.g. pick "Netflix" + type "crown" and get
- * just Netflix matches for The Crown.
+ * Pinned toolbar below the top nav. Matches the Live TV toolbar
+ * layout exactly: BROWSE pill on the LEFT, category title cluster
+ * right-aligned on the RIGHT. No inline search (the unified Search
+ * tab in the top nav covers that).
  *
- * Focus order: dropdown ⇄ search ⇄ grid (first row). Pressing DOWN
- * from either toolbar element jumps straight to the grid; pressing
- * UP from the top row of the grid returns to the dropdown.
+ * Focus order: dropdown ⇄ grid (first row). Pressing DOWN from the
+ * dropdown jumps straight to the grid; pressing UP from the top row
+ * of the grid returns to the dropdown.
  */
 @Composable
 private fun CategoryToolbar(
     title: String,
     totalCategoryCount: Int,
     selectedLabel: String,
-    searchQuery: String,
-    onSearchChange: (String) -> Unit,
+    itemCount: Int,
     dropdownExpanded: Boolean,
     onDropdownToggle: () -> Unit,
-    onDropdownClose: () -> Unit,
-    entries: List<SidebarEntry>,
-    selectedId: String,
-    onCategoryPick: (String) -> Unit,
     dropdownFocus: FocusRequester,
-    searchFocus: FocusRequester,
     downTarget: FocusRequester,
 ) {
     Row(
@@ -779,18 +762,34 @@ private fun CategoryToolbar(
             .padding(horizontal = 40.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ── Page title accent bar ──
+        // ── LEFT: Accent bar + Browse dropdown ──
         Box(
             Modifier
                 .size(width = 3.dp, height = 22.dp)
                 .background(Cyan, RoundedCornerShape(2.dp))
         )
-        Spacer(Modifier.width(10.dp))
-        // widthIn caps the title block so a long category name can't
-        // grow into the dropdown button.
-        Column(Modifier.widthIn(max = 360.dp)) {
+        Spacer(Modifier.width(12.dp))
+
+        CategoryDropdownButton(
+            label = selectedLabel,
+            totalCount = totalCategoryCount,
+            expanded = dropdownExpanded,
+            onToggle = onDropdownToggle,
+            focusRequester = dropdownFocus,
+            downTarget = downTarget,
+        )
+
+        // Flex spacer pushes the title cluster to the right.
+        Spacer(Modifier.weight(1f))
+
+        // ── RIGHT: Title + selected category name ──
+        Column(
+            Modifier.widthIn(max = 420.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
             Text(
-                title.uppercase(),
+                if (itemCount > 0) "${title.uppercase()}  ·  $itemCount"
+                else title.uppercase(),
                 color = Cyan,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Black,
@@ -810,29 +809,6 @@ private fun CategoryToolbar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.weight(1f))
-
-        // ── Category dropdown button ──
-        CategoryDropdownButton(
-            label = selectedLabel,
-            totalCount = totalCategoryCount,
-            expanded = dropdownExpanded,
-            onToggle = onDropdownToggle,
-            focusRequester = dropdownFocus,
-            downTarget = downTarget,
-            rightTarget = searchFocus,
-        )
-
-        Spacer(Modifier.width(14.dp))
-
-        // ── Inline search (fixed width, not flex) ──
-        InlineSearchBar(
-            value = searchQuery,
-            onChange = onSearchChange,
-            focusRequester = searchFocus,
-            downTarget = downTarget,
-            modifier = Modifier.width(340.dp),
-        )
     }
 
     // NOTE: the dropdown panel is rendered at the ROOT Box level (see
@@ -849,7 +825,6 @@ private fun CategoryDropdownButton(
     onToggle: () -> Unit,
     focusRequester: FocusRequester,
     downTarget: FocusRequester,
-    rightTarget: FocusRequester,
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
@@ -867,7 +842,6 @@ private fun CategoryDropdownButton(
             .onFocusChanged { focused = it.isFocused }
             .focusProperties {
                 down = downTarget
-                right = rightTarget
             }
             .focusable()
             .clickableWithEnter(onToggle),
@@ -909,10 +883,9 @@ private fun CategoryDropdownButton(
 }
 
 /**
- * Full-width panel that slides down from the toolbar when the
- * dropdown is expanded. Categories are laid out in a 3-column grid
- * of pills so even 40+ entries fit on ~8 rows — fast to scan and
- * thumb through with the D-pad.
+ * Full-screen overlay that slides in when the dropdown is expanded.
+ * Single-column scrollable list so every category is walked top-to-
+ * bottom in the provider's native order (matches the Live TV picker).
  */
 @Composable
 private fun CategoryDropdownPanel(
@@ -970,28 +943,26 @@ private fun CategoryDropdownPanel(
             }
             Spacer(Modifier.height(18.dp))
 
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                val cols = when {
-                    maxWidth > 1600.dp -> 6
-                    maxWidth > 1300.dp -> 5
-                    maxWidth > 1000.dp -> 4
-                    else -> 3
-                }
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(cols),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    itemsIndexed(entries, key = { _, e -> e.id }) { idx, entry ->
-                        CategoryPill(
-                            entry = entry,
-                            selected = entry.id == selectedId,
-                            focusMod = if (idx == 0)
-                                Modifier.focusRequester(firstItemFocus) else Modifier,
-                            onClick = { onPick(entry.id) },
-                        )
-                    }
+            // Single-column list — matches the Live TV picker so users
+            // can scan EVERY category in the provider's native order
+            // without skipping across columns. LazyColumn for smooth
+            // scrolling on long lists.
+            androidx.compose.foundation.lazy.LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) {
+                items(
+                    count = entries.size,
+                    key = { idx -> entries[idx].id },
+                ) { idx ->
+                    val entry = entries[idx]
+                    CategoryPill(
+                        entry = entry,
+                        selected = entry.id == selectedId,
+                        focusMod = if (idx == 0)
+                            Modifier.focusRequester(firstItemFocus) else Modifier,
+                        onClick = { onPick(entry.id) },
+                    )
                 }
             }
         }
