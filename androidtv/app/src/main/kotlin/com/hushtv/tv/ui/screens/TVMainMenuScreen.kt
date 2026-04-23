@@ -301,15 +301,19 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         }
 
         // ── SIDEBAR overlay (on top, aligned left, never pushes content) ─
+        // Always expanded — the collapsed/icon-only state caused focus-
+        // traversal weirdness with the content to its right, so we lock it
+        // to its full expanded width at all times. Still focusable, still
+        // D-pad navigable, just no animation.
         Box(Modifier.align(Alignment.CenterStart)) {
             Sidebar(
                 tabs = tabs,
                 activeKey = "home",
-                expanded = sidebarFocused,
+                expanded = true,
                 expiryStr = expiryStr,
                 daysLeft = daysLeft,
                 homeFocus = sidebarHomeFocus,
-                onExpandChange = { sidebarFocused = it },
+                onExpandChange = { /* no-op — sidebar always expanded */ },
                 onTab = { t -> t.route?.let { nav.navigate(it) } },
                 onProfile = { nav.navigate("home") },
             )
