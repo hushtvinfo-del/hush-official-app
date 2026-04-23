@@ -102,6 +102,40 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 28 — v1.12.4 D-pad focus never stuck in Top Nav (2026-04-23 — completed, deployed)
+User feedback: "When you're on Genres/Years/Collections and press RIGHT,
+focus jumps into the Top Nav and gets STUCK — pressing DOWN doesn't
+bring it back to the content. Fix this for every page, current and
+future."
+
+ROOT CAUSE: Each Home row attached its `firstItemFocus` requester to
+idx 0 only. When the user D-padded through a LazyRow and scrolled it,
+idx 0 got virtualised out of the composition. After focus escaped UP
+into the nav (a side-effect of Compose's 2D focus search when there's
+no focusable to the right), the nav's Down-handler called
+`firstItemFocus.requestFocus()` — which silently no-op'd because the
+requester had no attached node.
+
+FIX: Switched every Home row to use Compose's `Modifier.focusRestorer()`
+at the Column wrapper level (`focusRequester(fr).focusRestorer().focusGroup()`).
+Now `fr.requestFocus()` routes to the LAST-focused child card (or the
+first focusable if none yet). Bulletproof against LazyRow
+virtualisation; bonus: users return to the EXACT card they left, not
+always idx 0.
+
+Files changed (all Home rows unified under the same pattern):
+- `HomeCollectionsRow.kt`, `HomeGenresRow.kt`, `HomeYearsRow.kt`,
+  `HomeStreamingServicesRow.kt`, `HomeDiscoveryRow.kt`,
+  `HomeContinueWatchingSection.kt`
+- Each got: `@file:OptIn(ExperimentalComposeUiApi)` (for the
+  still-experimental `focusRestorer()`), `focusGroup` import from
+  `androidx.compose.foundation`, and the new `focusMod` modifier at
+  the Column wrapper. The per-item `focusRequester = if (idx == 0)`
+  attachments were removed since the Column now owns focus delegation.
+
+- Shipped as versionCode=100 / versionName="1.12.4" — APK (md5
+  `347f8148eeee4b4ef2c1770a1f955071`) live on `https://hushtv.xyz`.
+
 ### Phase 27 — v1.12.3 Movie Collections page (2026-04-23 — completed, deployed)
 User asked for a new Home page showcasing the top 20 most iconic movie
 box-sets / franchises. Clicking one should open a dedicated results

@@ -1,8 +1,11 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.hushtv.tv.ui.screens.home
 
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -76,8 +80,16 @@ fun HomeStreamingServicesRow(
 ) {
     if (services.isEmpty()) return
 
+    // focusRestorer(): Column acts as a focus group that remembers the
+    // last-focused card. When the parent calls firstItemFocus.requestFocus()
+    // from the Top Nav D-pad-Down, focus returns to exactly where the
+    // user left off — not idx 0 — even if LazyRow has virtualised it out.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -119,12 +131,11 @@ fun HomeStreamingServicesRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(services, key = { _, s -> s.id }) { idx, service ->
+            itemsIndexed(services, key = { _, s -> s.id }) { _, service ->
                 ServiceCardView(
                     service = service,
                     onFocus = { onFocusedServiceChange(service) },
                     onClick = { onServiceClick(service) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -136,16 +147,9 @@ private fun ServiceCardView(
     service: StreamingService,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
-
-    // The CARD box owns all focus + click behaviour. The label lives
-    // OUTSIDE in a plain (non-focusable, non-clickable) Text so it
-    // never picks up the focus border/highlight — clean separation.
-    val cardBase: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
 
     Column(
         Modifier.width(196.dp),
@@ -153,7 +157,7 @@ private fun ServiceCardView(
     ) {
         // ── CARD ──  pure logo-on-gradient. Focus ring + glow live here.
         Box(
-            cardBase
+            Modifier
                 .width(196.dp)
                 .height(118.dp)
                 .onFocusChanged {

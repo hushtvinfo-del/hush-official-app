@@ -1,9 +1,12 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.hushtv.tv.ui.screens.home
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -76,8 +80,15 @@ fun HomeDiscoveryRow(
 ) {
     if (cards.isEmpty()) return
 
+    // focusRestorer(): Column is a focus group remembering last-focused
+    // child. D-pad Down from Top Nav returns focus to exactly the card
+    // the user was on — never stuck in the nav.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -126,7 +137,7 @@ fun HomeDiscoveryRow(
                     card = card,
                     onFocus = { onFocusedCardChange(card) },
                     onClick = { onCardClick(card) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
+                    focusRequester = null,
                     onUpKey = if (idx == 0) onUpFromFirstItem else null,
                 )
             }

@@ -1,9 +1,12 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.hushtv.tv.ui.screens.home
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -112,8 +116,15 @@ fun HomeContinueWatchingRow(
 ) {
     if (entries.isEmpty()) return
 
+    // focusRestorer(): Column acts as a focus group remembering the
+    // last-focused Continue Watching card. D-pad Down from the Top Nav
+    // returns focus to where the user left off, not idx 0.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
+        focusMod
             .fillMaxWidth()
             .padding(start = contentStartPadding, end = 48.dp, top = 20.dp, bottom = 20.dp)
             // Row-level D-pad Down → fires onDownFromRow (used by Home to
@@ -147,7 +158,7 @@ fun HomeContinueWatchingRow(
                     onFocus = { onFocusedEntryChange(e) },
                     onClick = { onCardClick(e) },
                     onLongPress = { onLongPressRemove(e) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
+                    focusRequester = null,
                     onUpKey = if (idx == 0) onUpFromFirstItem else null,
                 )
             }

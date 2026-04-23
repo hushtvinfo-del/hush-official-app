@@ -1,7 +1,10 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.hushtv.tv.ui.screens.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -67,8 +71,20 @@ fun HomeCollectionsRow(
 ) {
     if (collections.isEmpty()) return
 
+    // focusRestorer(): makes this Column a "focus group" that remembers
+    // which child card was last focused. When the parent calls
+    // `firstItemFocus.requestFocus()` (e.g. D-pad Down from the Top Nav),
+    // focus is routed to the LAST-focused card — not index 0 — so when
+    // the user leaves the row by D-padding RIGHT past the last item and
+    // lands in the nav, pressing DOWN reliably returns them to exactly
+    // where they were. Bulletproof against LazyRow virtualization
+    // (which can unmount idx 0 when the user scrolls far right).
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -111,12 +127,11 @@ fun HomeCollectionsRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(collections, key = { _, c -> c.id }) { idx, coll ->
+            itemsIndexed(collections, key = { _, c -> c.id }) { _, coll ->
                 CollectionCardView(
                     coll = coll,
                     onFocus = { onFocusedCollectionChange(coll) },
                     onClick = { onCollectionClick(coll) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -128,16 +143,12 @@ private fun CollectionCardView(
     coll: MovieCollection,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
-    val base: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
     Box(
-        base
+        Modifier
             .width(260.dp)
             .height(156.dp)
             .onFocusChanged {
