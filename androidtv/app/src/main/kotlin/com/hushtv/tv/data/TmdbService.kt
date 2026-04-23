@@ -374,6 +374,36 @@ object TmdbService {
     }
 
     /**
+     * Fetch the hottest landscape backdrops (w1280) RIGHT NOW from
+     * TMDB via `/trending/{movie|tv}/week`. Used by the Home > Discovery
+     * hero so users see CURRENT blockbusters (bright, cinematic, fresh
+     * artwork) instead of whatever happened to match their Xtream
+     * library via fuzzy title search.
+     *
+     * Returns up to [limit] backdrop URLs, already sorted by popularity.
+     */
+    suspend fun trendingBackdrops(
+        kind: String,        // "movie" or "series"
+        limit: Int = 10,
+    ): List<String> = withContext(Dispatchers.IO) {
+        val endpoint = if (kind == "series") "trending/tv/week" else "trending/movie/week"
+        runCatching {
+            val url = "$BASE/$endpoint?language=en-US&api_key=${ApiKeys.TMDB}"
+            val body = client.newCall(Request.Builder().url(url).build())
+                .execute().body?.string() ?: return@runCatching emptyList()
+            moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)?.results
+                ?.asSequence()
+                ?.filter { !it.backdrop_path.isNullOrBlank() }
+                ?.sortedByDescending { it.popularity }
+                ?.mapNotNull { img(it.backdrop_path, "w1280") }
+                ?.distinct()
+                ?.take(limit)
+                ?.toList()
+                .orEmpty()
+        }.getOrDefault(emptyList())
+    }
+
+    /**
      * Fetch TMDB watch-provider metadata (logo + name) for a specific
      * `providerId`. Returns a URL for the provider's logo (w154 sized —
      * smallest resolution that still looks crisp on a 1080p TV card).

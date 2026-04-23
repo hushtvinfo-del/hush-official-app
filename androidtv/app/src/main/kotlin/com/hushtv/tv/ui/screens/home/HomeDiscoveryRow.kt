@@ -157,10 +157,11 @@ private fun DiscoveryCardView(
     val cardShape = RoundedCornerShape(16.dp)
     val accent = if (card.type == "series") Color(0xFFA78BFA) else Cyan
 
-    // Gradient depth — focus brightens the fill and lifts the glow.
-    val fillTop = if (focused) Color(0xFF182033) else Color(0xFF0D1322)
-    val fillBottom = if (focused) Color(0xFF0A0F1C) else Color(0xFF070B14)
-    val borderColor = if (focused) accent else accent.copy(alpha = 0.12f)
+    // Gradient depth — brighter fills so cards pop over the new,
+    // more-vibrant hero backdrop instead of blending into it.
+    val fillTop = if (focused) Color(0xFF243353) else Color(0xFF172038)
+    val fillBottom = if (focused) Color(0xFF101A2E) else Color(0xFF0A1220)
+    val borderColor = if (focused) accent else accent.copy(alpha = 0.22f)
     val shadowElev = animateFloatAsState(
         targetValue = if (focused) 24f else 6f,
         animationSpec = tween(160),

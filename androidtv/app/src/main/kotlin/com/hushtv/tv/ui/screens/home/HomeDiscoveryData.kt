@@ -186,9 +186,13 @@ private fun prefetchAll(ctx: android.content.Context, urls: List<String>) {
 
 /**
  * Finds the category whose name matches [categoryHint] (normalised
- * contains) and returns (items, xtream posters, tmdb backdrops). Falls
- * back to the "all" pool for the kind if no matching category exists —
- * so the card still shows SOMETHING instead of being empty.
+ * contains) and returns (items, xtream posters, tmdb backdrops).
+ *
+ * Backdrops now come from TMDB's `/trending/{movie|tv}/week` — the
+ * hottest content in the world THIS WEEK. Way brighter, fresher and
+ * higher quality than fuzzy-matching against the user's Xtream library
+ * (which could surface 10-year-old titles with mediocre artwork).
+ * Falls back to Xtream posters only if trending returns nothing.
  */
 private suspend fun pickCategory(
     host: String,
@@ -214,9 +218,8 @@ private suspend fun pickCategory(
         .mapNotNull { it.poster?.takeIf { u -> u.isNotBlank() } }
         .distinct()
         .take(8)
-    val topTitles = items.take(18).map { it.title }
     val backdrops = runCatching {
-        TmdbService.backdropsForTitles(topTitles, kind, limit = 8)
+        TmdbService.trendingBackdrops(kind, limit = 10)
     }.getOrDefault(emptyList())
     return Triple(items, posters, backdrops)
 }

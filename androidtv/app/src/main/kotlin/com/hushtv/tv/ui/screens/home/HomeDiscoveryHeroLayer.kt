@@ -114,44 +114,45 @@ fun HomeDiscoveryHeroLayer(
             }
         }
 
-        // Left-to-right darkening veil so the text column is crisp.
-        // Heavy on the left (95%) fading to ~25% on the right so the
-        // backdrop still shows through.
+        // Left-to-right darkening veil — now MUCH lighter so the
+        // backdrop colours punch through like the Genres page. Text
+        // column still stays readable thanks to a subtle drop shadow.
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.horizontalGradient(
-                        0.0f to Color(0xF205080F),
-                        0.35f to Color(0xCC05080F),
-                        0.65f to Color(0x8005080F),
-                        1.0f to Color(0x4005080F),
+                        0.0f to Color(0xB3000814),
+                        0.35f to Color(0x66000814),
+                        0.70f to Color(0x1A000814),
+                        1.0f to Color(0x00000814),
                     )
                 )
         )
 
-        // Bottom fade — softens the area where the card row sits.
+        // Bottom fade — lighter than before so the backdrop breathes.
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         0.0f to Color.Transparent,
-                        0.60f to Color.Transparent,
-                        1.0f to Color(0xFF05080F),
+                        0.70f to Color.Transparent,
+                        1.0f to Color(0xD905080F),
                     )
                 )
         )
 
-        // Accent tint from the bottom-right (cyan or violet).
+        // Accent tint from the bottom-right (cyan or violet) — brighter
+        // now to give the brighter backdrop a warm glow.
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.radialGradient(
-                        0.0f to accent.copy(alpha = 0.12f),
+                        0.0f to accent.copy(alpha = 0.18f),
                         1.0f to Color.Transparent,
-                        radius = 900f,
+                        radius = 1100f,
                     )
                 )
         )
@@ -241,8 +242,8 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
         }
         Spacer(Modifier.height(12.dp))
 
-        // Title — Inter Black, single line. Sized to fit "Latest Movies"
-        // (the widest of the two) on one line inside the 58% column.
+        // Title — Inter Black, single line. Drop shadow helps the
+        // white type stay crisp against the now-brighter backdrop.
         Text(
             card.title,
             color = Color.White,
@@ -252,17 +253,31 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
             fontFamily = Inter,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            style = androidx.compose.ui.text.TextStyle(
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color(0xCC000000),
+                    offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                    blurRadius = 14f,
+                )
+            ),
         )
         Spacer(Modifier.height(12.dp))
 
         Text(
             card.subtitle,
-            color = Color(0xFFE2E8F0),
+            color = Color(0xFFF1F5F9),
             fontSize = 14.sp,
             lineHeight = 19.sp,
             fontFamily = Inter,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            style = androidx.compose.ui.text.TextStyle(
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color(0xAA000000),
+                    offset = androidx.compose.ui.geometry.Offset(0f, 1f),
+                    blurRadius = 8f,
+                )
+            ),
         )
         Spacer(Modifier.height(14.dp))
 
