@@ -197,6 +197,52 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 19 — v1.10.4 Continue Watching + Discovery as separate pages (2026-04-23 — completed, deployed)
+User feedback: "The continue watching section and card is overlapping
+and in the way of the whole discovery background — each section needs
+its own screen so nothing overlaps the other background."
+
+Previous version stacked both sections in a Column sharing the same
+hero backdrop — which caused the CW card to sit on top of the
+Discovery poster wall and the Discovery titles to bleed through behind
+the CW row. Fixed by turning them into two independent full-screen
+pages with smooth vertical paging between them.
+
+- **AnimatedContent pager** (`TVMainMenuScreen.kt`): replaced the
+  Column-of-rows layout with an `AnimatedContent` pager keyed on a
+  `currentPage` state ("cw" or "discovery"). Default = "cw" if CW
+  entries exist, else "discovery". Transition spec: 280 ms
+  `slideInVertically` + `fadeIn` for the entering page
+  (`togetherWith`) `slideOutVertically` + `fadeOut` for the outgoing
+  one — direction sign flips based on whether we're going down
+  (CW → Discovery) or back up.
+- **Each page is self-contained**: inside each `AnimatedContent` branch
+  we render a fresh `Box(Modifier.fillMaxSize())` that hosts ONLY its
+  own hero layer + its own card row. The CW page uses `HomeHeroLayer`
+  + `HomeContinueWatchingRow`; the Discovery page uses
+  `HomeDiscoveryHeroLayer` + `HomeDiscoveryRow`. Zero cross-pollination
+  of backdrops or focusables.
+- **Inter-page D-pad plumbing**:
+  - `HomeContinueWatchingRow` gained a new optional
+    `onDownFromRow: (() -> Unit)?` param — attached on the Column-level
+    `onPreviewKeyEvent` so Down from ANY CW card triggers the slide.
+    From `TVMainMenuScreen` we wire it to `currentPage = "discovery"`.
+  - `HomeDiscoveryRow.onUpFromFirstItem` now flips `currentPage = "cw"`
+    when CW has entries; otherwise pops the nav back in.
+- **Auto-focus on page change** (`TVMainMenuScreen`): a
+  `LaunchedEffect(currentPage)` with a 320 ms `delay` (lets
+  `AnimatedContent` compose the new page + attach its
+  `FocusRequester`) calls `firstCwFocus.requestFocus()` or
+  `firstDiscoveryFocus.requestFocus()` as appropriate. Without this
+  the focus would stay on the old page's (now-disposed) card and
+  keyboard nav would break after a transition.
+- **Reactive cleanup**: if the user long-press removes their last CW
+  entry while on the CW page, a `LaunchedEffect(hasCw)` auto-bounces
+  them to the Discovery page so they're never stranded on an empty
+  page.
+- Shipped as versionCode=77 / versionName="1.10.4" — APK (md5
+  `b4e055e61b4f2a9ee1b782c3f382bafe`) live on `https://hushtv.xyz`.
+
 ### Phase 18 — v1.10.3 Always-on Discovery + stacked CW (2026-04-23 — completed, deployed)
 User feedback: "Where is the Discovery section — it should be under
 Continue Watching section. Discovery will always be the main top default

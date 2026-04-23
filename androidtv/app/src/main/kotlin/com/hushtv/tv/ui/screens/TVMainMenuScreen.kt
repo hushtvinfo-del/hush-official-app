@@ -9,6 +9,7 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -301,83 +302,150 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 .fillMaxSize()
                 .padding(top = heroTopOffset),
         ) {
-            // Hero layer — renders the Discovery or Continue-Watching
-            // backdrop based on which section the user's focus is in.
-            // Default = Discovery (the user's explicit preference: it's
-            // the "main default" section of Home).
-            if (heroSection == "cw" && heroEntry != null) {
-                com.hushtv.tv.ui.screens.home.HomeHeroLayer(
-                    entry = heroEntry,
-                    contentStartPadding = 80.dp,
-                )
-            } else {
-                com.hushtv.tv.ui.screens.home.HomeDiscoveryHeroLayer(
-                    card = focusedDiscoveryCard,
-                    contentStartPadding = 80.dp,
-                )
-            }
+        // ── 1. PAGER ── CW page and Discovery page are SEPARATE screens.
+        // Each page owns its own hero backdrop + card row, so the two
+        // sections never fight for space or overlap each other's art.
+        // Default page = Continue Watching when entries exist (natural
+        // return-to-resume flow); otherwise Discovery. Up/Down D-pad
+        // slides cleanly between pages via AnimatedContent.
+        val hasCw = continueEntries.isNotEmpty()
+        var currentPage by remember(hasCw) {
+            mutableStateOf(if (hasCw) "cw" else "discovery")
+        }
+        // If CW drops to empty while the user is on the CW page (they
+        // long-pressed remove), bounce them to Discovery.
+        LaunchedEffect(hasCw) {
+            if (!hasCw && currentPage == "cw") currentPage = "discovery"
+        }
 
-            // ── 2. INTERACTIVE CONTENT layer ─────────────────────────
-            // Column pinned to the bottom — Continue Watching (if any
-            // entries) stacks on top of the always-present Discovery
-            // row. The user explicitly asked for Discovery to be the
-            // "main default" section with CW rendering above it only
-            // when the user has titles they've started.
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(start = 48.dp, end = 32.dp),
-            ) {
-                Column(
-                    Modifier.align(Alignment.BottomStart).fillMaxWidth(),
-                ) {
-                    if (continueEntries.isNotEmpty()) {
-                        com.hushtv.tv.ui.screens.home.HomeContinueWatchingRow(
-                            playlistId = playlistId,
-                            entries = continueEntries,
-                            contentStartPadding = 0.dp,
-                            onFocusedEntryChange = {
-                                heroEntry = it
-                                heroSection = "cw"
-                            },
-                            onCardClick = { entry ->
-                                nav.navigate(
-                                    "moviedetail/$playlistId/${entry.progress.streamId}" +
-                                        "/${Uri.encode(entry.progress.title)}"
+        val showCwPage = currentPage == "cw" && hasCw
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(top = heroTopOffset),
+        ) {
+            androidx.compose.animation.AnimatedContent(
+                targetState = showCwPage,
+                transitionSpec = {
+                    // Slide up when entering a lower page (CW → Discovery);
+                    // slide down when going back up (Discovery → CW).
+                    val goingDown = !targetState // true = Discovery (below CW)
+                    val slideDir = if (goingDown) 1 else -1
+                    (androidx.compose.animation.slideInVertically(
+                        androidx.compose.animation.core.tween(280)
+                    ) { h -> slideDir * h / 3 } +
+                        androidx.compose.animation.fadeIn(
+                            androidx.compose.animation.core.tween(280)
+                        )) togetherWith
+                        (androidx.compose.animation.slideOutVertically(
+                            androidx.compose.animation.core.tween(280)
+                        ) { h -> -slideDir * h / 3 } +
+                            androidx.compose.animation.fadeOut(
+                                androidx.compose.animation.core.tween(200)
+                            ))
+                },
+                label = "home-pager",
+            ) { isCw ->
+                if (isCw) {
+                    // ── CW PAGE ── full-screen CW hero + CW card row.
+                    Box(Modifier.fillMaxSize()) {
+                        com.hushtv.tv.ui.screens.home.HomeHeroLayer(
+                            entry = heroEntry,
+                            contentStartPadding = 80.dp,
+                        )
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .padding(start = 48.dp, end = 32.dp),
+                        ) {
+                            Box(
+                                Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+                            ) {
+                                com.hushtv.tv.ui.screens.home.HomeContinueWatchingRow(
+                                    playlistId = playlistId,
+                                    entries = continueEntries,
+                                    contentStartPadding = 0.dp,
+                                    onFocusedEntryChange = {
+                                        heroEntry = it
+                                        heroSection = "cw"
+                                    },
+                                    onCardClick = { entry ->
+                                        nav.navigate(
+                                            "moviedetail/$playlistId/${entry.progress.streamId}" +
+                                                "/${Uri.encode(entry.progress.title)}"
+                                        )
+                                    },
+                                    onLongPressRemove = { removePromptFor = it },
+                                    firstItemFocus = firstCwFocus,
+                                    onUpFromFirstItem = showNavAndFocus,
+                                    onDownFromRow = {
+                                        // Slide down to Discovery page
+                                        currentPage = "discovery"
+                                        // Focus handoff happens when the
+                                        // Discovery page composes in (see
+                                        // DisposableEffect below).
+                                    },
                                 )
-                            },
-                            onLongPressRemove = { removePromptFor = it },
-                            firstItemFocus = firstCwFocus,
-                            onUpFromFirstItem = showNavAndFocus,
-                        )
+                            }
+                        }
                     }
-                    if (discoveryCards.isNotEmpty()) {
-                        com.hushtv.tv.ui.screens.home.HomeDiscoveryRow(
-                            cards = discoveryCards,
-                            contentStartPadding = 0.dp,
-                            onFocusedCardChange = {
-                                focusedDiscoveryCard = it
-                                heroSection = "discovery"
-                            },
-                            onCardClick = { card ->
-                                val encoded = Uri.encode(card.categoryName)
-                                nav.navigate("browse/$playlistId/${card.type}?category=$encoded")
-                            },
-                            firstItemFocus = firstDiscoveryFocus,
-                            // D-pad UP from the first Discovery card:
-                            //   • if Continue Watching exists → jump up
-                            //     to the first CW card
-                            //   • otherwise → pop the top nav back in
-                            onUpFromFirstItem = {
-                                if (continueEntries.isNotEmpty()) {
-                                    runCatching { firstCwFocus.requestFocus() }
-                                } else {
-                                    showNavAndFocus()
-                                }
-                            },
+                } else {
+                    // ── DISCOVERY PAGE ── full-screen Discovery hero +
+                    // Discovery card row. Always available (TMDB cache).
+                    Box(Modifier.fillMaxSize()) {
+                        com.hushtv.tv.ui.screens.home.HomeDiscoveryHeroLayer(
+                            card = focusedDiscoveryCard,
+                            contentStartPadding = 80.dp,
                         )
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .padding(start = 48.dp, end = 32.dp),
+                        ) {
+                            Box(
+                                Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+                            ) {
+                                com.hushtv.tv.ui.screens.home.HomeDiscoveryRow(
+                                    cards = discoveryCards,
+                                    contentStartPadding = 0.dp,
+                                    onFocusedCardChange = {
+                                        focusedDiscoveryCard = it
+                                        heroSection = "discovery"
+                                    },
+                                    onCardClick = { card ->
+                                        val encoded = Uri.encode(card.categoryName)
+                                        nav.navigate("browse/$playlistId/${card.type}?category=$encoded")
+                                    },
+                                    firstItemFocus = firstDiscoveryFocus,
+                                    onUpFromFirstItem = {
+                                        // Slide back up to CW page when it
+                                        // exists; otherwise pop the nav.
+                                        if (hasCw) {
+                                            currentPage = "cw"
+                                        } else {
+                                            showNavAndFocus()
+                                        }
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
+            }
+
+            // Auto-focus the new page's first card when the user slides
+            // between pages. Without this the focus is still on the
+            // outgoing page's card, which means Up/Down stops working.
+            LaunchedEffect(currentPage) {
+                // Small delay for AnimatedContent to compose the new page
+                // + attach its focus requester.
+                kotlinx.coroutines.delay(320)
+                runCatching {
+                    if (currentPage == "cw" && hasCw) firstCwFocus.requestFocus()
+                    else if (currentPage == "discovery") firstDiscoveryFocus.requestFocus()
+                }
+            }
 
             // Remove-from-Continue-Watching confirmation dialog.
             removePromptFor?.let { entry ->
@@ -389,7 +457,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     },
                     onDismiss = { removePromptFor = null },
                 )
-            }
             }
         }
 
@@ -436,6 +503,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             }
         }
     }
+}
+// End TVMainMenuScreen
 }
 
 /* ──────────────────────────────────────────────────────────────── */

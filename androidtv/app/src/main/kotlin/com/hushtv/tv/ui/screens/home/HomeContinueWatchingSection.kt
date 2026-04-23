@@ -108,10 +108,27 @@ fun HomeContinueWatchingRow(
     contentStartPadding: androidx.compose.ui.unit.Dp = 96.dp,
     firstItemFocus: androidx.compose.ui.focus.FocusRequester? = null,
     onUpFromFirstItem: (() -> Unit)? = null,
+    onDownFromRow: (() -> Unit)? = null,
 ) {
     if (entries.isEmpty()) return
 
-    Column(Modifier.fillMaxWidth().padding(start = contentStartPadding, end = 48.dp, top = 20.dp, bottom = 20.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = contentStartPadding, end = 48.dp, top = 20.dp, bottom = 20.dp)
+            // Row-level D-pad Down → fires onDownFromRow (used by Home to
+            // slide to the Discovery page). Attached on the Column so it
+            // catches Down from ANY card in the row, not just the last.
+            .onPreviewKeyEvent { ev ->
+                if (onDownFromRow != null &&
+                    ev.type == KeyEventType.KeyDown &&
+                    ev.key == Key.DirectionDown
+                ) {
+                    onDownFromRow.invoke()
+                    true
+                } else false
+            },
+    ) {
         Text(
             "Continue Watching",
             color = Color.White,
