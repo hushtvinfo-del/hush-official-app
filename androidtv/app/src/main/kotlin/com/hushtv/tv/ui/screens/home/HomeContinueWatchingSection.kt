@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,10 +48,13 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.hushtv.tv.data.TmdbMovie
 import com.hushtv.tv.data.TmdbService
@@ -151,8 +155,23 @@ fun rememberContinueEntries(playlistId: String): ContinueEntriesHandle {
     val scope = rememberCoroutineScope()
     var entries by remember(playlistId) { mutableStateOf<List<ContinueEntry>>(emptyList()) }
     // Version counter — bumping this forces the LaunchedEffect below to
-    // re-read from SharedPreferences after a removal.
+    // re-read from SharedPreferences. Bumped when:
+    //   • a user long-presses to remove an entry
+    //   • the Home screen returns from the background / another screen
+    //     (ON_RESUME) — so progress saved while watching a movie shows up
+    //     without the user needing to re-launch the app.
     var version by remember(playlistId) { mutableStateOf(0) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                version++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LaunchedEffect(playlistId, version) {
         val raw = WatchProgressStore.continueWatching(ctx).take(12)
