@@ -107,7 +107,7 @@ private val MOVIE_SERVICES_BASE = listOf(
 private val CUSTOM_LOGO_URLS = mapOf(
     "amc" to "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/AMC_logo_2019.svg/960px-AMC_logo_2019.svg.png",
     "appletv" to "https://clipart-library.com/new_gallery/456504_apple-tv-logo-png.png",
-    "crave" to "https://pbs.twimg.com/media/GVVosjrXQAAHX0A.jpg",
+    "crave" to "https://www.bellmedia.ca/lede/wp-content/uploads/2021/06/crave-logo-color-2025.png",
     "disney" to "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Disney%2B_logo.svg/3840px-Disney%2B_logo.svg.png",
     "netflix" to "https://static.vecteezy.com/system/resources/previews/017/396/804/non_2x/netflix-mobile-application-logo-free-png.png",
     // Paramount+ Wikipedia PNG thumb (the raw .svg would need a decoder).
