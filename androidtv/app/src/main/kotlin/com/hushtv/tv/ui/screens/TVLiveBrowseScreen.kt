@@ -723,17 +723,34 @@ private fun LiveCategoryToolbar(
             .padding(horizontal = 40.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ── Page title accent bar ──
+        // ── LEFT: Accent bar + Browse dropdown ──
+        // Search bar is gone per user request — Browse now sits on
+        // the left where the title used to be, and the title cluster
+        // is pushed to the right.
         Box(
             Modifier
                 .size(width = 3.dp, height = 22.dp)
                 .background(Cyan, RoundedCornerShape(2.dp))
         )
-        Spacer(Modifier.width(10.dp))
-        // widthIn(max = …) caps the title block so a long category name
-        // can never touch the dropdown button on the right.
+        Spacer(Modifier.width(12.dp))
+
+        LiveDropdownButton(
+            label = selectedLabel,
+            totalCount = totalCategories,
+            expanded = dropdownExpanded,
+            onToggle = onDropdownToggle,
+            focusRequester = dropdownFocus,
+            downTarget = downTarget,
+            rightTarget = dropdownFocus, // no search; keep right on self
+        )
+
+        // Flex spacer pushes the title cluster to the right.
+        Spacer(Modifier.weight(1f))
+
+        // ── RIGHT: Title + live category name ──
         Column(
-            Modifier.widthIn(max = 360.dp),
+            Modifier.widthIn(max = 420.dp),
+            horizontalAlignment = Alignment.End,
         ) {
             Text(
                 "LIVE TV  ·  ${categoryCount} CH",
@@ -756,31 +773,6 @@ private fun LiveCategoryToolbar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-
-        // Flex spacer pushes the Browse + Search cluster to the right.
-        Spacer(Modifier.weight(1f))
-
-        // ── Category dropdown button ──
-        LiveDropdownButton(
-            label = selectedLabel,
-            totalCount = totalCategories,
-            expanded = dropdownExpanded,
-            onToggle = onDropdownToggle,
-            focusRequester = dropdownFocus,
-            downTarget = downTarget,
-            rightTarget = searchFocus,
-        )
-
-        Spacer(Modifier.width(14.dp))
-
-        // ── Inline search — fixed width so it doesn't sprawl. ──
-        LiveInlineSearch(
-            value = searchQuery,
-            onChange = onSearchChange,
-            focusRequester = searchFocus,
-            downTarget = downTarget,
-            modifier = Modifier.width(340.dp),
-        )
     }
     // NOTE: the dropdown panel is rendered at the ROOT Box level
     // (see callsite), NOT here, so it can overlay the whole screen.
@@ -1034,21 +1026,19 @@ private fun LiveCategoryPanel(
             Spacer(Modifier.height(18.dp))
 
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                // Give users as many visible categories as possible.
-                // 5 cols on big TVs, 4 on most, 3 on narrow.
-                val cols = when {
-                    maxWidth > 1600.dp -> 6
-                    maxWidth > 1300.dp -> 5
-                    maxWidth > 1000.dp -> 4
-                    else -> 3
-                }
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(cols),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                // Single-column list — matches the old left-sidebar
+                // ordering so users can scan EVERY category in the
+                // provider's original order without skipping across
+                // columns. LazyColumn so it scrolls fluidly.
+                androidx.compose.foundation.lazy.LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    itemsIndexed(categories, key = { _, c -> c.category_id }) { idx, cat ->
+                    items(
+                        count = categories.size,
+                        key = { idx -> categories[idx].category_id },
+                    ) { idx ->
+                        val cat = categories[idx]
                         LiveCategoryPill(
                             name = cat.category_name,
                             selected = idx == selectedIndex,
