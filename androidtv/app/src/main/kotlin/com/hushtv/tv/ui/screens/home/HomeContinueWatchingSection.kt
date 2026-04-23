@@ -40,6 +40,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -93,6 +98,7 @@ fun HomeContinueWatchingRow(
     entries: List<ContinueEntry>,
     onFocusedEntryChange: (ContinueEntry) -> Unit,
     onCardClick: (ContinueEntry) -> Unit,
+    onLongPressRemove: (ContinueEntry) -> Unit = {},
     contentStartPadding: androidx.compose.ui.unit.Dp = 96.dp,
 ) {
     if (entries.isEmpty()) return
@@ -106,12 +112,6 @@ fun HomeContinueWatchingRow(
             fontFamily = Inter,
         )
         Spacer(Modifier.height(12.dp))
-        // contentPadding on the LazyRow gives room for:
-        //   • horizontal 12 dp — the first/last card can scale up (1.05×,
-        //     ~6 dp overflow each side) without clipping off the viewport
-        //     left or being cropped on the right edge of the scroll window.
-        //   • vertical 10 dp — the card's scaled-up bounds + any focus ring
-        //     shadow have breathing room top/bottom.
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
@@ -121,6 +121,7 @@ fun HomeContinueWatchingRow(
                     entry = e,
                     onFocus = { onFocusedEntryChange(e) },
                     onClick = { onCardClick(e) },
+                    onLongPress = { onLongPressRemove(e) },
                 )
             }
         }
@@ -128,17 +129,32 @@ fun HomeContinueWatchingRow(
 }
 
 /**
+ * Small handle for Home so it can read the list AND trigger an in-place
+ * removal from SharedPreferences + immediate UI refresh without re-mounting
+ * the whole screen.
+ */
+class ContinueEntriesHandle internal constructor(
+    val entries: List<ContinueEntry>,
+    val remove: (ContinueEntry) -> Unit,
+)
+
+/**
  * Composable-friendly data loader. Call this at the top of the home screen;
- * pass the returned list to [HomeContinueWatchingRow] and also use the first
- * entry as the initial hero backdrop.
+ * pass `handle.entries` to [HomeContinueWatchingRow] and also use the first
+ * entry as the initial hero backdrop. Call `handle.remove(e)` to drop an
+ * entry — the list recomputes immediately and the section will hide itself
+ * if it becomes empty (parent guards with `.isNotEmpty()`).
  */
 @Composable
-fun rememberContinueEntries(playlistId: String): List<ContinueEntry> {
+fun rememberContinueEntries(playlistId: String): ContinueEntriesHandle {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var entries by remember(playlistId) { mutableStateOf<List<ContinueEntry>>(emptyList()) }
+    // Version counter — bumping this forces the LaunchedEffect below to
+    // re-read from SharedPreferences after a removal.
+    var version by remember(playlistId) { mutableStateOf(0) }
 
-    LaunchedEffect(playlistId) {
+    LaunchedEffect(playlistId, version) {
         val raw = WatchProgressStore.continueWatching(ctx).take(12)
         if (raw.isEmpty()) {
             entries = emptyList()
@@ -158,7 +174,14 @@ fun rememberContinueEntries(playlistId: String): List<ContinueEntry> {
             }
         }
     }
-    return entries
+
+    return ContinueEntriesHandle(
+        entries = entries,
+        remove = { e ->
+            WatchProgressStore.clear(ctx, e.progress.streamId, e.progress.kind)
+            version++
+        },
+    )
 }
 
 @Composable
@@ -166,14 +189,19 @@ private fun ContinueCard(
     entry: ContinueEntry,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(12.dp)
-    // Elevation shadow softly grows when focused to add depth against the
-    // hero backdrop behind the row. 2 dp idle → 14 dp focused with a cyan
-    // ambient color for a premium "lifted" feel.
     val shadowColor = if (focused) Cyan else Color.Black
     val shadowElevation = if (focused) 14.dp else 2.dp
+
+    // Long-press detection on OK / D-pad center. Tivimate-style: hold the
+    // select button for ~500 ms to open the "Remove from Continue Watching"
+    // prompt. We track KeyDown timestamp and fire on KeyUp if held long
+    // enough — consuming the event so the short-press click doesn't fire.
+    var keyDownAtMs by remember { mutableStateOf(0L) }
+    var longPressFired by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -182,9 +210,40 @@ private fun ContinueCard(
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
-            // scaleOnFocus = 1f => no size change on focus. Keeps the cyan
-            // border + fill as the sole focus indicator so the card can't
-            // grow into the TV's overscan crop zone on either side.
+            .onPreviewKeyEvent { ev ->
+                val isEnterKey = ev.key == Key.Enter ||
+                    ev.key == Key.DirectionCenter ||
+                    ev.key == Key.NumPadEnter
+                if (!isEnterKey) return@onPreviewKeyEvent false
+                when (ev.type) {
+                    KeyEventType.KeyDown -> {
+                        if (keyDownAtMs == 0L) {
+                            keyDownAtMs = System.currentTimeMillis()
+                        } else if (!longPressFired &&
+                            System.currentTimeMillis() - keyDownAtMs > 500L
+                        ) {
+                            longPressFired = true
+                            onLongPress()
+                            return@onPreviewKeyEvent true
+                        }
+                        false
+                    }
+                    KeyEventType.KeyUp -> {
+                        val held = System.currentTimeMillis() - keyDownAtMs
+                        keyDownAtMs = 0L
+                        if (longPressFired) {
+                            longPressFired = false
+                            true
+                        } else if (held > 500L) {
+                            // Long-press fired at KeyUp boundary — prevent
+                            // short-press click from also firing.
+                            onLongPress()
+                            true
+                        } else false
+                    }
+                    else -> false
+                }
+            }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()
             .clickableWithEnter(onClick),

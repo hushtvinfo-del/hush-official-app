@@ -258,12 +258,18 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 .fillMaxSize()
                 .padding(start = 132.dp),
         ) {
-            val continueEntries = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
+            val continueHandle = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
+            val continueEntries = continueHandle.entries
             var heroEntry by remember { mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null) }
             LaunchedEffect(continueEntries.firstOrNull()) {
                 if (heroEntry == null || continueEntries.none { it === heroEntry }) {
                     heroEntry = continueEntries.firstOrNull()
                 }
+            }
+
+            // Long-press → remove prompt. Null means no prompt showing.
+            var removePromptFor by remember {
+                mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null)
             }
 
             // Hero fills the full Box — backdrop bleeds edge to edge; the
@@ -295,8 +301,21 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                                     "/${Uri.encode(entry.progress.title)}"
                             )
                         },
+                        onLongPressRemove = { removePromptFor = it },
                     )
                 }
+            }
+
+            // Remove-from-Continue-Watching confirmation dialog.
+            removePromptFor?.let { entry ->
+                com.hushtv.tv.ui.screens.home.RemoveContinueWatchingDialog(
+                    entry = entry,
+                    onConfirm = {
+                        continueHandle.remove(entry)
+                        removePromptFor = null
+                    },
+                    onDismiss = { removePromptFor = null },
+                )
             }
         }
 
