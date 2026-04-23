@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
@@ -191,7 +192,7 @@ fun TVCollectionsBrowseScreen(
                     value = query,
                     onChange = { query = it },
                     focusRequester = searchFocus,
-                    onDownToGrid = { runCatching { firstCardFocus.requestFocus() } },
+                    downTarget = firstCardFocus,
                 )
             }
 
@@ -259,16 +260,21 @@ fun TVCollectionsBrowseScreen(
 
 /**
  * Single-line search bar — pure BasicTextField with cyan focus ring
- * and an X-to-clear button. D-pad DOWN from the field jumps straight
- * to the first grid card so TV users never have to tab through
- * invisible focus targets.
+ * and an X-to-clear button.
+ *
+ * D-pad routing is declarative via `Modifier.focusProperties { down = ... }`
+ * on the TextField — this is the canonical Compose way and is
+ * bulletproof against IME consumption / event-preview ordering quirks
+ * that `onPreviewKeyEvent` can suffer from on Android TV. We ALSO
+ * keep an `onPreviewKeyEvent` handler as belt-and-suspenders for any
+ * device where focusProperties somehow doesn't fire.
  */
 @Composable
 private fun CollectionsSearchBar(
     value: String,
     onChange: (String) -> Unit,
     focusRequester: FocusRequester,
-    onDownToGrid: () -> Unit,
+    downTarget: FocusRequester,
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
@@ -301,11 +307,18 @@ private fun CollectionsSearchBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
+                    // Declarative: D-pad DOWN from this field → grid.
+                    // Works even when the TextField would otherwise
+                    // trap focus internally.
+                    .focusProperties { down = downTarget }
                     .onFocusChanged { focused = it.isFocused }
                     .onPreviewKeyEvent { ev ->
                         if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         when (ev.key) {
-                            Key.DirectionDown -> { onDownToGrid(); true }
+                            Key.DirectionDown -> {
+                                runCatching { downTarget.requestFocus() }
+                                true
+                            }
                             else -> false
                         }
                     },
@@ -327,6 +340,9 @@ private fun CollectionsSearchBar(
                     .clip(RoundedCornerShape(11.dp))
                     .background(Color(0x22FFFFFF))
                     .focusable()
+                    // Same DOWN routing so the clear button also
+                    // returns to the grid instead of trapping focus.
+                    .focusProperties { down = downTarget }
                     .clickableWithEnter { onChange("") },
                 contentAlignment = Alignment.Center,
             ) {
