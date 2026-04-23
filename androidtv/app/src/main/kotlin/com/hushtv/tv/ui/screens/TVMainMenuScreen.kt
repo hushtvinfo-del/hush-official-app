@@ -385,10 +385,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 com.hushtv.tv.ui.screens.home.TopNavBar(
                     tabs = tabs,
                     activeKey = "home",
-                    profileNickname = playlist?.name ?: "Profile",
                     homeFocus = topNavHomeFocus,
                     onTab = { t -> t.route?.let { nav.navigate(it) } },
-                    onProfile = { nav.navigate("home") },
                     onSettings = { nav.navigate("settings/$playlistId") },
                 )
             }

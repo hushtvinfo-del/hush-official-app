@@ -12,6 +12,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -79,6 +81,33 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
             Modifier.padding(horizontal = 48.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ── PROFILE section ───────────────────────────────────
+            Text(
+                "PROFILE",
+                color = TextSecondary, fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+            )
+            SettingsCard(
+                title = "Switch Profile",
+                subtitle = playlist?.name?.let { "Signed in as $it — switch to another" }
+                    ?: "Pick a different profile",
+                icon = { Icon(Icons.Default.Person, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                onClick = { nav.navigate("home") },
+            )
+            SettingsCard(
+                title = "Add Another Profile",
+                subtitle = "Sign in with a different Xtream account",
+                icon = { Icon(Icons.Default.PersonAdd, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                onClick = { nav.navigate("add") },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "PARENTAL CONTROLS",
+                color = TextSecondary, fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+            )
+
             // PIN section
             SettingsCard(
                 title = if (hasPin) "Change PIN" else "Set a 4-digit PIN",

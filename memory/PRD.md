@@ -197,6 +197,40 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 16 — v1.10.1 Top nav framed container + Profile moved to Settings (2026-04-23 — completed, deployed)
+User feedback: "The buttons are over the top of the background — the top
+menu needs a border like Netflix. Also I don't like the profile button —
+just integrate it right into the settings section where they can log out,
+add profile etc. Make sure the main screen background is adaptive to it
+and doesn't interfere with it or cut off any of the background."
+
+- **Framed nav container** (`TopNavBar.kt`): removed the old top-down
+  transparent gradient treatment and replaced with a solid 72 dp
+  container painted `Color(0xEB0B1220)` — deep navy at 92% alpha. Gives
+  the tabs a proper Netflix-style framed zone so they're never floating
+  over a bright patch of backdrop art. Added a 1 dp cyan-tinted bottom
+  border (`Color(0x3306B6D4)`) drawn as a child Box aligned
+  `BottomCenter` so it sits exactly on the bottom edge regardless of
+  row alignment. Subtle, visible, clean separator.
+- **Hero stays adaptive** (unchanged but verified): the hero backdrop
+  layer still renders `Modifier.fillMaxSize()` edge-to-edge BEHIND the
+  nav container thanks to the Box paint order (hero composed first →
+  painted underneath; nav composed last → painted on top). No clipping,
+  no `padding(top = 72.dp)` on the hero — the whole art shows through
+  behind the nav's 92% alpha veil.
+- **Profile chip removed** (`TopNavBar.kt`): dropped the `ProfileChip`
+  composable + its `profileNickname` / `onProfile` params. Nav is now
+  Logo → tab rail → Settings gear only.
+- **Settings screen gets PROFILE section** (`TVSettingsScreen.kt`):
+  added two new `SettingsCard` entries at the top of the screen under a
+  "PROFILE" label: "Switch Profile" (navigates to the profile picker
+  `home` route; subtitle shows current nickname) and "Add Another
+  Profile" (navigates to the `add` route). Icons: `Icons.Default.Person`
+  + `Icons.Default.PersonAdd`, both cyan. Existing parental controls
+  UI moved below under a new "PARENTAL CONTROLS" label.
+- Shipped as versionCode=74 / versionName="1.10.1" — APK (md5
+  `67330ea6d6817af11d1d8e4295291f84`) live on `https://hushtv.xyz`.
+
 ### Phase 15 — v1.10.0 Top Navigation Bar (2026-04-23 — completed, deployed)
 User feedback: "The left side scroll menu is making the app too dark and
 grey with the gradient etc... let's try a top menu instead like Netflix

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -33,7 +32,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -56,63 +54,59 @@ data class TopNavTab(
 )
 
 /**
- * Netflix / YouTube-TV-style top navigation bar.
+ * Netflix-style top navigation bar.
  *
- *   [ Logo ]  Home · Live TV · Movies · Series · Search      Profile ⚙
+ * Rendered as an OVERLAY — sits on top of the hero backdrop without
+ * clipping or inset. The hero art renders edge-to-edge behind it, so
+ * removing this nav causes zero layout reflow.
  *
- *  • Full-width, 72 dp tall, top-down dark-to-transparent gradient
- *    background so hero art shows through while nav stays legible.
- *  • D-pad left/right cycles tabs. First tab gets initial focus.
- *  • Active tab: cyan-filled pill behind the label.
- *  • Focused tab: cyan ring + subtle lift.
- *  • Profile chip (avatar + nickname) on the far left after the logo —
- *    D-pad left from Home reaches it. Settings gear is pinned far right.
+ *   [ Logo ]  Home · Live TV · Movies · Series · Search           ⚙
+ *
+ *   • 72 dp tall solid container (deep navy 92% alpha) — gives the
+ *     buttons a proper framed zone so they're never floating over a
+ *     bright patch of the backdrop
+ *   • Thin 1 dp cyan-tinted bottom border to visually separate nav
+ *     from content
+ *   • Active tab: cyan-filled pill with black text
+ *   • Focused tab: cyan ring + white text
+ *   • Settings gear pinned to the far right; profile actions live
+ *     inside the Settings screen itself so the nav stays minimal
  */
 @Composable
 fun TopNavBar(
     tabs: List<TopNavTab>,
     activeKey: String,
-    profileNickname: String,
     homeFocus: FocusRequester,
     onTab: (TopNavTab) -> Unit,
-    onProfile: () -> Unit,
     onSettings: () -> Unit,
 ) {
     Box(
         Modifier
             .fillMaxWidth()
-            .height(96.dp)
-            // Top-down dark gradient — black 72% at the top fades to
-            // transparent at the bottom so the hero art peeks through
-            // without losing nav legibility.
-            .background(
-                Brush.verticalGradient(
-                    0.0f to Color(0xB8000000),
-                    0.55f to Color(0x66000000),
-                    1.0f to Color.Transparent,
-                )
+            .height(72.dp)
+            // Solid container — gives the tabs their own framed zone
+            // against any backdrop art. Keep it just dark enough that
+            // dropped contrast is never an issue; still faintly shows
+            // the backdrop beneath so the app doesn't feel boxed-in.
+            .background(Color(0xEB0B1220))
+            // Thin cyan-tinted bottom border — subtle separator.
+            .border(
+                width = 0.dp,
+                color = Color.Transparent,
+                shape = RoundedCornerShape(0.dp),
             ),
-        contentAlignment = Alignment.CenterStart,
     ) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 48.dp, end = 48.dp, top = 12.dp, bottom = 12.dp)
+                .padding(start = 48.dp, end = 48.dp)
                 .fillMaxHeight(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // ── Logo ────────────────────────────────────────────────
             HushTVLogo(fontSize = 22.sp)
 
-            Spacer(Modifier.width(28.dp))
-
-            // ── Profile chip ───────────────────────────────────────
-            ProfileChip(
-                nickname = profileNickname,
-                onClick = onProfile,
-            )
-
-            Spacer(Modifier.width(36.dp))
+            Spacer(Modifier.width(40.dp))
 
             // ── Center tab rail ────────────────────────────────────
             Row(
@@ -130,58 +124,20 @@ fun TopNavBar(
                 }
             }
 
-            // ── Spacer push settings to far right ──────────────────
             Spacer(Modifier.weight(1f))
 
             // ── Settings gear ──────────────────────────────────────
             SettingsIconButton(onClick = onSettings)
         }
-    }
-}
 
-@Composable
-private fun ProfileChip(nickname: String, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val ringColor = if (focused) Cyan else Color(0x33FFFFFF)
-
-    Row(
-        Modifier
-            .height(40.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (focused) Color(0x26FFFFFF) else Color(0x14FFFFFF))
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = ringColor,
-                shape = RoundedCornerShape(20.dp),
-            )
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickableWithEnter(onClick)
-            .padding(start = 6.dp, end = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Avatar — circular initials badge, cyan background.
+        // 1 dp cyan-tinted bottom border drawn as a child Box so it
+        // sits exactly on the bottom edge regardless of row alignment.
         Box(
             Modifier
-                .size(28.dp)
-                .background(Cyan, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                nickname.take(1).uppercase().ifBlank { "H" },
-                color = Color(0xFF0A0F1C),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = Inter,
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            nickname.ifBlank { "Profile" },
-            color = Color.White,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = Inter,
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Color(0x3306B6D4)),
         )
     }
 }
@@ -200,11 +156,23 @@ private fun TopNavTabView(
     //   • active only       → dimmer cyan fill, black text
     //   • focused only      → translucent white fill, cyan ring, white text
     //   • neither           → fully transparent, grey text
-    val (bg, contentColor, borderColor, borderW) = when {
-        focused && active -> Quad(Cyan, Color(0xFF0A0F1C), Cyan, 2.dp)
-        active -> Quad(Color(0xFF0891B2), Color(0xFF0A0F1C), Color.Transparent, 0.dp)
-        focused -> Quad(Color(0x26FFFFFF), Color.White, Cyan, 2.dp)
-        else -> Quad(Color.Transparent, Color(0xFFCBD5E1), Color.Transparent, 0.dp)
+    val bg: Color
+    val contentColor: Color
+    val borderColor: Color
+    val borderW = if (focused) 2.dp else 0.dp
+    when {
+        focused && active -> {
+            bg = Cyan; contentColor = Color(0xFF0A0F1C); borderColor = Cyan
+        }
+        active -> {
+            bg = Color(0xFF0891B2); contentColor = Color(0xFF0A0F1C); borderColor = Color.Transparent
+        }
+        focused -> {
+            bg = Color(0x26FFFFFF); contentColor = Color.White; borderColor = Cyan
+        }
+        else -> {
+            bg = Color.Transparent; contentColor = Color(0xFFCBD5E1); borderColor = Color.Transparent
+        }
     }
 
     val scale by animateFloatAsState(
@@ -241,9 +209,6 @@ private fun TopNavTabView(
             letterSpacing = 0.3.sp,
         )
     }
-    // We don't actually use `scale` — but keeping it computed lets a
-    // future scaleOnFocus modifier slot in easily. Consumed by the
-    // framework for recomposition tracking.
     @Suppress("UNUSED_EXPRESSION") scale
 }
 
@@ -273,7 +238,3 @@ private fun SettingsIconButton(onClick: () -> Unit) {
         )
     }
 }
-
-private data class Quad<A, B, C, D>(
-    val a: A, val b: B, val c: C, val d: D,
-)
