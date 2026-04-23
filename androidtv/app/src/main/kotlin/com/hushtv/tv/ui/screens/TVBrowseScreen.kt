@@ -275,6 +275,9 @@ fun TVBrowseScreen(
                 }
             }
             CAT_SEARCH -> {
+                // Legacy — kept for the dedicated Search tab route. New
+                // in-screen search in Movies / Series layers on top of
+                // the active category (see baseItems filter below).
                 val q = searchQuery.trim().lowercase()
                 gridItems = if (q.length < 2) emptyList()
                 else allItems.filter { it.title.lowercase().contains(q) }.take(200)
@@ -309,6 +312,18 @@ fun TVBrowseScreen(
         )
     }
 
+    // Final displayed items = gridItems with an optional in-screen
+    // search filter layered on top. Makes the inline search work as a
+    // "narrow within current category" (e.g. Drama + "breaking") or
+    // globally (All + "breaking").
+    val displayedItems by remember(searchQuery, gridItems, selectedCatId) {
+        derivedStateOf {
+            val q = searchQuery.trim().lowercase()
+            if (q.isBlank() || selectedCatId == CAT_SEARCH) gridItems
+            else gridItems.filter { it.title.lowercase().contains(q) }
+        }
+    }
+
     // ── Focus & detail state ─────────────────────────────────────
     var focusedIdx by remember { mutableStateOf(-1) }
     var gridHasFocus by remember { mutableStateOf(false) }
@@ -319,10 +334,10 @@ fun TVBrowseScreen(
     // Fetch detailed VOD info for the focused item (debounced, cancellable).
     // Movies → get_vod_info. Series → get_series_info, mapped to the same
     // XtreamVodInfo shape so the preview panel can share one renderer.
-    LaunchedEffect(focusedIdx, gridItems) {
+    LaunchedEffect(focusedIdx, displayedItems) {
         vodInfo = null
         val p = playlist ?: return@LaunchedEffect
-        val item = gridItems.getOrNull(focusedIdx) ?: return@LaunchedEffect
+        val item = displayedItems.getOrNull(focusedIdx) ?: return@LaunchedEffect
         delay(350)
         vodInfo = when (item.kind) {
             "movie" -> XtreamApi.getVodInfo(p.host, p.username, p.password, item.streamId)
@@ -358,18 +373,25 @@ fun TVBrowseScreen(
     }
 
     val firstGridFocus = remember { FocusRequester() }
+    val dropdownFocus = remember { FocusRequester() }
+    val searchFocus = remember { FocusRequester() }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
     var pendingJumpToGrid by remember { mutableStateOf(false) }
-    LaunchedEffect(gridItems, pendingJumpToGrid) {
-        if (pendingJumpToGrid && gridItems.isNotEmpty()) {
+    LaunchedEffect(displayedItems, pendingJumpToGrid) {
+        if (pendingJumpToGrid && displayedItems.isNotEmpty()) {
             delay(90)
             runCatching { firstGridFocus.requestFocus() }
             pendingJumpToGrid = false
         }
     }
 
-    // Trigger token — increment to return focus to the sidebar at the
-    // currently-selected entry. Used by LEFT-key interception on the grid.
-    var returnToSidebarToken by remember { mutableStateOf(0) }
+    // Initial focus: put cursor on the dropdown so user can immediately
+    // open the category picker or arrow down into the grid.
+    LaunchedEffect(Unit) {
+        delay(260)
+        runCatching { dropdownFocus.requestFocus() }
+    }
 
     // Trailer dialog state
     var trailerVideoId by remember { mutableStateOf<String?>(null) }
@@ -400,187 +422,157 @@ fun TVBrowseScreen(
     ) {
         // ── Blurred backdrop (crossfades on focus change) ──────────
         BlurredBackdrop(
-            posterUrl = gridItems.getOrNull(focusedIdx)?.poster,
+            posterUrl = displayedItems.getOrNull(focusedIdx)?.poster,
             backdropUrl = vodInfo?.info?.backdrop_path?.firstOrNull(),
             visible = gridHasFocus,
         )
 
-        // Animated sidebar width — collapses to 0 when focus is in the grid.
-        val sidebarWidth by animateDpAsState(
-            targetValue = if (gridHasFocus) 0.dp else 200.dp,
-            animationSpec = tween(120),
-            label = "vod-sidebar-width",
-        )
+        // ── Full-width content: toolbar + detail + grid ────────────
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(top = 72.dp) // room for the global top nav
+                .onFocusChanged { gridHasFocus = it.hasFocus && focusedIdx >= 0 },
+        ) {
+            // ── TOOLBAR — dropdown + inline search. Pinned directly
+            //     below the top nav. Always visible.
+            CategoryToolbar(
+                title = title,
+                totalCategoryCount = allCategories.size,
+                selectedLabel = sidebarEntries.firstOrNull { it.id == selectedCatId }?.label
+                    ?: "All",
+                searchQuery = searchQuery,
+                onSearchChange = { searchQuery = it },
+                dropdownExpanded = dropdownExpanded,
+                onDropdownToggle = { dropdownExpanded = !dropdownExpanded },
+                onDropdownClose = { dropdownExpanded = false },
+                entries = sidebarEntries.filter { !it.isDivider && it.id != CAT_SEARCH },
+                selectedId = selectedCatId,
+                onCategoryPick = { id ->
+                    selectedCatId = id
+                    dropdownExpanded = false
+                    pendingJumpToGrid = true
+                },
+                dropdownFocus = dropdownFocus,
+                searchFocus = searchFocus,
+                downTarget = firstGridFocus,
+            )
 
-        Row(Modifier.fillMaxSize().padding(top = 72.dp)) {
-            // ── LEFT SIDEBAR — animated-width wrapper ──────────
-            Box(
-                Modifier
-                    .width(sidebarWidth)
-                    .fillMaxHeight()
-                    .clipToBounds(),
-            ) {
-                VodSidebar(
-                    entries = sidebarEntries,
-                    selectedId = selectedCatId,
-                    title = title,
-                    loading = loadingCats,
-                    returnToSidebarToken = returnToSidebarToken,
-                    modifier = Modifier.requiredWidth(200.dp),
-                    onBack = { nav.popBackStack() },
-                    onFocus = { id ->
-                        // Don't flip `selectedCatId` to CAT_SEARCH just by
-                        // focusing the row — that would auto-open the inline
-                        // search bar and swallow the user's context. They
-                        // must press Enter to actually open Search.
-                        if (id != "__divider__" && id != "__divider2__" && id != CAT_SEARCH) {
-                            selectedCatId = id
-                        }
-                    },
-                    onEnter = { id ->
-                        if (id == "__divider__" || id == "__divider2__") return@VodSidebar
-                        selectedCatId = id
-                        pendingJumpToGrid = true
-                    },
-                    searchQuery = searchQuery,
-                    onSearchChange = { searchQuery = it },
-                    isSearchActive = selectedCatId == CAT_SEARCH,
-                )
-            }
+            // Divider line under toolbar.
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
 
-            // Thin divider — only visible when sidebar is expanded
-            if (sidebarWidth > 20.dp) {
-                Box(Modifier.width(1.dp).fillMaxHeight().background(Color(0x14FFFFFF)))
-            }
-
-            // ── RIGHT PANE ──────────────────────────────────────
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .onFocusChanged { gridHasFocus = it.hasFocus }
-                    // Parent-level LEFT interception. Fires for ANY focused
-                    // descendant before the child gets to do its own focus
-                    // search. Guarantees LEFT always returns to the selected
-                    // sidebar row, no matter where the user is in the grid.
-                    .onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                            // Only intercept when on the leftmost column of the grid.
-                            // (If user is in column 2+, let Compose move to column 1 naturally.)
-                            if (focusedIdx >= 0 && focusedIdx % gridColumnCount == 0) {
-                                returnToSidebarToken++
-                                true
-                            } else false
-                        } else false
-                    },
-            ) {
-                // Top section: detail panel (only when grid has focus + item exists).
-                // IMPORTANT: give the Crossfade a FIXED height so that the grid
-                // below never shifts when the user moves focus between the
-                // sidebar and the grid. Layout shifts are one of the main
-                // reasons D-pad focus-scroll drifts in the "wrong direction".
-                val focusedItem = gridItems.getOrNull(focusedIdx)
-                Box(Modifier.fillMaxWidth().height(220.dp)) {
-                    Crossfade(
-                        targetState = gridHasFocus && focusedItem != null,
-                        animationSpec = tween(150),
-                        label = "detail-panel",
-                    ) { showDetail ->
-                        if (showDetail) {
-                            DetailPanel(
-                                item = focusedItem!!,
-                                info = vodInfo,
-                                isInMyList = remember(myListVersion) {
-                                    val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
-                                    MyListStore.isInList(ctx, playlistId, focusedItem.kind, id)
-                                },
-                                onPlay = { onCardClick(focusedItem) },
-                                onToggleMyList = {
-                                    val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
-                                    MyListStore.toggle(ctx, playlistId, focusedItem.kind, id)
-                                    myListVersion++
-                                },
-                                onTrailer = { vid ->
-                                    trailerVideoId = vid
-                                },
-                            )
-                        } else {
-                            CategoryHeader(title = sidebarEntries.firstOrNull { it.id == selectedCatId }?.label ?: title)
-                        }
+            // ── Detail panel (only while grid focused + item exists) ──
+            // Fixed height so the grid below never reflows on focus change.
+            val focusedItem = displayedItems.getOrNull(focusedIdx)
+            Box(Modifier.fillMaxWidth().height(210.dp)) {
+                Crossfade(
+                    targetState = gridHasFocus && focusedItem != null,
+                    animationSpec = tween(150),
+                    label = "detail-panel",
+                ) { showDetail ->
+                    if (showDetail) {
+                        DetailPanel(
+                            item = focusedItem!!,
+                            info = vodInfo,
+                            isInMyList = remember(myListVersion) {
+                                val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
+                                MyListStore.isInList(ctx, playlistId, focusedItem.kind, id)
+                            },
+                            onPlay = { onCardClick(focusedItem) },
+                            onToggleMyList = {
+                                val id = if (focusedItem.kind == "series") focusedItem.seriesId else focusedItem.streamId
+                                MyListStore.toggle(ctx, playlistId, focusedItem.kind, id)
+                                myListVersion++
+                            },
+                            onTrailer = { vid ->
+                                trailerVideoId = vid
+                            },
+                        )
+                    } else {
+                        // Empty placeholder — keeps the grid pinned at the
+                        // same vertical position whether focus is in the
+                        // toolbar or the grid.
+                        Box(Modifier.fillMaxSize())
                     }
                 }
+            }
 
-                // ── Poster grid ────────────────────────────────
-                // weight(1f) so the grid claims the exact remaining vertical
-                // space — otherwise LazyVerticalGrid falls back to intrinsic
-                // sizing which breaks focus-driven scroll math.
-                val gridState = rememberLazyGridState()
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    when {
-                        loadingItems -> CenterLoader()
-                        selectedCatId == CAT_SEARCH && searchQuery.trim().length < 2 ->
-                            InfoBox("Type at least 2 characters to search.", Icons.Default.Search)
-                        gridItems.isEmpty() ->
-                            InfoBox(
-                                msg = when (selectedCatId) {
-                                    CAT_SEARCH -> "No results for \"$searchQuery\"."
-                                    CAT_FAV -> "No favorites yet. Press and hold the OK / ENTER button on any poster to add it here."
-                                    else -> "Nothing here yet."
-                                },
-                                icon = when (selectedCatId) {
-                                    CAT_FAV -> Icons.Default.Star
-                                    else -> Icons.Default.Movie
-                                },
-                            )
-                        else -> {
-                            // Track column count — used both for laying out the
-                            // grid AND for the parent-level LEFT interception.
-                            BoxWithConstraints(Modifier.fillMaxSize()) {
-                                val cols = ((maxWidth + 12.dp) / (124.dp + 12.dp)).toInt().coerceAtLeast(1)
-                                LaunchedEffect(cols) { gridColumnCount = cols }
+            // ── Poster grid (claims all remaining space) ──
+            val gridState = rememberLazyGridState()
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when {
+                    loadingItems -> CenterLoader()
+                    displayedItems.isEmpty() && searchQuery.trim().isNotEmpty() ->
+                        InfoBox(
+                            "No results for \"${searchQuery.trim()}\"",
+                            Icons.Default.Search,
+                        )
+                    displayedItems.isEmpty() ->
+                        InfoBox(
+                            msg = when (selectedCatId) {
+                                CAT_FAV -> "No favorites yet. Press and hold OK on any poster to add it here."
+                                else -> "Nothing here yet."
+                            },
+                            icon = when (selectedCatId) {
+                                CAT_FAV -> Icons.Default.Star
+                                else -> Icons.Default.Movie
+                            },
+                        )
+                    else -> {
+                        BoxWithConstraints(Modifier.fillMaxSize()) {
+                            val cols = ((maxWidth + 12.dp) / (124.dp + 12.dp)).toInt().coerceAtLeast(1)
+                            LaunchedEffect(cols) { gridColumnCount = cols }
 
-                                // TV-grade focus pivot: keeps the focused row
-                                // anchored ~30% from the top of the viewport
-                                // regardless of D-pad direction. This replaces
-                                // the deprecated TvLazyVerticalGrid.pivotOffsets
-                                // per Google's 2026 guidance for Compose 1.7+.
-                                PositionFocusedItemInLazyLayout(parentFraction = 0.3f) {
-                                    LazyVerticalGrid(
-                                        state = gridState,
-                                        columns = GridCells.Fixed(cols),
-                                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                                    ) {
-                                        itemsIndexed(gridItems, key = { i, it -> "${it.kind}-${it.id}-$i" }) { idx, item ->
-                                            val progress = remember(watchVersion, item.id) {
-                                                WatchProgressStore.getRatio(ctx, item.streamId, item.kind)
-                                            }
-                                            val isInList = remember(myListVersion, item.id) {
-                                                val id = if (item.kind == "series") item.seriesId else item.streamId
-                                                MyListStore.isInList(ctx, playlistId, item.kind, id)
-                                            }
-                                            CompactPoster(
-                                                item = item,
-                                                progress = progress,
-                                                isInList = isInList,
-                                                focusMod = if (idx == 0) Modifier.focusRequester(firstGridFocus) else Modifier,
-                                                onFocus = { focusedIdx = idx },
-                                                onLeftEdge = { returnToSidebarToken++ },
-                                                isLeftmost = idx % cols == 0,
-                                                onClick = { onCardClick(item) },
-                                                onLongPressFavorite = {
-                                                    val id = if (item.kind == "series") item.seriesId else item.streamId
-                                                    val nowInList = MyListStore.toggle(ctx, playlistId, item.kind, id)
-                                                    myListVersion++
-                                                    android.widget.Toast.makeText(
-                                                        ctx,
-                                                        if (nowInList) "Added to Favorites" else "Removed from Favorites",
-                                                        android.widget.Toast.LENGTH_SHORT,
-                                                    ).show()
-                                                },
-                                            )
+                            PositionFocusedItemInLazyLayout(parentFraction = 0.3f) {
+                                LazyVerticalGrid(
+                                    state = gridState,
+                                    columns = GridCells.Fixed(cols),
+                                    contentPadding = PaddingValues(horizontal = 32.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                ) {
+                                    itemsIndexed(
+                                        displayedItems,
+                                        key = { i, it -> "${it.kind}-${it.id}-$i" },
+                                    ) { idx, item ->
+                                        val progress = remember(watchVersion, item.id) {
+                                            WatchProgressStore.getRatio(ctx, item.streamId, item.kind)
                                         }
+                                        val isInList = remember(myListVersion, item.id) {
+                                            val id = if (item.kind == "series") item.seriesId else item.streamId
+                                            MyListStore.isInList(ctx, playlistId, item.kind, id)
+                                        }
+                                        // Only the TOP ROW lifts focus up to
+                                        // the toolbar — rows below navigate
+                                        // within the grid normally.
+                                        val isTopRow = idx < cols
+                                        CompactPoster(
+                                            item = item,
+                                            progress = progress,
+                                            isInList = isInList,
+                                            focusMod = (if (idx == 0)
+                                                Modifier.focusRequester(firstGridFocus)
+                                                else Modifier)
+                                                .then(
+                                                    if (isTopRow)
+                                                        Modifier.focusProperties { up = dropdownFocus }
+                                                    else Modifier
+                                                ),
+                                            onFocus = { focusedIdx = idx },
+                                            onLeftEdge = { /* no sidebar to return to */ },
+                                            isLeftmost = idx % cols == 0,
+                                            onClick = { onCardClick(item) },
+                                            onLongPressFavorite = {
+                                                val id = if (item.kind == "series") item.seriesId else item.streamId
+                                                val nowInList = MyListStore.toggle(ctx, playlistId, item.kind, id)
+                                                myListVersion++
+                                                android.widget.Toast.makeText(
+                                                    ctx,
+                                                    if (nowInList) "Added to Favorites" else "Removed from Favorites",
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                            },
+                                        )
                                     }
                                 }
                             }
@@ -674,6 +666,412 @@ private data class SidebarEntry(
     val icon: ImageVector,
     val isDivider: Boolean = false,
 )
+
+/* ──────────────────────────────────────────────────────────────── */
+/*  CATEGORY TOOLBAR + DROPDOWN                                     */
+/* ──────────────────────────────────────────────────────────────── */
+
+/**
+ * Pinned toolbar below the top nav. Holds the category dropdown on
+ * the left and a live inline search field on the right. Search
+ * filters the CURRENT category's items (or All if no category is
+ * picked) so users can e.g. pick "Netflix" + type "crown" and get
+ * just Netflix matches for The Crown.
+ *
+ * Focus order: dropdown ⇄ search ⇄ grid (first row). Pressing DOWN
+ * from either toolbar element jumps straight to the grid; pressing
+ * UP from the top row of the grid returns to the dropdown.
+ */
+@Composable
+private fun CategoryToolbar(
+    title: String,
+    totalCategoryCount: Int,
+    selectedLabel: String,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    dropdownExpanded: Boolean,
+    onDropdownToggle: () -> Unit,
+    onDropdownClose: () -> Unit,
+    entries: List<SidebarEntry>,
+    selectedId: String,
+    onCategoryPick: (String) -> Unit,
+    dropdownFocus: FocusRequester,
+    searchFocus: FocusRequester,
+    downTarget: FocusRequester,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // ── Page title accent bar ──
+        Box(
+            Modifier
+                .size(width = 4.dp, height = 28.dp)
+                .background(Cyan, RoundedCornerShape(2.dp))
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(
+                title.uppercase(),
+                color = Cyan,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.sp,
+                fontFamily = Inter,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                selectedLabel,
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black,
+                lineHeight = 24.sp,
+                fontFamily = Inter,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(28.dp))
+
+        // ── Category dropdown button + panel ──
+        CategoryDropdownButton(
+            label = selectedLabel,
+            totalCount = totalCategoryCount,
+            expanded = dropdownExpanded,
+            onToggle = onDropdownToggle,
+            focusRequester = dropdownFocus,
+            downTarget = downTarget,
+            rightTarget = searchFocus,
+        )
+
+        Spacer(Modifier.width(16.dp))
+
+        // ── Inline search ──
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            InlineSearchBar(
+                value = searchQuery,
+                onChange = onSearchChange,
+                focusRequester = searchFocus,
+                downTarget = downTarget,
+            )
+        }
+    }
+
+    // ── Dropdown panel — shown below the toolbar when expanded ──
+    if (dropdownExpanded) {
+        CategoryDropdownPanel(
+            entries = entries,
+            selectedId = selectedId,
+            onPick = onCategoryPick,
+            onDismiss = onDropdownClose,
+        )
+    }
+}
+
+/** Pill-style dropdown trigger — current category + chevron. */
+@Composable
+private fun CategoryDropdownButton(
+    label: String,
+    totalCount: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    focusRequester: FocusRequester,
+    downTarget: FocusRequester,
+    rightTarget: FocusRequester,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(48.dp)
+            .background(SurfaceNavy, RoundedCornerShape(12.dp))
+            .border(
+                width = if (focused || expanded) 2.dp else 1.dp,
+                color = if (focused || expanded) Cyan else Color(0x33FFFFFF),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(horizontal = 16.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .focusProperties {
+                down = downTarget
+                right = rightTarget
+            }
+            .focusable()
+            .clickableWithEnter(onToggle),
+    ) {
+        Text(
+            "BROWSE",
+            color = Cyan,
+            fontSize = 10.sp,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Black,
+            fontFamily = Inter,
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            if (totalCount > 0) "$label" else "Loading…",
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = Inter,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 220.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        // Chevron rotates when expanded — gives a clear open/closed cue.
+        val rot by animateFloatAsState(
+            targetValue = if (expanded) 180f else 0f,
+            animationSpec = tween(160),
+            label = "chevron-rot",
+        )
+        Text(
+            "▼",
+            color = if (focused || expanded) Cyan else Color.White,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.graphicsLayer { rotationZ = rot },
+        )
+    }
+}
+
+/**
+ * Full-width panel that slides down from the toolbar when the
+ * dropdown is expanded. Categories are laid out in a 3-column grid
+ * of pills so even 40+ entries fit on ~8 rows — fast to scan and
+ * thumb through with the D-pad.
+ */
+@Composable
+private fun CategoryDropdownPanel(
+    entries: List<SidebarEntry>,
+    selectedId: String,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val firstItemFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(80)
+        runCatching { firstItemFocus.requestFocus() }
+    }
+
+    // Full-width backdrop overlay that intercepts BACK / outside-tap.
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(Color(0xF2020409))
+            .onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.Back) {
+                    onDismiss(); true
+                } else false
+            }
+            .padding(horizontal = 32.dp, vertical = 16.dp),
+    ) {
+        Column {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "PICK A CATEGORY",
+                    color = Cyan,
+                    fontSize = 10.sp,
+                    letterSpacing = 3.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = Inter,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "${entries.size} categories · press BACK to close",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 11.sp,
+                    fontFamily = Inter,
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+
+            BoxWithConstraints {
+                // Pick column count adaptively: wider screens get 4 cols,
+                // phones / narrow → 2. 3 is the TV sweet-spot.
+                val cols = when {
+                    maxWidth > 1400.dp -> 4
+                    maxWidth > 900.dp -> 3
+                    else -> 2
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(cols),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 440.dp),
+                ) {
+                    itemsIndexed(entries, key = { _, e -> e.id }) { idx, entry ->
+                        CategoryPill(
+                            entry = entry,
+                            selected = entry.id == selectedId,
+                            focusMod = if (idx == 0)
+                                Modifier.focusRequester(firstItemFocus) else Modifier,
+                            onClick = { onPick(entry.id) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryPill(
+    entry: SidebarEntry,
+    selected: Boolean,
+    focusMod: Modifier,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = focusMod
+            .fillMaxWidth()
+            .height(40.dp)
+            .background(
+                when {
+                    focused -> Cyan.copy(alpha = 0.18f)
+                    selected -> Color(0xFF14223A)
+                    else -> Color(0x14FFFFFF)
+                },
+                shape,
+            )
+            .border(
+                width = if (focused) 2.dp else if (selected) 1.dp else 0.dp,
+                color = when {
+                    focused -> Cyan
+                    selected -> Cyan.copy(alpha = 0.6f)
+                    else -> Color.Transparent
+                },
+                shape = shape,
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
+            .padding(horizontal = 14.dp),
+    ) {
+        Icon(
+            imageVector = entry.icon,
+            contentDescription = null,
+            tint = if (selected || focused) Cyan else Color(0xFFCBD5E1),
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            entry.label,
+            color = if (selected || focused) Color.White else Color(0xFFE2E8F0),
+            fontSize = 13.sp,
+            fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.Medium,
+            fontFamily = Inter,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (selected) {
+            Spacer(Modifier.weight(1f))
+            Text(
+                "✓",
+                color = Cyan,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Black,
+            )
+        }
+    }
+}
+
+/** Slim inline search pill — same pattern as the franchises browser. */
+@Composable
+private fun InlineSearchBar(
+    value: String,
+    onChange: (String) -> Unit,
+    focusRequester: FocusRequester,
+    downTarget: FocusRequester,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .width(360.dp)
+            .height(48.dp)
+            .background(SurfaceNavy, RoundedCornerShape(12.dp))
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Cyan else Color(0x33FFFFFF),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(horizontal = 16.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            tint = if (focused) Cyan else TextMuted,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Box(Modifier.weight(1f)) {
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = TextStyle(color = Color.White, fontSize = 14.sp, fontFamily = Inter),
+                cursorBrush = SolidColor(Cyan),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .focusProperties { down = downTarget }
+                    .onFocusChanged { focused = it.isFocused }
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (ev.key) {
+                            Key.DirectionDown -> {
+                                runCatching { downTarget.requestFocus() }
+                                true
+                            }
+                            else -> false
+                        }
+                    },
+            )
+            if (value.isEmpty()) {
+                Text(
+                    "Search in this section…",
+                    color = TextMuted,
+                    fontSize = 14.sp,
+                    fontFamily = Inter,
+                )
+            }
+        }
+        if (value.isNotEmpty()) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(22.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Color(0x22FFFFFF))
+                    .focusable()
+                    .focusProperties { down = downTarget }
+                    .clickableWithEnter { onChange("") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Clear search",
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
+    }
+}
+
+
 
 /* ──────────────────────────────────────────────────────────────── */
 /*  LEFT SIDEBAR                                                    */
