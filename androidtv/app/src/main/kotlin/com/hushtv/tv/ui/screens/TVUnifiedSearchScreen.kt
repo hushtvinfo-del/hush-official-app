@@ -5,7 +5,6 @@ package com.hushtv.tv.ui.screens
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -253,8 +252,10 @@ fun TVUnifiedSearchScreen(
                                     badge = "LIVE",
                                     badgeTint = Color(0xFFEF4444),
                                     onClick = {
-                                        val host = playlist?.host ?: return@PosterCard
-                                        val url = "$host/${playlist.username}/${playlist.password}/${mc.streamId}.ts"
+                                        val p = playlist ?: return@PosterCard
+                                        val url = XtreamApi.liveUrl(
+                                            p.host, p.username, p.password, mc.streamId,
+                                        )
                                         nav.navigate(
                                             "player/$playlistId/${Uri.encode(url)}/${Uri.encode(mc.title)}/true"
                                         )
@@ -296,7 +297,7 @@ fun TVUnifiedSearchScreen(
                                     badgeTint = Color(0xFF8B5CF6),
                                     onClick = {
                                         nav.navigate(
-                                            "seriesdetail/$playlistId/${mc.seriesId}/${Uri.encode(mc.title)}"
+                                            "series/$playlistId/${mc.seriesId}/${Uri.encode(mc.title)}"
                                         )
                                     },
                                 )
@@ -470,7 +471,7 @@ private fun PosterCard(
             .onFocusChanged { focused = it.isFocused }
             .tvFocusable(scaleOnFocus = 1.05f, shape = shape)
             .focusable()
-            .clickable(onClick = onClick),
+            .clickableWithEnter(onClick),
     ) {
         Box(
             Modifier
@@ -559,7 +560,7 @@ private fun CollectionPosterCard(
             .onFocusChanged { focused = it.isFocused }
             .tvFocusable(scaleOnFocus = 1.05f, shape = shape)
             .focusable()
-            .clickable(onClick = onClick),
+            .clickableWithEnter(onClick),
     ) {
         Box(
             Modifier
@@ -688,7 +689,7 @@ private fun UnifiedSearchBar(
                     .background(Color(0x22FFFFFF))
                     .focusable()
                     .focusProperties { down = downTarget }
-                    .clickable { onChange("") },
+                    .clickableWithEnter { onChange("") },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
