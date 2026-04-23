@@ -167,7 +167,10 @@ private fun ContinueCard(
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
-            .tvFocusable(shape = cardShape)
+            // scaleOnFocus = 1f => no size change on focus. Keeps the cyan
+            // border + fill as the sole focus indicator so the card can't
+            // grow into the TV's overscan crop zone on either side.
+            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()
             .clickableWithEnter(onClick),
     ) {
