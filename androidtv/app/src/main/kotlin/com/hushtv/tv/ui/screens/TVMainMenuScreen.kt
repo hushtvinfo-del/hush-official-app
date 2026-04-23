@@ -261,9 +261,9 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         buildList {
             if (hasCw) add("cw")
             add("discovery")
-            add("collections")
             add("ss_movies")
             add("ss_series")
+            add("collections")
             add("genres_movies")
             add("genres_series")
             add("years_movies")
@@ -470,7 +470,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         kindLabel = "STREAMING SERVICES · MOVIES",
                         kind = "movie",
                         firstItemFocus = firstSsMoviesFocus,
-                        onUpFromRow = { currentPage = "collections" },
+                        onUpFromRow = { currentPage = "discovery" },
                         onDownFromRow = { currentPage = "ss_series" },
                     )
                     "ss_series" -> SsPage(
@@ -483,7 +483,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         kind = "series",
                         firstItemFocus = firstSsSeriesFocus,
                         onUpFromRow = { currentPage = "ss_movies" },
-                        onDownFromRow = { currentPage = "genres_movies" },
+                        onDownFromRow = { currentPage = "collections" },
                     )
                     "genres_movies" -> GenresPage(
                         playlistId = playlistId,
@@ -494,7 +494,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         kindLabel = "GENRES · MOVIES",
                         kind = "movie",
                         firstItemFocus = firstGenresMoviesFocus,
-                        onUpFromRow = { currentPage = "ss_series" },
+                        onUpFromRow = { currentPage = "collections" },
                         onDownFromRow = { currentPage = "genres_series" },
                     )
                     "genres_series" -> GenresPage(
@@ -526,8 +526,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         focused = focusedCollection,
                         onFocusedChange = { focusedCollection = it },
                         firstItemFocus = firstCollectionsFocus,
-                        onUpFromRow = { currentPage = "discovery" },
-                        onDownFromRow = { currentPage = "ss_movies" },
+                        onUpFromRow = { currentPage = "ss_series" },
+                        onDownFromRow = { currentPage = "genres_movies" },
                     )
                     else -> DiscoveryPage(
                         playlistId = playlistId,
@@ -544,7 +544,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         onUpFromRow = {
                             if (hasCw) currentPage = "cw" else showNavAndFocus()
                         },
-                        onDownFromRow = { currentPage = "collections" },
+                        onDownFromRow = { currentPage = "ss_movies" },
                     )
                 }
             }
