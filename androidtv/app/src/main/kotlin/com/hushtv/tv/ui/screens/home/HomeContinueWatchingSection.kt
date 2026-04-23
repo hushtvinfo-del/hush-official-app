@@ -234,7 +234,12 @@ private fun ContinueCard(
     // fired onClick — removing the item without the user clicking "Remove".
     var keyDownAtMs by remember { mutableStateOf(0L) }
 
-    val base = Modifier
+    // focusRequester MUST come BEFORE .focusable() — the requester
+    // attaches to the next focusable in the chain, not the previous one.
+    val baseTop: Modifier = if (focusRequester != null)
+        Modifier.focusRequester(focusRequester) else Modifier
+
+    val base = baseTop
         .width(240.dp)
         .onFocusChanged {
             focused = it.isFocused
@@ -277,9 +282,7 @@ private fun ContinueCard(
         .focusable()
         .clickableWithEnter(onClick)
 
-    Column(
-        modifier = if (focusRequester != null) base.then(Modifier.focusRequester(focusRequester)) else base,
-    ) {
+    Column(modifier = base) {
         Box(
             Modifier
                 .fillMaxWidth()

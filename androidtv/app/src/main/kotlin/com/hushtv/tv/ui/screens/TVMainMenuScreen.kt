@@ -275,29 +275,45 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             runCatching { topNavHomeFocus.requestFocus() }
         }
 
-        // ── 1. HERO LAYER ── Full-bleed, edge-to-edge behind everything.
-        // A TV overscan-safe 80 dp left padding keeps the title legible
-        // without the sidebar constraint of the old design.
-        if (showDiscovery) {
-            com.hushtv.tv.ui.screens.home.HomeDiscoveryHeroLayer(
-                card = focusedDiscoveryCard,
-                contentStartPadding = 80.dp,
-            )
-        } else {
-            com.hushtv.tv.ui.screens.home.HomeHeroLayer(
-                entry = heroEntry,
-                contentStartPadding = 80.dp,
-            )
-        }
-
-        // ── 2. INTERACTIVE CONTENT layer ─────────────────────────────
-        // 32 dp right padding = TV overscan safe zone. Left 48 dp just
-        // aligns with the hero text column.
+        // ── 1. HERO + CONTENT container ──────────────────────────────
+        // The hero backdrop + the interactive card row share an animated
+        // top padding that matches the nav visibility: when the nav is
+        // visible the hero sits BELOW the 72 dp nav container (zero
+        // overlap); when the nav auto-hides the hero expands up to fill
+        // the full viewport. This keeps the backdrop fully visible and
+        // never cut off behind the nav.
+        val navHeightDp = 72.dp
+        val heroTopOffset by androidx.compose.animation.core.animateDpAsState(
+            targetValue = if (navVisible) navHeightDp else 0.dp,
+            animationSpec = androidx.compose.animation.core.tween(220),
+            label = "hero-top-offset",
+        )
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(start = 48.dp, end = 32.dp),
+                .padding(top = heroTopOffset),
         ) {
+            // Hero layer fills its container (below the nav when visible).
+            if (showDiscovery) {
+                com.hushtv.tv.ui.screens.home.HomeDiscoveryHeroLayer(
+                    card = focusedDiscoveryCard,
+                    contentStartPadding = 80.dp,
+                )
+            } else {
+                com.hushtv.tv.ui.screens.home.HomeHeroLayer(
+                    entry = heroEntry,
+                    contentStartPadding = 80.dp,
+                )
+            }
+
+            // ── 2. INTERACTIVE CONTENT layer ─────────────────────────
+            // 32 dp right padding = TV overscan safe zone. Left 48 dp
+            // just aligns with the hero text column.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = 48.dp, end = 32.dp),
+            ) {
             if (continueEntries.isNotEmpty()) {
                 Box(
                     Modifier
@@ -350,6 +366,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     },
                     onDismiss = { removePromptFor = null },
                 )
+            }
             }
         }
 

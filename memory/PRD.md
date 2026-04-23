@@ -197,6 +197,40 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 17 — v1.10.2 Hero adapts below nav + D-pad Down fix (2026-04-23 — completed, deployed)
+User feedback: "The background is still behind the top menu — it needs
+to adapt below it and not interfere. Also you can't even scroll down from
+the top menu to the main section; it's stuck within the top menu only."
+
+TWO fixes:
+
+1. **Hero adapts below nav** (`TVMainMenuScreen.kt`): wrapped the hero
+   layer + interactive content layer in a shared Box that has an
+   ANIMATED top padding tied to `navVisible`. When the nav is visible:
+   `padding(top = 72.dp)` → hero starts right below the nav container,
+   no overlap. When the nav auto-hides: padding animates to 0 → hero
+   expands up to fill the full viewport. The animation (`animateDpAsState`,
+   220 ms tween) matches the nav's own slide-out, so the two move in
+   sync — looks like one unified motion. Backdrop never passes behind
+   the nav, never interferes with it, never gets cut off.
+
+2. **D-pad DOWN out of the nav was stuck**
+   (`HomeContinueWatchingSection.kt`, `HomeDiscoveryRow.kt`): the bug
+   was that the `focusRequester` modifier was placed AFTER the
+   `.focusable()` in the chain via `base.then(Modifier.focusRequester(fr))`.
+   In Compose, `focusRequester` attaches to the NEXT focusable in the
+   chain — anything placed after it. If you chain `.focusable()
+   .focusRequester(fr)`, the requester has no focusable to bind to, so
+   `fr.requestFocus()` silently no-ops. Moved the requester to the TOP
+   of the modifier chain via `if (focusRequester != null)
+   Modifier.focusRequester(fr) else Modifier`, then chained the rest
+   off that. Now `firstCardFocus.requestFocus()` from the nav's
+   `onPreviewKeyEvent` correctly moves focus into the first content
+   card, which drops the nav visibility (via `onFocusChanged` seeing
+   `hasFocus=false`), which triggers the hero to expand up.
+- Shipped as versionCode=75 / versionName="1.10.2" — APK (md5
+  `7088032344ff8d482cab8f410ab8525d`) live on `https://hushtv.xyz`.
+
 ### Phase 16 — v1.10.1 Top nav framed container + Profile moved to Settings (2026-04-23 — completed, deployed)
 User feedback: "The buttons are over the top of the background — the top
 menu needs a border like Netflix. Also I don't like the profile button —

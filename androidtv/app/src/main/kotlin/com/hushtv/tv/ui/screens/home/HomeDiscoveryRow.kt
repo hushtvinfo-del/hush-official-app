@@ -137,7 +137,12 @@ private fun DiscoveryCardView(
         label = "discovery-card-shadow",
     )
 
-    val base = Modifier
+    // focusRequester MUST come BEFORE .focusable() — the requester
+    // attaches to the next focusable in the chain, not the previous one.
+    val baseTop: Modifier = if (focusRequester != null)
+        Modifier.focusRequester(focusRequester) else Modifier
+
+    val base = baseTop
         .width(360.dp)
         .height(168.dp)
         .onFocusChanged {
@@ -173,9 +178,7 @@ private fun DiscoveryCardView(
         )
         .clickableWithEnter(onClick)
 
-    Box(
-        modifier = if (focusRequester != null) base.then(Modifier.focusRequester(focusRequester)) else base,
-    ) {
+    Box(modifier = base) {
         // Accent stripe — thin vertical bar on the left edge.
         Box(
             Modifier
