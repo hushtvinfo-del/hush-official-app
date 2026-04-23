@@ -261,7 +261,7 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
             fontSize = 14.sp,
             lineHeight = 19.sp,
             fontFamily = Inter,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(14.dp))
