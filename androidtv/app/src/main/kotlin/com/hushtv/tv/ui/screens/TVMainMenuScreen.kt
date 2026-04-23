@@ -251,12 +251,12 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         //      through; first row sits at ~55% of the viewport so the hero
         //      text is fully visible on first render).
         // ── CONTENT layer (fixed-position canvas) ─────────────────────
-        // 192 dp left padding = sidebar width (176) + 16 dp gap, so content
+        // 156 dp left padding = sidebar width (140) + 16 dp gap, so content
         // never overlaps the sidebar even when it's fully expanded.
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(start = 192.dp),
+                .padding(start = 156.dp),
         ) {
             val continueHandle = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
             val continueEntries = continueHandle.entries
@@ -357,7 +357,7 @@ private fun Sidebar(
     onProfile: () -> Unit,
 ) {
     val width by animateDpAsState(
-        targetValue = if (expanded) 176.dp else 68.dp,
+        targetValue = if (expanded) 140.dp else 60.dp,
         animationSpec = tween(150),
         label = "sidebar-width",
     )
