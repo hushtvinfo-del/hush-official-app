@@ -7424,12 +7424,12 @@
                         "endOffsets": "475,653,937,1348,1475"
                     },
                     "to": {
-                        "startLines": "801,817,823,1149,1165",
+                        "startLines": "801,817,823,1150,1166",
                         "startColumns": "4,4,4,4,4",
-                        "startOffsets": "49341,49766,49944,61673,62084",
-                        "endLines": "816,822,832,1164,1168",
+                        "startOffsets": "49341,49766,49944,61815,62226",
+                        "endLines": "816,822,832,1165,1169",
                         "endColumns": "24,24,24,24,24",
-                        "endOffsets": "49761,49939,50223,62079,62206"
+                        "endOffsets": "49761,49939,50223,62221,62348"
                     }
                 },
                 {
@@ -7521,6 +7521,23 @@
                         "startOffsets": "20739",
                         "endColumns": "53",
                         "endOffsets": "20788"
+                    }
+                },
+                {
+                    "source": "/root/.gradle/caches/transforms-4/281fc092d6e64e666e577f170abcdc8b/transformed/androidsvg-aar-1.4/res/values/values.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "141",
+                        "endOffsets": "192"
+                    },
+                    "to": {
+                        "startLines": "1149",
+                        "startColumns": "4",
+                        "startOffsets": "61673",
+                        "endColumns": "141",
+                        "endOffsets": "61810"
                     }
                 },
                 {

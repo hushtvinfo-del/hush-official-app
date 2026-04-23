@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Build
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.decode.SvgDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
@@ -33,6 +34,10 @@ class HushTVApp : Application(), ImageLoaderFactory {
             .build()
         return ImageLoader.Builder(this)
             .okHttpClient(okHttp)
+            .components {
+                // Support SVG URLs (Wikipedia logos etc.) directly.
+                add(SvgDecoder.Factory())
+            }
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizePercent(0.25)

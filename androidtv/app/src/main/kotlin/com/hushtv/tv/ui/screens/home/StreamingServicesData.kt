@@ -110,8 +110,9 @@ private val CUSTOM_LOGO_URLS = mapOf(
     "crave" to "https://www.bellmedia.ca/lede/wp-content/uploads/2021/06/crave-logo-color-2025.png",
     "disney" to "https://static.vecteezy.com/system/resources/previews/022/636/380/non_2x/disney-logo-disney-icon-transparent-free-png.png",
     "netflix" to "https://static.vecteezy.com/system/resources/previews/017/396/804/non_2x/netflix-mobile-application-logo-free-png.png",
-    // Paramount+ Wikipedia PNG thumb (the raw .svg would need a decoder).
-    "paramount" to "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Paramount_Plus.svg/960px-Paramount_Plus.svg.png",
+    // Raw SVG — decoded by SvgDecoder registered on the Coil ImageLoader
+    // in HushTVApp. Zero-loss scaling on any TV size.
+    "paramount" to "https://upload.wikimedia.org/wikipedia/commons/a/a5/Paramount_Plus.svg",
     "prime" to "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Amazon_Prime_Video_logo_%282024%29.svg/960px-Amazon_Prime_Video_logo_%282024%29.svg.png",
 )
 
