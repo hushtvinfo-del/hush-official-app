@@ -28,6 +28,41 @@ data class DiscoveredCollection(
     val backdropUrl: String?,
 )
 
+// ── Internal TMDB response wrappers used by discovery ───────────────
+// Must be top-level so Moshi reflection can pick up their metadata;
+// local/nested classes inside suspend fun bodies can lose it.
+
+@JsonClass(generateAdapter = true)
+internal data class TmdbMovieListItem(val id: Int = 0)
+
+@JsonClass(generateAdapter = true)
+internal data class TmdbMovieListResp(val results: List<TmdbMovieListItem> = emptyList())
+
+@JsonClass(generateAdapter = true)
+internal data class TmdbBelongsToCollection(
+    val id: Int = 0,
+    val name: String = "",
+    val backdrop_path: String? = null,
+    val poster_path: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+internal data class TmdbMovieDetailWithCollection(
+    val belongs_to_collection: TmdbBelongsToCollection? = null,
+)
+
+@JsonClass(generateAdapter = true)
+internal data class TmdbCollectionSearchHit(
+    val id: Int = 0,
+    val name: String = "",
+    val backdrop_path: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+internal data class TmdbCollectionSearchResp(
+    val results: List<TmdbCollectionSearchHit> = emptyList(),
+)
+
 @JsonClass(generateAdapter = true)
 data class TmdbCastMember(
     val id: Int = 0,
@@ -500,6 +535,9 @@ object TmdbService {
      */
     suspend fun discoverPopularCollections(pages: Int = 5): List<DiscoveredCollection> =
         withContext(Dispatchers.IO) {
+            val listAdapter = moshi.adapter(TmdbMovieListResp::class.java)
+            val detailAdapter = moshi.adapter(TmdbMovieDetailWithCollection::class.java)
+
             // Step 1: fetch N pages of popular movies concurrently.
             val movieIds = (1..pages).map { page ->
                 async {
@@ -507,15 +545,14 @@ object TmdbService {
                         val url = "$BASE/movie/popular?language=en-US&page=$page&api_key=${ApiKeys.TMDB}"
                         val body = client.newCall(Request.Builder().url(url).build())
                             .execute().body?.string() ?: return@runCatching emptyList<Int>()
-                        @JsonClass(generateAdapter = true)
-                        data class MovieListItem(val id: Int = 0)
-                        @JsonClass(generateAdapter = true)
-                        data class MovieListResp(val results: List<MovieListItem> = emptyList())
-                        moshi.adapter(MovieListResp::class.java).fromJson(body)
-                            ?.results?.map { it.id } ?: emptyList()
+                        listAdapter.fromJson(body)?.results?.map { it.id } ?: emptyList()
+                    }.onFailure {
+                        android.util.Log.w("TmdbDiscover", "popular page $page failed", it)
                     }.getOrDefault(emptyList())
                 }
             }.awaitAll().flatten().distinct()
+
+            android.util.Log.i("TmdbDiscover", "fetched ${movieIds.size} popular movies")
 
             // Step 2: fetch each movie's belongs_to_collection field in parallel.
             // Batch into chunks of 20 concurrent requests to be polite.
@@ -526,16 +563,7 @@ object TmdbService {
                             val url = "$BASE/movie/$mid?language=en-US&api_key=${ApiKeys.TMDB}"
                             val body = client.newCall(Request.Builder().url(url).build())
                                 .execute().body?.string() ?: return@runCatching null
-                            @JsonClass(generateAdapter = true)
-                            data class Belongs(
-                                val id: Int = 0,
-                                val name: String = "",
-                                val backdrop_path: String? = null,
-                                val poster_path: String? = null,
-                            )
-                            @JsonClass(generateAdapter = true)
-                            data class MovieDetail(val belongs_to_collection: Belongs? = null)
-                            val parsed = moshi.adapter(MovieDetail::class.java).fromJson(body)
+                            val parsed = detailAdapter.fromJson(body)
                             val b = parsed?.belongs_to_collection
                             if (b != null && b.id > 0 && b.name.isNotBlank()) {
                                 DiscoveredCollection(
@@ -551,7 +579,9 @@ object TmdbService {
 
             // Step 3: dedupe by id, preserve insertion order (popularity rank).
             val seen = linkedSetOf<Int>()
-            discovered.filter { seen.add(it.id) }
+            val final = discovered.filter { seen.add(it.id) }
+            android.util.Log.i("TmdbDiscover", "discovered ${final.size} unique collections")
+            final
         }
 
     /**
@@ -566,15 +596,8 @@ object TmdbService {
                 val url = "$BASE/search/collection?query=$encoded&language=en-US&api_key=${ApiKeys.TMDB}"
                 val body = client.newCall(Request.Builder().url(url).build())
                     .execute().body?.string() ?: return@withContext null
-                @JsonClass(generateAdapter = true)
-                data class Hit(
-                    val id: Int = 0,
-                    val name: String = "",
-                    val backdrop_path: String? = null,
-                )
-                @JsonClass(generateAdapter = true)
-                data class Resp(val results: List<Hit> = emptyList())
-                val hit = moshi.adapter(Resp::class.java).fromJson(body)?.results
+                val adapter = moshi.adapter(TmdbCollectionSearchResp::class.java)
+                val hit = adapter.fromJson(body)?.results
                     ?.firstOrNull { it.id > 0 && it.name.isNotBlank() }
                 if (hit != null) {
                     DiscoveredCollection(

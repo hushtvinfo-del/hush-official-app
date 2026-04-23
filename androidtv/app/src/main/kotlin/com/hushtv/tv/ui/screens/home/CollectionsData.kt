@@ -152,17 +152,26 @@ fun rememberMovieCollections(): List<MovieCollection> {
         }
 
         // (B) If the discovered cache is missing or stale, refresh it.
+        // IMPORTANT: never cache empty results — if discovery returns
+        // nothing, we want to retry on the next launch rather than sit
+        // on an empty cache for 7 days (previous bug: discovery
+        // silently failed once → cached empty list → user saw only the
+        // curated 20 until the TTL expired).
         val cachedDiscovered = DiscoveryCache.loadDiscoveredCollections(ctx)
-        val discovered = if (cachedDiscovered.isEmpty() ||
+        val shouldRefresh = cachedDiscovered.isEmpty() ||
             DiscoveryCache.shouldRefreshDiscoveredCollections(ctx)
-        ) {
+        val discovered = if (shouldRefresh) {
             val fresh = runCatching {
                 TmdbService.discoverPopularCollections(pages = 5)
             }.getOrDefault(emptyList())
             if (fresh.isNotEmpty()) {
                 DiscoveryCache.saveDiscoveredCollections(ctx, fresh)
                 fresh
-            } else cachedDiscovered
+            } else {
+                // Discovery failed — fall back to existing cache (even if
+                // stale) so user still sees anything we previously had.
+                cachedDiscovered
+            }
         } else cachedDiscovered
 
         // (C) Merge, publish, and prefetch artwork so scrolling is instant.

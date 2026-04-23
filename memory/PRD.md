@@ -102,6 +102,37 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 32 — v1.13.2 Discovery fix — actually populate 100+ franchises (2026-04-23 — completed, deployed)
+User reported that the "See All" grid still showed only the 20 curated
+franchises despite v1.13.0 shipping dynamic discovery. Investigated
+root cause.
+
+**Root cause:** The discovery function declared its TMDB JSON
+response-model data classes as LOCAL CLASSES inside the
+`suspend fun discoverPopularCollections` body (with `@JsonClass` and
+using Moshi reflection). Kotlin local classes can lose
+`@Metadata` annotations in certain compiler configurations, which
+breaks Moshi's `KotlinJsonAdapterFactory` reflection lookup at
+runtime. Parsing silently returned `null` → empty list → curated 20
+were the only collections rendered.
+
+**Fix (v1.13.2):**
+- Moved ALL TMDB discovery response wrappers to top-level `internal`
+  data classes inside `TmdbService.kt`:
+  `TmdbMovieListItem`, `TmdbMovieListResp`, `TmdbBelongsToCollection`,
+  `TmdbMovieDetailWithCollection`, `TmdbCollectionSearchHit`,
+  `TmdbCollectionSearchResp`.
+- Adapter instances now created once outside the parallel
+  `async` blocks (a performance win too).
+- `CollectionsData.kt`: added a guard to never cache an empty
+  discovery result so the app retries on next launch until discovery
+  succeeds (defends against transient network / API hiccups).
+- Added tagged `Log.i/Log.w("TmdbDiscover", …)` for production
+  diagnostics.
+
+- Shipped as versionCode=105 / versionName="1.13.2" — APK (md5
+  `5d19cd73c080e1de0aab4022fa6b32a0`) live on `https://hushtv.xyz`.
+
 ### Phase 31 — v1.13.1 Collections search filter (2026-04-23 — completed, deployed)
 User approved the potential-improvement suggestion: add a live search
 filter to the See All grid so users can quickly find franchises as the

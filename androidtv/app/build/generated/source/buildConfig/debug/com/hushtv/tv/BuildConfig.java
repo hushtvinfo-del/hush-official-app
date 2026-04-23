@@ -7,6 +7,6 @@ public final class BuildConfig {
   public static final boolean DEBUG = Boolean.parseBoolean("true");
   public static final String APPLICATION_ID = "com.hushtv.tv.debug";
   public static final String BUILD_TYPE = "debug";
-  public static final int VERSION_CODE = 104;
-  public static final String VERSION_NAME = "1.13.1-debug";
+  public static final int VERSION_CODE = 105;
+  public static final String VERSION_NAME = "1.13.2-debug";
 }
