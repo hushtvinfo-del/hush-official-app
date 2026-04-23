@@ -72,6 +72,7 @@ fun HomeDiscoveryRow(
     firstItemFocus: androidx.compose.ui.focus.FocusRequester? = null,
     onUpFromFirstItem: (() -> Unit)? = null,
     onUpFromRow: (() -> Unit)? = null,
+    onDownFromRow: (() -> Unit)? = null,
 ) {
     if (cards.isEmpty()) return
 
@@ -84,17 +85,20 @@ fun HomeDiscoveryRow(
                 top = 16.dp,
                 bottom = 32.dp,
             )
-            // Row-level D-pad UP handler — fires onUpFromRow on Up from
-            // ANY card in the row (not just the first). The parent uses
-            // this to slide back up to the CW page (or pop the nav).
+            // Row-level D-pad handlers. Up fires onUpFromRow for ANY
+            // card in the row; Down fires onDownFromRow. The parent
+            // uses these to page between Home sections.
             .onPreviewKeyEvent { ev ->
-                if (onUpFromRow != null &&
-                    ev.type == KeyEventType.KeyDown &&
-                    ev.key == Key.DirectionUp
-                ) {
-                    onUpFromRow.invoke()
-                    true
-                } else false
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (ev.key) {
+                    Key.DirectionUp -> {
+                        if (onUpFromRow != null) { onUpFromRow(); true } else false
+                    }
+                    Key.DirectionDown -> {
+                        if (onDownFromRow != null) { onDownFromRow(); true } else false
+                    }
+                    else -> false
+                }
             },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

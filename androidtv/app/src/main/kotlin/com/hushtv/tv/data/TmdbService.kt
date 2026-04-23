@@ -305,6 +305,49 @@ object TmdbService {
     }
 
     /**
+     * Fetch TMDB watch-provider metadata (logo + name) for a specific
+     * `providerId`. Returns a URL for the provider's logo (w154 sized —
+     * smallest resolution that still looks crisp on a 1080p TV card).
+     *
+     * Uses the `/watch/providers/{kind}` endpoint which returns ALL
+     * providers in one call; we then filter by ID. Cached by the caller.
+     */
+    suspend fun watchProviderLogo(providerId: Int, kind: String): String? =
+        watchProviderLogos(kind)[providerId]
+
+    // Simple in-memory cache so successive lookups for 7 providers
+    // result in at most TWO HTTP calls (one per kind).
+    private val providerLogoCache = mutableMapOf<String, Map<Int, String>>()
+
+    suspend fun watchProviderLogos(kind: String): Map<Int, String> =
+        withContext(Dispatchers.IO) {
+            val endpoint = if (kind == "series") "watch/providers/tv" else "watch/providers/movie"
+            providerLogoCache[endpoint]?.let { return@withContext it }
+            val url = "$BASE/$endpoint?language=en-US&watch_region=US&api_key=${ApiKeys.TMDB}"
+            val body = runCatching {
+                client.newCall(Request.Builder().url(url).build()).execute()
+                    .body?.string()
+            }.getOrNull() ?: return@withContext emptyMap<Int, String>()
+
+            @JsonClass(generateAdapter = true)
+            data class Provider(
+                val provider_id: Int = 0,
+                val provider_name: String? = null,
+                val logo_path: String? = null,
+            )
+            @JsonClass(generateAdapter = true)
+            data class Response(val results: List<Provider> = emptyList())
+            val parsed = runCatching {
+                moshi.adapter(Response::class.java).fromJson(body)
+            }.getOrNull() ?: return@withContext emptyMap<Int, String>()
+            val map = parsed.results
+                .filter { !it.logo_path.isNullOrBlank() }
+                .associate { it.provider_id to ("$IMG_BASE/w154${it.logo_path}") }
+            providerLogoCache[endpoint] = map
+            map
+        }
+
+    /**
      * Heavy normaliser for Xtream-style messy titles:
      *   "[EN] VIP | Den of Thieves (2018)"  →  "Den of Thieves"
      * Strips language/country prefixes like "US |", "EN -", quality tags

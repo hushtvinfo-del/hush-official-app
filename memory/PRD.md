@@ -197,6 +197,67 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 21 — v1.11.0 Streaming Services section (2026-04-23 — completed, deployed)
+User asked for a new "Streaming Services" section on Home with two
+sub-pages: Streaming Services (Movies) and Streaming Services (Series),
+each with 7 brand-coloured tiles (AMC+, Apple TV+, CRAVE/STARZ, Disney+,
+Netflix, Paramount+, Prime Video). User decisions:
+- Click action: deep-link to Xtream browse screen filtered by a category
+  containing that service's name (existing `initialCategoryName`
+  contains-match behaviour).
+- Logos: fetched live from TMDB's `/watch/providers/movie` + `/tv`
+  endpoints (no bundled assets).
+- Structure: separate full-screen pages for each.
+
+Files added:
+- `data/TmdbService.kt`: new `watchProviderLogos(kind): Map<Int,String>`
+  helper — single call to `/watch/providers/{kind}?language=en-US&watch_region=US`,
+  returns a stable `provider_id → w154 logo URL` map. In-memory cache so
+  subsequent lookups for 7 providers cost at most TWO HTTP hits (one per
+  kind).
+- `ui/screens/home/StreamingServicesData.kt`: `StreamingService` data
+  class + hand-curated palette for the 7 services (brandTop/Bottom,
+  accent, searchKeyword, tmdbProviderId). `rememberStreamingServices(kind)`
+  composable renders the base list immediately (logoUrl=null for instant
+  paint) then enriches with TMDB URLs via `LaunchedEffect`. Warms Coil
+  disk cache so logos appear flicker-free.
+- `ui/screens/home/HomeStreamingServicesRow.kt`: `LazyRow` of 180×220 dp
+  portrait tiles. Each tile: vertical brand gradient + radial accent
+  glow + centered `AsyncImage` for the TMDB logo (with wordmark fallback
+  while loading) + service name label. Column-level `onPreviewKeyEvent`
+  handles Up/Down for pager paging.
+- `ui/screens/home/HomeStreamingServicesHeroLayer.kt`: full-bleed hero
+  with `AnimatedContent` crossfade (900 ms) between service palettes.
+  Diagonal brand-gradient backdrop + bottom-right radial accent glow +
+  slow-pulsing translucent watermark logo in the right half. Left
+  40% darken veil keeps the title/tagline/badge column crisp.
+
+Files changed:
+- `TVMainMenuScreen.kt`: pager upgraded from 2 states
+  (CW/Discovery) to 4 pages (`"cw" | "discovery" | "ss_movies" |
+  "ss_series"`). `pageOrder` list drives AnimatedContent slide direction
+  via `indexOf()` comparison. Added `firstSsMoviesFocus` + `firstSsSeriesFocus`
+  requesters. Nav-Down switch statement targets the right requester per
+  page. Extracted page composables (`CwPage`, `DiscoveryPage`, `SsPage`)
+  to the bottom of the file for readability. Fixed stale
+  `showCwPage` → `currentPage`.
+- `HomeDiscoveryRow.kt`: added optional `onDownFromRow` param (wires Down
+  from Discovery to SS Movies page).
+
+**DEPLOYMENT NOTE — infrastructure**: this job pod was FRESH (no Android
+SDK, no JDK, no sshpass installed from previous sessions). Had to:
+1. `apt-get install openjdk-17-jdk-headless`
+2. Download cmdline-tools, `sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"`
+3. Pod runs on aarch64 but Google's build-tools ships x86_64 aapt2 —
+   installed `qemu-user-static` + `libc6:amd64 libstdc++6:amd64 zlib1g:amd64`
+   and created a shell wrapper at `/opt/aapt2-wrapper/aapt2` that
+   execs `qemu-x86_64-static /opt/android-sdk/build-tools/34.0.0/aapt2`.
+4. `apt-get install sshpass` for OTA deploy.
+Future fork jobs may need these steps if the pod is reset again.
+
+- Shipped as versionCode=81 / versionName="1.11.0" — APK (md5
+  `17bed24e6d3b0d5439f6c5d1c5abcae1`) live on `https://hushtv.xyz`.
+
 ### Phase 20 — v1.10.5 Static top nav (no more auto-hide) (2026-04-23 — completed, deployed)
 User feedback: "When you go back up to the menu it's breaking the image
 just like the previous left menu collapse one was. The obvious fix here
