@@ -26,6 +26,7 @@ import com.hushtv.tv.ui.screens.TVBrowseScreen
 import com.hushtv.tv.ui.screens.TVCollectionDetailScreen
 import com.hushtv.tv.ui.screens.TVCollectionsBrowseScreen
 import com.hushtv.tv.ui.screens.TVEpgGridScreen
+import com.hushtv.tv.ui.screens.TVUnifiedSearchScreen
 import com.hushtv.tv.ui.screens.TVHomeScreen
 import com.hushtv.tv.ui.screens.TVLiveBrowseScreen
 import com.hushtv.tv.ui.screens.TVMainMenuScreen
@@ -144,6 +145,12 @@ private fun AppContent() {
         }
         composable("collections/{playlistId}") { bs ->
             TVCollectionsBrowseScreen(
+                nav,
+                bs.arguments?.getString("playlistId") ?: "",
+            )
+        }
+        composable("search/{playlistId}") { bs ->
+            TVUnifiedSearchScreen(
                 nav,
                 bs.arguments?.getString("playlistId") ?: "",
             )

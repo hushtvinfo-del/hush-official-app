@@ -114,7 +114,7 @@ fun TVCollectionsBrowseScreen(
             TopNavTab("live",   "Live TV", Icons.Default.Tv,         "browse/$playlistId/live"),
             TopNavTab("movies", "Movies",  Icons.Default.Movie,      "browse/$playlistId/movie"),
             TopNavTab("series", "Series",  Icons.Outlined.Slideshow, "browse/$playlistId/series"),
-            TopNavTab("search", "Search",  Icons.Default.Search,     "browse/$playlistId/search"),
+            TopNavTab("search", "Search",  Icons.Default.Search,     "search/$playlistId"),
         )
     }
     val homeFocus = remember { FocusRequester() }

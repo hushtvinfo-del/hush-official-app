@@ -200,7 +200,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             com.hushtv.tv.ui.screens.home.TopNavTab("live",   "Live TV", Icons.Default.Tv,         "browse/$playlistId/live"),
             com.hushtv.tv.ui.screens.home.TopNavTab("movies", "Movies",  Icons.Default.Movie,      "browse/$playlistId/movie"),
             com.hushtv.tv.ui.screens.home.TopNavTab("series", "Series",  Icons.Outlined.Slideshow, "browse/$playlistId/series"),
-            com.hushtv.tv.ui.screens.home.TopNavTab("search", "Search",  Icons.Default.Search,     "browse/$playlistId/search"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("search", "Search",  Icons.Default.Search,     "search/$playlistId"),
         )
     }
 

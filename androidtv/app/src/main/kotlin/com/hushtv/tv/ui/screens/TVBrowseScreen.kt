@@ -575,7 +575,7 @@ fun TVBrowseScreen(
                 com.hushtv.tv.ui.screens.home.TopNavTab(
                     "search", "Search",
                     Icons.Default.Search,
-                    "browse/$playlistId/search",
+                    "search/$playlistId",
                 ),
             )
         }
