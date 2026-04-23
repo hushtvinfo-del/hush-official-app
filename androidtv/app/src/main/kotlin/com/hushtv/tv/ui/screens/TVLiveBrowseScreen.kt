@@ -2,6 +2,8 @@ package com.hushtv.tv.ui.screens
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -9,6 +11,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,6 +22,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Movie
@@ -33,17 +39,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -67,6 +76,7 @@ import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamCategory
 import com.hushtv.tv.ui.HushTVLogo
 import com.hushtv.tv.ui.theme.Cyan
+import com.hushtv.tv.ui.theme.Inter
 import com.hushtv.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -286,87 +296,83 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                 Brush.verticalGradient(0f to Color(0xFF050B18), 1f to Color(0xFF000000))
             )
     ) {
-        TopBar(
-            title = currentCategory?.category_name ?: "Live TV",
-            count = filteredChannels.size,
-            searchOpen = searchOpen,
+        // ── New toolbar — matches the Movies / Series browse style.
+        // Replaces the old TopBar + left-sidebar combo. Holds the
+        // category dropdown, live-search pill and a "GUIDE" CTA.
+        val dropdownFocus = remember { FocusRequester() }
+        val searchFocusTB = remember { FocusRequester() }
+        val guideFocus = remember { FocusRequester() }
+        var dropdownExpanded by remember { mutableStateOf(false) }
+
+        LiveCategoryToolbar(
+            selectedLabel = currentCategory?.category_name ?: "Live TV",
+            categoryCount = filteredChannels.size,
+            totalCategories = uiCategories.size,
             searchQuery = searchQuery,
-            onSearchToggle = { searchOpen = !searchOpen; if (!searchOpen) searchQuery = "" },
-            onSearchChange = { searchQuery = it },
-            onBack = { nav.popBackStack() },
+            onSearchChange = {
+                searchQuery = it
+                searchOpen = it.isNotEmpty()
+            },
+            dropdownExpanded = dropdownExpanded,
+            onDropdownToggle = { dropdownExpanded = !dropdownExpanded },
+            onDropdownClose = { dropdownExpanded = false },
+            categories = uiCategories,
+            selectedIndex = selectedCatIndex,
+            onPickCategory = { idx ->
+                if (selectedCatIndex != idx) focusedChannelIdx = 0
+                selectedCatIndex = idx
+                dropdownExpanded = false
+                pendingJumpToFirstChannel = true
+            },
             onOpenGuide = {
                 NavState.liveChannels = filteredChannels
                 nav.navigate("epg/$playlistId")
-            }
+            },
+            dropdownFocus = dropdownFocus,
+            searchFocus = searchFocusTB,
+            guideFocus = guideFocus,
+            downTarget = firstChannelFocus,
         )
 
-        // Trigger token — increment to tell the sidebar to scroll to the
-        // selected category and focus its row. Set from LEFT-key interception
-        // in the channels pane. The sidebar handles both the scroll AND the
-        // focus request, eliminating timing races where requestFocus() fires
-        // before the target row is composed / visible.
-        var returnToSidebarToken by remember { mutableStateOf(0) }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
 
-    Row(Modifier.weight(1f).fillMaxWidth()) {
-            CategorySidebar(
-                categories = uiCategories,
-                selectedIndex = selectedCatIndex,
-                loading = loadingCats,
-                returnToSidebarToken = returnToSidebarToken,
-                onSelect = {
-                    // Focus change on a category row — load channels silently
-                    // in the background but DO NOT steal focus to the channels pane.
-                    if (selectedCatIndex != it) focusedChannelIdx = 0
-                    selectedCatIndex = it
-                },
-                onEnter = {
-                    // ENTER on a category — commit + jump focus to first channel.
-                    if (selectedCatIndex != it) focusedChannelIdx = 0
-                    selectedCatIndex = it
-                    pendingJumpToFirstChannel = true
-                },
-                restoreFocusIndex = if (NavState.browsePlaylistId == playlistId) NavState.selectedCategoryIndex else 0
+        // ── Right pane (now FULL WIDTH). Preview bar at top + channels below. ──
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .onFocusChanged { channelsPaneFocused = it.hasFocus && focusedChannelIdx >= 0 }
+        ) {
+            // ── Tivimate-style preview bar (video + EPG info) ──────────
+            PreviewBar(
+                channel = filteredChannels.getOrNull(focusedChannelIdx),
+                player = previewPlayer,
+                showVideo = channelsPaneFocused,
             )
 
-            Box(Modifier.width(1.dp).fillMaxHeight().background(Color(0x1FFFFFFF)))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FFFFFFF)))
 
-            // Right pane — Preview bar at top + scrollable channels below
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .onFocusChanged { channelsPaneFocused = it.hasFocus }
-            ) {
-                // ── Tivimate-style preview bar (video + EPG info) ──────────
-                PreviewBar(
-                    channel = filteredChannels.getOrNull(focusedChannelIdx),
-                    player = previewPlayer,
-                    showVideo = channelsPaneFocused,
-                )
-
-                Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FFFFFFF)))
-
-                // ── Channel list (scrolls below the preview bar) ──────────
-                ChannelsPane(
-                    playlistId = playlistId,
-                    host = playlist?.host ?: "",
-                    username = playlist?.username ?: "",
-                    password = playlist?.password ?: "",
-                    channels = filteredChannels,
-                    loading = loadingChans,
-                    onFocusChange = { focusedChannelIdx = it },
-                    initialFocusIndex = focusedChannelIdx,
-                    firstChannelFocus = firstChannelFocus,
-                    onLeftEdge = { returnToSidebarToken++ },
-                    onPlay = onPlay,
-                    emptyReason = when {
-                        searchQuery.isNotBlank() && filteredChannels.isEmpty() ->
-                            "No channels matching \"$searchQuery\""
-                        channels.isEmpty() && !loadingChans -> "No channels in this category"
-                        else -> null
-                    }
-                )
-            }
+            // ── Channel list (scrolls below the preview bar) ──────────
+            ChannelsPane(
+                playlistId = playlistId,
+                host = playlist?.host ?: "",
+                username = playlist?.username ?: "",
+                password = playlist?.password ?: "",
+                channels = filteredChannels,
+                loading = loadingChans,
+                onFocusChange = { focusedChannelIdx = it },
+                initialFocusIndex = focusedChannelIdx,
+                firstChannelFocus = firstChannelFocus,
+                onLeftEdge = { /* no sidebar to return to */ },
+                onPlay = onPlay,
+                emptyReason = when {
+                    searchQuery.isNotBlank() && filteredChannels.isEmpty() ->
+                        "No channels matching \"$searchQuery\""
+                    channels.isEmpty() && !loadingChans -> "No channels in this category"
+                    else -> null
+                },
+                topRowUpTarget = dropdownFocus,
+            )
         }
     }
     // ── TOP NAV overlay ─────────────────────────────────────
@@ -655,6 +661,448 @@ private fun formatClock(ms: Long): String {
 // Top bar
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIVE CATEGORY TOOLBAR — replaces the left sidebar. Dropdown + Search + Guide.
+// Matches the visual language of the Movies / Series BrowseScreen toolbar.
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun LiveCategoryToolbar(
+    selectedLabel: String,
+    categoryCount: Int,
+    totalCategories: Int,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    dropdownExpanded: Boolean,
+    onDropdownToggle: () -> Unit,
+    onDropdownClose: () -> Unit,
+    categories: List<XtreamCategory>,
+    selectedIndex: Int,
+    onPickCategory: (Int) -> Unit,
+    onOpenGuide: () -> Unit,
+    dropdownFocus: FocusRequester,
+    searchFocus: FocusRequester,
+    guideFocus: FocusRequester,
+    downTarget: FocusRequester,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // ── Page title accent bar ──
+        Box(
+            Modifier
+                .size(width = 4.dp, height = 28.dp)
+                .background(Cyan, RoundedCornerShape(2.dp))
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(
+                "LIVE TV",
+                color = Cyan,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.sp,
+                fontFamily = Inter,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                selectedLabel,
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black,
+                lineHeight = 24.sp,
+                fontFamily = Inter,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "$categoryCount channels",
+                color = Color(0xFF94A3B8),
+                fontSize = 11.sp,
+                fontFamily = Inter,
+            )
+        }
+        Spacer(Modifier.width(28.dp))
+
+        // ── Category dropdown button ──
+        LiveDropdownButton(
+            label = selectedLabel,
+            totalCount = totalCategories,
+            expanded = dropdownExpanded,
+            onToggle = onDropdownToggle,
+            focusRequester = dropdownFocus,
+            downTarget = downTarget,
+            rightTarget = searchFocus,
+        )
+
+        Spacer(Modifier.width(14.dp))
+
+        // ── Inline search ──
+        LiveInlineSearch(
+            value = searchQuery,
+            onChange = onSearchChange,
+            focusRequester = searchFocus,
+            downTarget = downTarget,
+            modifier = Modifier.weight(1f),
+        )
+
+        Spacer(Modifier.width(14.dp))
+
+        // ── GUIDE button ── jumps to the full EPG grid.
+        GuideButton(
+            focusRequester = guideFocus,
+            onClick = onOpenGuide,
+            downTarget = downTarget,
+        )
+    }
+
+    // ── Dropdown panel — full-width, shown when expanded ──
+    if (dropdownExpanded) {
+        LiveCategoryPanel(
+            categories = categories,
+            selectedIndex = selectedIndex,
+            onPick = onPickCategory,
+            onDismiss = onDropdownClose,
+        )
+    }
+}
+
+@Composable
+private fun LiveDropdownButton(
+    label: String,
+    totalCount: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    focusRequester: FocusRequester,
+    downTarget: FocusRequester,
+    rightTarget: FocusRequester,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(48.dp)
+            .background(Color(0xFF0A121F), RoundedCornerShape(12.dp))
+            .border(
+                width = if (focused || expanded) 2.dp else 1.dp,
+                color = if (focused || expanded) Cyan else Color(0x33FFFFFF),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(horizontal = 16.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .focusProperties {
+                down = downTarget
+                right = rightTarget
+            }
+            .focusable()
+            .clickableWithEnter(onToggle),
+    ) {
+        Text(
+            "BROWSE",
+            color = Cyan,
+            fontSize = 10.sp,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Black,
+            fontFamily = Inter,
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            if (totalCount > 0) label else "Loading…",
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = Inter,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 220.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        val rot by animateFloatAsState(
+            targetValue = if (expanded) 180f else 0f,
+            animationSpec = tween(160),
+            label = "live-chev-rot",
+        )
+        Text(
+            "▼",
+            color = if (focused || expanded) Cyan else Color.White,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.graphicsLayer { rotationZ = rot },
+        )
+    }
+}
+
+@Composable
+private fun LiveInlineSearch(
+    value: String,
+    onChange: (String) -> Unit,
+    focusRequester: FocusRequester,
+    downTarget: FocusRequester,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .height(48.dp)
+            .background(Color(0xFF0A121F), RoundedCornerShape(12.dp))
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Cyan else Color(0x33FFFFFF),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(horizontal = 16.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            tint = if (focused) Cyan else Color(0xFF64748B),
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Box(Modifier.weight(1f)) {
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = TextStyle(color = Color.White, fontSize = 14.sp, fontFamily = Inter),
+                cursorBrush = SolidColor(Cyan),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .focusProperties { down = downTarget }
+                    .onFocusChanged { focused = it.isFocused }
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
+                            runCatching { downTarget.requestFocus() }
+                            true
+                        } else false
+                    },
+            )
+            if (value.isEmpty()) {
+                Text(
+                    "Search channels…",
+                    color = Color(0xFF64748B),
+                    fontSize = 14.sp,
+                    fontFamily = Inter,
+                )
+            }
+        }
+        if (value.isNotEmpty()) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(22.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Color(0x22FFFFFF))
+                    .focusable()
+                    .focusProperties { down = downTarget }
+                    .clickableWithEnter { onChange("") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Clear search",
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuideButton(
+    focusRequester: FocusRequester,
+    onClick: () -> Unit,
+    downTarget: FocusRequester,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(48.dp)
+            .background(
+                if (focused) Cyan else Color(0xFF0A121F),
+                RoundedCornerShape(12.dp),
+            )
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Cyan else Color(0x33FFFFFF),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(horizontal = 18.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .focusProperties { down = downTarget }
+            .focusable()
+            .clickableWithEnter(onClick),
+    ) {
+        Icon(
+            imageVector = Icons.Default.DateRange,
+            contentDescription = null,
+            tint = if (focused) Color(0xFF05080F) else Cyan,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "FULL GUIDE",
+            color = if (focused) Color(0xFF05080F) else Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 2.sp,
+            fontFamily = Inter,
+        )
+    }
+}
+
+@Composable
+private fun LiveCategoryPanel(
+    categories: List<XtreamCategory>,
+    selectedIndex: Int,
+    onPick: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val firstItemFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(80)
+        runCatching { firstItemFocus.requestFocus() }
+    }
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(Color(0xF2020409))
+            .onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.Back) {
+                    onDismiss(); true
+                } else false
+            }
+            .padding(horizontal = 32.dp, vertical = 16.dp),
+    ) {
+        Column {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "PICK A CHANNEL CATEGORY",
+                    color = Cyan,
+                    fontSize = 10.sp,
+                    letterSpacing = 3.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = Inter,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "${categories.size} categories · press BACK to close",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 11.sp,
+                    fontFamily = Inter,
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+
+            BoxWithConstraints {
+                val cols = when {
+                    maxWidth > 1400.dp -> 4
+                    maxWidth > 900.dp -> 3
+                    else -> 2
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(cols),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 440.dp),
+                ) {
+                    itemsIndexed(categories, key = { _, c -> c.category_id }) { idx, cat ->
+                        LiveCategoryPill(
+                            name = cat.category_name,
+                            selected = idx == selectedIndex,
+                            focusMod = if (idx == 0)
+                                Modifier.focusRequester(firstItemFocus) else Modifier,
+                            onClick = { onPick(idx) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveCategoryPill(
+    name: String,
+    selected: Boolean,
+    focusMod: Modifier,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = focusMod
+            .fillMaxWidth()
+            .height(40.dp)
+            .background(
+                when {
+                    focused -> Cyan.copy(alpha = 0.18f)
+                    selected -> Color(0xFF14223A)
+                    else -> Color(0x14FFFFFF)
+                },
+                shape,
+            )
+            .border(
+                width = if (focused) 2.dp else if (selected) 1.dp else 0.dp,
+                color = when {
+                    focused -> Cyan
+                    selected -> Cyan.copy(alpha = 0.6f)
+                    else -> Color.Transparent
+                },
+                shape = shape,
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
+            .padding(horizontal = 14.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Tv,
+            contentDescription = null,
+            tint = if (selected || focused) Cyan else Color(0xFFCBD5E1),
+            modifier = Modifier.size(15.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            name,
+            color = if (selected || focused) Color.White else Color(0xFFE2E8F0),
+            fontSize = 13.sp,
+            fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.Medium,
+            fontFamily = Inter,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (selected) {
+            Spacer(Modifier.weight(1f))
+            Text(
+                "✓",
+                color = Cyan,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Black,
+            )
+        }
+    }
+}
+
+
 @Composable
 private fun TopBar(
     title: String,
@@ -923,7 +1371,8 @@ private fun ChannelsPane(
     firstChannelFocus: FocusRequester,
     onLeftEdge: () -> Unit,
     onFocusChange: (Int) -> Unit,
-    onPlay: (Int) -> Unit
+    onPlay: (Int) -> Unit,
+    topRowUpTarget: FocusRequester? = null,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -991,6 +1440,10 @@ private fun ChannelsPane(
                             Modifier
                                 .focusRequester(firstChannelFocus)
                                 .focusRequester(reqFor(idx))
+                                .let {
+                                    if (topRowUpTarget != null)
+                                        it.focusProperties { up = topRowUpTarget } else it
+                                }
                         } else {
                             Modifier.focusRequester(reqFor(idx))
                         }
