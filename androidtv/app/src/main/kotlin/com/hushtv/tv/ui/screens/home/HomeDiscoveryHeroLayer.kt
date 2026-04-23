@@ -1,5 +1,14 @@
 package com.hushtv.tv.ui.screens.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,31 +28,35 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.Inter
 import kotlinx.coroutines.delay
 
 /**
- * Discovery hero backdrop. The old version rendered a tilted, cascading
- * wall of posters that overflowed the screen and felt cluttered. This
- * replacement uses a single full-bleed backdrop (slowly auto-rotated from
- * the category's posters) with a heavy left-to-right veil so the title
- * column stays legible — everything stays inside the viewport, no scroll.
+ * Discovery hero backdrop. Uses TMDB hi-res landscape backdrops (w1280)
+ * when available, falling back to Xtream posters only if TMDB didn't
+ * match. Rotates through the art pool every 12 s with a fade crossfade
+ * + Ken-Burns slow-pan so the screen feels alive without being busy.
+ * Everything is bounded to the viewport — no scroll, no overflow.
  */
 @Composable
 fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
@@ -65,33 +78,38 @@ fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
         }
 
         val accent = if (card.type == "series") Color(0xFF8B5CF6) else Cyan
+        val art = card.heroArt
 
-        // Rotate through the card's posters every 5s so the backdrop
-        // feels alive without being busy. Fixed backdrop inside the
-        // viewport — no tilted mosaic, no overflow.
-        var posterIdx by remember(card.id) { mutableStateOf(0) }
-        LaunchedEffect(card.id, card.posters) {
-            if (card.posters.size <= 1) return@LaunchedEffect
+        // Rotate through the art pool every 12 s — slow enough for the
+        // Ken-Burns pan to be felt, fast enough to stay alive.
+        var artIdx by remember(card.id) { mutableStateOf(0) }
+        LaunchedEffect(card.id, art) {
+            if (art.size <= 1) return@LaunchedEffect
             while (true) {
-                delay(5000)
-                posterIdx = (posterIdx + 1) % card.posters.size
+                delay(12_000)
+                artIdx = (artIdx + 1) % art.size
             }
         }
-        val posterUrl = card.posters.getOrNull(posterIdx)
+        val currentArt = art.getOrNull(artIdx)
 
-        // Full-bleed backdrop — fills the Home content area cleanly.
-        if (posterUrl != null) {
-            AsyncImage(
-                model = posterUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
+        // ── Full-bleed backdrop with Ken-Burns + fade crossfade ──
+        if (currentArt != null) {
+            AnimatedContent(
+                targetState = currentArt,
+                transitionSpec = {
+                    // 1.8 s soft crossfade between posters
+                    (fadeIn(tween(1800, easing = LinearEasing)) togetherWith
+                        fadeOut(tween(1800, easing = LinearEasing)))
+                },
+                label = "discovery-backdrop-crossfade",
+            ) { url ->
+                KenBurnsBackdrop(url = url, panIndex = artIdx)
+            }
         }
 
-        // Left-to-right darkening veil so the text column is crisp. Heavy
-        // on the left where the copy sits, fading to ~35% opacity on the
-        // right so the backdrop still shows through.
+        // Left-to-right darkening veil so the text column is crisp.
+        // Heavy on the left (95%) fading to ~25% on the right so the
+        // backdrop still shows through.
         Box(
             Modifier
                 .fillMaxSize()
@@ -105,8 +123,7 @@ fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
                 )
         )
 
-        // Bottom fade — softens the area where the card row sits so cards
-        // visually separate from the backdrop.
+        // Bottom fade — softens the area where the card row sits.
         Box(
             Modifier
                 .fillMaxSize()
@@ -119,8 +136,7 @@ fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
                 )
         )
 
-        // Accent tint from the bottom-right (cyan or violet) — gives the
-        // hero its signature colour temperature.
+        // Accent tint from the bottom-right (cyan or violet).
         Box(
             Modifier
                 .fillMaxSize()
@@ -144,12 +160,73 @@ fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
     }
 }
 
+/**
+ * Single Ken-Burns backdrop cell — slowly pans + zooms the image so a
+ * static poster feels cinematic. 20 s linear loop, 1.0 → 1.08 scale,
+ * subtle x/y offset that alternates direction per [panIndex] so
+ * consecutive posters don't all pan the same way.
+ */
+@Composable
+private fun KenBurnsBackdrop(url: String, panIndex: Int) {
+    val transition = rememberInfiniteTransition(label = "ken-burns-$panIndex")
+    val scale by transition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 20_000, easing = LinearEasing),
+        ),
+        label = "ken-burns-scale",
+    )
+    // Alternate pan direction per index so consecutive posters feel
+    // distinct. Even = pan right-down, odd = pan left-up.
+    val direction = if (panIndex % 2 == 0) 1f else -1f
+    val translateX by transition.animateFloat(
+        initialValue = -25f * direction,
+        targetValue = 25f * direction,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 20_000, easing = LinearEasing),
+        ),
+        label = "ken-burns-tx",
+    )
+    val translateY by transition.animateFloat(
+        initialValue = -15f * direction,
+        targetValue = 15f * direction,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 20_000, easing = LinearEasing),
+        ),
+        label = "ken-burns-ty",
+    )
+    val ctx = LocalContext.current
+    // Request with aggressive caching + crossfade disabled (we're doing
+    // our own crossfade at the AnimatedContent level).
+    val request = remember(url) {
+        ImageRequest.Builder(ctx)
+            .data(url)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .build()
+    }
+    AsyncImage(
+        model = request,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = translateX
+                translationY = translateY
+            },
+    )
+}
+
 @Composable
 private fun DiscoveryTitleBlock(card: DiscoveryCard) {
     Column(Modifier.fillMaxWidth(0.45f)) {
         val accent = if (card.type == "series") Color(0xFFA78BFA) else Cyan
 
-        // Eyebrow row — icon + category label.
+        // Eyebrow row.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 if (card.type == "series") Icons.Default.Tv else Icons.Default.Movie,
@@ -169,7 +246,7 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
         }
         Spacer(Modifier.height(12.dp))
 
-        // Title — Inter Black, sized so two lines fit above the card row.
+        // Title — Inter Black, sized for two lines max.
         Text(
             card.title,
             color = Color.White,
@@ -182,7 +259,6 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
         )
         Spacer(Modifier.height(10.dp))
 
-        // Subtitle — short descriptive copy (2 lines max).
         Text(
             card.subtitle,
             color = Color(0xFFE2E8F0),
@@ -194,7 +270,6 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
         )
         Spacer(Modifier.height(14.dp))
 
-        // Count chip with fire icon.
         if (card.itemCount > 0) {
             Surface(
                 color = Color(0x26FFFFFF),

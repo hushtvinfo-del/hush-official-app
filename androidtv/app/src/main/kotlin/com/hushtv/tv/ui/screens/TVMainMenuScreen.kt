@@ -354,6 +354,26 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             }
         }
 
+        // ── SIDEBAR blend veil ───────────────────────────────────────
+        // A wide horizontal gradient that sits BENEATH the sidebar but
+        // extends past its 140 dp edge all the way to ~300 dp, giving
+        // the nav a long, gentle fade into the content instead of a
+        // sharp seam. Nothing in here is focusable — it's purely visual.
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .width(300.dp)
+                .fillMaxHeight()
+                .background(
+                    Brush.horizontalGradient(
+                        0.0f to Color(0xFF0B1220),
+                        0.40f to Color(0xE60B1220),
+                        0.70f to Color(0x800B1220),
+                        1.0f to Color(0x000B1220),
+                    )
+                )
+        )
+
         // ── SIDEBAR overlay (on top, aligned left, never pushes content) ─
         // Always expanded — the collapsed/icon-only state caused focus-
         // traversal weirdness with the content to its right, so we lock it
@@ -401,17 +421,9 @@ private fun Sidebar(
         Modifier
             .width(width)
             .fillMaxHeight()
-            .background(
-                // Premium glass-morphism backdrop — solid deep navy at the
-                // left edge, softly transparent on the right so the home
-                // backdrop bleeds through behind the sidebar. Zero hard
-                // seams between the nav and the content.
-                Brush.horizontalGradient(
-                    0.0f to Color(0xF20B1220),
-                    0.55f to Color(0xCC0B1220),
-                    1.0f to Color(0x000B1220),
-                )
-            )
+            // Sidebar is now fully transparent — the wide horizontal blend
+            // veil rendered behind it in the parent Box handles the fade
+            // into the content. This removes the 140 dp hard-edge seam.
             .onFocusChanged { onExpandChange(it.hasFocus) }
             .padding(vertical = 28.dp, horizontal = 0.dp),
     ) {

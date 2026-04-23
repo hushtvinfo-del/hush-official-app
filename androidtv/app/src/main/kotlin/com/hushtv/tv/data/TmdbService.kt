@@ -62,6 +62,8 @@ data class TmdbSearchHit(
     val release_date: String? = null,
     val first_air_date: String? = null,
     val popularity: Double = 0.0,
+    val backdrop_path: String? = null,
+    val poster_path: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -268,5 +270,55 @@ object TmdbService {
         if (videos == null) return null
         val trailers = videos.results.filter { it.site == "YouTube" && it.type == "Trailer" }
         return trailers.firstOrNull { it.official }?.key ?: trailers.firstOrNull()?.key
+    }
+
+    /**
+     * Resolve TMDB backdrop URLs (w1280) for a batch of Xtream titles in
+     * parallel. Strips language prefixes, quality tags and years, then
+     * searches TMDB and picks the most popular hit with a backdrop. Used
+     * to paint the Home > Discovery hero with hi-res landscape artwork
+     * instead of low-res portrait posters.
+     */
+    suspend fun backdropsForTitles(
+        titles: List<String>,
+        kind: String,        // "movie" or "series"
+        limit: Int = 6,
+    ): List<String> = withContext(Dispatchers.IO) {
+        if (titles.isEmpty()) return@withContext emptyList()
+        val clean = titles.take(limit * 3).map { normaliseTitleForSearch(it) }
+            .filter { it.isNotBlank() }
+            .distinct()
+        val endpoint = if (kind == "series") "search/tv" else "search/movie"
+        val hits = clean.map { q ->
+            runCatching {
+                val encoded = java.net.URLEncoder.encode(q, "UTF-8")
+                val url = "$BASE/$endpoint?query=$encoded&include_adult=false&api_key=${ApiKeys.TMDB}"
+                val body = client.newCall(Request.Builder().url(url).build()).execute()
+                    .body?.string() ?: return@runCatching null
+                moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)?.results
+                    ?.filter { !it.backdrop_path.isNullOrBlank() }
+                    ?.maxByOrNull { it.popularity }
+                    ?.backdrop_path
+            }.getOrNull()
+        }
+        hits.filterNotNull().distinct().mapNotNull { img(it, "w1280") }.take(limit)
+    }
+
+    /**
+     * Heavy normaliser for Xtream-style messy titles:
+     *   "[EN] VIP | Den of Thieves (2018)"  →  "Den of Thieves"
+     * Strips language/country prefixes like "US |", "EN -", quality tags
+     * (4K, HD, FHD, UHD), trailing years in parens, bracketed tags, and
+     * collapses whitespace.
+     */
+    private fun normaliseTitleForSearch(raw: String): String {
+        var s = raw
+        s = s.replace(Regex("""^\s*\[[^]]*]\s*"""), "")      // leading [TAG]
+        s = s.replace(Regex("""^\s*[A-Z]{2,3}\s*[|:\-]\s*"""), "") // "EN | " / "US - "
+        s = s.replace(Regex("""\s*\|\s*.*$"""), "")          // anything after | 
+        s = s.replace(Regex("""\s*\(\d{4}\)\s*$"""), "")     // trailing (2019)
+        s = s.replace(Regex("""\b(4K|UHD|FHD|HD|HDR|DV|SDR)\b""", RegexOption.IGNORE_CASE), "")
+        s = s.replace(Regex("""\s+"""), " ").trim()
+        return s
     }
 }

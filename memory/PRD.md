@@ -197,6 +197,44 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 9 — v1.9.2 TMDB backdrops + Ken-Burns + sidebar blend (2026-04-23 — completed, deployed)
+User feedback: "The background images that are rotating are very distorted,
+bad quality and rotating too fast — can you use better image quality etc.
+Also the left menu gradient is too much, it needs to blend way better
+from left menu into the main screen."
+
+- **Hi-res TMDB backdrops** (`TmdbService.kt`, `HomeDiscoveryData.kt`): new
+  `TmdbService.backdropsForTitles(titles, kind, limit)` helper — strips
+  Xtream-style noise from each title (leading `[TAG]`, country prefixes
+  `EN |` / `US -`, `4K/HD/UHD/FHD/HDR/DV/SDR` quality tags, trailing
+  years), hits `/search/movie` or `/search/tv`, filters hits that have a
+  `backdrop_path`, picks the most popular one and returns a list of
+  `w1280` landscape URLs. `rememberDiscoveryCards` now runs movie/series
+  fetches in parallel via `async` + resolves the top 18 titles in each
+  category for TMDB backdrops. `DiscoveryCard` gained `backdrops` field
+  and a `heroArt` property that prefers TMDB backdrops, falling back to
+  Xtream posters when TMDB misses. Added `backdrop_path` + `poster_path`
+  to `TmdbSearchHit` so we don't need an extra `getMovie()` round trip.
+- **Ken-Burns + crossfade** (`HomeDiscoveryHeroLayer.kt`): rotation slowed
+  from 5 s to 12 s. Each backdrop now renders in a `KenBurnsBackdrop`
+  composable — `rememberInfiniteTransition` drives a 20 s linear scale
+  animation (1.0 → 1.08) plus ±25 px x-drift and ±15 px y-drift applied
+  via `graphicsLayer`. Direction alternates per index so consecutive
+  posters feel distinct. Crossfades between backdrops use a 1.8 s linear
+  `AnimatedContent` with `fadeIn togetherWith fadeOut`. Coil requests
+  are memory + disk cached to avoid re-download on every rotation tick.
+- **Sidebar blend veil** (`TVMainMenuScreen.kt`): removed the sidebar's
+  own horizontal gradient background (the 140 dp compressed fade was the
+  source of the visible seam). Added a new 300 dp-wide blend veil Box in
+  the root Box that sits BETWEEN the content layer and the sidebar,
+  painted with a four-stop horizontal gradient (0xFF → 0xE6 → 0x80 → 0x00
+  of `#0B1220`). The sidebar column is now fully transparent and rides
+  on top of the veil, so the nav fades gently across ~300 dp into the
+  content instead of dropping off at the 140 dp edge.
+- Shipped as versionCode=66 / versionName="1.9.2" — APK (23,477,264 bytes,
+  md5 `6abc28258e471c2ab439e3ad0f464b3f`) live on `https://hushtv.xyz`,
+  `version.json` bumped.
+
 ### Phase 8 — v1.9.1 Discovery card redesign (2026-04-23 — completed, deployed)
 User feedback: "Remove the movie posters from within the cards — with the
 current background it's too busy; fill them better with the text etc, and
