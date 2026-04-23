@@ -5,6 +5,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -95,7 +96,16 @@ fun HomeContinueWatchingRow(
             fontFamily = Inter,
         )
         Spacer(Modifier.height(12.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // contentPadding on the LazyRow gives room for:
+        //   • horizontal 12 dp — the first/last card can scale up (1.05×,
+        //     ~6 dp overflow each side) without clipping off the viewport
+        //     left or being cropped on the right edge of the scroll window.
+        //   • vertical 10 dp — the card's scaled-up bounds + any focus ring
+        //     shadow have breathing room top/bottom.
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        ) {
             items(entries, key = { "cw-${it.progress.kind}-${it.progress.streamId}" }) { e ->
                 ContinueCard(
                     entry = e,
