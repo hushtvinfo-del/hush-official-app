@@ -197,6 +197,46 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 26 — v1.12.2 Movies by Release Year page (2026-04-23 — completed, deployed)
+User asked for a new Home page: "Movies by Release Year" with 3 year
+buckets (2026/2025/2024) that deep-link into `MOVIES - YYYY` Xtream
+categories. Each card should have a year-appropriate backdrop.
+
+Files added:
+- `ui/screens/home/YearsData.kt`: `MovieYear` data class with
+  `searchKeyword` matching the Xtream category name EXACTLY (`MOVIES -
+  2026` etc), plus accent/gradient palette and short tagline per year.
+  `rememberMovieYears()` composable uses cache-first + background
+  refresh pattern (same as Discovery/Genres).
+- `ui/screens/home/HomeYearsRow.kt`: since there are only 3 cards, I
+  used LARGER 280 × 170 dp landscape tiles (vs 210 dp for genres).
+  Massive 48 sp year label at bottom-left, "MOVIES" tag chip
+  top-right, full-bleed TMDB backdrop, bottom-to-top dark veil,
+  accent-tinted focus glow.
+- `ui/screens/home/HomeYearsHeroLayer.kt`: full-bleed backdrop with
+  700 ms crossfade + Ken-Burns scale, "RELEASE YEAR" eyebrow + big
+  "Movies · 2026" title + tagline.
+
+Files changed:
+- `data/TmdbService.kt`: added `backdropsForYears(years)` — runs
+  `/discover/movie?primary_release_year=YYYY&sort_by=popularity.desc`
+  for each year in parallel, returns `{year → w1280 URL}`.
+- `data/DiscoveryCache.kt`: added `saveYearBackdrop` /
+  `loadYearBackdrop` keyed by `year:$yr`.
+- `TVMainMenuScreen.kt`: added `firstYearsMoviesFocus`, added
+  `"years_movies"` to `pageOrder`, `rememberMovieYears()` state +
+  `focusedMovieYear` var, `"years_movies"` branch in AnimatedContent,
+  focus-handoff LaunchedEffect update, nav-down target map update,
+  indicator label `"YEARS"`, and private `YearsPage` helper at the
+  bottom that wires the hero + row + click routing to
+  `browse/$playlistId/movie?category=$encoded`.
+
+Page flow: Genres Series → Down → Years Movies (last page). Up
+reverses. Channel Up/Down walks the whole list.
+
+- Shipped as versionCode=98 / versionName="1.12.2" — APK (md5
+  `7c20ef3a8356b29b5c9aac7bdad7f445`) live on `https://hushtv.xyz`.
+
 ### Phase 25 — v1.12.1 Genres pages (Movies + Series) (2026-04-23 — completed, deployed)
 User asked for two new Home pages that list traditional genre buckets
 with beautiful per-genre backdrops + deep-link to matching Xtream

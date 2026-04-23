@@ -214,6 +214,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val firstSsSeriesFocus = remember { FocusRequester() }
     val firstGenresMoviesFocus = remember { FocusRequester() }
     val firstGenresSeriesFocus = remember { FocusRequester() }
+    val firstYearsMoviesFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { topNavHomeFocus.requestFocus() } }
 
     val onCardSelect: (MediaCard) -> Unit = sel@{ item ->
@@ -253,6 +254,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             add("ss_series")
             add("genres_movies")
             add("genres_series")
+            add("years_movies")
         }
     }
 
@@ -375,6 +377,15 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             if (focusedGenreSeries == null) focusedGenreSeries = genresSeries.firstOrNull()
         }
 
+        // Movie-release-year state.
+        val movieYears = com.hushtv.tv.ui.screens.home.rememberMovieYears()
+        var focusedMovieYear by remember {
+            mutableStateOf<com.hushtv.tv.ui.screens.home.MovieYear?>(null)
+        }
+        LaunchedEffect(movieYears.firstOrNull()) {
+            if (focusedMovieYear == null) focusedMovieYear = movieYears.firstOrNull()
+        }
+
         // Nav-Down target — follows the CURRENTLY VISIBLE page so the
         // requestFocus() call always hits a composable that's actually
         // attached to the tree.
@@ -475,6 +486,16 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         kind = "series",
                         firstItemFocus = firstGenresSeriesFocus,
                         onUpFromRow = { currentPage = "genres_movies" },
+                        onDownFromRow = { currentPage = "years_movies" },
+                    )
+                    "years_movies" -> YearsPage(
+                        playlistId = playlistId,
+                        nav = nav,
+                        years = movieYears,
+                        focused = focusedMovieYear,
+                        onFocusedChange = { focusedMovieYear = it },
+                        firstItemFocus = firstYearsMoviesFocus,
+                        onUpFromRow = { currentPage = "genres_series" },
                         onDownFromRow = null,
                     )
                     else -> DiscoveryPage(
@@ -509,6 +530,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         "ss_series" -> firstSsSeriesFocus.requestFocus()
                         "genres_movies" -> firstGenresMoviesFocus.requestFocus()
                         "genres_series" -> firstGenresSeriesFocus.requestFocus()
+                        "years_movies" -> firstYearsMoviesFocus.requestFocus()
                     }
                 }
             }
@@ -542,6 +564,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         "ss_series" -> "SERIES"
                         "genres_movies" -> "G·MOV"
                         "genres_series" -> "G·SER"
+                        "years_movies" -> "YEARS"
                         else -> k.uppercase()
                     },
                 )
@@ -580,6 +603,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                             "ss_series" -> firstSsSeriesFocus
                             "genres_movies" -> firstGenresMoviesFocus
                             "genres_series" -> firstGenresSeriesFocus
+                            "years_movies" -> firstYearsMoviesFocus
                             else -> firstDiscoveryFocus
                         }
                         runCatching { target.requestFocus() }
@@ -1477,3 +1501,43 @@ private fun GenresPage(
         }
     }
 }
+
+@Composable
+private fun YearsPage(
+    playlistId: String,
+    nav: NavController,
+    years: List<com.hushtv.tv.ui.screens.home.MovieYear>,
+    focused: com.hushtv.tv.ui.screens.home.MovieYear?,
+    onFocusedChange: (com.hushtv.tv.ui.screens.home.MovieYear) -> Unit,
+    firstItemFocus: FocusRequester,
+    onUpFromRow: () -> Unit,
+    onDownFromRow: (() -> Unit)?,
+) {
+    Box(Modifier.fillMaxSize()) {
+        com.hushtv.tv.ui.screens.home.HomeYearsHeroLayer(
+            year = focused,
+            contentStartPadding = 80.dp,
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(start = 48.dp, end = 32.dp),
+        ) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
+                com.hushtv.tv.ui.screens.home.HomeYearsRow(
+                    years = years,
+                    contentStartPadding = 0.dp,
+                    onFocusedYearChange = onFocusedChange,
+                    onYearClick = { y ->
+                        val encoded = Uri.encode(y.searchKeyword)
+                        nav.navigate("browse/$playlistId/movie?category=$encoded")
+                    },
+                    firstItemFocus = firstItemFocus,
+                    onUpFromRow = onUpFromRow,
+                    onDownFromRow = onDownFromRow,
+                )
+            }
+        }
+    }
+}
+

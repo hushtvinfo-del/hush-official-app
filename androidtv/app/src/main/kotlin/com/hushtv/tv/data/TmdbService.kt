@@ -384,6 +384,37 @@ object TmdbService {
     }
 
     /**
+     * Resolve hi-res backdrops for specific movie release years in
+     * parallel. Uses `/discover/movie?primary_release_year=YYYY` to
+     * find the most popular movie of that year with a backdrop.
+     * Returns `{year → w1280 URL}`.
+     */
+    suspend fun backdropsForYears(years: List<Int>): Map<Int, String> =
+        withContext(Dispatchers.IO) {
+            if (years.isEmpty()) return@withContext emptyMap()
+            val deferred = years.map { yr ->
+                async {
+                    runCatching {
+                        val url = "$BASE/discover/movie?primary_release_year=$yr" +
+                            "&sort_by=popularity.desc&include_adult=false" +
+                            "&include_video=false&language=en-US" +
+                            "&api_key=${ApiKeys.TMDB}"
+                        val body = client.newCall(Request.Builder().url(url).build())
+                            .execute().body?.string() ?: return@runCatching null
+                        val parsed = moshi.adapter(TmdbSearchResponse::class.java)
+                            .fromJson(body)
+                        val backdropPath = parsed?.results
+                            ?.filter { !it.backdrop_path.isNullOrBlank() }
+                            ?.firstOrNull()?.backdrop_path
+                        val imgUrl = img(backdropPath, "w1280")
+                        if (imgUrl != null) yr to imgUrl else null
+                    }.getOrNull()
+                }
+            }
+            deferred.awaitAll().filterNotNull().toMap()
+        }
+
+    /**
      * Heavy normaliser for Xtream-style messy titles:
      *   "[EN] VIP | Den of Thieves (2018)"  →  "Den of Thieves"
      * Strips language/country prefixes like "US |", "EN -", quality tags

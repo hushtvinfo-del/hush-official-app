@@ -62,4 +62,16 @@ object DiscoveryCache {
     fun loadGenreBackdrop(ctx: Context, kind: String, tmdbGenreId: Int): String? =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(genreKey(kind, tmdbGenreId), null)
+
+    // ── Year backdrop cache (movie release year) ────────────────────
+    private fun yearKey(year: Int) = "year:$year"
+
+    fun saveYearBackdrop(ctx: Context, year: Int, url: String) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(yearKey(year), url).apply()
+    }
+
+    fun loadYearBackdrop(ctx: Context, year: Int): String? =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(yearKey(year), null)
 }
