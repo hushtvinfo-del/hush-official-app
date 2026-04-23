@@ -105,7 +105,7 @@ private val MOVIE_SERVICES_BASE = listOf(
  * over image quality, cropping, and background transparency.
  */
 private val CUSTOM_LOGO_URLS = mapOf(
-    "amc" to "https://e7.pngegg.com/pngimages/852/748/png-clipart-amc-logo-television-show-graphic-design-amc-television-text.png",
+    "amc" to "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/AMC_logo_2019.svg/960px-AMC_logo_2019.svg.png",
     "appletv" to "https://clipart-library.com/new_gallery/456504_apple-tv-logo-png.png",
     "crave" to "https://pbs.twimg.com/media/GVVosjrXQAAHX0A.jpg",
     "disney" to "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Disney%2B_logo.svg/3840px-Disney%2B_logo.svg.png",
