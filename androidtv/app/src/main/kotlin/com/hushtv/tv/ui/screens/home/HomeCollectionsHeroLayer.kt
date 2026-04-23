@@ -102,7 +102,7 @@ fun HomeCollectionsHeroLayer(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = contentStartPadding, top = 72.dp, end = 48.dp),
+                .padding(start = contentStartPadding, top = 40.dp, end = 48.dp),
         ) {
             CollectionHeroCopy(coll)
         }
@@ -184,25 +184,27 @@ private fun CollectionHeroCopy(coll: MovieCollection) {
         }
         Spacer(Modifier.height(12.dp))
 
-        // Massive franchise name.
+        // Massive franchise name — hard-capped to 1 line so the hero
+        // copy never expands tall enough to overlap the card row
+        // pinned at the bottom of the page.
         Text(
             coll.displayName,
             color = Color.White,
-            fontSize = 52.sp,
+            fontSize = 46.sp,
             fontWeight = FontWeight.Black,
-            lineHeight = 54.sp,
+            lineHeight = 48.sp,
             fontFamily = Inter,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             coll.tagline,
             color = Color(0xFFE2E8F0),
-            fontSize = 14.sp,
-            lineHeight = 19.sp,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
             fontFamily = Inter,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(14.dp))

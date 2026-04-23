@@ -102,6 +102,46 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 29 — v1.12.6 Collections splash + strict TitleMatcher (2026-04-23 — completed, deployed)
+User feedback: 3 major issues on the brand-new Collections page —
+(1) hero text overlapping the card row; (2) the collection detail
+screen looked jarring while loading (header visible, empty grid
+below); (3) MOST IMPORTANT — the library matcher was pulling in
+completely wrong films (e.g. "Ed" and "Plastic Galaxy" showing up
+inside the Star Wars franchise results) because of loose substring
+containment.
+
+Fixes shipped:
+- **New `data/TitleMatcher.kt`** — single source of truth for any
+  TMDB ↔ Xtream library matching across the whole app (collections,
+  cast click, recommendations, future features). Rules:
+    1. EXACT normalized match (with year gate when both sides report
+       years — remakes are correctly distinguished).
+    2. CONTIGUOUS phrase containment with ≥ 3 real words on BOTH
+       sides + year gate (when years available and they disagree by
+       > 1 year → reject).
+  Library titles with fewer than 3 words ("Ed", "Star", "Plastic
+  Galaxy") can NO LONGER match long TMDB titles via coincidental
+  substrings. Validated with 11 sanity tests covering all user-
+  reported false-positives + well-formatted matches + remake edge
+  cases. All 11 pass.
+- **`TVCollectionDetailScreen.kt` rewrite** — uses
+  `TitleMatcher.findBestMatch` / `buildIndex` (O(n) batch lookup).
+  Added a full-bleed cinematic **splash loading screen** with the
+  franchise's TMDB backdrop + Ken-Burns pulse + accent loader ring +
+  franchise name + tagline. Paints instantly from
+  `DiscoveryCache.loadCollectionBackdrop` so there's never an empty
+  state. `AnimatedVisibility` crossfades smoothly into the results
+  grid when both TMDB parts and the user's library have loaded.
+- **`HomeCollectionsHeroLayer.kt`** — hero copy top padding dropped
+  72 dp → 40 dp; franchise name forced to `maxLines = 1` (was 2);
+  tagline also `maxLines = 1` (was 2); font sizes tightened.
+  Guarantees the hero column never grows tall enough to overlap the
+  card row pinned at the bottom of the page.
+
+- Shipped as versionCode=102 / versionName="1.12.6" — APK (md5
+  `93ef9597c31ee6323a9343b104538ed7`) live on `https://hushtv.xyz`.
+
 ### Phase 28 — v1.12.4 D-pad focus never stuck in Top Nav (2026-04-23 — completed, deployed)
 User feedback: "When you're on Genres/Years/Collections and press RIGHT,
 focus jumps into the Top Nav and gets STUCK — pressing DOWN doesn't
