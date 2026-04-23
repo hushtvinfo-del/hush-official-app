@@ -86,4 +86,45 @@ object DiscoveryCache {
     fun loadCollectionBackdrop(ctx: Context, collectionId: Int): String? =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(collectionKey(collectionId), null)
+
+    // ── Discovered collections list (TMDB popularity-seeded) ────────
+    // Stored as a pipe-separated tuple-per-line:
+    //   "id|name|backdropUrl"
+    // Plus a timestamp so we can expire after 7 days.
+    private const val DISCOVERED_LIST_KEY = "collections:discovered:list"
+    private const val DISCOVERED_TIME_KEY = "collections:discovered:timestamp"
+
+    fun saveDiscoveredCollections(ctx: Context, list: List<DiscoveredCollection>) {
+        val serialised = list.joinToString("\n") { c ->
+            val name = c.name.replace("|", "‖")  // sanitise field separator
+            val url = c.backdropUrl?.replace("|", "‖").orEmpty()
+            "${c.id}|$name|$url"
+        }
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(DISCOVERED_LIST_KEY, serialised)
+            .putLong(DISCOVERED_TIME_KEY, System.currentTimeMillis())
+            .apply()
+    }
+
+    fun loadDiscoveredCollections(ctx: Context): List<DiscoveredCollection> {
+        val raw = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(DISCOVERED_LIST_KEY, null) ?: return emptyList()
+        return raw.split("\n").mapNotNull { line ->
+            val parts = line.split("|", limit = 3)
+            if (parts.size < 2) return@mapNotNull null
+            val id = parts[0].toIntOrNull() ?: return@mapNotNull null
+            val name = parts.getOrNull(1).orEmpty().replace("‖", "|")
+            val url = parts.getOrNull(2).orEmpty().replace("‖", "|").ifBlank { null }
+            DiscoveredCollection(id = id, name = name, backdropUrl = url)
+        }
+    }
+
+    /** True when the discovered-collections cache is older than 7 days. */
+    fun shouldRefreshDiscoveredCollections(ctx: Context): Boolean {
+        val ts = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getLong(DISCOVERED_TIME_KEY, 0L)
+        if (ts == 0L) return true
+        val ageMs = System.currentTimeMillis() - ts
+        return ageMs > 7L * 24L * 60L * 60L * 1000L
+    }
 }

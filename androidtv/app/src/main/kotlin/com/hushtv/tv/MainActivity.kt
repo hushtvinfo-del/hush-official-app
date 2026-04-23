@@ -24,6 +24,7 @@ import com.hushtv.tv.ui.HushSplashScreen
 import com.hushtv.tv.ui.screens.TVAddAccountScreen
 import com.hushtv.tv.ui.screens.TVBrowseScreen
 import com.hushtv.tv.ui.screens.TVCollectionDetailScreen
+import com.hushtv.tv.ui.screens.TVCollectionsBrowseScreen
 import com.hushtv.tv.ui.screens.TVEpgGridScreen
 import com.hushtv.tv.ui.screens.TVHomeScreen
 import com.hushtv.tv.ui.screens.TVLiveBrowseScreen
@@ -127,6 +128,12 @@ private fun AppContent() {
                 bs.arguments?.getString("playlistId") ?: "",
                 bs.arguments?.getString("collectionId")?.toIntOrNull() ?: 0,
                 bs.arguments?.getString("name") ?: "",
+            )
+        }
+        composable("collections/{playlistId}") { bs ->
+            TVCollectionsBrowseScreen(
+                nav,
+                bs.arguments?.getString("playlistId") ?: "",
             )
         }
         composable("epg/{playlistId}") { bs ->

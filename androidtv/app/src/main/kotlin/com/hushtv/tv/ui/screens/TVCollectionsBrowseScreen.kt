@@ -1,0 +1,326 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
+package com.hushtv.tv.ui.screens
+
+import android.net.Uri
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.outlined.Slideshow
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import com.hushtv.tv.ui.screens.home.MovieCollection
+import com.hushtv.tv.ui.screens.home.TopNavBar
+import com.hushtv.tv.ui.screens.home.TopNavTab
+import com.hushtv.tv.ui.screens.home.rememberMovieCollections
+import com.hushtv.tv.ui.theme.BgBlack
+import com.hushtv.tv.ui.theme.Cyan
+import com.hushtv.tv.ui.theme.Inter
+import com.hushtv.tv.ui.tvFocusable
+
+/**
+ * Full-grid "See All" Collections browser. Renders every franchise in
+ * the catalog (curated + dynamically discovered from TMDB) as a grid
+ * of cinematic backdrop tiles. Same click route as the home row →
+ * detail screen chronological view.
+ */
+@Composable
+fun TVCollectionsBrowseScreen(
+    nav: NavController,
+    playlistId: String,
+) {
+    val collections = rememberMovieCollections()
+
+    val tabs = remember {
+        listOf(
+            TopNavTab("home",   "Home",    Icons.Default.Home,       "menu/$playlistId"),
+            TopNavTab("live",   "Live TV", Icons.Default.Tv,         "browse/$playlistId/live"),
+            TopNavTab("movies", "Movies",  Icons.Default.Movie,      "browse/$playlistId/movie"),
+            TopNavTab("series", "Series",  Icons.Outlined.Slideshow, "browse/$playlistId/series"),
+            TopNavTab("search", "Search",  Icons.Default.Search,     "browse/$playlistId/search"),
+        )
+    }
+    val homeFocus = remember { FocusRequester() }
+    val firstCardFocus = remember { FocusRequester() }
+    val gridFocus = remember { FocusRequester() }
+    LaunchedEffect(collections.isNotEmpty()) {
+        if (collections.isNotEmpty()) {
+            kotlinx.coroutines.delay(220)
+            runCatching { firstCardFocus.requestFocus() }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(BgBlack)) {
+        // Top nav.
+        Box(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
+            TopNavBar(
+                tabs = tabs,
+                activeKey = "movies",
+                homeFocus = homeFocus,
+                onTab = { t -> t.route?.let { nav.navigate(it) } },
+                onSettings = { nav.navigate("settings/$playlistId") },
+            )
+        }
+
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(top = 72.dp, start = 48.dp, end = 48.dp, bottom = 24.dp),
+        ) {
+            // ── Page header — big franchise-browser title ──
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 18.dp, bottom = 22.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(width = 4.dp, height = 32.dp)
+                        .background(Cyan, RoundedCornerShape(2.dp))
+                )
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(
+                        "FRANCHISES · ALL",
+                        color = Cyan,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 3.sp,
+                        fontFamily = Inter,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Movie Collections",
+                        color = Color.White,
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Black,
+                        lineHeight = 40.sp,
+                        fontFamily = Inter,
+                        maxLines = 1,
+                    )
+                }
+                Spacer(Modifier.width(24.dp))
+                Text(
+                    "${collections.size} franchises · click any to watch in order",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 13.sp,
+                    fontFamily = Inter,
+                )
+            }
+
+            if (collections.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Loading your collection catalog…",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 14.sp,
+                        fontFamily = Inter,
+                    )
+                }
+            } else {
+                // focusRestorer so D-pad Up → nav → D-pad Down returns
+                // focus to exactly the card the user was on.
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusRequester(gridFocus)
+                        .focusRestorer()
+                        .focusGroup(),
+                ) {
+                    items(collections, key = { it.id }) { coll ->
+                        BrowseCollectionCard(
+                            coll = coll,
+                            isFirst = coll == collections.first(),
+                            firstCardFocus = firstCardFocus,
+                            onClick = {
+                                nav.navigate(
+                                    "collection/$playlistId/${coll.tmdbCollectionId}/" +
+                                        Uri.encode(coll.displayName)
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowseCollectionCard(
+    coll: MovieCollection,
+    isFirst: Boolean,
+    firstCardFocus: FocusRequester,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.04f else 1f,
+        animationSpec = tween(90),
+        label = "browse-coll-scale",
+    )
+    val cardShape = RoundedCornerShape(14.dp)
+    val focusMod = if (isFirst) Modifier.focusRequester(firstCardFocus) else Modifier
+
+    Column(
+        modifier = focusMod
+            .onFocusChanged { focused = it.isFocused }
+            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
+            .focusable()
+            .clickableWithEnter(onClick)
+            .graphicsLayer {
+                scaleX = scale; scaleY = scale
+            },
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .shadow(
+                    elevation = if (focused) 22.dp else 4.dp,
+                    shape = cardShape,
+                    ambientColor = coll.accent,
+                    spotColor = coll.accent,
+                )
+                .clip(cardShape)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            coll.accent.copy(alpha = 0.28f),
+                            Color(0xFF05080F),
+                        )
+                    )
+                )
+                .border(
+                    width = if (focused) 2.5.dp else 1.dp,
+                    color = if (focused) coll.accent else coll.accent.copy(alpha = 0.22f),
+                    shape = cardShape,
+                ),
+        ) {
+            // Backdrop.
+            coll.backdropUrl?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            // Dark veil.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color(0x33000000),
+                            0.60f to Color(0x80000000),
+                            1.0f to Color(0xEB000000),
+                        )
+                    )
+            )
+            if (focused) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                0.0f to coll.accent.copy(alpha = 0.22f),
+                                1.0f to Color.Transparent,
+                                radius = 380f,
+                            )
+                        )
+                )
+            }
+
+            // Content.
+            Box(Modifier.fillMaxSize().padding(14.dp)) {
+                // Accent pill top-left.
+                Row(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .background(Color(0x40FFFFFF), RoundedCornerShape(999.dp))
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(5.dp)
+                            .background(coll.accent, RoundedCornerShape(3.dp))
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        "FRANCHISE",
+                        color = Color.White,
+                        fontSize = 8.sp,
+                        letterSpacing = 1.5.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = Inter,
+                    )
+                }
+                // Name bottom-left.
+                Text(
+                    coll.displayName,
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Black,
+                    lineHeight = 19.sp,
+                    fontFamily = Inter,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.align(Alignment.BottomStart),
+                )
+            }
+        }
+    }
+}

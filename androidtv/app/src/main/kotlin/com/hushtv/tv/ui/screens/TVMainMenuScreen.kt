@@ -1599,6 +1599,9 @@ private fun CollectionsPage(
                                 Uri.encode(c.displayName)
                         )
                     },
+                    onSeeAllClick = {
+                        nav.navigate("collections/$playlistId")
+                    },
                     firstItemFocus = firstItemFocus,
                     onUpFromRow = onUpFromRow,
                     onDownFromRow = onDownFromRow,

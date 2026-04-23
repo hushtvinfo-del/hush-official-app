@@ -17,6 +17,17 @@ import java.util.concurrent.TimeUnit
 @JsonClass(generateAdapter = true)
 data class TmdbGenre(val id: Int = 0, val name: String = "")
 
+/**
+ * A collection surfaced from TMDB — either via `/search/collection` or
+ * via popular-movie discovery. Used to populate the Collections list
+ * beyond the hand-curated top 20.
+ */
+data class DiscoveredCollection(
+    val id: Int,
+    val name: String,
+    val backdropUrl: String?,
+)
+
 @JsonClass(generateAdapter = true)
 data class TmdbCastMember(
     val id: Int = 0,
@@ -475,6 +486,104 @@ object TmdbService {
                     ?.sortedBy { it.release_date ?: "9999" }
                     ?: emptyList()
             }.getOrDefault(emptyList())
+        }
+
+    /**
+     * Discover popular movie collections by scanning the TMDB popular-
+     * movies list and pulling `belongs_to_collection` from each movie.
+     * Returns `{collectionId → DiscoveredCollection}` deduped.
+     *
+     * Fires `pages` concurrent `/movie/popular` calls, then up to
+     * `pages * 20` concurrent `/movie/{id}` calls to extract the
+     * collection metadata. All parallel on Dispatchers.IO so the
+     * whole run completes in ~3-5 s on a decent connection.
+     */
+    suspend fun discoverPopularCollections(pages: Int = 5): List<DiscoveredCollection> =
+        withContext(Dispatchers.IO) {
+            // Step 1: fetch N pages of popular movies concurrently.
+            val movieIds = (1..pages).map { page ->
+                async {
+                    runCatching {
+                        val url = "$BASE/movie/popular?language=en-US&page=$page&api_key=${ApiKeys.TMDB}"
+                        val body = client.newCall(Request.Builder().url(url).build())
+                            .execute().body?.string() ?: return@runCatching emptyList<Int>()
+                        @JsonClass(generateAdapter = true)
+                        data class MovieListItem(val id: Int = 0)
+                        @JsonClass(generateAdapter = true)
+                        data class MovieListResp(val results: List<MovieListItem> = emptyList())
+                        moshi.adapter(MovieListResp::class.java).fromJson(body)
+                            ?.results?.map { it.id } ?: emptyList()
+                    }.getOrDefault(emptyList())
+                }
+            }.awaitAll().flatten().distinct()
+
+            // Step 2: fetch each movie's belongs_to_collection field in parallel.
+            // Batch into chunks of 20 concurrent requests to be polite.
+            val discovered = movieIds.chunked(20).flatMap { batch ->
+                batch.map { mid ->
+                    async {
+                        runCatching {
+                            val url = "$BASE/movie/$mid?language=en-US&api_key=${ApiKeys.TMDB}"
+                            val body = client.newCall(Request.Builder().url(url).build())
+                                .execute().body?.string() ?: return@runCatching null
+                            @JsonClass(generateAdapter = true)
+                            data class Belongs(
+                                val id: Int = 0,
+                                val name: String = "",
+                                val backdrop_path: String? = null,
+                                val poster_path: String? = null,
+                            )
+                            @JsonClass(generateAdapter = true)
+                            data class MovieDetail(val belongs_to_collection: Belongs? = null)
+                            val parsed = moshi.adapter(MovieDetail::class.java).fromJson(body)
+                            val b = parsed?.belongs_to_collection
+                            if (b != null && b.id > 0 && b.name.isNotBlank()) {
+                                DiscoveredCollection(
+                                    id = b.id,
+                                    name = b.name,
+                                    backdropUrl = img(b.backdrop_path, "w1280"),
+                                )
+                            } else null
+                        }.getOrNull()
+                    }
+                }.awaitAll().filterNotNull()
+            }
+
+            // Step 3: dedupe by id, preserve insertion order (popularity rank).
+            val seen = linkedSetOf<Int>()
+            discovered.filter { seen.add(it.id) }
+        }
+
+    /**
+     * Resolve a named franchise to its TMDB collection ID + backdrop
+     * via `/search/collection`. Used when we have a franchise display
+     * name but don't want to guess the ID.
+     */
+    suspend fun searchCollection(query: String): DiscoveredCollection? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+                val url = "$BASE/search/collection?query=$encoded&language=en-US&api_key=${ApiKeys.TMDB}"
+                val body = client.newCall(Request.Builder().url(url).build())
+                    .execute().body?.string() ?: return@withContext null
+                @JsonClass(generateAdapter = true)
+                data class Hit(
+                    val id: Int = 0,
+                    val name: String = "",
+                    val backdrop_path: String? = null,
+                )
+                @JsonClass(generateAdapter = true)
+                data class Resp(val results: List<Hit> = emptyList())
+                val hit = moshi.adapter(Resp::class.java).fromJson(body)?.results
+                    ?.firstOrNull { it.id > 0 && it.name.isNotBlank() }
+                if (hit != null) {
+                    DiscoveredCollection(
+                        id = hit.id,
+                        name = hit.name,
+                        backdropUrl = img(hit.backdrop_path, "w1280"),
+                    )
+                } else null
+            }.getOrNull()
         }
 
     /**

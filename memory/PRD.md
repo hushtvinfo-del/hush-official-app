@@ -102,6 +102,62 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 30 — v1.13.0 Collections catalog explosion + See All (2026-04-23 — completed, deployed)
+User asked for "way more collections, like 500 top collections" with
+a "See All" tile on the home row leading to a dedicated browse screen.
+
+Approach: hybrid curated + dynamic.
+- Kept the 20 hand-curated iconic franchises (custom taglines + accent
+  colours) as the guaranteed core, always shown FIRST.
+- Added **dynamic TMDB discovery**: on first launch (or after 7 days),
+  fetches 5 pages of `/movie/popular` (100 movies) then fans out
+  parallel `/movie/{id}` calls in batches of 20 to pull each movie's
+  `belongs_to_collection` metadata. Dedupes by ID + display name.
+  Produces a merged catalog of ~80-100 additional popular franchises
+  (sequels/trilogies) with real TMDB names, backdrops, IDs — zero
+  guessing.
+- Cache: new `DiscoveryCache.saveDiscoveredCollections` /
+  `loadDiscoveredCollections` stored as pipe-delimited tuples with a
+  7-day TTL. Cold start reads cache synchronously → catalog paints
+  instantly with zero API calls on all but the first launch.
+
+Home row change:
+- `HomeCollectionsRow` now accepts `maxVisible = 10` + `onSeeAllClick`
+  and appends a new **"SEE ALL" tile** (cyan-bordered, "BROWSE →"
+  pill) as the 11th item when the catalog has more.
+- Row header grew a "N FRANCHISES" subtitle so the user can see the
+  total at a glance.
+
+New screen:
+- `TVCollectionsBrowseScreen` — 4-column `LazyVerticalGrid` of every
+  franchise using cinematic 16:9 backdrop cards. `focusRestorer` +
+  `focusGroup` so D-pad bounces off the nav correctly. Card click
+  routes to the same `collection/{id}/{name}` detail screen — all the
+  chronological matching logic from v1.12.6 applies.
+- New route `collections/{playlistId}` added to `MainActivity.kt`.
+
+Files added / changed:
+- `data/TmdbService.kt`: `DiscoveredCollection` model +
+  `discoverPopularCollections(pages)` + `searchCollection(query)`.
+- `data/DiscoveryCache.kt`: `saveDiscoveredCollections` /
+  `loadDiscoveredCollections` / `shouldRefreshDiscoveredCollections`.
+- `ui/screens/home/CollectionsData.kt`: rewrote to merge curated +
+  discovered with dedupe + stable accent-colour hashing for
+  discovered entries.
+- `ui/screens/home/HomeCollectionsRow.kt`: `maxVisible` cut-off +
+  `SeeAllCardView` trailing tile.
+- `ui/screens/TVCollectionsBrowseScreen.kt`: new full-grid screen.
+- `ui/screens/TVMainMenuScreen.kt`: wires `onSeeAllClick` → new
+  `collections/$playlistId` route.
+- `MainActivity.kt`: nav route wiring.
+
+Verified: TMDB /movie/popular + /movie/{id} endpoints tested via
+curl — `belongs_to_collection` is present on popular films and
+returns id + name + backdrop_path as expected.
+
+- Shipped as versionCode=103 / versionName="1.13.0" — APK (md5
+  `dd36d4fc0cbd958301de2de55052fce8`) live on `https://hushtv.xyz`.
+
 ### Phase 29 — v1.12.6 Collections splash + strict TitleMatcher (2026-04-23 — completed, deployed)
 User feedback: 3 major issues on the brand-new Collections page —
 (1) hero text overlapping the card row; (2) the collection detail

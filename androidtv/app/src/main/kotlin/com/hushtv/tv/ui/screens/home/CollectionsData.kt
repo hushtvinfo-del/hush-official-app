@@ -10,17 +10,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import coil.imageLoader
 import coil.request.ImageRequest
+import com.hushtv.tv.data.DiscoveredCollection
 import com.hushtv.tv.data.DiscoveryCache
 import com.hushtv.tv.data.TmdbService
+import kotlin.math.abs
 
 /**
  * A single movie collection / box-set (e.g. "The Godfather",
- * "Back to the Future"). Top 20 most-iconic franchises.
- *
- * [tmdbCollectionId] is the TMDB collection ID (stable, lookup-safe).
- * [backdropUrl] is populated async from the collection's official
- * TMDB metadata (cached in SharedPreferences so cold starts paint
- * instantly).
+ * "Back to the Future"). Top 20 are hand-curated with custom taglines
+ * + accent colours; the rest are discovered dynamically from TMDB.
  */
 data class MovieCollection(
     val id: String,
@@ -31,9 +29,8 @@ data class MovieCollection(
     val backdropUrl: String? = null,
 )
 
-// Top 20 most iconic movie box-sets / franchises. TMDB collection IDs
-// are permanent — these won't drift.
-private val COLLECTIONS_BASE = listOf(
+// ── Hand-curated top 20 franchises — shown FIRST on the home row. ───
+private val CURATED_COLLECTIONS = listOf(
     MovieCollection("star_wars", "Star Wars",
         "A galaxy far, far away — every saga film in order.",
         10, Color(0xFFFACC15)),
@@ -96,42 +93,118 @@ private val COLLECTIONS_BASE = listOf(
         31562, Color(0xFF64748B)),
 )
 
+// ── Accent palette for DISCOVERED collections. Deterministic hash
+//    based on the collection name → stable colour across app runs.
+private val DISCOVERED_ACCENTS = listOf(
+    Color(0xFFEF4444), Color(0xFFF97316), Color(0xFFEAB308),
+    Color(0xFF84CC16), Color(0xFF22C55E), Color(0xFF14B8A6),
+    Color(0xFF06B6D4), Color(0xFF3B82F6), Color(0xFF8B5CF6),
+    Color(0xFFD946EF), Color(0xFFEC4899), Color(0xFFF43F5E),
+    Color(0xFFB45309), Color(0xFF64748B), Color(0xFF0EA5E9),
+    Color(0xFFA855F7),
+)
+
+private fun accentFor(name: String): Color =
+    DISCOVERED_ACCENTS[abs(name.hashCode()) % DISCOVERED_ACCENTS.size]
+
+/** Strip common punctuation + casing so we can dedupe by "same franchise". */
+private fun dedupeKey(name: String): String =
+    name.lowercase()
+        .replace(Regex("""\bcollection\b"""), "")
+        .replace(Regex("""[^a-z0-9]+"""), " ")
+        .trim()
+
 /**
- * Loads collection cards with TMDB backdrops fetched async. Cache-first
- * for instant cold starts; refreshes in background.
+ * Load the full collection catalog — curated first, then discovered
+ * from TMDB (popularity-seeded, cached 7 days). Everything paints
+ * instantly from SharedPreferences on cold start; discovery happens
+ * in the background on stale caches.
  */
 @Composable
 fun rememberMovieCollections(): List<MovieCollection> {
     val ctx = LocalContext.current
 
-    var collections by remember {
-        mutableStateOf(
-            COLLECTIONS_BASE.map { c ->
-                c.copy(
-                    backdropUrl = DiscoveryCache.loadCollectionBackdrop(ctx, c.tmdbCollectionId),
-                )
-            }
-        )
+    // 1. Seed: curated (with cached backdrops) + previously-discovered.
+    val seed = remember {
+        val curated = CURATED_COLLECTIONS.map { c ->
+            c.copy(backdropUrl = DiscoveryCache.loadCollectionBackdrop(ctx, c.tmdbCollectionId))
+        }
+        val discoveredCached = DiscoveryCache.loadDiscoveredCollections(ctx)
+        mergeCuratedWithDiscovered(curated, discoveredCached)
     }
+    var collections by remember { mutableStateOf(seed) }
 
     LaunchedEffect(Unit) {
+        // (A) Refresh curated backdrops in the background.
         val freshMap = runCatching {
-            TmdbService.backdropsForCollections(COLLECTIONS_BASE.map { it.tmdbCollectionId })
+            TmdbService.backdropsForCollections(CURATED_COLLECTIONS.map { it.tmdbCollectionId })
         }.getOrDefault(emptyMap())
-
-        if (freshMap.isEmpty()) return@LaunchedEffect
-
-        freshMap.forEach { (cid, url) -> DiscoveryCache.saveCollectionBackdrop(ctx, cid, url) }
-
-        collections = COLLECTIONS_BASE.map { c ->
-            c.copy(backdropUrl = freshMap[c.tmdbCollectionId] ?: c.backdropUrl)
+        if (freshMap.isNotEmpty()) {
+            freshMap.forEach { (cid, url) ->
+                DiscoveryCache.saveCollectionBackdrop(ctx, cid, url)
+            }
+        }
+        val refreshedCurated = CURATED_COLLECTIONS.map { c ->
+            c.copy(
+                backdropUrl = freshMap[c.tmdbCollectionId]
+                    ?: DiscoveryCache.loadCollectionBackdrop(ctx, c.tmdbCollectionId),
+            )
         }
 
+        // (B) If the discovered cache is missing or stale, refresh it.
+        val cachedDiscovered = DiscoveryCache.loadDiscoveredCollections(ctx)
+        val discovered = if (cachedDiscovered.isEmpty() ||
+            DiscoveryCache.shouldRefreshDiscoveredCollections(ctx)
+        ) {
+            val fresh = runCatching {
+                TmdbService.discoverPopularCollections(pages = 5)
+            }.getOrDefault(emptyList())
+            if (fresh.isNotEmpty()) {
+                DiscoveryCache.saveDiscoveredCollections(ctx, fresh)
+                fresh
+            } else cachedDiscovered
+        } else cachedDiscovered
+
+        // (C) Merge, publish, and prefetch artwork so scrolling is instant.
+        val merged = mergeCuratedWithDiscovered(refreshedCurated, discovered)
+        collections = merged
+
         val loader = ctx.imageLoader
-        collections.mapNotNull { it.backdropUrl }.forEach { url ->
+        merged.mapNotNull { it.backdropUrl }.forEach { url ->
             loader.enqueue(ImageRequest.Builder(ctx).data(url).build())
         }
     }
 
     return collections
+}
+
+/**
+ * Combine curated + discovered into a single list, deduped by name.
+ * Curated always wins and appears first — hand-authored taglines and
+ * accent colours should never be overwritten by the generic TMDB data.
+ */
+private fun mergeCuratedWithDiscovered(
+    curated: List<MovieCollection>,
+    discovered: List<DiscoveredCollection>,
+): List<MovieCollection> {
+    val takenKeys = curated.map { dedupeKey(it.displayName) }.toMutableSet()
+    val takenIds = curated.map { it.tmdbCollectionId }.toMutableSet()
+
+    val extras = discovered.mapNotNull { d ->
+        if (d.id in takenIds) return@mapNotNull null
+        val key = dedupeKey(d.name)
+        if (key in takenKeys) return@mapNotNull null
+        takenKeys += key
+        takenIds += d.id
+
+        MovieCollection(
+            id = "tmdb_${d.id}",
+            displayName = d.name.replace(Regex("""\s*Collection$"""), "").trim(),
+            tagline = "Every film in the franchise.",
+            tmdbCollectionId = d.id,
+            accent = accentFor(d.name),
+            backdropUrl = d.backdropUrl,
+        )
+    }
+    return curated + extras
 }

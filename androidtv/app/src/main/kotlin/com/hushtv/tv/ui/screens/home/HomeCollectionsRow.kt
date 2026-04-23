@@ -53,23 +53,26 @@ import com.hushtv.tv.ui.theme.Inter
 import com.hushtv.tv.ui.tvFocusable
 
 /**
- * Horizontal rail of movie-collection (box-set) cards — 20 items,
- * e.g. Star Wars, Harry Potter, Mission: Impossible. Uses larger
- * 260 × 156 dp landscape tiles so franchise backdrops read clearly
- * at TV distance. Each tile: full-bleed TMDB backdrop, franchise
- * name bottom-left in Inter Black, accent-tinted focus glow.
+ * Horizontal rail of movie-collection (box-set) cards. Shows the top
+ * [maxVisible] franchises inline + a "See All" tile at the end that
+ * opens the full grid browser. Keeps the home row snappy regardless
+ * of how many collections the catalog grows to.
  */
 @Composable
 fun HomeCollectionsRow(
     collections: List<MovieCollection>,
     onFocusedCollectionChange: (MovieCollection) -> Unit,
     onCollectionClick: (MovieCollection) -> Unit,
+    onSeeAllClick: () -> Unit,
     contentStartPadding: androidx.compose.ui.unit.Dp = 96.dp,
     firstItemFocus: FocusRequester? = null,
     onUpFromRow: (() -> Unit)? = null,
     onDownFromRow: (() -> Unit)? = null,
+    maxVisible: Int = 10,
 ) {
     if (collections.isEmpty()) return
+    val visible = collections.take(maxVisible)
+    val hasMore = collections.size > maxVisible
 
     // focusRestorer(): makes this Column a "focus group" that remembers
     // which child card was last focused. When the parent calls
@@ -121,18 +124,38 @@ fun HomeCollectionsRow(
                 letterSpacing = 3.sp,
                 fontFamily = Inter,
             )
+            if (hasMore) {
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "${collections.size} FRANCHISES",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                    fontFamily = Inter,
+                )
+            }
         }
         Spacer(Modifier.height(14.dp))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(collections, key = { _, c -> c.id }) { _, coll ->
+            itemsIndexed(visible, key = { _, c -> c.id }) { _, coll ->
                 CollectionCardView(
                     coll = coll,
                     onFocus = { onFocusedCollectionChange(coll) },
                     onClick = { onCollectionClick(coll) },
                 )
+            }
+            if (hasMore) {
+                item(key = "see_all") {
+                    SeeAllCardView(
+                        totalCount = collections.size,
+                        onFocus = { /* keep currently-focused hero */ },
+                        onClick = onSeeAllClick,
+                    )
+                }
             }
         }
     }
@@ -255,6 +278,88 @@ private fun CollectionCardView(
                     lineHeight = 22.sp,
                     fontFamily = Inter,
                     maxLines = 2,
+                )
+            }
+        }
+    }
+}
+
+
+/**
+ * Trailing "See All" tile — same dimensions as a franchise card but
+ * visually different (accent border, arrow chip, uppercase CTA).
+ * Leads to the full Collections grid.
+ */
+@Composable
+private fun SeeAllCardView(
+    totalCount: Int,
+    onFocus: () -> Unit,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val cardShape = RoundedCornerShape(14.dp)
+
+    Box(
+        Modifier
+            .width(260.dp)
+            .height(156.dp)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus()
+            }
+            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
+            .focusable()
+            .clickableWithEnter(onClick)
+            .shadow(
+                elevation = if (focused) 22.dp else 5.dp,
+                shape = cardShape,
+                ambientColor = Cyan,
+                spotColor = Cyan,
+            )
+            .clip(cardShape)
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF0B1220), Color(0xFF05080F))
+                )
+            )
+            .border(
+                width = if (focused) 2.5.dp else 1.5.dp,
+                color = if (focused) Cyan else Cyan.copy(alpha = 0.45f),
+                shape = cardShape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "SEE ALL",
+                color = Color.White,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 4.sp,
+                fontFamily = Inter,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "$totalCount franchises",
+                color = Cyan,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp,
+                fontFamily = Inter,
+            )
+            Spacer(Modifier.height(10.dp))
+            Box(
+                Modifier
+                    .background(Cyan, RoundedCornerShape(999.dp))
+                    .padding(horizontal = 14.dp, vertical = 5.dp),
+            ) {
+                Text(
+                    "BROWSE  →",
+                    color = Color(0xFF05080F),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.2.sp,
+                    fontFamily = Inter,
                 )
             }
         }
