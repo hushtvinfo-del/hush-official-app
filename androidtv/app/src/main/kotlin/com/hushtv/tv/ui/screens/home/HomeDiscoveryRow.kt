@@ -72,32 +72,33 @@ fun HomeDiscoveryRow(
         Modifier.fillMaxWidth().padding(
             start = contentStartPadding,
             end = 48.dp,
-            top = 20.dp,
+            top = 16.dp,
             bottom = 20.dp,
         ),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
-                    .size(width = 4.dp, height = 18.dp)
+                    .size(width = 4.dp, height = 16.dp)
                     .background(Cyan, RoundedCornerShape(2.dp))
             )
             Spacer(Modifier.width(10.dp))
             Text(
                 "DISCOVER",
                 color = Color.White,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 3.sp,
                 fontFamily = Inter,
             )
         }
-        Spacer(Modifier.height(14.dp))
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            items(cards, key = { it.id }) { card ->
+        Spacer(Modifier.height(12.dp))
+        // Plain Row (not LazyRow) — we always have exactly 2 cards and a
+        // plain Row has ZERO auto-scroll / bringIntoView behaviour. That
+        // means focusing a card can never cause the hero frame above to
+        // shift vertically — the whole Home viewport stays rock-solid.
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            cards.forEach { card ->
                 DiscoveryCardView(
                     card = card,
                     onFocus = { onFocusedCardChange(card) },
@@ -122,7 +123,7 @@ private fun DiscoveryCardView(
 
     Column(
         Modifier
-            .width(420.dp)
+            .width(340.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
@@ -135,7 +136,7 @@ private fun DiscoveryCardView(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(210.dp)
+                .height(170.dp)
                 .shadow(
                     elevation = shadowElevation,
                     shape = cardShape,
@@ -173,7 +174,7 @@ private fun DiscoveryCardView(
             Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(22.dp),
+                    .padding(18.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column {
@@ -182,35 +183,35 @@ private fun DiscoveryCardView(
                             if (card.type == "series") Icons.Default.Tv else Icons.Default.Movie,
                             contentDescription = null,
                             tint = accent,
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(12.dp),
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             card.eyebrow,
                             color = accent,
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 2.4.sp,
+                            letterSpacing = 2.2.sp,
                             fontFamily = Inter,
                         )
                     }
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         card.title,
                         color = Color.White,
-                        fontSize = 26.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Black,
-                        lineHeight = 30.sp,
+                        lineHeight = 25.sp,
                         fontFamily = Inter,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     if (card.itemCount > 0) {
                         Text(
                             "${card.itemCount} titles",
                             color = Color(0xFFCBD5E1),
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             fontFamily = Inter,
                         )
@@ -220,25 +221,25 @@ private fun DiscoveryCardView(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         color = if (focused) accent else Color(0x26FFFFFF),
-                        shape = RoundedCornerShape(22.dp),
+                        shape = RoundedCornerShape(18.dp),
                     ) {
                         Row(
-                            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 "Browse",
                                 color = if (focused) Color.Black else Color.White,
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = Inter,
                             )
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(5.dp))
                             Icon(
                                 Icons.Default.ArrowForward,
                                 contentDescription = null,
                                 tint = if (focused) Color.Black else Color.White,
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(12.dp),
                             )
                         }
                     }
@@ -258,7 +259,9 @@ private fun PosterQuad(posters: List<String>) {
     Row(
         Modifier
             .fillMaxSize()
-            .padding(start = 200.dp),
+            // Poster grid occupies the right ~45% of the card so the text
+            // column on the left (340 × 0.55 ≈ 188 dp) has breathing room.
+            .padding(start = 160.dp),
     ) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             PosterTile(posters.getOrNull(0), Modifier.weight(1f))

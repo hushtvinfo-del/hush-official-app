@@ -110,7 +110,11 @@ fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
 
 @Composable
 private fun DiscoveryTitleBlock(card: DiscoveryCard) {
-    Column(Modifier.fillMaxWidth(0.52f)) {
+    // 42% of content width — the card row below spans ~0–720 dp (two 340 dp
+    // cards + 16 dp gap), which is ~60% of a typical 1200 dp content area,
+    // so the title column must stay inside the left 40% to not visually
+    // overlap the cards.
+    Column(Modifier.fillMaxWidth(0.42f)) {
         // Cyan (or violet for series) eyebrow with icon
         Row(verticalAlignment = Alignment.CenterVertically) {
             val accent = if (card.type == "series") Color(0xFFA78BFA) else Cyan
@@ -130,58 +134,59 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
                 fontFamily = Inter,
             )
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
 
-        // Title — gigantic Inter Black
+        // Title — Inter Black, sized so 2 lines fit comfortably above the
+        // card row even on 720p TVs.
         Text(
             card.title,
             color = Color.White,
-            fontSize = 60.sp,
+            fontSize = 48.sp,
             fontWeight = FontWeight.Black,
-            lineHeight = 62.sp,
+            lineHeight = 50.sp,
+            fontFamily = Inter,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        // Subtitle (2 lines max)
+        Text(
+            card.subtitle,
+            color = Color(0xFFE2E8F0),
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
             fontFamily = Inter,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(14.dp))
 
-        // Subtitle
-        Text(
-            card.subtitle,
-            color = Color(0xFFE2E8F0),
-            fontSize = 15.sp,
-            lineHeight = 22.sp,
-            fontFamily = Inter,
-        )
-        Spacer(Modifier.height(18.dp))
-
-        // Count chip + fire icon
+        // Count chip
         if (card.itemCount > 0) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    color = Color(0x26FFFFFF),
-                    shape = RoundedCornerShape(20.dp),
+            Surface(
+                color = Color(0x26FFFFFF),
+                shape = RoundedCornerShape(18.dp),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Icons.Default.LocalFireDepartment,
-                            contentDescription = null,
-                            tint = Color(0xFFF97316),
-                            modifier = Modifier.width(14.dp).height(14.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "${card.itemCount} TITLES IN THIS COLLECTION",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp,
-                            fontFamily = Inter,
-                        )
-                    }
+                    Icon(
+                        Icons.Default.LocalFireDepartment,
+                        contentDescription = null,
+                        tint = Color(0xFFF97316),
+                        modifier = Modifier.width(12.dp).height(12.dp),
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        "${card.itemCount} TITLES",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        fontFamily = Inter,
+                    )
                 }
             }
         }
