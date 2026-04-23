@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -96,7 +97,7 @@ fun LayoutChooserDialog(
                         1.0f to Color(0xFF030509),
                     )
                 )
-                .padding(horizontal = 64.dp, vertical = 48.dp),
+                .padding(horizontal = 48.dp, vertical = 32.dp),
         ) {
             Column(
                 Modifier.fillMaxSize(),
@@ -111,35 +112,35 @@ fun LayoutChooserDialog(
                     fontWeight = FontWeight.Black,
                     fontFamily = Inter,
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "How should we show categories?",
                     color = Color.White,
-                    fontSize = 32.sp,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.Black,
-                    lineHeight = 34.sp,
+                    lineHeight = 28.sp,
                     fontFamily = Inter,
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     "This applies to Live TV, Movies and Series. " +
                         "You can change it anytime from Settings.",
                     color = Color(0xFF94A3B8),
-                    fontSize = 14.sp,
-                    lineHeight = 18.sp,
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
                     fontFamily = Inter,
                 )
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(20.dp))
 
                 // ── Two cards side-by-side ──
                 Row(
                     Modifier.fillMaxWidth().weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
                     LayoutCard(
                         title = "Top Bar",
                         subtitle = "RECOMMENDED · DEFAULT",
-                        description = "Compact toolbar at the top. Click BROWSE to pop a full-screen category picker. More room for your library.",
+                        description = "Compact toolbar at the top with a BROWSE dropdown. More room for your library.",
                         selected = currentMode == LayoutPrefsStore.MODE_TOP,
                         preview = { TopBarPreview() },
                         focusRequester = topFocus,
@@ -149,7 +150,7 @@ fun LayoutChooserDialog(
                     LayoutCard(
                         title = "Left Sidebar",
                         subtitle = "CLASSIC",
-                        description = "Persistent vertical category rail on the left. Every category visible at once — fastest to scan.",
+                        description = "Persistent vertical category rail on the left — every category visible at once.",
                         selected = currentMode == LayoutPrefsStore.MODE_SIDEBAR,
                         preview = { SidebarPreview() },
                         focusRequester = sideFocus,
@@ -158,7 +159,7 @@ fun LayoutChooserDialog(
                     )
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(10.dp))
                 if (dismissable) {
                     Text(
                         "Press BACK to keep current layout",
@@ -191,7 +192,7 @@ private fun LayoutCard(
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(18.dp)
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.02f else 1f,
         animationSpec = tween(150),
@@ -199,7 +200,7 @@ private fun LayoutCard(
     )
     Column(
         modifier
-            .widthIn(max = 560.dp)
+            .widthIn(max = 520.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(
@@ -219,33 +220,39 @@ private fun LayoutCard(
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(24.dp),
+            .padding(18.dp),
     ) {
-        // Mini preview.
+        // Preview — fixed-height so it can't eat all the vertical
+        // space on shorter TV screens. weight(1f) absorbs any extra
+        // vertical space beyond that minimum.
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(12.dp))
+                .weight(1f, fill = true)
+                .heightIn(min = 100.dp, max = 170.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF050B17))
-                .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(12.dp)),
+                .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(10.dp)),
         ) {
             preview()
         }
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(12.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 subtitle,
                 color = Cyan,
                 fontSize = 10.sp,
-                letterSpacing = 2.5.sp,
+                letterSpacing = 2.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = Inter,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
             if (selected) {
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier
                         .background(Cyan, RoundedCornerShape(999.dp))
@@ -262,22 +269,26 @@ private fun LayoutCard(
                 }
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             title,
             color = Color.White,
-            fontSize = 26.sp,
+            fontSize = 22.sp,
             fontWeight = FontWeight.Black,
-            lineHeight = 28.sp,
+            lineHeight = 24.sp,
             fontFamily = Inter,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             description,
             color = Color(0xFFCBD5E1),
-            fontSize = 14.sp,
-            lineHeight = 19.sp,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
             fontFamily = Inter,
+            maxLines = 3,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
     }
 }
