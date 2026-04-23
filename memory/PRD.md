@@ -197,6 +197,26 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 11 — v1.9.4 Edge fill fix on Ken-Burns (2026-04-23 — completed, deployed)
+User feedback: "When the new background pics change there's some effect
+making the background not fill the right side of the screen — need it to
+just fill the whole main screen without this effect, blend seamlessly
+into the right side like you did for the left."
+
+- **Ken-Burns scale floor** (`HomeDiscoveryHeroLayer.kt`): the issue was
+  that `animateFloat(initialValue = 1.0f, targetValue = 1.08f)` paired
+  with ±25 px translation briefly exposed viewport edges — most visibly
+  at the right edge, and worst right after a crossfade when a fresh
+  image's scale animation started at 1.0 (exact viewport size, no
+  overflow buffer). Changed base scale to a minimum of **1.10** (range
+  1.10 → 1.18 linear 20 s loop) and reduced translation to **±12 px x,
+  ±8 px y**. At 1920 px TV width, 1.10× gives ~96 px of overflow per
+  side, far exceeding the 12 px drift — the image always over-fills the
+  viewport, so no edge is ever exposed. The backdrop now blends
+  edge-to-edge on both sides exactly like the left-menu blend.
+- Shipped as versionCode=68 / versionName="1.9.4" — APK (md5
+  `862be21d3a1cefd3ab7c5518c77288ff`) live on `https://hushtv.xyz`.
+
 ### Phase 10 — v1.9.3 Seam fix + instant cold start (2026-04-23 — completed, deployed)
 User feedback: "There's something wrong with the way the main screen —
 there's a gap between the left menu and the right background and it's

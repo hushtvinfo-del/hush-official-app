@@ -169,35 +169,37 @@ fun HomeDiscoveryHeroLayer(
 
 /**
  * Single Ken-Burns backdrop cell — slowly pans + zooms the image so a
- * static poster feels cinematic. 20 s linear loop, 1.0 → 1.08 scale,
- * subtle x/y offset that alternates direction per [panIndex] so
- * consecutive posters don't all pan the same way.
+ * static poster feels cinematic. 20 s linear loop, 1.10 → 1.18 scale
+ * (always over-filling so the translation buffer can never expose a
+ * bare edge), subtle ±12 px x / ±8 px y drift that alternates
+ * direction per [panIndex] so consecutive posters feel distinct.
  */
 @Composable
 private fun KenBurnsBackdrop(url: String, panIndex: Int) {
     val transition = rememberInfiniteTransition(label = "ken-burns-$panIndex")
     val scale by transition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.08f,
+        initialValue = 1.10f,
+        targetValue = 1.18f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 20_000, easing = LinearEasing),
         ),
         label = "ken-burns-scale",
     )
     // Alternate pan direction per index so consecutive posters feel
-    // distinct. Even = pan right-down, odd = pan left-up.
+    // distinct. Even = pan right-down, odd = pan left-up. Drift kept
+    // small so the 1.10+ base scale always covers every edge.
     val direction = if (panIndex % 2 == 0) 1f else -1f
     val translateX by transition.animateFloat(
-        initialValue = -25f * direction,
-        targetValue = 25f * direction,
+        initialValue = -12f * direction,
+        targetValue = 12f * direction,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 20_000, easing = LinearEasing),
         ),
         label = "ken-burns-tx",
     )
     val translateY by transition.animateFloat(
-        initialValue = -15f * direction,
-        targetValue = 15f * direction,
+        initialValue = -8f * direction,
+        targetValue = 8f * direction,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 20_000, easing = LinearEasing),
         ),
