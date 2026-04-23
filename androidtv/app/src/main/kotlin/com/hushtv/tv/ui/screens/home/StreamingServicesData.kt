@@ -114,9 +114,7 @@ private val MOVIE_SERVICES_BASE = listOf(
  * that box, not the tile dimensions. Used to compensate for PNGs that
  * ship with generous transparent padding around the actual wordmark.
  */
-private val CUSTOM_LOGO_SCALE = mapOf(
-    "prime" to 1.35f,
-)
+private val CUSTOM_LOGO_SCALE = mapOf<String, Float>()
 
 private val CUSTOM_LOGO_URLS = mapOf(
     "amc" to "https://raw.githubusercontent.com/tv-logo/tv-logos/refs/heads/main/countries/united-states/amc-us.png",
@@ -125,7 +123,7 @@ private val CUSTOM_LOGO_URLS = mapOf(
     "disney" to "https://github.com/tv-logo/tv-logos/blob/main/countries/united-states/disney-plus-us.png?raw=true",
     "netflix" to "https://static.vecteezy.com/system/resources/previews/017/396/804/non_2x/netflix-mobile-application-logo-free-png.png",
     "paramount" to "https://github.com/tv-logo/tv-logos/blob/main/countries/france/paramount-channel-fr.png?raw=true",
-    "prime" to "https://image.pngaaa.com/361/480361-middle.png",
+    "prime" to "https://static.vecteezy.com/system/resources/thumbnails/019/766/188/small/prime-video-logo-prime-video-icon-transparent-logo-free-png.png",
 )
 
 /**
