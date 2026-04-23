@@ -102,6 +102,31 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 31 — v1.13.1 Collections search filter (2026-04-23 — completed, deployed)
+User approved the potential-improvement suggestion: add a live search
+filter to the See All grid so users can quickly find franchises as the
+catalog grows beyond 150 items.
+
+Implementation:
+- Added `var query by mutableStateOf("")` to `TVCollectionsBrowseScreen`
+  and a `derivedStateOf`-backed `filtered` list that normalises both
+  the query and each collection's `displayName` via the existing
+  `TitleMatcher.normalize()`. Match is case/punctuation-insensitive
+  contains.
+- `CollectionsSearchBar` — 320 × 46 dp pill with search icon, cyan
+  focus ring, BasicTextField, X-to-clear button. Mirrors the existing
+  `SearchBox` styling in `TVBrowseScreen` for visual consistency.
+- D-pad wiring: Down from the search field → first grid card; Up from
+  the FIRST ROW of grid cards → back into the search field. Rows
+  below the first navigate within the grid normally. Click-to-clear
+  on the X tile also works with D-pad + OK.
+- Empty-state: when the query returns 0 matches the grid is replaced
+  by a centred "No franchises match 'query'" message + subtext.
+- Header subtitle now shows "N of M match" when filtering.
+
+- Shipped as versionCode=104 / versionName="1.13.1" — APK (md5
+  `51e6f0c9c0b0359958775b6c31ef37e2`) live on `https://hushtv.xyz`.
+
 ### Phase 30 — v1.13.0 Collections catalog explosion + See All (2026-04-23 — completed, deployed)
 User asked for "way more collections, like 500 top collections" with
 a "See All" tile on the home row leading to a dedicated browse screen.

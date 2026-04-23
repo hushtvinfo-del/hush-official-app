@@ -26,15 +26,19 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.outlined.Slideshow
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,14 +53,22 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.hushtv.tv.data.TitleMatcher
 import com.hushtv.tv.ui.screens.home.MovieCollection
 import com.hushtv.tv.ui.screens.home.TopNavBar
 import com.hushtv.tv.ui.screens.home.TopNavTab
@@ -64,6 +76,8 @@ import com.hushtv.tv.ui.screens.home.rememberMovieCollections
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.Inter
+import com.hushtv.tv.ui.theme.SurfaceNavy
+import com.hushtv.tv.ui.theme.TextMuted
 import com.hushtv.tv.ui.tvFocusable
 
 /**
@@ -79,6 +93,20 @@ fun TVCollectionsBrowseScreen(
 ) {
     val collections = rememberMovieCollections()
 
+    // Live search state — normalised via TitleMatcher so e.g. typing
+    // "batman" matches "Batman (Christopher Nolan Collection)" and
+    // "batman!" alike.
+    var query by remember { mutableStateOf("") }
+    val filtered by remember(collections) {
+        derivedStateOf {
+            val q = TitleMatcher.normalize(query)
+            if (q.isBlank()) collections
+            else collections.filter {
+                TitleMatcher.normalize(it.displayName).contains(q)
+            }
+        }
+    }
+
     val tabs = remember {
         listOf(
             TopNavTab("home",   "Home",    Icons.Default.Home,       "menu/$playlistId"),
@@ -89,6 +117,7 @@ fun TVCollectionsBrowseScreen(
         )
     }
     val homeFocus = remember { FocusRequester() }
+    val searchFocus = remember { FocusRequester() }
     val firstCardFocus = remember { FocusRequester() }
     val gridFocus = remember { FocusRequester() }
     LaunchedEffect(collections.isNotEmpty()) {
@@ -115,10 +144,10 @@ fun TVCollectionsBrowseScreen(
                 .fillMaxSize()
                 .padding(top = 72.dp, start = 48.dp, end = 48.dp, bottom = 24.dp),
         ) {
-            // ── Page header — big franchise-browser title ──
+            // ── Page header + inline search bar ──
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 18.dp, bottom = 22.dp),
+                modifier = Modifier.padding(top = 18.dp, bottom = 20.dp).fillMaxWidth(),
             ) {
                 Box(
                     Modifier
@@ -126,7 +155,7 @@ fun TVCollectionsBrowseScreen(
                         .background(Cyan, RoundedCornerShape(2.dp))
                 )
                 Spacer(Modifier.width(14.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(
                         "FRANCHISES · ALL",
                         color = Cyan,
@@ -145,13 +174,24 @@ fun TVCollectionsBrowseScreen(
                         fontFamily = Inter,
                         maxLines = 1,
                     )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (query.isBlank())
+                            "${collections.size} franchises · click any to watch in order"
+                        else
+                            "${filtered.size} of ${collections.size} match \"$query\"",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 12.sp,
+                        fontFamily = Inter,
+                    )
                 }
                 Spacer(Modifier.width(24.dp))
-                Text(
-                    "${collections.size} franchises · click any to watch in order",
-                    color = Color(0xFF94A3B8),
-                    fontSize = 13.sp,
-                    fontFamily = Inter,
+                // ── Search bar ──
+                CollectionsSearchBar(
+                    value = query,
+                    onChange = { query = it },
+                    focusRequester = searchFocus,
+                    onDownToGrid = { runCatching { firstCardFocus.requestFocus() } },
                 )
             }
 
@@ -163,6 +203,25 @@ fun TVCollectionsBrowseScreen(
                         fontSize = 14.sp,
                         fontFamily = Inter,
                     )
+                }
+            } else if (filtered.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "No franchises match \"$query\"",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = Inter,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Try a different word or clear the search",
+                            color = Color(0xFF64748B),
+                            fontSize = 12.sp,
+                            fontFamily = Inter,
+                        )
+                    }
                 }
             } else {
                 // focusRestorer so D-pad Up → nav → D-pad Down returns
@@ -178,11 +237,12 @@ fun TVCollectionsBrowseScreen(
                         .focusRestorer()
                         .focusGroup(),
                 ) {
-                    items(collections, key = { it.id }) { coll ->
+                    items(filtered, key = { it.id }) { coll ->
                         BrowseCollectionCard(
                             coll = coll,
-                            isFirst = coll == collections.first(),
+                            isFirst = coll == filtered.first(),
                             firstCardFocus = firstCardFocus,
+                            onUpFromFirstRow = { runCatching { searchFocus.requestFocus() } },
                             onClick = {
                                 nav.navigate(
                                     "collection/$playlistId/${coll.tmdbCollectionId}/" +
@@ -197,11 +257,96 @@ fun TVCollectionsBrowseScreen(
     }
 }
 
+/**
+ * Single-line search bar — pure BasicTextField with cyan focus ring
+ * and an X-to-clear button. D-pad DOWN from the field jumps straight
+ * to the first grid card so TV users never have to tab through
+ * invisible focus targets.
+ */
+@Composable
+private fun CollectionsSearchBar(
+    value: String,
+    onChange: (String) -> Unit,
+    focusRequester: FocusRequester,
+    onDownToGrid: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .width(320.dp)
+            .height(46.dp)
+            .background(SurfaceNavy, RoundedCornerShape(10.dp))
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Cyan else Color(0x22FFFFFF),
+                shape = RoundedCornerShape(10.dp),
+            )
+            .padding(horizontal = 14.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            tint = if (focused) Cyan else TextMuted,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Box(Modifier.weight(1f)) {
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = TextStyle(color = Color.White, fontSize = 14.sp, fontFamily = Inter),
+                cursorBrush = SolidColor(Cyan),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { focused = it.isFocused }
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (ev.key) {
+                            Key.DirectionDown -> { onDownToGrid(); true }
+                            else -> false
+                        }
+                    },
+            )
+            if (value.isEmpty()) {
+                Text(
+                    "Search franchises…",
+                    color = TextMuted,
+                    fontSize = 14.sp,
+                    fontFamily = Inter,
+                )
+            }
+        }
+        if (value.isNotEmpty()) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(22.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Color(0x22FFFFFF))
+                    .focusable()
+                    .clickableWithEnter { onChange("") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Clear search",
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun BrowseCollectionCard(
     coll: MovieCollection,
     isFirst: Boolean,
     firstCardFocus: FocusRequester,
+    onUpFromFirstRow: () -> Unit,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -218,6 +363,16 @@ private fun BrowseCollectionCard(
             .onFocusChanged { focused = it.isFocused }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                // Only the first row should lift focus to the search
+                // bar — rows below just navigate within the grid.
+                if (isFirst && ev.key == Key.DirectionUp) {
+                    onUpFromFirstRow()
+                    return@onPreviewKeyEvent true
+                }
+                false
+            }
             .clickableWithEnter(onClick)
             .graphicsLayer {
                 scaleX = scale; scaleY = scale
