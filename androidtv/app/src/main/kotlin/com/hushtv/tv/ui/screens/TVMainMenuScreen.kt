@@ -268,10 +268,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // hero backdrop renders. Defaults to "discovery" because the user
         // explicitly wanted Discovery to be the default main home section.
         var heroSection by remember { mutableStateOf("discovery") }
-        // If the user has Continue Watching entries, the D-pad-Down from
-        // the nav lands there first (most contextually useful). Otherwise
-        // it lands on the first Discovery card.
-        val navDownTarget = if (continueEntries.isNotEmpty()) "cw" else "discovery"
 
         // Top nav is ALWAYS visible — static, never hides. The auto-hide
         // behaviour was causing visual "breaks" when the user D-padded
@@ -301,6 +297,14 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         }
 
         val showCwPage = currentPage == "cw" && hasCw
+
+        // Nav-Down target — follows the CURRENTLY VISIBLE page so the
+        // requestFocus() call always hits a composable that's actually
+        // attached to the tree. If we used `hasCw` alone it could target
+        // `firstCwFocus` when the CW page isn't composed (user is on
+        // Discovery page), silently failing and leaving focus trapped
+        // in the nav.
+        val navDownTarget = if (showCwPage) "cw" else "discovery"
 
         // Static top nav height — hero + content start right below it
         // at a constant 72 dp offset. No animation.
@@ -403,9 +407,12 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                                         nav.navigate("browse/$playlistId/${card.type}?category=$encoded")
                                     },
                                     firstItemFocus = firstDiscoveryFocus,
-                                    onUpFromFirstItem = {
-                                        // Slide back up to CW page when it
-                                        // exists; otherwise pop the nav.
+                                    // Row-level Up handler: fires for Up
+                                    // from ANY Discovery card (Latest
+                                    // Movies OR Latest Series). Routes
+                                    // back to CW page when CW exists,
+                                    // otherwise falls through to the nav.
+                                    onUpFromRow = {
                                         if (hasCw) {
                                             currentPage = "cw"
                                         } else {

@@ -71,16 +71,31 @@ fun HomeDiscoveryRow(
     contentStartPadding: androidx.compose.ui.unit.Dp = 96.dp,
     firstItemFocus: androidx.compose.ui.focus.FocusRequester? = null,
     onUpFromFirstItem: (() -> Unit)? = null,
+    onUpFromRow: (() -> Unit)? = null,
 ) {
     if (cards.isEmpty()) return
 
     Column(
-        Modifier.fillMaxWidth().padding(
-            start = contentStartPadding,
-            end = 48.dp,
-            top = 16.dp,
-            bottom = 32.dp,
-        ),
+        Modifier
+            .fillMaxWidth()
+            .padding(
+                start = contentStartPadding,
+                end = 48.dp,
+                top = 16.dp,
+                bottom = 32.dp,
+            )
+            // Row-level D-pad UP handler — fires onUpFromRow on Up from
+            // ANY card in the row (not just the first). The parent uses
+            // this to slide back up to the CW page (or pop the nav).
+            .onPreviewKeyEvent { ev ->
+                if (onUpFromRow != null &&
+                    ev.type == KeyEventType.KeyDown &&
+                    ev.key == Key.DirectionUp
+                ) {
+                    onUpFromRow.invoke()
+                    true
+                } else false
+            },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
