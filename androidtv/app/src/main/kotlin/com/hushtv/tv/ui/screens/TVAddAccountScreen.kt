@@ -109,11 +109,14 @@ fun TVAddAccountScreen(nav: NavController) {
                 )
         )
 
-        // Two-column layout
+        // Two-column layout. Outer padding is kept conservative on top/bottom
+        // (32 dp) so on TVs with overscan the Connect button at the bottom
+        // and the header at the top are never clipped. Horizontal padding
+        // matches the rest of the app.
         Row(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 96.dp, vertical = 54.dp),
+                .padding(horizontal = 72.dp, vertical = 32.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // ── LEFT: branding ─────────────────────────────
@@ -123,33 +126,33 @@ fun TVAddAccountScreen(nav: NavController) {
                     .padding(end = 40.dp),
                 verticalArrangement = Arrangement.Center,
             ) {
-                HushTVLogo(fontSize = 64.sp)
-                Spacer(Modifier.height(10.dp))
+                HushTVLogo(fontSize = 52.sp)
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "Your Stream. Your Way.",
                     color = TextMuted,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontFamily = Inter,
                     letterSpacing = 1.7.sp,
                 )
-                Spacer(Modifier.height(40.dp))
+                Spacer(Modifier.height(28.dp))
                 Text(
                     "Welcome back",
                     color = TextPrimary,
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontFamily = Inter,
                     fontWeight = FontWeight.Bold,
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     "Sign in with your HushTV credentials to pick up exactly where you left off — " +
                         "live channels, movies, series, and your watchlist, all on the big screen.",
                     color = TextSecondary,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontFamily = Inter,
-                    lineHeight = 20.sp,
+                    lineHeight = 18.sp,
                 )
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(18.dp))
                 BulletPoint("Thousands of live channels and premium VOD")
                 Spacer(Modifier.height(6.dp))
                 BulletPoint("Per-profile watch history & bookmarks")
@@ -164,7 +167,7 @@ fun TVAddAccountScreen(nav: NavController) {
                     .graphicsLayer { translationX = shakeX.value }
                     .background(Color(0x0FFFFFFF), RoundedCornerShape(16.dp))
                     .border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(16.dp))
-                    .padding(horizontal = 36.dp, vertical = 28.dp),
+                    .padding(horizontal = 32.dp, vertical = 24.dp),
                 verticalArrangement = Arrangement.Center,
             ) {
                 // Step dots
@@ -232,9 +235,16 @@ fun TVAddAccountScreen(nav: NavController) {
                     )
                 }
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(22.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Buttons sit AT the bottom of the card. Connect is primary
+                // (cyan fill + black text); Back is a tertiary outlined pill.
+                // Both are a full 56 dp tall so the focus ring is obvious and
+                // the text can't get squished by overscan on cramped TVs.
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     ConnectButton(
                         loading = loading,
                         success = success,
@@ -268,10 +278,6 @@ fun TVAddAccountScreen(nav: NavController) {
                                             host = XtreamApi.HUSH_HOST,
                                         ),
                                     )
-                                    // Mark the newly-created profile as "last used" so
-                                    // the next cold start auto-logs into it, and drop
-                                    // both the add screen and the picker from the back
-                                    // stack so BACK from the menu exits the app.
                                     LastProfileStore.save(ctx, newId)
                                     loading = false
                                     success = true
@@ -286,7 +292,10 @@ fun TVAddAccountScreen(nav: NavController) {
                             }
                         },
                     )
-                    BackButton(onClick = { nav.popBackStack() })
+                    BackButton(
+                        onClick = { nav.popBackStack() },
+                        modifier = Modifier.width(132.dp),
+                    )
                 }
             }
         }
@@ -450,10 +459,13 @@ private fun ConnectButton(
 }
 
 @Composable
-private fun BackButton(onClick: () -> Unit) {
+private fun BackButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var focused by remember { mutableStateOf(false) }
     Box(
-        Modifier
+        modifier
             .height(56.dp)
             .background(
                 if (focused) Color(0x3306B6D4) else Color(0x14FFFFFF),
@@ -466,8 +478,7 @@ private fun BackButton(onClick: () -> Unit) {
             )
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clickableWithEnter(onClick)
-            .padding(horizontal = 20.dp),
+            .clickableWithEnter(onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
