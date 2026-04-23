@@ -609,6 +609,30 @@ fun TVBrowseScreen(
                 onSettings = { nav.navigate("settings/$playlistId") },
             )
         }
+
+        // ── Category-picker overlay. Rendered at the ROOT Box so it
+        // sits above EVERY other pane (grid, toolbar). Previously the
+        // panel was nested inside the toolbar Column which let the
+        // poster grid bleed through. Top nav stays on top because it's
+        // rendered AFTER this overlay.
+        if (dropdownExpanded) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = 72.dp),
+            ) {
+                CategoryDropdownPanel(
+                    entries = sidebarEntries.filter { !it.isDivider && it.id != CAT_SEARCH },
+                    selectedId = selectedCatId,
+                    onPick = { id ->
+                        selectedCatId = id
+                        dropdownExpanded = false
+                        pendingJumpToGrid = true
+                    },
+                    onDismiss = { dropdownExpanded = false },
+                )
+            }
+        }
     }
 
     // ── Trailer dialog ───────────────────────────────────────────
@@ -723,15 +747,9 @@ private fun CategoryToolbar(
         }
     }
 
-    // ── Dropdown panel — shown below the toolbar when expanded ──
-    if (dropdownExpanded) {
-        CategoryDropdownPanel(
-            entries = entries,
-            selectedId = selectedId,
-            onPick = onCategoryPick,
-            onDismiss = onDropdownClose,
-        )
-    }
+    // NOTE: the dropdown panel is rendered at the ROOT Box level (see
+    // callsite) so it can overlay the whole screen. Was inside a Column
+    // previously which let the grid below bleed through the panel.
 }
 
 /** Pill-style dropdown trigger — current category + chevron. */

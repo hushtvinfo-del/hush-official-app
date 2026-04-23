@@ -287,6 +287,17 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         nav.navigate("player/${p.id}/${Uri.encode(url)}/${Uri.encode(ch.title)}/true")
     }
 
+    // Dropdown state — hoisted so the panel can be rendered as a
+    // fullscreen overlay at the ROOT Box level (above all content).
+    // Previously the panel was nested inside the toolbar Column which
+    // meant the preview bar still rendered below it — the user saw
+    // the CTV channel logo peeking through. This top-level overlay
+    // approach guarantees nothing can bleed through.
+    val dropdownFocus = remember { FocusRequester() }
+    val searchFocusTB = remember { FocusRequester() }
+    val guideFocus = remember { FocusRequester() }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
     Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
@@ -299,10 +310,6 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         // ── New toolbar — matches the Movies / Series browse style.
         // Replaces the old TopBar + left-sidebar combo. Holds the
         // category dropdown, live-search pill and a "GUIDE" CTA.
-        val dropdownFocus = remember { FocusRequester() }
-        val searchFocusTB = remember { FocusRequester() }
-        val guideFocus = remember { FocusRequester() }
-        var dropdownExpanded by remember { mutableStateOf(false) }
 
         LiveCategoryToolbar(
             selectedLabel = currentCategory?.category_name ?: "Live TV",
@@ -422,6 +429,30 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
             },
             onSettings = { nav.navigate("settings/$playlistId") },
         )
+    }
+
+    // ── Category-picker overlay. Rendered at the ROOT Box so it sits
+    // above every other pane (preview bar, channel list, toolbar) —
+    // fixes the "CTV logo bleed-through" the user reported. Top nav
+    // stays on top thanks to the preceding Box overlay ordering.
+    if (dropdownExpanded) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(top = 72.dp),
+        ) {
+            LiveCategoryPanel(
+                categories = uiCategories,
+                selectedIndex = selectedCatIndex,
+                onPick = { idx ->
+                    if (selectedCatIndex != idx) focusedChannelIdx = 0
+                    selectedCatIndex = idx
+                    dropdownExpanded = false
+                    pendingJumpToFirstChannel = true
+                },
+                onDismiss = { dropdownExpanded = false },
+            )
+        }
     }
     } // close outer Box
 }
@@ -760,16 +791,8 @@ private fun LiveCategoryToolbar(
             downTarget = downTarget,
         )
     }
-
-    // ── Dropdown panel — full-width, shown when expanded ──
-    if (dropdownExpanded) {
-        LiveCategoryPanel(
-            categories = categories,
-            selectedIndex = selectedIndex,
-            onPick = onPickCategory,
-            onDismiss = onDropdownClose,
-        )
-    }
+    // NOTE: the dropdown panel is rendered at the ROOT Box level
+    // (see callsite), NOT here, so it can overlay the whole screen.
 }
 
 @Composable
