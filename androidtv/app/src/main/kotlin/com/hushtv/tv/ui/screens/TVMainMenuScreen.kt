@@ -235,15 +235,49 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     //   2. CONTENT (card row pinned near the bottom)
     //   3. TOP NAV overlay (auto-hides when focus leaves it; reappears when
     //      the user D-pad-ups from the first content card)
+    // Hoisted so the root Box's onPreviewKeyEvent (Channel Up/Down
+    // shortcut) can read + mutate them.
+    val continueHandle = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
+    val continueEntries = continueHandle.entries
+    val hasCw = continueEntries.isNotEmpty()
+    var currentPage by remember(hasCw) {
+        mutableStateOf(if (hasCw) "cw" else "discovery")
+    }
+    val pageOrder = remember(hasCw) {
+        buildList {
+            if (hasCw) add("cw")
+            add("discovery")
+            add("ss_movies")
+            add("ss_series")
+        }
+    }
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(BgBlack),
+            .background(BgBlack)
+            .onPreviewKeyEvent { ev ->
+                // Channel Up / Down (Android TV remotes) + Page Up / Down
+                // (some TV remotes) → jump full Home pages from ANY focus.
+                if (ev.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                    return@onPreviewKeyEvent false
+                }
+                val k = ev.key
+                val isPageUp = k == androidx.compose.ui.input.key.Key.ChannelUp ||
+                    k == androidx.compose.ui.input.key.Key.PageUp
+                val isPageDown = k == androidx.compose.ui.input.key.Key.ChannelDown ||
+                    k == androidx.compose.ui.input.key.Key.PageDown
+                if (!isPageUp && !isPageDown) return@onPreviewKeyEvent false
+                val idx = pageOrder.indexOf(currentPage).coerceAtLeast(0)
+                val next = when {
+                    isPageUp && idx > 0 -> pageOrder[idx - 1]
+                    isPageDown && idx < pageOrder.lastIndex -> pageOrder[idx + 1]
+                    else -> null
+                }
+                if (next != null) { currentPage = next; true } else false
+            },
     ) {
-        // State for Home content. Hoisted here so BOTH the hero layer and
-        // the content layer can read them.
-        val continueHandle = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
-        val continueEntries = continueHandle.entries
+        // State for Home content. Continue entries already hoisted above.
         var heroEntry by remember { mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null) }
         LaunchedEffect(continueEntries.firstOrNull()) {
             if (heroEntry == null || continueEntries.none { it === heroEntry }) {
@@ -289,31 +323,20 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // return-to-resume flow); otherwise Discovery. Up/Down D-pad
         // slides cleanly between pages via AnimatedContent.
         //
+        // `hasCw` / `currentPage` / `pageOrder` are all hoisted above
+        // the root Box so the Channel-Up/Down shortcut handler there
+        // can read + mutate them.
+        //
         // Pages in vertical order (top → bottom):
         //   "cw"         → Continue Watching (optional)
         //   "discovery"  → Latest Movies / Latest Series
         //   "ss_movies"  → Streaming Services (Movies)
         //   "ss_series"  → Streaming Services (Series)
-        val hasCw = continueEntries.isNotEmpty()
-        var currentPage by remember(hasCw) {
-            mutableStateOf(if (hasCw) "cw" else "discovery")
-        }
+        //
         // If CW drops to empty while the user is on the CW page (they
         // long-pressed remove), bounce them to Discovery.
         LaunchedEffect(hasCw) {
             if (!hasCw && currentPage == "cw") currentPage = "discovery"
-        }
-
-        // Helper for deciding slide direction. Returns the page index
-        // in the vertical order so AnimatedContent can pick the right
-        // slide sign (up vs down) without hard-coding page names.
-        val pageOrder = remember(hasCw) {
-            buildList {
-                if (hasCw) add("cw")
-                add("discovery")
-                add("ss_movies")
-                add("ss_series")
-            }
         }
 
         // Streaming service state (loaded lazily on composition).
@@ -455,6 +478,37 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     onDismiss = { removePromptFor = null },
                 )
             }
+        }
+
+        // ── 2.5. PAGE INDICATOR ────────────────────────────────────
+        // Vertical dots + chevrons pinned to the right edge showing the
+        // current page position and hinting at pages above/below.
+        // Also hosts the Channel Up/Down / Page Up/Down shortcut keys
+        // for instant page jumping from any focus position.
+        val indicatorPages = remember(pageOrder) {
+            pageOrder.map { k ->
+                com.hushtv.tv.ui.screens.home.HomePage(
+                    key = k,
+                    label = when (k) {
+                        "cw" -> "WATCHING"
+                        "discovery" -> "DISCOVER"
+                        "ss_movies" -> "MOVIES"
+                        "ss_series" -> "SERIES"
+                        else -> k.uppercase()
+                    },
+                )
+            }
+        }
+        Box(
+            Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.Center,
+        ) {
+            com.hushtv.tv.ui.screens.home.HomePageIndicator(
+                pages = indicatorPages,
+                currentPage = currentPage,
+            )
         }
 
         // ── 3. STATIC TOP NAV ─────────────────────────────────────────

@@ -197,6 +197,30 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 22 — v1.11.2 Page indicator + Channel shortcuts (2026-04-23 — completed, deployed)
+User: "Page quick-jump dots pinned to the right edge + Channel Up/Down
+shortcuts → YES."
+
+Added:
+- `HomePageIndicator.kt` — new composable rendering a vertical stack of
+  dots at `Alignment.CenterEnd`, 20 dp end-padding. Inactive dots are
+  10 dp translucent-white circles; the active dot expands to an 88 dp
+  cyan pill revealing the page label (WATCHING / DISCOVER / MOVIES /
+  SERIES) via `animateDpAsState`. Chevron-up glyph above stack when
+  there's a page above; chevron-down glyph below when there's one
+  below. Discoverability cue without clutter.
+- `TVMainMenuScreen.kt`: Hoisted `continueHandle` / `continueEntries` /
+  `hasCw` / `currentPage` / `pageOrder` above the root Box so the root
+  Box's `onPreviewKeyEvent` can read + mutate `currentPage`. The root
+  handler intercepts `Key.ChannelUp`, `Key.ChannelDown`, `Key.PageUp`,
+  `Key.PageDown` and walks the `pageOrder` list up or down by one
+  page. Works from ANY focus position (nav tab, hero content, etc.).
+  Added `indicatorPages` list mapping page keys to display labels and
+  rendered the indicator as a sibling Box to the pager + nav.
+
+- Shipped as versionCode=83 / versionName="1.11.2" — APK (md5
+  `2e9a6f450cd92a60e8ef80a315b77c4b`) live on `https://hushtv.xyz`.
+
 ### Phase 21 — v1.11.0 Streaming Services section (2026-04-23 — completed, deployed)
 User asked for a new "Streaming Services" section on Home with two
 sub-pages: Streaming Services (Movies) and Streaming Services (Series),
