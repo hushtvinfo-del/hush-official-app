@@ -197,6 +197,31 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 8 — v1.9.1 Discovery card redesign (2026-04-23 — completed, deployed)
+User feedback: "Remove the movie posters from within the cards — with the
+current background it's too busy; fill them better with the text etc, and
+the background should fit the screen without scrolling."
+
+- **Discovery cards** (`HomeDiscoveryRow.kt`): stripped `PosterQuad` +
+  right-half poster mosaic entirely. Replaced with a poster-free,
+  typography-forward tile — 360×168 dp, vertical dark gradient fill, 4 dp
+  accent stripe on the left, eyebrow row (icon + label), massive
+  Inter-Black 26 sp title, 2-line subtitle, and a bottom row with a
+  monochrome count chip + accent-filled Browse CTA pill. Cyan accent for
+  Movies, violet for Series. Focus lifts the shadow from 6 → 24 dp,
+  brightens the fill gradient, thickens the accent border, and flips the
+  CTA pill to the accent colour with black text.
+- **Discovery hero layer** (`HomeDiscoveryHeroLayer.kt`): removed the
+  tilted cascading `PosterMosaic` (3 rotated columns with y-offsets and
+  `rotationZ = -6f` that visibly overflowed the viewport). Replaced with
+  a single full-bleed `AsyncImage` backdrop that auto-rotates through the
+  category's posters every 5 s via `LaunchedEffect` + `delay(5000)`.
+  Stronger horizontal darkening veil (92% → 25% opacity) keeps the left
+  45% text column legible. Bottom fade protects the pinned card row.
+  Everything stays inside the viewport — zero scroll, zero overflow.
+- Shipped as versionCode=65 / versionName="1.9.1" — APK (23,477,264 bytes)
+  live on `https://hushtv.xyz`, `version.json` bumped.
+
 ### Phase 7 — v1.3.4 D-pad grid focus fix (2026-04-22 — completed, deployed)
 User feedback: "Something is seriously wrong with the scrolling using the d
 pad in movies and series — when you scroll over right then down right etc

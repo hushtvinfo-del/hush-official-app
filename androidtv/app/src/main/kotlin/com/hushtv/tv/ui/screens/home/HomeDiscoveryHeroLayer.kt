@@ -1,16 +1,13 @@
 package com.hushtv.tv.ui.screens.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,12 +19,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,22 +36,21 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.Inter
+import kotlinx.coroutines.delay
 
 /**
- * Cinematic hero layer for the Discovery section. When a Discovery card is
- * focused, this layer paints a full-viewport backdrop made of a tilted
- * poster mosaic on the right half + a massive title block on the left.
- *
- * Designed to feel like the landing page of a premium streaming service —
- * no single backdrop image needed; we build it dynamically from the user's
- * own library.
+ * Discovery hero backdrop. The old version rendered a tilted, cascading
+ * wall of posters that overflowed the screen and felt cluttered. This
+ * replacement uses a single full-bleed backdrop (slowly auto-rotated from
+ * the category's posters) with a heavy left-to-right veil so the title
+ * column stays legible — everything stays inside the viewport, no scroll.
  */
 @Composable
 fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
     Box(Modifier.fillMaxSize().background(Color(0xFF05080F))) {
         if (card == null) {
-            // Empty state while data is loading — soft cyan radial glow so
-            // the screen doesn't look broken.
+            // Empty state while data loads — soft cyan radial glow so the
+            // screen doesn't look broken.
             Box(
                 Modifier
                     .fillMaxSize()
@@ -65,13 +64,34 @@ fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
             return
         }
 
-        // Right-half tilted poster mosaic
-        PosterMosaic(
-            posters = card.posters,
-            tintColor = if (card.type == "series") Color(0xFF8B5CF6) else Cyan,
-        )
+        val accent = if (card.type == "series") Color(0xFF8B5CF6) else Cyan
 
-        // Left-to-right darkening veil so the text column is readable
+        // Rotate through the card's posters every 5s so the backdrop
+        // feels alive without being busy. Fixed backdrop inside the
+        // viewport — no tilted mosaic, no overflow.
+        var posterIdx by remember(card.id) { mutableStateOf(0) }
+        LaunchedEffect(card.id, card.posters) {
+            if (card.posters.size <= 1) return@LaunchedEffect
+            while (true) {
+                delay(5000)
+                posterIdx = (posterIdx + 1) % card.posters.size
+            }
+        }
+        val posterUrl = card.posters.getOrNull(posterIdx)
+
+        // Full-bleed backdrop — fills the Home content area cleanly.
+        if (posterUrl != null) {
+            AsyncImage(
+                model = posterUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        // Left-to-right darkening veil so the text column is crisp. Heavy
+        // on the left where the copy sits, fading to ~35% opacity on the
+        // right so the backdrop still shows through.
         Box(
             Modifier
                 .fillMaxSize()
@@ -79,25 +99,41 @@ fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
                     Brush.horizontalGradient(
                         0.0f to Color(0xF205080F),
                         0.35f to Color(0xCC05080F),
-                        0.6f to Color(0x9905080F),
-                        1.0f to Color(0x3305080F),
+                        0.65f to Color(0x8005080F),
+                        1.0f to Color(0x4005080F),
                     )
                 )
         )
-        // Bottom fade — softens the area where the card row sits
+
+        // Bottom fade — softens the area where the card row sits so cards
+        // visually separate from the backdrop.
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         0.0f to Color.Transparent,
-                        0.65f to Color.Transparent,
+                        0.60f to Color.Transparent,
                         1.0f to Color(0xFF05080F),
                     )
                 )
         )
 
-        // Text column
+        // Accent tint from the bottom-right (cyan or violet) — gives the
+        // hero its signature colour temperature.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        0.0f to accent.copy(alpha = 0.12f),
+                        1.0f to Color.Transparent,
+                        radius = 900f,
+                    )
+                )
+        )
+
+        // Text column — left 45% of the hero.
         Column(
             Modifier
                 .fillMaxSize()
@@ -110,14 +146,11 @@ fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
 
 @Composable
 private fun DiscoveryTitleBlock(card: DiscoveryCard) {
-    // 42% of content width — the card row below spans ~0–720 dp (two 340 dp
-    // cards + 16 dp gap), which is ~60% of a typical 1200 dp content area,
-    // so the title column must stay inside the left 40% to not visually
-    // overlap the cards.
-    Column(Modifier.fillMaxWidth(0.42f)) {
-        // Cyan (or violet for series) eyebrow with icon
+    Column(Modifier.fillMaxWidth(0.45f)) {
+        val accent = if (card.type == "series") Color(0xFFA78BFA) else Cyan
+
+        // Eyebrow row — icon + category label.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            val accent = if (card.type == "series") Color(0xFFA78BFA) else Cyan
             Icon(
                 if (card.type == "series") Icons.Default.Tv else Icons.Default.Movie,
                 contentDescription = null,
@@ -136,33 +169,32 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
         }
         Spacer(Modifier.height(12.dp))
 
-        // Title — Inter Black, sized so 2 lines fit comfortably above the
-        // card row even on 720p TVs.
+        // Title — Inter Black, sized so two lines fit above the card row.
         Text(
             card.title,
             color = Color.White,
-            fontSize = 48.sp,
+            fontSize = 52.sp,
             fontWeight = FontWeight.Black,
-            lineHeight = 50.sp,
+            lineHeight = 54.sp,
             fontFamily = Inter,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(10.dp))
 
-        // Subtitle (2 lines max)
+        // Subtitle — short descriptive copy (2 lines max).
         Text(
             card.subtitle,
             color = Color(0xFFE2E8F0),
-            fontSize = 13.sp,
-            lineHeight = 18.sp,
+            fontSize = 14.sp,
+            lineHeight = 19.sp,
             fontFamily = Inter,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(14.dp))
 
-        // Count chip
+        // Count chip with fire icon.
         if (card.itemCount > 0) {
             Surface(
                 color = Color(0x26FFFFFF),
@@ -188,92 +220,6 @@ private fun DiscoveryTitleBlock(card: DiscoveryCard) {
                         fontFamily = Inter,
                     )
                 }
-            }
-        }
-    }
-}
-
-/**
- * Builds the tilted poster wall that sits on the right ~55% of the hero.
- * Three staggered columns rotated slightly off-axis, each fading out at the
- * edges. Gives the hero a premium "wall of posters" feel without any
- * asset pipeline work.
- */
-@Composable
-private fun PosterMosaic(posters: List<String>, tintColor: Color) {
-    if (posters.isEmpty()) return
-
-    Box(
-        Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                // Slight global rotation so the columns feel organic
-                rotationZ = -6f
-            },
-    ) {
-        val cols = 3
-        // Offsets per column — creates the staggered cascade
-        val offsetsY = listOf(-80.dp, 60.dp, -40.dp)
-        Row(
-            Modifier
-                .fillMaxSize()
-                .offset(x = 400.dp, y = 0.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            repeat(cols) { colIdx ->
-                PosterColumn(
-                    posters = posters.drop(colIdx).filterIndexed { i, _ -> i % cols == 0 },
-                    yOffset = offsetsY[colIdx % offsetsY.size],
-                )
-            }
-        }
-
-        // Tint glow emanating from the bottom-right corner (cyan/violet)
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        0.0f to tintColor.copy(alpha = 0.14f),
-                        1.0f to Color.Transparent,
-                        radius = 900f,
-                    )
-                )
-        )
-    }
-}
-
-@Composable
-private fun PosterColumn(posters: List<String>, yOffset: androidx.compose.ui.unit.Dp) {
-    Column(
-        Modifier
-            .width(180.dp)
-            .fillMaxHeight()
-            .offset(y = yOffset),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // Render each poster twice so the column is visually full top→bottom
-        val loop = (posters + posters).take(6)
-        loop.forEach { url ->
-            Box(
-                Modifier
-                    .width(180.dp)
-                    .height(260.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF0E1422)),
-            ) {
-                AsyncImage(
-                    model = url,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                // Darken posters slightly so the hero text remains dominant
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Color(0x40000000))
-                )
             }
         }
     }
