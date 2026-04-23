@@ -197,6 +197,44 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 10 — v1.9.3 Seam fix + instant cold start (2026-04-23 — completed, deployed)
+User feedback: "There's something wrong with the way the main screen —
+there's a gap between the left menu and the right background and it's
+making it very ugly; the menu and main screen need to flow and blend into
+one." + "Pre-fetch and cache TMDB backdrops on app startup: YES."
+
+- **Seam fix** (`TVMainMenuScreen.kt`): the bug was that the HERO
+  backdrop layer rendered inside a Box with `padding(start = 156.dp)`,
+  so the backdrop image had a hard edge at x=156 dp — visible as a
+  bright vertical line between the sidebar and the content. Restructured
+  so the hero layers (`HomeDiscoveryHeroLayer` + `HomeHeroLayer`) now
+  render EDGE-TO-EDGE, full-screen width, behind everything. State
+  (continue entries, discovery cards, focused entry) was hoisted out of
+  the padded Box so both the full-bleed hero and the padded card layer
+  share it. The interactive card rows stay in a `Box` with
+  `padding(start = 156.dp)` so they never overlap the sidebar. The blend
+  veil sits on top of the full-bleed hero, producing one continuous
+  Netflix-style canvas with no visible seam.
+- **Hero title padding** (`HomeDiscoveryHeroLayer.kt`): added a
+  `contentStartPadding` param (default 0.dp); `TVMainMenuScreen` passes
+  `156.dp` so the title block is offset past the sidebar while the
+  backdrop stays full-bleed.
+- **Instant cold start** (`DiscoveryCache.kt`, `HomeDiscoveryData.kt`):
+  new `DiscoveryCache` object — SharedPreferences cache keyed by
+  `playlistId:kind:(backdrops|posters|count)`. On first composition
+  `rememberDiscoveryCards` synchronously reconstructs cards from cache
+  via `buildCardsFromCache` so the hero renders hi-res artwork in the
+  first frame. `LaunchedEffect` still refreshes from Xtream + TMDB in
+  the background and persists the fresh art. If the cache has data the
+  user never sees the empty-state flash again.
+- **Coil image prefetch** (`HomeDiscoveryData.kt`): after fresh data
+  arrives, every backdrop URL is enqueued on `ctx.imageLoader` so the
+  disk cache is warm before the 12 s rotation fires. First swap is
+  flicker-free.
+- Shipped as versionCode=67 / versionName="1.9.3" — APK (md5
+  `ea79768f37519927b31662347ad19e36`) live on `https://hushtv.xyz`,
+  `version.json` bumped.
+
 ### Phase 9 — v1.9.2 TMDB backdrops + Ken-Burns + sidebar blend (2026-04-23 — completed, deployed)
 User feedback: "The background images that are rotating are very distorted,
 bad quality and rotating too fast — can you use better image quality etc.

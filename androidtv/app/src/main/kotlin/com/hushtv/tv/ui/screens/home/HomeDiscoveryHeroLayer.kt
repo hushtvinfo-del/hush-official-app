@@ -57,9 +57,16 @@ import kotlinx.coroutines.delay
  * match. Rotates through the art pool every 12 s with a fade crossfade
  * + Ken-Burns slow-pan so the screen feels alive without being busy.
  * Everything is bounded to the viewport — no scroll, no overflow.
+ *
+ * The BACKDROP is FULL-BLEED — rendered edge-to-edge so it passes
+ * cleanly beneath the left sidebar with no seam. Only the text column
+ * is offset by [contentStartPadding] (sidebar-avoiding inset).
  */
 @Composable
-fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
+fun HomeDiscoveryHeroLayer(
+    card: DiscoveryCard?,
+    contentStartPadding: androidx.compose.ui.unit.Dp = 0.dp,
+) {
     Box(Modifier.fillMaxSize().background(Color(0xFF05080F))) {
         if (card == null) {
             // Empty state while data loads — soft cyan radial glow so the
@@ -149,11 +156,11 @@ fun HomeDiscoveryHeroLayer(card: DiscoveryCard?) {
                 )
         )
 
-        // Text column — left 45% of the hero.
+        // Text column — left 45% of the hero, offset past the sidebar.
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = 0.dp, top = 44.dp, end = 48.dp),
+                .padding(start = contentStartPadding, top = 44.dp, end = 48.dp),
         ) {
             DiscoveryTitleBlock(card)
         }

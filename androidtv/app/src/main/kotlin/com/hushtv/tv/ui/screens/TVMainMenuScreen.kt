@@ -251,58 +251,64 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         //      through; first row sits at ~55% of the viewport so the hero
         //      text is fully visible on first render).
         // ── CONTENT layer (fixed-position canvas) ─────────────────────
-        // 156 dp left padding = sidebar width (140) + 16 dp gap, so content
-        // never overlaps the sidebar even when it's fully expanded.
+        // The HERO BACKDROP renders FULL-BLEED (edge-to-edge, x=0 → screen
+        // right) so it passes cleanly beneath the sidebar — no hard seam
+        // where the backdrop starts. Only the INTERACTIVE content (title
+        // text + card row) respects the 156 dp sidebar-avoiding padding
+        // (sidebar width 140 + 16 dp gap).
+        //
+        // State for Home content. Hoisted here so BOTH the full-bleed
+        // hero layer and the padded card row can read them.
+        val continueHandle = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
+        val continueEntries = continueHandle.entries
+        var heroEntry by remember { mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null) }
+        LaunchedEffect(continueEntries.firstOrNull()) {
+            if (heroEntry == null || continueEntries.none { it === heroEntry }) {
+                heroEntry = continueEntries.firstOrNull()
+            }
+        }
+
+        var removePromptFor by remember {
+            mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null)
+        }
+
+        val discoveryCards = com.hushtv.tv.ui.screens.home.rememberDiscoveryCards(playlistId)
+        var focusedDiscoveryCard by remember {
+            mutableStateOf<com.hushtv.tv.ui.screens.home.DiscoveryCard?>(null)
+        }
+        LaunchedEffect(discoveryCards.firstOrNull()) {
+            if (focusedDiscoveryCard == null ||
+                discoveryCards.none { it === focusedDiscoveryCard }
+            ) {
+                focusedDiscoveryCard = discoveryCards.firstOrNull()
+            }
+        }
+        val showDiscovery = continueEntries.isEmpty()
+
+        // ── 1. HERO LAYER ── Full-bleed, beneath the sidebar.
+        // The text column inside each hero layer receives a 156 dp start
+        // padding so the massive title doesn't sit under the sidebar.
+        if (showDiscovery) {
+            com.hushtv.tv.ui.screens.home.HomeDiscoveryHeroLayer(
+                card = focusedDiscoveryCard,
+                contentStartPadding = 156.dp,
+            )
+        } else {
+            com.hushtv.tv.ui.screens.home.HomeHeroLayer(
+                entry = heroEntry,
+                contentStartPadding = 156.dp,
+            )
+        }
+
+        // ── 2. INTERACTIVE CONTENT layer ─────────────────────────────
+        // Padded so the card row never overlaps the sidebar; everything
+        // focusable (Discovery / Continue Watching cards) lives here.
         Box(
             Modifier
                 .fillMaxSize()
                 .padding(start = 156.dp),
         ) {
-            val continueHandle = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
-            val continueEntries = continueHandle.entries
-            var heroEntry by remember { mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null) }
-            LaunchedEffect(continueEntries.firstOrNull()) {
-                if (heroEntry == null || continueEntries.none { it === heroEntry }) {
-                    heroEntry = continueEntries.firstOrNull()
-                }
-            }
-
-            // Long-press → remove prompt. Null means no prompt showing.
-            var removePromptFor by remember {
-                mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null)
-            }
-
-            // Discovery — shown when Continue Watching is empty.
-            val discoveryCards = com.hushtv.tv.ui.screens.home.rememberDiscoveryCards(playlistId)
-            var focusedDiscoveryCard by remember {
-                mutableStateOf<com.hushtv.tv.ui.screens.home.DiscoveryCard?>(null)
-            }
-            LaunchedEffect(discoveryCards.firstOrNull()) {
-                if (focusedDiscoveryCard == null ||
-                    discoveryCards.none { it === focusedDiscoveryCard }
-                ) {
-                    focusedDiscoveryCard = discoveryCards.firstOrNull()
-                }
-            }
-
-            val showDiscovery = continueEntries.isEmpty()
-
-            // Hero layer — Continue Watching artwork OR Discovery mosaic,
-            // depending on what the user is seeing below.
-            if (showDiscovery) {
-                com.hushtv.tv.ui.screens.home.HomeDiscoveryHeroLayer(card = focusedDiscoveryCard)
-            } else {
-                com.hushtv.tv.ui.screens.home.HomeHeroLayer(
-                    entry = heroEntry,
-                    contentStartPadding = 0.dp,
-                )
-            }
-
-            // Continue Watching row is PINNED TO THE BOTTOM of the content
-            // Box via Alignment.BottomStart. No LazyColumn, no focus-driven
-            // auto-scroll, no chance of the row riding up into the hero
-            // description. This is what the user kept asking for: the hero
-            // block stays put and the cards stay put, regardless of focus.
+            // Continue Watching row pinned to the bottom of the screen.
             if (continueEntries.isNotEmpty()) {
                 Box(
                     Modifier

@@ -7,6 +7,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import coil.imageLoader
+import coil.request.ImageRequest
+import com.hushtv.tv.data.DiscoveryCache
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.TmdbService
@@ -42,15 +45,26 @@ data class DiscoveryCard(
 }
 
 /**
- * Loads both discovery categories in parallel — "NEW RELEASES" movies and
- * "POPULAR SERIES". Posters + TMDB backdrops power the hero rotation when
- * a card is focused. Returns an empty list while loading so the parent
- * can gracefully render a soft placeholder.
+ * Loads Discovery card artwork with a two-phase strategy:
+ *
+ *  1) **Cache-first** — on first composition we synchronously read the
+ *     last-known-good backdrops/posters/counts out of [DiscoveryCache]
+ *     (SharedPreferences). The hero renders hi-res art INSTANTLY — no
+ *     empty-state flash on cold start, no waiting for 30+ TMDB calls.
+ *
+ *  2) **Background refresh** — a `LaunchedEffect` then re-fetches from
+ *     Xtream + TMDB. If the fresh data differs, the cards swap and the
+ *     cache is updated. Coil prefetches each backdrop URL to the disk
+ *     cache so the 12 s rotation + Ken-Burns crossfade is flicker-free.
  */
 @Composable
 fun rememberDiscoveryCards(playlistId: String): List<DiscoveryCard> {
     val ctx = LocalContext.current
-    var cards by remember(playlistId) { mutableStateOf<List<DiscoveryCard>>(emptyList()) }
+
+    // Seed state from cache on first composition so the hero is never empty.
+    var cards by remember(playlistId) {
+        mutableStateOf(buildCardsFromCache(ctx, playlistId))
+    }
 
     LaunchedEffect(playlistId) {
         val p = PlaylistStore.find(ctx, playlistId) ?: return@LaunchedEffect
@@ -69,6 +83,14 @@ fun rememberDiscoveryCards(playlistId: String): List<DiscoveryCard> {
                 m.await() to s.await()
             }
         }
+
+        // Persist fresh artwork so the NEXT cold start is instant.
+        DiscoveryCache.saveBackdrops(ctx, playlistId, "movie", movies.third)
+        DiscoveryCache.saveposters(ctx, playlistId, "movie", movies.second)
+        DiscoveryCache.saveItemCount(ctx, playlistId, "movie", movies.first.size)
+        DiscoveryCache.saveBackdrops(ctx, playlistId, "series", series.third)
+        DiscoveryCache.saveposters(ctx, playlistId, "series", series.second)
+        DiscoveryCache.saveItemCount(ctx, playlistId, "series", series.first.size)
 
         cards = listOf(
             DiscoveryCard(
@@ -96,9 +118,70 @@ fun rememberDiscoveryCards(playlistId: String): List<DiscoveryCard> {
                 itemCount = series.first.size,
             ),
         )
+
+        // Warm the Coil image cache for every backdrop we'll rotate
+        // through so the first swap is visible INSTANTLY.
+        prefetchAll(ctx, cards.flatMap { it.heroArt })
     }
 
     return cards
+}
+
+/**
+ * Reconstruct Discovery cards straight out of the SharedPreferences
+ * cache. Safe to call on the main thread — just a prefs read.
+ * Returns an empty list if we've never seen this playlist before.
+ */
+private fun buildCardsFromCache(
+    ctx: android.content.Context,
+    playlistId: String,
+): List<DiscoveryCard> {
+    val movieBackdrops = DiscoveryCache.loadBackdrops(ctx, playlistId, "movie")
+    val moviePosters = DiscoveryCache.loadPosters(ctx, playlistId, "movie")
+    val movieCount = DiscoveryCache.loadItemCount(ctx, playlistId, "movie")
+    val seriesBackdrops = DiscoveryCache.loadBackdrops(ctx, playlistId, "series")
+    val seriesPosters = DiscoveryCache.loadPosters(ctx, playlistId, "series")
+    val seriesCount = DiscoveryCache.loadItemCount(ctx, playlistId, "series")
+
+    if (movieBackdrops.isEmpty() && moviePosters.isEmpty() &&
+        seriesBackdrops.isEmpty() && seriesPosters.isEmpty()
+    ) return emptyList()
+
+    return listOf(
+        DiscoveryCard(
+            id = "latest-movies",
+            title = "Latest Movies",
+            eyebrow = "JUST ADDED",
+            subtitle = "Fresh blockbusters straight from the big screen — new every week.",
+            tag = "${movieCount} NEW",
+            type = "movie",
+            categoryName = "NEW RELEASES",
+            backdrops = movieBackdrops,
+            posters = moviePosters,
+            itemCount = movieCount,
+        ),
+        DiscoveryCard(
+            id = "latest-series",
+            title = "Latest Series",
+            eyebrow = "TRENDING NOW",
+            subtitle = "The hottest shows everyone's binging right now.",
+            tag = "${seriesCount} HOT",
+            type = "series",
+            categoryName = "POPULAR SERIES",
+            backdrops = seriesBackdrops,
+            posters = seriesPosters,
+            itemCount = seriesCount,
+        ),
+    )
+}
+
+/** Fire-and-forget Coil prefetch — warms the disk cache for each URL. */
+private fun prefetchAll(ctx: android.content.Context, urls: List<String>) {
+    val loader = ctx.imageLoader
+    urls.forEach { url ->
+        val req = ImageRequest.Builder(ctx).data(url).build()
+        loader.enqueue(req)
+    }
 }
 
 /**
