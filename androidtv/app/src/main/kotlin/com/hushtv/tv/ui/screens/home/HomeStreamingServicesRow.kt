@@ -140,31 +140,28 @@ private fun ServiceCardView(
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
-    val base: Modifier = if (focusRequester != null)
+    // The CARD box owns all focus + click behaviour. The label lives
+    // OUTSIDE in a plain (non-focusable, non-clickable) Text so it
+    // never picks up the focus border/highlight — clean separation.
+    val cardBase: Modifier = if (focusRequester != null)
         Modifier.focusRequester(focusRequester) else Modifier
 
-    // The whole unit = card + label below. Focus applies to the outer
-    // Column so the label and card glow together.
     Column(
-        base
-            .width(196.dp)
-            .onFocusChanged {
-                focused = it.isFocused
-                if (it.isFocused) onFocus()
-            }
-            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
-            .focusable()
-            .clickableWithEnter(onClick),
+        Modifier.width(196.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // ── CARD ──  pure logo-on-gradient. No internal text so each
-        // brand's logo has maximum visual weight. All logos rendered in
-        // an IDENTICAL 120 × 80 dp box with ContentScale.Fit, so they
-        // look the same visual size regardless of aspect ratio.
+        // ── CARD ──  pure logo-on-gradient. Focus ring + glow live here.
         Box(
-            Modifier
+            cardBase
                 .width(196.dp)
                 .height(118.dp)
+                .onFocusChanged {
+                    focused = it.isFocused
+                    if (it.isFocused) onFocus()
+                }
+                .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
+                .focusable()
+                .clickableWithEnter(onClick)
                 .shadow(
                     elevation = if (focused) 22.dp else 6.dp,
                     shape = cardShape,
@@ -198,9 +195,6 @@ private fun ServiceCardView(
                     )
             )
 
-            // Logo — identically-sized 140 × 74 dp box, ContentScale.Fit
-            // so the logo fills the box proportionally. No over-scaling
-            // (we clamp with bounded size), no stretching, no spillover.
             val logoUrl = service.logoUrl
             if (logoUrl != null) {
                 AsyncImage(
@@ -212,7 +206,6 @@ private fun ServiceCardView(
                         .height(74.dp),
                 )
             } else {
-                // Fallback wordmark while the logo loads / fails.
                 Text(
                     service.displayName,
                     color = service.accent,
@@ -223,8 +216,10 @@ private fun ServiceCardView(
             }
         }
 
-        // ── LABEL below the card ── same line for every tile, no chance
-        // of collision with the logo art inside the card.
+        // ── LABEL beneath the card ── plain Text in a Box with NO
+        // focusable / clickable modifiers, so Compose never draws a
+        // focus ring or highlight around it. Fully decoupled from the
+        // card above.
         Spacer(Modifier.height(10.dp))
         Text(
             service.displayName,

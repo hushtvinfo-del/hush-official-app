@@ -84,13 +84,12 @@ fun HomeStreamingServicesHeroLayer(
             BrandedHeroBackdrop(s)
         }
 
-        // Left-column text stays stable across the crossfade (sits ON
-        // TOP of the AnimatedContent so it doesn't flicker). Positioned
-        // higher up so it never crowds the card row below.
+        // Left-column text — positioned to sit vertically centered
+        // against the content zone between the nav and the card row.
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = contentStartPadding, top = 8.dp, end = 48.dp),
+                .padding(start = contentStartPadding, top = 72.dp, end = 48.dp),
         ) {
             BrandedHeroCopy(service)
         }
