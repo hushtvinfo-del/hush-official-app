@@ -82,6 +82,7 @@ fun TopNavBar(
     homeFocus: FocusRequester,
     onTab: (TopNavTab) -> Unit,
     onSettings: () -> Unit,
+    daysLeft: Long? = null,
 ) {
     Box(
         Modifier
@@ -128,6 +129,12 @@ fun TopNavBar(
             }
 
             Spacer(Modifier.weight(1f))
+
+            // ── Subscription expiry badge ──────────────────────────
+            if (daysLeft != null) {
+                ExpiryBadge(daysLeft = daysLeft)
+                Spacer(Modifier.width(14.dp))
+            }
 
             // ── Settings gear ──────────────────────────────────────
             SettingsIconButton(onClick = onSettings)
@@ -218,6 +225,49 @@ private fun TopNavTabView(
                 .width(underlineWidth)
                 .height(underlineThickness)
                 .background(underlineColor, RoundedCornerShape(2.dp))
+        )
+    }
+}
+
+/**
+ * Subscription expiry indicator. Tiny coloured dot + days-remaining
+ * text, rendered as a compact non-focusable pill.
+ *
+ *   • Green   → > 30 days left (healthy)
+ *   • Cyan    → 8–30 days left (fine but getting close)
+ *   • Amber   → 1–7 days left (renew soon)
+ *   • Red     → expired (0 or negative)
+ */
+@Composable
+private fun ExpiryBadge(daysLeft: Long) {
+    val (dotColor, label) = when {
+        daysLeft <= 0 -> Color(0xFFEF4444) to "EXPIRED"
+        daysLeft <= 7 -> Color(0xFFF59E0B) to "${daysLeft}d left"
+        daysLeft <= 30 -> Cyan to "${daysLeft}d left"
+        else -> Color(0xFF22C55E) to "${daysLeft}d left"
+    }
+    Row(
+        Modifier
+            .height(28.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0x14FFFFFF))
+            .padding(horizontal = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(dotColor),
+        )
+        Spacer(Modifier.width(7.dp))
+        Text(
+            label,
+            color = Color(0xFFE2E8F0),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.4.sp,
+            fontFamily = Inter,
         )
     }
 }

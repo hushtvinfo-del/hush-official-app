@@ -543,6 +543,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 homeFocus = topNavHomeFocus,
                 onTab = { t -> t.route?.let { nav.navigate(it) } },
                 onSettings = { nav.navigate("settings/$playlistId") },
+                daysLeft = daysLeft,
             )
         }
     }
