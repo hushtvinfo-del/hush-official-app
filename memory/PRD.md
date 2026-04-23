@@ -197,6 +197,39 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 14 — v1.9.8 CRITICAL: fix player launch lag + ANR crashes (2026-04-23 — completed, deployed)
+User feedback: "There is something wrong with the functionality in the
+app when you click play on movies or series — it's really dragging and
+lagging before it starts the player... I've seen it crashing a lot of
+times and exiting the app back to the device home screen."
+
+- **ROOT CAUSE** (`ThumbnailExtractor.kt`): the extractor's constructor
+  was calling `MediaMetadataRetriever().setDataSource(url, …)` inline,
+  and the extractor itself was instantiated inside `remember {}` in
+  `TVPlayerScreen` — which executes on the COMPOSITION THREAD (i.e. the
+  main UI thread). `setDataSource` for an HTTP URL opens the full video
+  file, reads its container headers, and indexes it; on slow networks
+  or large 4K VODs that takes 5–15 seconds. During that time the UI is
+  frozen, and Android's watchdog fires an ANR (Application Not
+  Responding) which exits the app back to the TV home screen —
+  matching the user's crash symptoms exactly.
+- **FIX** (`ThumbnailExtractor.kt`): made the constructor a no-op.
+  Added `initBlocking(url)` method that performs the `setDataSource`
+  handshake; documented that callers MUST invoke it on a background
+  dispatcher. `extract()` now returns `null` silently until `ready`.
+  Added `isUrlSupported(url)` static helper — HLS (.m3u8), MPEG-TS
+  (.ts), and DASH (.mpd) URLs return `false` so the extractor isn't
+  instantiated for formats `MediaMetadataRetriever` can't parse (it
+  hangs indefinitely on those).
+- **FIX** (`TVPlayerScreen.kt`): wrapped the extractor creation with
+  `isUrlSupported` + `isLive` gate. Added a `LaunchedEffect` that calls
+  `initBlocking()` inside `withContext(Dispatchers.IO) {}` so the
+  handshake NEVER touches the composition thread. Player now launches
+  instantly; scrubber thumbnails simply "warm up" a few seconds later
+  in the background.
+- Shipped as versionCode=72 / versionName="1.9.8" — APK (md5
+  `767ded374f9a6b4ed5250096e360b4ad`) live on `https://hushtv.xyz`.
+
 ### Phase 13 — v1.9.6 Hero title one-line + card proportion tune (2026-04-23 — completed, deployed)
 User feedback: "Can you make the latest movies background text say Latest
 Movies all in the same line (the same way you have latest series) and

@@ -100,10 +100,18 @@ fun TVPlayerScreen(
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
 
-    // Thumbnail preview extractor for scrubber (VOD only). Lazy-init so live
-    // streams never pay the cost.
+    // Thumbnail preview extractor for scrubber (VOD only, MP4/MKV only).
+    // The extractor is created lazily and its HTTP handshake runs on
+    // Dispatchers.IO — NEVER on the composition thread, because
+    // MediaMetadataRetriever.setDataSource() can block 5-15 s on slow
+    // networks and used to trigger ANR crashes on player launch.
     val thumbExtractor = remember(currentUrl, isLive) {
-        if (isLive) null else ThumbnailExtractor(currentUrl)
+        if (isLive || !ThumbnailExtractor.isUrlSupported(currentUrl)) null
+        else ThumbnailExtractor()
+    }
+    LaunchedEffect(thumbExtractor, currentUrl) {
+        val e = thumbExtractor ?: return@LaunchedEffect
+        withContext(Dispatchers.IO) { e.initBlocking(currentUrl) }
     }
     DisposableEffect(thumbExtractor) {
         onDispose { thumbExtractor?.release() }
