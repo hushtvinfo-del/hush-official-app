@@ -69,7 +69,6 @@ import coil.compose.SubcomposeAsyncImage
 import com.hushtv.tv.data.EpgProgram
 import com.hushtv.tv.data.EpgService
 import com.hushtv.tv.data.FavoritesStore
-import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.NavState
 import com.hushtv.tv.data.PlaylistStore
@@ -297,13 +296,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     val dropdownFocus = remember { FocusRequester() }
     val searchFocusTB = remember { FocusRequester() }
     val guideFocus = remember { FocusRequester() }
-    val resumeChipFocus = remember { FocusRequester() }
     var dropdownExpanded by remember { mutableStateOf(false) }
-
-    // Watching-Now resume state. Re-read on every recomposition so the
-    // chip updates immediately after the user returns from playback.
-    val resumeChannel = remember(playlistId) { LastChannelStore.load(ctx) }
-        ?.takeIf { it.playlistId == playlistId }
 
     Box(Modifier.fillMaxSize()) {
     Column(
@@ -346,16 +339,6 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
             searchFocus = searchFocusTB,
             guideFocus = guideFocus,
             downTarget = firstChannelFocus,
-            resumeChannel = resumeChannel,
-            onResumeChannel = {
-                resumeChannel?.let { rc ->
-                    nav.navigate(
-                        "player/${rc.playlistId}/${Uri.encode(rc.streamUrl)}/" +
-                            "${Uri.encode(rc.channelName)}/true"
-                    )
-                }
-            },
-            resumeChipFocus = resumeChipFocus,
         )
 
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
@@ -395,7 +378,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     channels.isEmpty() && !loadingChans -> "No channels in this category"
                     else -> null
                 },
-                topRowUpTarget = if (resumeChannel != null) resumeChipFocus else dropdownFocus,
+                topRowUpTarget = dropdownFocus,
             )
         }
     }
@@ -733,9 +716,6 @@ private fun LiveCategoryToolbar(
     searchFocus: FocusRequester,
     guideFocus: FocusRequester,
     downTarget: FocusRequester,
-    resumeChannel: LastChannelStore.LastChannel?,
-    onResumeChannel: () -> Unit,
-    resumeChipFocus: FocusRequester,
 ) {
     Row(
         Modifier
@@ -777,23 +757,6 @@ private fun LiveCategoryToolbar(
             )
         }
 
-        // "Watching Now" resume chip — shown only when we have a
-        // persisted last-watched channel. One-click jump straight
-        // back into playback. Explicit focusRequester + focusProperties
-        // so the chip is always reachable via D-pad (the flex spacer
-        // between it and the dropdown otherwise breaks 2D focus
-        // search's left/right resolution).
-        if (resumeChannel != null) {
-            Spacer(Modifier.width(20.dp))
-            WatchingNowChip(
-                channelName = resumeChannel.channelName,
-                onClick = onResumeChannel,
-                focusRequester = resumeChipFocus,
-                downTarget = downTarget,
-                rightTarget = dropdownFocus,
-            )
-        }
-
         // Flex spacer pushes the Browse + Search cluster to the right.
         Spacer(Modifier.weight(1f))
 
@@ -806,8 +769,6 @@ private fun LiveCategoryToolbar(
             focusRequester = dropdownFocus,
             downTarget = downTarget,
             rightTarget = searchFocus,
-            // When the resume chip exists, LEFT from Browse → chip.
-            leftTarget = if (resumeChannel != null) resumeChipFocus else null,
         )
 
         Spacer(Modifier.width(14.dp))
@@ -825,72 +786,6 @@ private fun LiveCategoryToolbar(
     // (see callsite), NOT here, so it can overlay the whole screen.
 }
 
-/**
- * Slim "▶ RESUME · CHANNEL" chip. Picks up the last-watched live
- * channel from `LastChannelStore` and lets the user jump back to
- * playback with a single click without scrolling the channel list.
- */
-@Composable
-private fun WatchingNowChip(
-    channelName: String,
-    onClick: () -> Unit,
-    focusRequester: FocusRequester,
-    downTarget: FocusRequester,
-    rightTarget: FocusRequester,
-) {
-    var focused by remember { mutableStateOf(false) }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .height(36.dp)
-            .background(
-                if (focused) Cyan else Color(0xFF0B1A2E),
-                RoundedCornerShape(18.dp),
-            )
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Cyan else Cyan.copy(alpha = 0.45f),
-                shape = RoundedCornerShape(18.dp),
-            )
-            .focusRequester(focusRequester)
-            .onFocusChanged { focused = it.isFocused }
-            .focusProperties {
-                down = downTarget
-                right = rightTarget
-            }
-            .focusable()
-            .clickableWithEnter(onClick)
-            .padding(horizontal = 12.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Default.PlayArrow,
-            contentDescription = null,
-            tint = if (focused) Color(0xFF05080F) else Cyan,
-            modifier = Modifier.size(15.dp),
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            "RESUME",
-            color = if (focused) Color(0xFF05080F) else Cyan,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 1.6.sp,
-            fontFamily = Inter,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            channelName,
-            color = if (focused) Color(0xFF05080F) else Color.White,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = Inter,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 180.dp),
-        )
-    }
-}
-
 @Composable
 private fun LiveDropdownButton(
     label: String,
@@ -900,7 +795,6 @@ private fun LiveDropdownButton(
     focusRequester: FocusRequester,
     downTarget: FocusRequester,
     rightTarget: FocusRequester,
-    leftTarget: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
@@ -919,7 +813,6 @@ private fun LiveDropdownButton(
             .focusProperties {
                 down = downTarget
                 right = rightTarget
-                if (leftTarget != null) left = leftTarget
             }
             .focusable()
             .clickableWithEnter(onToggle),
