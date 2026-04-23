@@ -226,6 +226,16 @@ fun TVBrowseScreen(
                 }
             }
         }
+        // ── Default sort ──
+        // Movies: most recently added first (Xtream `added` unix ts).
+        // Series: most recently modified first (same underlying field —
+        // XtreamApi maps `last_modified` into `addedTs` for parity).
+        // Items with a 0 timestamp (no value from the provider) sink to
+        // the bottom, alphabetically among themselves.
+        gridItems = gridItems.sortedWith(
+            compareByDescending<com.hushtv.tv.data.MediaCard> { it.addedTs }
+                .thenBy { it.title.lowercase() }
+        )
     }
 
     // ── Focus & detail state ─────────────────────────────────────
@@ -347,7 +357,15 @@ fun TVBrowseScreen(
                     returnToSidebarToken = returnToSidebarToken,
                     modifier = Modifier.requiredWidth(200.dp),
                     onBack = { nav.popBackStack() },
-                    onFocus = { id -> if (id != "__divider__" && id != "__divider2__") selectedCatId = id },
+                    onFocus = { id ->
+                        // Don't flip `selectedCatId` to CAT_SEARCH just by
+                        // focusing the row — that would auto-open the inline
+                        // search bar and swallow the user's context. They
+                        // must press Enter to actually open Search.
+                        if (id != "__divider__" && id != "__divider2__" && id != CAT_SEARCH) {
+                            selectedCatId = id
+                        }
+                    },
                     onEnter = { id ->
                         if (id == "__divider__" || id == "__divider2__") return@VodSidebar
                         selectedCatId = id

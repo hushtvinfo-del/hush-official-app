@@ -87,6 +87,27 @@ data class TmdbRecommendation(
 data class TmdbRecommendations(val results: List<TmdbRecommendation> = emptyList())
 
 @JsonClass(generateAdapter = true)
+data class TmdbCollectionPart(
+    val id: Int = 0,
+    val title: String = "",
+    val release_date: String? = null,
+    val poster_path: String? = null,
+    val backdrop_path: String? = null,
+    val overview: String = "",
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbCollectionDetail(
+    val id: Int = 0,
+    val name: String = "",
+    val overview: String = "",
+    val backdrop_path: String? = null,
+    val poster_path: String? = null,
+    val parts: List<TmdbCollectionPart> = emptyList(),
+)
+
+
+@JsonClass(generateAdapter = true)
 data class TmdbMovie(
     val id: Int = 0,
     val title: String = "",
@@ -412,6 +433,48 @@ object TmdbService {
                 }
             }
             deferred.awaitAll().filterNotNull().toMap()
+        }
+
+    /**
+     * Fetch the backdrop URL for each TMDB collection ID in parallel.
+     * Uses `/collection/{id}` which returns the collection's metadata
+     * including `backdrop_path`. Returns `{collectionId → w1280 URL}`.
+     */
+    suspend fun backdropsForCollections(collectionIds: List<Int>): Map<Int, String> =
+        withContext(Dispatchers.IO) {
+            if (collectionIds.isEmpty()) return@withContext emptyMap()
+            val deferred = collectionIds.map { cid ->
+                async {
+                    runCatching {
+                        val url = "$BASE/collection/$cid?language=en-US&api_key=${ApiKeys.TMDB}"
+                        val body = client.newCall(Request.Builder().url(url).build())
+                            .execute().body?.string() ?: return@runCatching null
+                        val parsed = moshi.adapter(TmdbCollectionDetail::class.java)
+                            .fromJson(body)
+                        val imgUrl = img(parsed?.backdrop_path, "w1280")
+                        if (imgUrl != null) cid to imgUrl else null
+                    }.getOrNull()
+                }
+            }
+            deferred.awaitAll().filterNotNull().toMap()
+        }
+
+    /**
+     * Fetch the parts (movies) of a single TMDB collection. Returns the
+     * list of `{title, releaseYear, posterUrl}` for each part so the
+     * caller can match them against an Xtream library.
+     */
+    suspend fun getCollectionParts(collectionId: Int): List<TmdbCollectionPart> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val url = "$BASE/collection/$collectionId?language=en-US&api_key=${ApiKeys.TMDB}"
+                val body = client.newCall(Request.Builder().url(url).build())
+                    .execute().body?.string() ?: return@withContext emptyList()
+                moshi.adapter(TmdbCollectionDetail::class.java).fromJson(body)
+                    ?.parts
+                    ?.sortedBy { it.release_date ?: "9999" }
+                    ?: emptyList()
+            }.getOrDefault(emptyList())
         }
 
     /**

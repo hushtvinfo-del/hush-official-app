@@ -18,11 +18,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.outlined.Slideshow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -180,8 +183,10 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
 
     val currentCategory = uiCategories.getOrNull(selectedCatIndex)
     val filteredChannels = remember(channels, searchQuery) {
-        if (searchQuery.isBlank()) channels
+        val base = if (searchQuery.isBlank()) channels
         else channels.filter { it.title.contains(searchQuery, ignoreCase = true) }
+        // Default sort: alphabetical A-Z by channel title, case-insensitive.
+        base.sortedBy { it.title.lowercase() }
     }
 
     // Persist "what the player needs to know for CH+/-".
@@ -272,9 +277,11 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         nav.navigate("player/${p.id}/${Uri.encode(url)}/${Uri.encode(ch.title)}/true")
     }
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
             .fillMaxSize()
+            .padding(top = 72.dp)
             .background(
                 Brush.verticalGradient(0f to Color(0xFF050B18), 1f to Color(0xFF000000))
             )
@@ -362,6 +369,55 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
             }
         }
     }
+    // ── TOP NAV overlay ─────────────────────────────────────
+    val navTabs = remember {
+        listOf(
+            com.hushtv.tv.ui.screens.home.TopNavTab(
+                "home", "Home",
+                androidx.compose.material.icons.Icons.Default.Home,
+                "menu/$playlistId",
+            ),
+            com.hushtv.tv.ui.screens.home.TopNavTab(
+                "live", "Live TV",
+                androidx.compose.material.icons.Icons.Default.Tv,
+                "browse/$playlistId/live",
+            ),
+            com.hushtv.tv.ui.screens.home.TopNavTab(
+                "movies", "Movies",
+                androidx.compose.material.icons.Icons.Default.Movie,
+                "browse/$playlistId/movie",
+            ),
+            com.hushtv.tv.ui.screens.home.TopNavTab(
+                "series", "Series",
+                androidx.compose.material.icons.Icons.Outlined.Slideshow,
+                "browse/$playlistId/series",
+            ),
+            com.hushtv.tv.ui.screens.home.TopNavTab(
+                "search", "Search",
+                androidx.compose.material.icons.Icons.Default.Search,
+                "browse/$playlistId/search",
+            ),
+        )
+    }
+    val navHomeFocus = remember { FocusRequester() }
+    Box(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
+        com.hushtv.tv.ui.screens.home.TopNavBar(
+            tabs = navTabs,
+            activeKey = "live",
+            homeFocus = navHomeFocus,
+            onTab = { t ->
+                if (t.key == "live") return@TopNavBar
+                t.route?.let { route ->
+                    nav.navigate(route) {
+                        popUpTo("menu/$playlistId") { inclusive = false }
+                        launchSingleTop = true
+                    }
+                }
+            },
+            onSettings = { nav.navigate("settings/$playlistId") },
+        )
+    }
+    } // close outer Box
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

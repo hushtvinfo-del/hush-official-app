@@ -74,4 +74,16 @@ object DiscoveryCache {
     fun loadYearBackdrop(ctx: Context, year: Int): String? =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(yearKey(year), null)
+
+    // ── Collection backdrop cache (TMDB collection id) ──────────────
+    private fun collectionKey(collectionId: Int) = "collection:$collectionId"
+
+    fun saveCollectionBackdrop(ctx: Context, collectionId: Int, url: String) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(collectionKey(collectionId), url).apply()
+    }
+
+    fun loadCollectionBackdrop(ctx: Context, collectionId: Int): String? =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(collectionKey(collectionId), null)
 }
