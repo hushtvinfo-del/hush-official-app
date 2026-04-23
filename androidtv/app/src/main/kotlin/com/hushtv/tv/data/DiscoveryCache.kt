@@ -50,4 +50,16 @@ object DiscoveryCache {
             .getString(key, null) ?: return emptyList()
         return raw.split("\n").filter { it.isNotBlank() }
     }
+
+    // ── Genre backdrop cache (keyed by kind + tmdbGenreId) ──────────
+    private fun genreKey(kind: String, tmdbGenreId: Int) = "genre:$kind:$tmdbGenreId"
+
+    fun saveGenreBackdrop(ctx: Context, kind: String, tmdbGenreId: Int, url: String) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(genreKey(kind, tmdbGenreId), url).apply()
+    }
+
+    fun loadGenreBackdrop(ctx: Context, kind: String, tmdbGenreId: Int): String? =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(genreKey(kind, tmdbGenreId), null)
 }

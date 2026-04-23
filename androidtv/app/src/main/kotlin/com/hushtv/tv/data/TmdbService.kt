@@ -5,6 +5,8 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -346,6 +348,40 @@ object TmdbService {
             providerLogoCache[endpoint] = map
             map
         }
+
+    /**
+     * Resolve a high-res backdrop (w1280) for each TMDB genre ID by
+     * calling `/discover/{movie|tv}?with_genres={id}&sort_by=popularity.desc`
+     * in parallel. Picks the most popular title with a `backdrop_path`.
+     * Returns `{genreId → URL}` for ids where we found something.
+     */
+    suspend fun backdropsForGenres(
+        kind: String,
+        genreIds: List<Int>,
+    ): Map<Int, String> = withContext(Dispatchers.IO) {
+        if (genreIds.isEmpty()) return@withContext emptyMap()
+        val endpoint = if (kind == "series") "discover/tv" else "discover/movie"
+        // Run all lookups concurrently.
+        val deferred = genreIds.map { gid ->
+            async {
+                runCatching {
+                    val url = "$BASE/$endpoint?with_genres=$gid&sort_by=popularity.desc" +
+                        "&include_adult=false&include_video=false&language=en-US" +
+                        "&api_key=${ApiKeys.TMDB}"
+                    val body = client.newCall(Request.Builder().url(url).build()).execute()
+                        .body?.string() ?: return@runCatching null
+                    val parsed = moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)
+                    val backdropPath = parsed?.results
+                        ?.filter { !it.backdrop_path.isNullOrBlank() }
+                        ?.firstOrNull()
+                        ?.backdrop_path
+                    val imgUrl = img(backdropPath, "w1280")
+                    if (imgUrl != null) gid to imgUrl else null
+                }.getOrNull()
+            }
+        }
+        deferred.awaitAll().filterNotNull().toMap()
+    }
 
     /**
      * Heavy normaliser for Xtream-style messy titles:

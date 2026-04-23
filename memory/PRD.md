@@ -197,6 +197,58 @@ should auto-log me into my profile on app start."
 - Shipped as versionCode=26 / versionName="1.3.3" — APK (23,395,344 bytes)
   and version.json both live on `https://hushtv.xyz`.
 
+### Phase 25 — v1.12.1 Genres pages (Movies + Series) (2026-04-23 — completed, deployed)
+User asked for two new Home pages that list traditional genre buckets
+with beautiful per-genre backdrops + deep-link to matching Xtream
+categories. Exact movie/series lists provided in the request.
+
+Files added:
+- `data/TmdbService.kt`: new `backdropsForGenres(kind, genreIds)` that
+  runs `/discover/{movie|tv}?with_genres={id}&sort_by=popularity.desc`
+  for each genre ID IN PARALLEL via `async` + `awaitAll`, returns
+  `{genreId → w1280 URL}` for genres where TMDB found a backdrop.
+- `data/DiscoveryCache.kt`: added `saveGenreBackdrop` /
+  `loadGenreBackdrop` keyed by `genre:$kind:$tmdbGenreId` so cold start
+  paints each card instantly from cache, fresh fetches happen in
+  background.
+- `ui/screens/home/GenresData.kt`: `Genre` data class + hand-curated
+  `MOVIE_GENRES_BASE` (20 entries) + `SERIES_GENRES_BASE` (13 entries).
+  Each genre gets an accent palette (`gradientTop`/`gradientBottom`/
+  `accent`) tuned to the mood of the genre, a short evocative tagline,
+  and its corresponding `tmdbGenreId` (0 for genres with no TMDB
+  equivalent like "Standup" / "Sitcom"). `searchKeyword` field matches
+  the Xtream category name exactly so deep-links resolve cleanly.
+- `ui/screens/home/HomeGenresRow.kt`: `LazyRow` of 210×118 dp landscape
+  cards. Each card: backdrop image filling the card (or genre gradient
+  as fallback), bottom-to-top dark veil so the label is always crisp,
+  radial accent wash on focus, genre name in all-caps Inter-Black at
+  bottom-left. Genre-accent focus border (2.5 dp + shadow glow).
+  Column-level `onPreviewKeyEvent` handles Up/Down for pager paging.
+- `ui/screens/home/HomeGenresHeroLayer.kt`: full-bleed hero with
+  `AnimatedContent` 700 ms crossfade between backdrops. Ken-Burns scale
+  pulse (1.06 → 1.12, 22 s, no translation). Left 58% text column with
+  52 sp genre name + single-line tagline + accent-dotted "OPEN CATEGORY"
+  chip. Fallback to `gradientTop → gradientBottom` linear + radial
+  accent glow if TMDB didn't return anything.
+
+Files changed:
+- `TVMainMenuScreen.kt`: added `firstGenresMoviesFocus` /
+  `firstGenresSeriesFocus` requesters; extended `pageOrder` with
+  `"genres_movies"`, `"genres_series"`; added `rememberGenres("movie")`
+  + `rememberGenres("series")` state and focused genre state; added
+  two branches to the AnimatedContent `when`; updated
+  `LaunchedEffect(currentPage)` focus handoff; updated nav-down target
+  map; updated indicator labels to include `G·MOV` / `G·SER`; added
+  `GenresPage` private composable at file bottom that composes
+  `HomeGenresHeroLayer` + `HomeGenresRow` with proper callbacks.
+
+D-pad flow: SS Series → Down → Genres Movies → Down → Genres Series
+(last page, no Down). Up reverses. Channel Up/Down shortcut still
+walks the whole list.
+
+- Shipped as versionCode=97 / versionName="1.12.1" — APK (md5
+  `5d8911d9f565c66b3e485aee9bb10270`) live on `https://hushtv.xyz`.
+
 ### Phase 24 — v1.12.0 Unified top nav across browse screens (2026-04-23 — completed, deployed)
 User: "Bring the same top-nav + page indicator + hero treatment to the
 Movies and Series browse screens — yes, unifying them would give the

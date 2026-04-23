@@ -212,6 +212,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val firstDiscoveryFocus = remember { FocusRequester() }
     val firstSsMoviesFocus = remember { FocusRequester() }
     val firstSsSeriesFocus = remember { FocusRequester() }
+    val firstGenresMoviesFocus = remember { FocusRequester() }
+    val firstGenresSeriesFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { topNavHomeFocus.requestFocus() } }
 
     val onCardSelect: (MediaCard) -> Unit = sel@{ item ->
@@ -249,6 +251,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             add("discovery")
             add("ss_movies")
             add("ss_series")
+            add("genres_movies")
+            add("genres_series")
         }
     }
 
@@ -355,6 +359,22 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             if (focusedSsSeries == null) focusedSsSeries = ssSeries.firstOrNull()
         }
 
+        // Genre state — loaded lazily, cached per kind.
+        val genresMovies = com.hushtv.tv.ui.screens.home.rememberGenres("movie")
+        val genresSeries = com.hushtv.tv.ui.screens.home.rememberGenres("series")
+        var focusedGenreMovie by remember {
+            mutableStateOf<com.hushtv.tv.ui.screens.home.Genre?>(null)
+        }
+        var focusedGenreSeries by remember {
+            mutableStateOf<com.hushtv.tv.ui.screens.home.Genre?>(null)
+        }
+        LaunchedEffect(genresMovies.firstOrNull()) {
+            if (focusedGenreMovie == null) focusedGenreMovie = genresMovies.firstOrNull()
+        }
+        LaunchedEffect(genresSeries.firstOrNull()) {
+            if (focusedGenreSeries == null) focusedGenreSeries = genresSeries.firstOrNull()
+        }
+
         // Nav-Down target — follows the CURRENTLY VISIBLE page so the
         // requestFocus() call always hits a composable that's actually
         // attached to the tree.
@@ -431,7 +451,31 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         kind = "series",
                         firstItemFocus = firstSsSeriesFocus,
                         onUpFromRow = { currentPage = "ss_movies" },
-                        onDownFromRow = null, // nothing below
+                        onDownFromRow = { currentPage = "genres_movies" },
+                    )
+                    "genres_movies" -> GenresPage(
+                        playlistId = playlistId,
+                        nav = nav,
+                        genres = genresMovies,
+                        focused = focusedGenreMovie,
+                        onFocusedChange = { focusedGenreMovie = it },
+                        kindLabel = "GENRES · MOVIES",
+                        kind = "movie",
+                        firstItemFocus = firstGenresMoviesFocus,
+                        onUpFromRow = { currentPage = "ss_series" },
+                        onDownFromRow = { currentPage = "genres_series" },
+                    )
+                    "genres_series" -> GenresPage(
+                        playlistId = playlistId,
+                        nav = nav,
+                        genres = genresSeries,
+                        focused = focusedGenreSeries,
+                        onFocusedChange = { focusedGenreSeries = it },
+                        kindLabel = "GENRES · SERIES",
+                        kind = "series",
+                        firstItemFocus = firstGenresSeriesFocus,
+                        onUpFromRow = { currentPage = "genres_movies" },
+                        onDownFromRow = null,
                     )
                     else -> DiscoveryPage(
                         playlistId = playlistId,
@@ -463,6 +507,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         "discovery" -> firstDiscoveryFocus.requestFocus()
                         "ss_movies" -> firstSsMoviesFocus.requestFocus()
                         "ss_series" -> firstSsSeriesFocus.requestFocus()
+                        "genres_movies" -> firstGenresMoviesFocus.requestFocus()
+                        "genres_series" -> firstGenresSeriesFocus.requestFocus()
                     }
                 }
             }
@@ -494,6 +540,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         "discovery" -> "DISCOVER"
                         "ss_movies" -> "MOVIES"
                         "ss_series" -> "SERIES"
+                        "genres_movies" -> "G·MOV"
+                        "genres_series" -> "G·SER"
                         else -> k.uppercase()
                     },
                 )
@@ -530,6 +578,8 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                             "cw" -> firstCwFocus
                             "ss_movies" -> firstSsMoviesFocus
                             "ss_series" -> firstSsSeriesFocus
+                            "genres_movies" -> firstGenresMoviesFocus
+                            "genres_series" -> firstGenresSeriesFocus
                             else -> firstDiscoveryFocus
                         }
                         runCatching { target.requestFocus() }
@@ -1374,6 +1424,49 @@ private fun SsPage(
                     onFocusedServiceChange = onFocusedChange,
                     onServiceClick = { svc ->
                         val encoded = Uri.encode(svc.searchKeyword)
+                        nav.navigate("browse/$playlistId/$kind?category=$encoded")
+                    },
+                    firstItemFocus = firstItemFocus,
+                    onUpFromRow = onUpFromRow,
+                    onDownFromRow = onDownFromRow,
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun GenresPage(
+    playlistId: String,
+    nav: NavController,
+    genres: List<com.hushtv.tv.ui.screens.home.Genre>,
+    focused: com.hushtv.tv.ui.screens.home.Genre?,
+    onFocusedChange: (com.hushtv.tv.ui.screens.home.Genre) -> Unit,
+    kindLabel: String,
+    kind: String, // "movie" or "series"
+    firstItemFocus: FocusRequester,
+    onUpFromRow: () -> Unit,
+    onDownFromRow: (() -> Unit)?,
+) {
+    Box(Modifier.fillMaxSize()) {
+        com.hushtv.tv.ui.screens.home.HomeGenresHeroLayer(
+            genre = focused,
+            contentStartPadding = 80.dp,
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(start = 48.dp, end = 32.dp),
+        ) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
+                com.hushtv.tv.ui.screens.home.HomeGenresRow(
+                    genres = genres,
+                    kindLabel = kindLabel,
+                    contentStartPadding = 0.dp,
+                    onFocusedGenreChange = onFocusedChange,
+                    onGenreClick = { g ->
+                        val encoded = Uri.encode(g.searchKeyword)
                         nav.navigate("browse/$playlistId/$kind?category=$encoded")
                     },
                     firstItemFocus = firstItemFocus,
