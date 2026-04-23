@@ -36,7 +36,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -130,13 +129,24 @@ fun TVUnifiedSearchScreen(
     }
 
     // ── Query + filtered buckets ──
+    // Live-typing would filter three Xtream lists (can each be 10k+
+    // titles) on the main thread per keystroke → ANR / OOM / crash on
+    // big providers. Debounce the query + move the filtering work to
+    // Dispatchers.Default so typing is always buttery smooth and the
+    // provider lists are walked at most once every 350 ms.
     var query by remember { mutableStateOf("") }
-    val liveHits = rememberFiltered(query, liveAll) { it.title }
-    val moviesHits = rememberFiltered(query, moviesAll) { it.title }
-    val seriesHits = rememberFiltered(query, seriesAll) { it.title }
-    val collectionsHits = rememberFiltered(query, collectionsAll) { it.displayName }
+    val debouncedQuery = rememberDebouncedQuery(query, delayMs = 350L)
+
+    val liveHits by rememberAsyncFiltered(debouncedQuery, liveAll) { it.title }
+    val moviesHits by rememberAsyncFiltered(debouncedQuery, moviesAll) { it.title }
+    val seriesHits by rememberAsyncFiltered(debouncedQuery, seriesAll) { it.title }
+    val collectionsHits by rememberAsyncFiltered(debouncedQuery, collectionsAll) { it.displayName }
 
     val totalHits = liveHits.size + moviesHits.size + seriesHits.size + collectionsHits.size
+
+    // Show a spinner while the debounced query catches up to the raw
+    // query — prevents "no results" flashing between keystrokes.
+    val filtering = query.trim() != debouncedQuery.trim() && query.isNotBlank()
 
     // ── Focus + TopNav ──
     val tabs = remember {
@@ -223,6 +233,7 @@ fun TVUnifiedSearchScreen(
             when {
                 loading -> CenterNote("Indexing your library…")
                 query.isBlank() -> CenterNote("Type anything — channels, movies, series or franchises.")
+                filtering -> CenterNote("Searching…")
                 totalHits == 0 -> CenterNote("Nothing matches \"$query\".")
                 else -> {
                     androidx.compose.foundation.lazy.LazyColumn(
@@ -328,28 +339,71 @@ fun TVUnifiedSearchScreen(
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
+/**
+ * Returns the input query after no keystrokes for [delayMs]. Prevents
+ * every character press from triggering a big filter pass on the
+ * main thread. 350 ms is the sweet spot: feels instant while cutting
+ * ~10× keystroke amplification on typical typing speed.
+ */
 @Composable
-private fun <T> rememberFiltered(
+private fun rememberDebouncedQuery(query: String, delayMs: Long = 350L): String {
+    var debounced by remember { mutableStateOf(query) }
+    LaunchedEffect(query) {
+        delay(delayMs)
+        debounced = query
+    }
+    return debounced
+}
+
+/**
+ * Async, off-main-thread filter. Runs on Dispatchers.Default (CPU
+ * pool) so big Xtream libraries never stall the UI. Bails out of the
+ * current computation when the query changes (LaunchedEffect key)
+ * — no wasted work when the user keeps typing during a slow pass.
+ *
+ * Matching rules:
+ *   1. Full normalised query appears as substring of title, OR
+ *   2. Every normalised query word is a prefix of a title word.
+ * Caps each bucket at 40 hits to keep render cheap.
+ */
+@Composable
+private fun <T> rememberAsyncFiltered(
     query: String,
     source: List<T>,
     titleOf: (T) -> String,
-): List<T> {
-    val state = remember(query, source) {
-        derivedStateOf {
-            if (query.isBlank()) return@derivedStateOf emptyList<T>()
-            val q = TitleMatcher.normalize(query)
-            if (q.isBlank()) return@derivedStateOf emptyList<T>()
-            val queryWords = q.split(" ").filter { it.isNotBlank() }
-            source.asSequence().filter { item ->
-                val norm = TitleMatcher.normalize(titleOf(item))
-                if (norm.isBlank()) return@filter false
-                if (norm.contains(q)) return@filter true
-                val words = norm.split(" ")
-                queryWords.all { qw -> words.any { it.startsWith(qw) } }
-            }.take(40).toList()
+): androidx.compose.runtime.State<List<T>> {
+    val state = remember { mutableStateOf<List<T>>(emptyList()) }
+
+    // Reset to empty immediately whenever the query goes blank so the
+    // UI never shows stale hits under an empty search bar.
+    LaunchedEffect(query, source) {
+        val q = TitleMatcher.normalize(query)
+        if (q.isBlank() || source.isEmpty()) {
+            state.value = emptyList()
+            return@LaunchedEffect
         }
+        val queryWords = q.split(" ").filter { it.isNotBlank() }
+        // Push the actual scan off the main thread so a 30k-item walk
+        // can never ANR, even on cheap TV hardware.
+        val result = withContext(Dispatchers.Default) {
+            val bag = ArrayList<T>(40)
+            for (item in source) {
+                val norm = TitleMatcher.normalize(titleOf(item))
+                if (norm.isBlank()) continue
+                val match = norm.contains(q) || run {
+                    val words = norm.split(" ")
+                    queryWords.all { qw -> words.any { it.startsWith(qw) } }
+                }
+                if (match) {
+                    bag += item
+                    if (bag.size >= 40) break
+                }
+            }
+            bag
+        }
+        state.value = result
     }
-    return state.value
+    return state
 }
 
 @Composable
