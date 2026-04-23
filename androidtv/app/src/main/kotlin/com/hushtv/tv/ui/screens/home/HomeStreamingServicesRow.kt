@@ -153,7 +153,7 @@ private fun ServiceCardView(
     Column(
         base
             .width(180.dp)
-            .height(220.dp)
+            .height(196.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()

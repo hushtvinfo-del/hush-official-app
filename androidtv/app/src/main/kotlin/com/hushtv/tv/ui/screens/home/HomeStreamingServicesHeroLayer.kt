@@ -85,13 +85,14 @@ fun HomeStreamingServicesHeroLayer(
         }
 
         // Left-column text stays stable across the crossfade (sits ON
-        // TOP of the AnimatedContent so it doesn't flicker).
+        // TOP of the AnimatedContent so it doesn't flicker). Positioned
+        // higher up so it never crowds the card row below.
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = contentStartPadding, top = 32.dp, end = 48.dp),
+                .padding(start = contentStartPadding, top = 8.dp, end = 48.dp),
         ) {
-            BrandedHeroCopy(service, kindLabel)
+            BrandedHeroCopy(service)
         }
     }
 }
@@ -195,28 +196,11 @@ private fun BrandedHeroBackdrop(service: StreamingService) {
 }
 
 @Composable
-private fun BrandedHeroCopy(service: StreamingService, kindLabel: String) {
+private fun BrandedHeroCopy(service: StreamingService) {
     Column(Modifier.fillMaxWidth(0.58f)) {
-        // Eyebrow: "STREAMING SERVICES • MOVIES" (or SERIES).
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(width = 4.dp, height = 14.dp)
-                    .background(service.accent, RoundedCornerShape(2.dp))
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                kindLabel,
-                color = service.accent,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 3.sp,
-                fontFamily = Inter,
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-
         // Service name — big, confident. Single-line enforced.
+        // No red eyebrow / kind label here (the row header already says
+        // "STREAMING SERVICES · MOVIES" / "...SERIES").
         Text(
             service.displayName,
             color = Color.White,
