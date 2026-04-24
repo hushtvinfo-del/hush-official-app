@@ -5,23 +5,31 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,127 +45,256 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-/** Mobile unified search across movies, series and live channels. */
+/**
+ * Mobile unified search across movies, series and live channels — the
+ * thumb-first counterpart to the TV master-search feature.
+ *
+ *  Layout (top → bottom):
+ *    [ ← | 🔍 Search movies, series, channels…          ✕ ]
+ *    [ All · Movies · Series · Live ]              ← filter chips
+ *    [                                           ]
+ *    [  Section: MOVIES · 12                     ]
+ *    [  [poster] Title                           ]
+ *    [  [poster] Title                           ]
+ *    [  Section: SERIES · 3                      ]
+ *    [  …                                         ]
+ *
+ *  • Auto-focuses the input + opens soft keyboard on entry.
+ *  • Debounced 180 ms so typing doesn't block the main thread.
+ *  • Library index is pre-loaded once in the background so typing
+ *    feels instant.
+ *  • Filter chips narrow results to one kind (also works as a
+ *    visual preview of counts).
+ */
 @Composable
 fun MobileSearchScreen(nav: NavController, playlistId: String) {
     val ctx = LocalContext.current
     val playlist = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
+    val keyboard = LocalSoftwareKeyboardController.current
 
     var query by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf("all") }          // all | movie | series | live
     var movies by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var series by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var live by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
+    var indexReady by remember { mutableStateOf(false) }
 
-    // Pre-fetch full index ONCE so typing is instant.
+    // Pre-fetch the whole library index ONCE. Heavy call; runs off the
+    // main thread. While this is in flight we show a spinner so the
+    // user knows why results haven't appeared yet.
     var allMovies by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var allSeries by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var allLive by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
 
     LaunchedEffect(playlistId) {
-        if (playlist == null) return@LaunchedEffect
-        withContext(Dispatchers.IO) {
-            allMovies = runCatching {
+        if (playlist == null) { indexReady = true; return@LaunchedEffect }
+        val (m, s, l) = withContext(Dispatchers.IO) {
+            val m = runCatching {
                 XtreamApi.getAllStreams(playlist.host, playlist.username, playlist.password, "movie")
             }.getOrDefault(emptyList())
-            allSeries = runCatching {
+            val s = runCatching {
                 XtreamApi.getAllStreams(playlist.host, playlist.username, playlist.password, "series")
             }.getOrDefault(emptyList())
-            allLive = runCatching {
+            val l = runCatching {
                 XtreamApi.getAllStreams(playlist.host, playlist.username, playlist.password, "live")
             }.getOrDefault(emptyList())
+            Triple(m, s, l)
         }
+        allMovies = m
+        allSeries = s
+        allLive = l
+        indexReady = true
     }
 
-    // Debounced filter.
-    LaunchedEffect(query, allMovies, allSeries, allLive) {
+    // Debounced filter — re-runs on query change or when the index
+    // finishes loading (so the first keystrokes before indexReady don't
+    // silently drop).
+    LaunchedEffect(query, indexReady, allMovies, allSeries, allLive) {
         delay(180)
         val q = query.trim().lowercase()
         if (q.isEmpty()) {
             movies = emptyList(); series = emptyList(); live = emptyList()
             return@LaunchedEffect
         }
-        movies = allMovies.filter { it.title.lowercase().contains(q) }.take(40)
-        series = allSeries.filter { it.title.lowercase().contains(q) }.take(40)
-        live = allLive.filter { it.title.lowercase().contains(q) }.take(40)
+        movies = allMovies.filter { it.title.lowercase().contains(q) }.take(60)
+        series = allSeries.filter { it.title.lowercase().contains(q) }.take(60)
+        live = allLive.filter { it.title.lowercase().contains(q) }.take(60)
+    }
+
+    // Auto-focus the input so the keyboard opens immediately.
+    val fieldFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(120)
+        runCatching { fieldFocus.requestFocus() }
+        keyboard?.show()
     }
 
     Column(Modifier.fillMaxSize().background(Color(0xFF05080F))) {
+        // ── Search bar row ──────────────────────────────────────────
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Back button
             Box(
                 Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(40.dp)
+                    .clip(CircleShape)
                     .background(Color(0x22FFFFFF))
                     .clickable { nav.popBackStack() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Default.ArrowBack, null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp),
+                )
             }
-            Spacer(Modifier.width(8.dp))
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                placeholder = { Text("Search movies, series, channels…", color = Color(0xFF64748B), fontSize = 14.sp) },
-                singleLine = true,
-                leadingIcon = {
-                    Icon(Icons.Default.Search, null, tint = Color(0xFF94A3B8), modifier = Modifier.size(18.dp))
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0x18FFFFFF),
-                    unfocusedContainerColor = Color(0x10FFFFFF),
-                    focusedIndicatorColor = Cyan,
-                    unfocusedIndicatorColor = Color(0x33FFFFFF),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    cursorColor = Cyan,
-                ),
-                shape = RoundedCornerShape(10.dp),
-            )
+            Spacer(Modifier.width(10.dp))
+            // Search pill — BasicTextField inside a rounded surface so
+            // the height is stable and predictable on all screens.
+            Row(
+                Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color(0xFF0F1A2C))
+                    .border(1.dp, Cyan.copy(alpha = 0.35f), RoundedCornerShape(22.dp))
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Default.Search, null,
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) {
+                        Text(
+                            "Search movies, series, channels…",
+                            color = Color(0xFF64748B),
+                            fontSize = 14.sp,
+                        )
+                    }
+                    BasicTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(fieldFocus),
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        cursorBrush = SolidColor(Cyan),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    )
+                }
+                if (query.isNotEmpty()) {
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x1FFFFFFF))
+                            .clickable { query = "" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Default.Close, null,
+                            tint = Color(0xFFCBD5E1),
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                }
+            }
         }
 
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-            if (query.isBlank()) {
-                item {
-                    Text(
-                        "Start typing to search your library…",
-                        color = Color(0xFF64748B),
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(20.dp),
-                    )
-                }
-            } else if (movies.isEmpty() && series.isEmpty() && live.isEmpty()) {
-                item {
-                    Text(
-                        "No matches.",
-                        color = Color(0xFF64748B),
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(20.dp),
-                    )
-                }
-            } else {
-                if (movies.isNotEmpty()) {
-                    item { SectionHeader("MOVIES · ${movies.size}") }
-                    items(movies, key = { "m-${it.streamId}" }) { c ->
-                        SearchResultRow(c) { onCard(c, playlistId, nav) }
+        // ── Filter chip rail ─────────────────────────────────────────
+        LazyRow(
+            Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            val totalAll = movies.size + series.size + live.size
+            item { FilterChip("All", totalAll, filter == "all") { filter = "all" } }
+            item { FilterChip("Movies", movies.size, filter == "movie") { filter = "movie" } }
+            item { FilterChip("Series", series.size, filter == "series") { filter = "series" } }
+            item { FilterChip("Live", live.size, filter == "live") { filter = "live" } }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
+        // ── Results ──────────────────────────────────────────────────
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
+            when {
+                query.isBlank() -> {
+                    item {
+                        Column(
+                            Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                "Start typing to search",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Finds movies, series & live channels",
+                                color = Color(0xFF64748B),
+                                fontSize = 12.sp,
+                            )
+                        }
                     }
                 }
-                if (series.isNotEmpty()) {
-                    item { SectionHeader("SERIES · ${series.size}") }
-                    items(series, key = { "s-${it.seriesId}" }) { c ->
-                        SearchResultRow(c) { onCard(c, playlistId, nav) }
+                !indexReady -> {
+                    item {
+                        Box(
+                            Modifier.fillMaxWidth().padding(32.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                color = Cyan,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
                     }
                 }
-                if (live.isNotEmpty()) {
-                    item { SectionHeader("LIVE · ${live.size}") }
-                    items(live, key = { "l-${it.streamId}" }) { c ->
-                        SearchResultRow(c) { onCard(c, playlistId, nav) }
+                movies.isEmpty() && series.isEmpty() && live.isEmpty() -> {
+                    item {
+                        Text(
+                            "No matches for \"${query.trim()}\"",
+                            color = Color(0xFF64748B),
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(20.dp),
+                        )
+                    }
+                }
+                else -> {
+                    if ((filter == "all" || filter == "movie") && movies.isNotEmpty()) {
+                        item { SectionHeader("MOVIES", movies.size) }
+                        items(movies, key = { "m-${it.streamId}" }) { c ->
+                            SearchResultRow(c) { onCard(c, playlistId, nav) }
+                        }
+                    }
+                    if ((filter == "all" || filter == "series") && series.isNotEmpty()) {
+                        item { SectionHeader("SERIES", series.size) }
+                        items(series, key = { "s-${it.seriesId}" }) { c ->
+                            SearchResultRow(c) { onCard(c, playlistId, nav) }
+                        }
+                    }
+                    if ((filter == "all" || filter == "live") && live.isNotEmpty()) {
+                        item { SectionHeader("LIVE", live.size) }
+                        items(live, key = { "l-${it.streamId}" }) { c ->
+                            SearchResultRow(c) { onCard(c, playlistId, nav) }
+                        }
                     }
                 }
             }
@@ -165,16 +302,16 @@ fun MobileSearchScreen(nav: NavController, playlistId: String) {
     }
 }
 
-private fun onCard(card: com.hushtv.tv.data.MediaCard, playlistId: String, nav: androidx.navigation.NavController) {
+private fun onCard(card: MediaCard, playlistId: String, nav: NavController) {
     val ctx = nav.context
-    val p = com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId) ?: return
+    val p = PlaylistStore.find(ctx, playlistId) ?: return
     when (card.kind) {
         "live" -> {
-            val url = com.hushtv.tv.data.XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
+            val url = XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
             nav.navigate(mobilePlayerRoute(playlistId, url, card.title, isLive = true))
         }
         "movie" -> {
-            val url = com.hushtv.tv.data.XtreamApi.movieUrl(p.host, p.username, p.password, card.streamId, card.containerExtension)
+            val url = XtreamApi.movieUrl(p.host, p.username, p.password, card.streamId, card.containerExtension)
             nav.navigate(
                 mobilePlayerRoute(
                     playlistId = playlistId,
@@ -200,24 +337,61 @@ private fun onCard(card: com.hushtv.tv.data.MediaCard, playlistId: String, nav: 
     }
 }
 
-
-@androidx.compose.runtime.Composable
-private fun SectionHeader(title: String) {
-    Text(
-        title,
-        color = Cyan,
-        fontSize = 10.sp,
-        letterSpacing = 2.sp,
-        fontWeight = FontWeight.Black,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-    )
+@Composable
+private fun FilterChip(label: String, count: Int, selected: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) Cyan else Color(0x14FFFFFF)
+    val fg = if (selected) Color(0xFF05080F) else Color.White
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = fg,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        if (count > 0) {
+            Spacer(Modifier.width(6.dp))
+            Text(
+                count.toString(),
+                color = fg.copy(alpha = 0.75f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+            )
+        }
+    }
 }
 
-@androidx.compose.runtime.Composable
-private fun SearchResultRow(
-    card: com.hushtv.tv.data.MediaCard,
-    onClick: () -> Unit,
-) {
+@Composable
+private fun SectionHeader(label: String, count: Int) {
+    Row(
+        Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = Cyan,
+            fontSize = 10.sp,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Black,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "· $count",
+            color = Color(0xFF64748B),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun SearchResultRow(card: MediaCard, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -236,10 +410,10 @@ private fun SearchResultRow(
             contentAlignment = Alignment.Center,
         ) {
             if (!card.poster.isNullOrBlank()) {
-                coil.compose.AsyncImage(
+                AsyncImage(
                     model = card.poster, contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    contentScale = ContentScale.Crop,
                 )
             } else {
                 Text(
@@ -257,7 +431,7 @@ private fun SearchResultRow(
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
     }

@@ -102,6 +102,54 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 40 — v1.27.1 Mobile Search layout bug + polish (2026-04-24 — completed, deployed)
+User uploaded a screenshot showing the search screen with a full-screen
+cyan-bordered rectangle and no results rendering. Typed "terminator"
+but nothing came back.
+
+ROOT CAUSE: `MobileSearchScreen.kt` wrapped the `OutlinedTextField` in
+a `Row` with `fillMaxWidth()` and vertical padding but no height
+constraint, and the TextField itself was modified with
+`.weight(1f).fillMaxHeight()`. In Compose, `fillMaxHeight()` on a Row
+child whose Row has no bounded height resolves against the Column's
+full `fillMaxSize()` — so the text field exploded to fill the entire
+viewport. The LazyColumn below it got zero space, hiding every result
+even though the filter logic was running fine.
+
+Files changed:
+- `mobile/MobileSearchScreen.kt` — rewrote the screen top-to-bottom.
+  Key changes:
+  - Replaced the `OutlinedTextField` with a `BasicTextField` wrapped
+    in a fixed-height (44 dp) cyan-bordered rounded pill. No more
+    `fillMaxHeight` — the pill sizes exactly as designed regardless
+    of parent constraints.
+  - `FocusRequester` + `LaunchedEffect(Unit) { fieldFocus.requestFocus();
+    keyboard?.show() }` auto-opens the soft keyboard on entry so
+    users can type immediately (previously you had to tap the field
+    first).
+  - Added a `×` clear button inside the pill (shown only when there's
+    text).
+  - New filter chip rail (All · Movies · Series · Live) — thumb-
+    friendly equivalent of the TV sidebar, with live counts baked
+    into each chip. Selected chip fills cyan.
+  - Separate empty / loading / no-match states with richer copy
+    ("Start typing to search" centred, "No matches for 'xyz'").
+  - Pre-load `allMovies`/`allSeries`/`allLive` via a single
+    `Triple`-returning `withContext(Dispatchers.IO) {}` block so all
+    three fetches happen in the same background frame.
+  - `indexReady` gate so the debounced filter `LaunchedEffect` waits
+    for the pre-fetch to finish before declaring "no matches". While
+    index is loading we show a `CircularProgressIndicator`.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 151 → 152`, `versionName
+  "1.27.0" → "1.27.1"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL.
+- Shipped as versionCode=152 / versionName="1.27.1" — APK (md5
+  `4b97b54d0269f0787a0d66c9b4a3183c`) live on `https://hushtv.xyz`,
+  `version.json` bumped with changelog.
+
+
 ### Phase 39 — v1.27.0 Mobile browse parity sort (2026-04-24 — completed, deployed)
 User: "Just like TV version, mobile movies need to sort by most
 recently added, series by most recently modified, live TV A-Z."
