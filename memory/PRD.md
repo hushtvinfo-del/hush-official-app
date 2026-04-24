@@ -102,6 +102,84 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 52 — v1.30.7 Crash reporter proper timestamping (2026-04-24 — completed, deployed)
+User sent a third crash report after updating to v1.30.6. Analysis:
+
+- `app_version: 1.30.6-debug` in payload
+- But log header says `===== HushTV crash 2026-04-24 15:18:54 =====`
+  (local time, ~15 min BEFORE v1.30.6 was deployed to their device)
+- Same IllegalStateException signature as the two prior reports.
+
+CONCLUSION: **The fix in v1.30.6 was NOT verified broken by this
+report.** The trace was a STALE log entry on the user's device from
+their previous v1.30.5 session. When they tapped "Send to server"
+manually after updating, our reporter re-uploaded the entire
+`crash.log` file and tagged it with the CURRENT BuildConfig version
+(v1.30.6) — because `buildPayload()` stamped `app_version` at UPLOAD
+time instead of CRASH time.
+
+Flaws in the crash-reporting pipeline (NOT in v1.30.6's fix):
+
+1. Log header format was human-readable prose (`===== HushTV crash
+   <local-time> — thread=<name> =====`) — not machine-parseable, no
+   version field.
+2. `buildPayload()` unconditionally used `fmt.format(Date())` and
+   `BuildConfig.VERSION_NAME` for `captured_at` / `app_version` —
+   always "now" and "current APK", never "when/where it actually
+   crashed".
+3. `uploadNow(force=true)` skipped the `last_uploaded_mtime` dedup
+   check → users could re-post the same stale trace endlessly.
+4. No UX signal distinguishing "nothing new to upload" from "failed"
+   or "sent" → invited confusion.
+
+Fixes (this phase):
+- `HushTVApp.installCrashHandler()`: log header is now
+  machine-parseable:
+    `===== HushTV <iso_utc> v<name>#<code> thread=<name> =====`
+  Example:
+    `===== HushTV 2026-04-24T15:18:54Z v1.30.6-debug#163 thread=main =====`
+  UTC only (no local-time ambiguity) + explicit version name + code.
+- `CrashReporter.buildPayload()`: added a `Regex` parse of that
+  header. When it matches, uses the parsed `captured_at` and
+  `app_version` / `version_code` for the upload payload. When it
+  doesn't (legacy log written by older crash handlers), falls back
+  to `Date()` + `BuildConfig` as before. Also added a new
+  `installed_version` field that always reports the CURRENT
+  BuildConfig — so the dashboard can distinguish "crash happened
+  on v1.30.6 and was uploaded while v1.30.6 was still installed"
+  from "crash happened on v1.30.5 but user updated to v1.30.6
+  before uploading".
+- `CrashReporter.uploadNow()`: signature changed from
+  `(Boolean)->Unit` → `(String)->Unit`. Returns "sent" / "failed" /
+  "nothing". Checks `last_uploaded_mtime` BEFORE uploading manually —
+  if nothing's changed since the last successful send, returns
+  "nothing" immediately without a network round-trip. Also early-
+  returns "nothing" when `crash.log` is missing / empty.
+- `mobile/MobileDiagnosticsScreen.kt` + `ui/screens/TVDiagnosticsScreen.kt`:
+  added a "nothing" branch to the upload status banner showing a
+  yellow "Already sent — nothing new to upload." Color: `#FACC15`.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 163 → 164`, `versionName
+  "1.30.6" → "1.30.7"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (only
+  AutoMirrored-ArrowBack / Logout deprecation warnings — not
+  blockers).
+- Shipped as non-mandatory — APK (md5
+  `88c23126b8dd5b41a0c1444e9d1e829e`) live on `https://hushtv.xyz`.
+
+Verification plan (to send to user):
+1. Install v1.30.7.
+2. Settings → Diagnostics → Delete (clears the stale log).
+3. Use the app normally — specifically exercise the CW remove flow
+  that used to crash.
+4. If the v1.30.6 focusRestorer fix works, no crash → Diagnostics
+  stays "No crashes logged" → server gets nothing.
+5. If anything else crashes, it'll have a NEW-format header and
+  show up on the dashboard with the real captured_at time and
+  correct app_version.
+
+
 ### Phase 51 — v1.30.6 REAL ROOT CAUSE of TV crashes (2026-04-24 — completed, deployed as MANDATORY)
 First crash reports arrived on the server dashboard from a Shield TV
 running v1.30.5. Two identical traces, same signature:

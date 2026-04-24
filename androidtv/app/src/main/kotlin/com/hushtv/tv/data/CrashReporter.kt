@@ -54,12 +54,28 @@ object CrashReporter {
     }
 
     /** Forced upload triggered by the Diagnostics screen.
-     *  [callback] receives `true` on HTTP 200, `false` otherwise. */
-    fun uploadNow(ctx: Context, callback: (Boolean) -> Unit) {
+     *  [callback] receives one of:
+     *    • "sent"       — upload succeeded
+     *    • "nothing"    — crash log is empty / already sent
+     *    • "failed"     — network / server error
+     */
+    fun uploadNow(ctx: Context, callback: (String) -> Unit) {
         executor.execute {
-            val ok = runCatching { maybeUpload(ctx, force = true) }
-                .getOrDefault(false)
-            callback(ok)
+            val result = runCatching {
+                val f = File(ctx.filesDir, "crash.log")
+                if (!f.exists() || f.length() == 0L) return@runCatching "nothing"
+                val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                // Also respect dedup on manual uploads — stops users
+                // re-sending the same stale trace over and over and
+                // tagging each one with a wrong "upload-time"
+                // app_version. If they hit Send but nothing's new we
+                // report "nothing" instead of "sent".
+                if (f.lastModified() == prefs.getLong(KEY_LAST_UPLOADED_MTIME, 0L)) {
+                    return@runCatching "nothing"
+                }
+                if (maybeUpload(ctx, force = true)) "sent" else "failed"
+            }.getOrDefault("failed")
+            callback(result)
         }
     }
 
@@ -82,7 +98,7 @@ object CrashReporter {
     }
 
     private fun buildPayload(ctx: Context, trace: String): String {
-        val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
+        val fmtUtc = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
         val deviceId = runCatching {
@@ -91,16 +107,42 @@ object CrashReporter {
         }.getOrNull() ?: "unknown"
         val device = "${Build.MANUFACTURER}-${Build.MODEL}-$deviceId"
             .replace(' ', '-').take(60)
-        // Trim trace — we cap at 64 KB to stay well under the
-        // server's 512 KB body limit.
         val safeTrace = if (trace.length > 64 * 1024) trace.takeLast(64 * 1024) else trace
+
+        // Parse the machine-readable crash header that
+        // HushTVApp.installCrashHandler writes:
+        //   ===== HushTV <iso> v<name>#<code> thread=<name> =====
+        // When present, use it to report the ACTUAL time + APK version
+        // at crash, not upload-time. Stops stale logs from one release
+        // getting reported under a later release's version tag.
+        val headerRe = Regex(
+            """=====\s+HushTV\s+(\S+)\s+v(\S+?)#(\d+)\s+thread=(\S+?)\s+====="""
+        )
+        val match = headerRe.find(safeTrace)
+        val capturedAt: String
+        val appVersion: String
+        val versionCode: String
+        if (match != null) {
+            capturedAt = match.groupValues[1]
+            appVersion = match.groupValues[2]
+            versionCode = match.groupValues[3]
+        } else {
+            // Fall back to now + current BuildConfig for logs that
+            // predate v1.30.7 (no machine header).
+            capturedAt = fmtUtc.format(Date())
+            appVersion = BuildConfig.VERSION_NAME
+            versionCode = BuildConfig.VERSION_CODE.toString()
+        }
 
         return buildJson {
             put("device", device)
             put("android_sdk", Build.VERSION.SDK_INT.toString())
-            put("app_version", BuildConfig.VERSION_NAME)
-            put("version_code", BuildConfig.VERSION_CODE.toString())
-            put("captured_at", fmt.format(Date()))
+            put("app_version", appVersion)
+            put("version_code", versionCode)
+            put("captured_at", capturedAt)
+            // Keep a marker so the dashboard can tell new-format logs
+            // apart from old-format ones at a glance.
+            put("installed_version", BuildConfig.VERSION_NAME)
             put("trace", safeTrace)
         }
     }

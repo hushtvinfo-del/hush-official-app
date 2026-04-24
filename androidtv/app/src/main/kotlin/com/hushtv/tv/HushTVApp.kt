@@ -9,6 +9,7 @@ import coil.decode.SvgDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
+import com.hushtv.tv.BuildConfig
 import com.hushtv.tv.data.XtreamApi
 import okhttp3.OkHttpClient
 import java.io.File
@@ -42,12 +43,20 @@ class HushTVApp : Application(), ImageLoaderFactory {
             runCatching {
                 val sw = StringWriter()
                 throwable.printStackTrace(PrintWriter(sw))
-                val ts = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+                // UTC ISO-8601 so we can parse it back unambiguously.
+                val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+                    .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
                     .format(Date())
-                val header = "===== HushTV crash $ts — thread=${thread.name} =====\n"
+                // Header format (machine-parseable):
+                //   ===== HushTV <iso> v<name>#<code> thread=<name> =====
+                val header =
+                    "===== HushTV " + iso +
+                        " v" + BuildConfig.VERSION_NAME +
+                        "#" + BuildConfig.VERSION_CODE +
+                        " thread=" + thread.name +
+                        " =====\n"
                 Log.e("HushTVCrash", header + sw.toString())
                 val f = File(filesDir, "crash.log")
-                // Append so we keep a history, cap at 256 KB.
                 if (f.length() > 256L * 1024) f.delete()
                 f.appendText(header + sw.toString() + "\n\n")
             }
