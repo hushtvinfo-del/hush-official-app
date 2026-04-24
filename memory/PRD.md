@@ -102,6 +102,37 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 38 — v1.26.1 (second build) OTA loop fix (2026-04-24 — completed, deployed)
+User reported: "The same update keeps coming up even after I've
+installed it." Screenshot showed `v1.24.1-debug → v1.26.1` in the
+update dialog, confirming the installed APK still reported 1.24.1.
+
+ROOT CAUSE (regression spanning phases 35-37): across v1.25.0, v1.26.0,
+and v1.26.1 I only updated the server's `/var/www/hushtv/version.json`
+with bumped `versionCode` / `versionName`. I never bumped
+`versionCode` / `versionName` in `app/build.gradle.kts`, which is the
+value baked into the APK at build time and read by
+`UpdateManager.currentVersionCode()` via `BuildConfig.VERSION_CODE`.
+So every "update" the user installed was the SAME APK version as
+before (147 / 1.24.1) — just with new Kotlin code inside. The OTA
+check `info.versionCode > currentVersionCode()` then evaluated as
+`150 > 147 = true`, re-triggering the dialog on every launch.
+
+Fix:
+- `app/build.gradle.kts`: `versionCode = 147` → `150`,
+  `versionName = "1.24.1"` → `"1.26.1"`. The `.debug` applicationIdSuffix
+  + `-debug` versionNameSuffix still apply, so the installed APK will
+  now correctly report `150 / 1.26.1-debug`.
+- Rebuilt + re-shipped the APK (md5
+  `fb99aedf0e49a7ed6757299f55f0726d`). `version.json` unchanged (still
+  says 150 / 1.26.1) so after this install the dialog will stop.
+
+Going forward — remember to bump BOTH places in one commit:
+  1. `app/build.gradle.kts` (`versionCode` + `versionName`)
+  2. server `/var/www/hushtv/version.json`
+…for every release. Numbers must match, or the dialog loops.
+
+
 ### Phase 37 — v1.26.1 Mobile CW resume fix + long-press remove (2026-04-24 — completed, deployed)
 User reported that (a) Continue Watching on mobile restarts titles from
 the beginning instead of resuming, and (b) there's no way to remove
