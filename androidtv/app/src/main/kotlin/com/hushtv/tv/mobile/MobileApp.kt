@@ -40,7 +40,10 @@ fun MobileApp() {
 
     val startDestination = remember {
         val id = LastProfileStore.load(ctx)
-        if (id != null && PlaylistStore.find(ctx, id) != null) "shell/$id" else "home"
+        // Use "menu/" as the authenticated start — same route TVHomeScreen &
+        // TVAddAccountScreen navigate to after login, so all three entry
+        // paths converge on the same MobileShell.
+        if (id != null && PlaylistStore.find(ctx, id) != null) "menu/$id" else "home"
     }
 
     Surface(
@@ -50,7 +53,19 @@ fun MobileApp() {
         NavHost(navController = nav, startDestination = startDestination) {
             composable("home") { TVHomeScreen(nav) }
             composable("add") { TVAddAccountScreen(nav) }
+            // The profile picker & add-account screens (reused from TV) both
+            // navigate to "menu/{id}" after a successful login/add. Mobile
+            // doesn't have a TV menu — route that intent to the mobile shell
+            // instead. Same destination, same feel, no screen rewrite.
+            composable("menu/{playlistId}") { bs ->
+                MobileShell(nav, bs.arguments?.getString("playlistId") ?: "")
+            }
             composable("shell/{playlistId}") { bs ->
+                MobileShell(nav, bs.arguments?.getString("playlistId") ?: "")
+            }
+            composable("settings/{playlistId}") { bs ->
+                // Mobile settings has no dedicated route yet; re-use the shell
+                // so the user lands on the Settings tab via the bottom nav.
                 MobileShell(nav, bs.arguments?.getString("playlistId") ?: "")
             }
             composable(
