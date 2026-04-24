@@ -22,28 +22,40 @@ object EpgReminderScheduler {
     private const val LEAD_MS = 5L * 60 * 1000  // 5 min before program
 
     fun schedule(ctx: Context, r: ReminderStore.Reminder) {
-        ensureChannel(ctx)
-        val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val fireAt = r.programStartMs - LEAD_MS
-        if (fireAt <= System.currentTimeMillis()) return  // past programs → skip
+        runCatching {
+            ensureChannel(ctx)
+            val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val fireAt = r.programStartMs - LEAD_MS
+            if (fireAt <= System.currentTimeMillis()) return@runCatching  // past programs → skip
 
-        val intent = Intent(ctx, ReminderReceiver::class.java).apply {
-            action = "com.hushtv.tv.REMINDER"
-            putExtra("channelName", r.channelName)
-            putExtra("programTitle", r.programTitle)
-            putExtra("streamId", r.streamId)
-        }
-        val pi = PendingIntent.getBroadcast(
-            ctx,
-            (r.streamId.toLong() + r.programStartMs).toInt(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+            val intent = Intent(ctx, ReminderReceiver::class.java).apply {
+                action = "com.hushtv.tv.REMINDER"
+                putExtra("channelName", r.channelName)
+                putExtra("programTitle", r.programTitle)
+                putExtra("streamId", r.streamId)
+            }
+            val pi = PendingIntent.getBroadcast(
+                ctx,
+                (r.streamId.toLong() + r.programStartMs).toInt(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
-            am.set(AlarmManager.RTC_WAKEUP, fireAt, pi)
-        } else {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi)
+            // On Android 12+ calling setExactAndAllowWhileIdle without
+            // SCHEDULE_EXACT_ALARM permission throws SecurityException.
+            // On Android 14+ the permission can even be REVOKED at
+            // runtime without notice. Fall back to inexact alarm on
+            // any failure — the user still gets notified, just with
+            // a small scheduling window, and the app stays alive.
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
+                    am.set(AlarmManager.RTC_WAKEUP, fireAt, pi)
+                } else {
+                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi)
+                }
+            } catch (_: SecurityException) {
+                runCatching { am.set(AlarmManager.RTC_WAKEUP, fireAt, pi) }
+            }
         }
     }
 

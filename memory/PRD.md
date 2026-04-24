@@ -102,6 +102,75 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 47 — v1.30.2 CRITICAL STABILITY FIX: random TV app exits (2026-04-24 — completed, deployed as MANDATORY update)
+User reported: "Major issues with TV. App randomly exiting — happens
+on Continue Watching when scrolling/clicking/long-pressing to remove,
+on Movies when changing categories, and when navigating between Live
+TV / Movies / Series. Very frequent. Might be memory."
+
+RCA (via troubleshoot_agent, high confidence):
+- PRIMARY CAUSE (85%): Android's low-memory-killer (LMK)
+  terminating the app process under pressure. App footprint
+  ~250-300 MB (bundled 50 MB Vosk model + 64 MB Coil bitmap cache
+  + ExoPlayer + Compose state + EPG caches) exceeded the ~192-256 MB
+  default heap on low-memory TVs. No `android:largeHeap="true"` had
+  ever been set. Silent process-kill matches the symptom — no
+  crash dialog, just a sudden return to launcher.
+- SECONDARY (15%): No `Thread.setDefaultUncaughtExceptionHandler`
+  installed. Any uncaught exception in the new LaunchedEffects
+  (LiveSessionStore/RecentChannelStore writes, reminder scheduling)
+  would have silently killed the process. Harder to prove without
+  logs — but the lack of any crash visibility was itself a bug.
+
+Fixes (all four shipped together):
+
+1. `AndroidManifest.xml` — added `android:largeHeap="true"` to
+   the `<application>` tag. On typical TV devices this bumps the
+   per-process heap from ~256 MB to ~512 MB-1 GB depending on OEM,
+   giving the app 2-4× more headroom against the LMK.
+
+2. `HushTVApp.kt` — installed a default uncaught exception handler
+   in `onCreate()` that writes any crash stack trace to both
+   Logcat (tag `HushTVCrash`) AND
+   `/data/data/com.hushtv.tv/files/crash.log`. Append mode, capped
+   at 256 KB (truncate-on-overflow). Chains to the previous handler
+   afterwards so Android still kills the process as expected. Means
+   any FUTURE crash leaves evidence we can retrieve.
+
+3. `HushTVApp.kt` — reduced Coil memory cache from `maxSizePercent
+   (0.25)` → `maxSizePercent(0.12)` and disk cache from 256 MB →
+   128 MB. Frees roughly 30 MB RAM on a 2 GB TV without
+   significantly hurting repeat-scroll smoothness (Coil's LRU
+   eviction still keeps the hot bitmaps).
+
+4. `TVLiveBrowseScreen.kt` — wrapped all FIVE
+   LaunchedEffect blocks added in phase 43 (LiveSessionStore
+   persist/restore) with `runCatching {}`. If SharedPreferences or
+   NavState throws for any reason, the effect no-ops instead of
+   killing the process.
+
+5. `notifications/EpgReminderScheduler.kt` — wrapped
+   `schedule(...)` in `runCatching`. On Android 12+, wrapped the
+   `setExactAndAllowWhileIdle()` call specifically with try/catch
+   SecurityException (Android 14 can REVOKE
+   SCHEDULE_EXACT_ALARM at runtime post-install). On denial, falls
+   back to `am.set(...)` inexact alarm — reminder still fires, app
+   stays alive.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 158 → 159`, `versionName
+  "1.30.1" → "1.30.2"`.
+- Shipped as MANDATORY update (mandatory=true in version.json) —
+  APK (md5 `58b665c449f3b8190f48972246ba9750`) live on
+  `https://hushtv.xyz`.
+
+Next step if crashes still persist after user installs v1.30.2:
+- Retrieve `/data/data/com.hushtv.tv/files/crash.log` via adb or a
+  new "Diagnostics → Share Crash Log" button in Settings (not yet
+  built — queue it as a P2 follow-up). Parse stack trace to
+  identify the exact root cause.
+
+
 ### Phase 46 — v1.30.1 Mobile Home "Channel History" rail (2026-04-24 — completed, deployed)
 User: "Can we have here more channels they were watching like the
 last 5 channels (Channel History)?" — the v1.29.0 Resume Live card

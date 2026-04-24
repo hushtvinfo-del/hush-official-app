@@ -210,21 +210,25 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
 
     // Persist "what the player needs to know for CH+/-".
     LaunchedEffect(filteredChannels, playlistId) {
-        NavState.browsePlaylistId = playlistId
-        NavState.liveChannels = filteredChannels
+        runCatching {
+            NavState.browsePlaylistId = playlistId
+            NavState.liveChannels = filteredChannels
+        }
     }
 
     // Restore the user's last-picked category (survives app restart)
     // once uiCategories has finished loading. Runs exactly once per
     // screen entry — after that the user's in-session picks take over.
     LaunchedEffect(uiCategories, playlistId) {
-        if (catRestored || uiCategories.size <= 2) return@LaunchedEffect
-        val savedId = com.hushtv.tv.data.LiveSessionStore.getCategoryId(ctx, playlistId)
-        if (savedId.isNotBlank()) {
-            val idx = uiCategories.indexOfFirst { it.category_id == savedId }
-            if (idx >= 0) selectedCatIndex = idx
+        runCatching {
+            if (catRestored || uiCategories.size <= 2) return@runCatching
+            val savedId = com.hushtv.tv.data.LiveSessionStore.getCategoryId(ctx, playlistId)
+            if (savedId.isNotBlank()) {
+                val idx = uiCategories.indexOfFirst { it.category_id == savedId }
+                if (idx >= 0) selectedCatIndex = idx
+            }
+            catRestored = true
         }
-        catRestored = true
     }
 
     // Track focused channel; use it both for state-restore and mini-preview.
@@ -237,32 +241,38 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     // finish loading for the restored category.
     var focusRestored by remember(playlistId) { mutableStateOf(false) }
     LaunchedEffect(filteredChannels, playlistId, catRestored) {
-        if (focusRestored || !catRestored || filteredChannels.isEmpty()) return@LaunchedEffect
-        val savedSid = com.hushtv.tv.data.LiveSessionStore.getStreamId(ctx, playlistId)
-        if (savedSid > 0) {
-            val idx = filteredChannels.indexOfFirst { it.streamId == savedSid }
-            if (idx >= 0) focusedChannelIdx = idx
+        runCatching {
+            if (focusRestored || !catRestored || filteredChannels.isEmpty()) return@runCatching
+            val savedSid = com.hushtv.tv.data.LiveSessionStore.getStreamId(ctx, playlistId)
+            if (savedSid > 0) {
+                val idx = filteredChannels.indexOfFirst { it.streamId == savedSid }
+                if (idx >= 0) focusedChannelIdx = idx
+            }
+            focusRestored = true
         }
-        focusRestored = true
     }
 
     LaunchedEffect(focusedChannelIdx, filteredChannels) {
-        NavState.selectedCategoryIndex = selectedCatIndex
-        NavState.focusedChannelIndex = focusedChannelIdx
-        // Persist the focused channel's streamId so it's restored on
-        // next entry (app restart or sibling-screen round-trip).
-        filteredChannels.getOrNull(focusedChannelIdx)?.let {
-            com.hushtv.tv.data.LiveSessionStore.setStreamId(ctx, playlistId, it.streamId)
+        runCatching {
+            NavState.selectedCategoryIndex = selectedCatIndex
+            NavState.focusedChannelIndex = focusedChannelIdx
+            // Persist the focused channel's streamId so it's restored on
+            // next entry (app restart or sibling-screen round-trip).
+            filteredChannels.getOrNull(focusedChannelIdx)?.let {
+                com.hushtv.tv.data.LiveSessionStore.setStreamId(ctx, playlistId, it.streamId)
+            }
         }
     }
     LaunchedEffect(selectedCatIndex, uiCategories) {
-        NavState.selectedCategoryIndex = selectedCatIndex
-        // Persist the categoryId string. Skip until we've restored so
-        // we don't overwrite the saved value with index 0 on first
-        // composition before restore fires.
-        if (catRestored) {
-            uiCategories.getOrNull(selectedCatIndex)?.let {
-                com.hushtv.tv.data.LiveSessionStore.setCategoryId(ctx, playlistId, it.category_id)
+        runCatching {
+            NavState.selectedCategoryIndex = selectedCatIndex
+            // Persist the categoryId string. Skip until we've restored so
+            // we don't overwrite the saved value with index 0 on first
+            // composition before restore fires.
+            if (catRestored) {
+                uiCategories.getOrNull(selectedCatIndex)?.let {
+                    com.hushtv.tv.data.LiveSessionStore.setCategoryId(ctx, playlistId, it.category_id)
+                }
             }
         }
     }
