@@ -102,6 +102,42 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 39 — v1.27.0 Mobile browse parity sort (2026-04-24 — completed, deployed)
+User: "Just like TV version, mobile movies need to sort by most
+recently added, series by most recently modified, live TV A-Z."
+
+Files changed:
+- `mobile/MobileBrowseScreen.kt`: inside the category-load
+  `LaunchedEffect`, wrapped the fetched `data` with
+  `.sortedWith(compareByDescending<MediaCard> { it.addedTs }
+  .thenBy { it.title.lowercase() })`. `MediaCard.addedTs` is
+  already populated from Xtream's `added` field for movies and
+  `last_modified` for series (see `XtreamApi.kt` lines 240 and 252),
+  so the same sort expression correctly implements "most-recently
+  added" for movies and "most-recently modified" for series — exact
+  parity with TV's `TVBrowseScreen.kt` line 309-312.
+- `mobile/MobileLiveHubScreen.kt`:
+  - `orderedChannels` changed from `favs + rest` (favourites-pinned-
+    first) to pure `channels.sortedBy { it.title.lowercase() }` —
+    matches TV's `TVLiveBrowseScreen.kt` line 199. Favourite state
+    is still shown per-row via the star icon so information
+    fidelity is preserved.
+  - Dropped the now-unused `favSet` dep from the `remember` key.
+  - `item("meta")` position label now uses `orderedChannels.indexOf`
+    (was `channels.indexOf`) so the `N/M` displayed below the live
+    preview matches the 1-based channel numbers the user sees in
+    the row list.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 150 → 151`, `versionName
+  "1.26.1" → "1.27.0"` (BOTH places bumped in lockstep per the
+  phase-38 post-mortem).
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- Shipped as versionCode=151 / versionName="1.27.0" — APK (md5
+  `8d683001e77fcb8b975cf47aef473eb0`) live on `https://hushtv.xyz`,
+  `version.json` bumped with changelog.
+
+
 ### Phase 38 — v1.26.1 (second build) OTA loop fix (2026-04-24 — completed, deployed)
 User reported: "The same update keeps coming up even after I've
 installed it." Screenshot showed `v1.24.1-debug → v1.26.1` in the

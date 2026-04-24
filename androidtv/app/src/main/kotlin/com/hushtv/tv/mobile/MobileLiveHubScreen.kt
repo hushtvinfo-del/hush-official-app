@@ -191,10 +191,14 @@ fun MobileLiveHubScreen(
     val recentIds = remember(recentVersion, playlistId) {
         RecentChannelStore.getAll(ctx, playlistId)
     }
-    val orderedChannels = remember(channels, favSet) {
-        val favs = channels.filter { it.streamId in favSet }
-        val rest = channels.filter { it.streamId !in favSet }
-        favs + rest
+    val orderedChannels = remember(channels) {
+        // Default sort (parity with TV `TVLiveBrowseScreen`):
+        //   • Alphabetical A-Z by channel title, case-insensitive.
+        // Favorite state is still shown with a star icon per row and
+        // surfaced via the favorites-only filter, so we don't also
+        // pin favourites to the top — keeps numbering consistent
+        // with the TV browse screen.
+        channels.sortedBy { it.title.lowercase() }
     }
     // For the "Recent" rail we resolve the MediaCard objects. When
     // switching categories, some recent channels may not belong —
@@ -322,10 +326,12 @@ fun MobileLiveHubScreen(
             // Now / Next metadata
             if (currentChannel != null) {
                 item("meta") {
-                    val idx = channels.indexOf(currentChannel)
+                    // Position label uses `orderedChannels` so it
+                    // matches the A-Z-sorted row numbers below.
+                    val idx = orderedChannels.indexOf(currentChannel)
                     NowNextPanel(
                         channel = currentChannel,
-                        positionLabel = if (idx >= 0) "${idx + 1}/${channels.size}" else null,
+                        positionLabel = if (idx >= 0) "${idx + 1}/${orderedChannels.size}" else null,
                         epgVersion = epgVersion,
                     )
                 }

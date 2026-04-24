@@ -91,7 +91,16 @@ fun MobileBrowseScreen(
                 }
             }
         }.getOrDefault(emptyList())
-        cardList = data
+        // Default sort (parity with TV `TVBrowseScreen`):
+        //   • Movies: most-recently ADDED first (Xtream `added` unix ts).
+        //   • Series: most-recently MODIFIED first (Xtream `last_modified`).
+        // Both fields are normalised into `MediaCard.addedTs` by
+        // `XtreamApi`. Items with a 0 timestamp (providers that don't
+        // expose the field) sink to the bottom in A-Z order.
+        cardList = data.sortedWith(
+            compareByDescending<com.hushtv.tv.data.MediaCard> { it.addedTs }
+                .thenBy { it.title.lowercase() }
+        )
         loading = false
     }
 
