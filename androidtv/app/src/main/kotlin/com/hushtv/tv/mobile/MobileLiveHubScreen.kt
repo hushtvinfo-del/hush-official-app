@@ -140,6 +140,10 @@ fun MobileLiveHubScreen(
             if (c != null) {
                 LiveSessionStore.setChannelName(ctx, playlistId, c.title)
                 LiveSessionStore.setPoster(ctx, playlistId, c.poster)
+                // Feeds the mobile Home "Channel History" rail — one
+                // entry per past selection, each with cached name +
+                // poster so the rail renders with zero fetch.
+                RecentChannelStore.setMeta(ctx, playlistId, c.streamId, c.title, c.poster)
             }
         }
     }

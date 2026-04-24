@@ -102,6 +102,55 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 46 — v1.30.1 Mobile Home "Channel History" rail (2026-04-24 — completed, deployed)
+User: "Can we have here more channels they were watching like the
+last 5 channels (Channel History)?" — the v1.29.0 Resume Live card
+only showed ONE channel (the most recent) and left the rest of the
+Resume Live page blank.
+
+Files changed:
+- `data/RecentChannelStore.kt`: extended with a per-channel
+  `Meta(name, poster)` store. Three new APIs:
+  - `setMeta(ctx, playlistId, streamId, name, poster)`
+  - `getMeta(ctx, playlistId, streamId): Meta?`
+  - data class `Meta(val name: String, val poster: String?)`
+  Stored under key `meta_${playlistId}_$streamId` with value
+  `"name|||poster"`. Triple-pipe chosen because it can't legally
+  appear in Xtream-provided channel titles. Keeps the pre-existing
+  MRU streamId list untouched.
+- `mobile/MobileLiveHubScreen.kt`: extended the existing
+  `LaunchedEffect(selectedStreamId, channels, playlistId)` block to
+  also call `RecentChannelStore.setMeta(ctx, playlistId, c.streamId,
+  c.title, c.poster)` for each newly selected channel. Single write
+  site covers all 5 `pushFront(...)` call sites without duplicating
+  the plumbing into each.
+- `mobile/MobileHomeScreen.kt`:
+  - `ResumeLivePage` now reads `RecentChannelStore.getAll(ctx,
+    playlistId)` + filters out the hero channel, takes up to 5
+    entries, looks up cached `Meta` per id, and builds a
+    `List<Pair<Int, Meta>>` for the rail. All reads are synchronous
+    from SharedPreferences so the page renders instantly.
+  - Added a "CHANNEL HISTORY · last N" section header + a `LazyRow`
+    of `ChannelHistoryTile` composables below the hero card. Spacer
+    of 22 dp above the header.
+  - New private `ChannelHistoryTile(name, poster, onClick)` — 110 dp
+    wide tile, cyan-bordered card with a 16:10 logo box (poster or
+    2-char monogram fallback), channel name (2-line clamp) below.
+    Click → builds Xtream live URL + navigates to
+    `mobilePlayerRoute(... isLive = true)` for fullscreen playback.
+  - Added `RecentChannelStore` import.
+  - Hoisted the `launchChannel: (Int, String) -> Unit` helper so
+    both the hero card and every history tile go through the same
+    nav-navigate path.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 157 → 158`, `versionName
+  "1.30.0" → "1.30.1"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- Shipped as versionCode=158 / versionName="1.30.1" — APK (md5
+  `b7a0e6f4cb0ab323c7b3a34434c00cf6`) live on `https://hushtv.xyz`.
+
+
 ### Phase 45 — v1.30.0 TV "Set reminder" long-press (2026-04-24 — completed, deployed)
 Brings the mobile v1.28.0 reminder feature to the TV form factor.
 UX approach was deliberately less invasive than making every EPG

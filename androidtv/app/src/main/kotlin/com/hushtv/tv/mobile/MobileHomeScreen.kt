@@ -42,6 +42,7 @@ import coil.compose.AsyncImage
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.LiveSessionStore
 import com.hushtv.tv.data.PlaylistStore
+import com.hushtv.tv.data.RecentChannelStore
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.WatchProgressStore
 import com.hushtv.tv.data.XtreamApi
@@ -253,21 +254,39 @@ private fun ResumeLivePage(
     val ctx = LocalContext.current
     val playlist = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
 
-    val launchLive: () -> Unit = lf@ {
-        val p = playlist ?: return@lf
-        val url = XtreamApi.liveUrl(p.host, p.username, p.password, streamId)
-        nav.navigate(
-            mobilePlayerRoute(
-                playlistId = playlistId,
-                streamUrl = url,
-                channelName = channelName,
-                isLive = true,
-            ),
-        )
+    // History = the last-watched channels EXCLUDING the one in the hero
+    // card (it's already prominent). Take up to 5 — matches the user's
+    // ask. We read RecentChannelStore on every ON_RESUME by piggy-
+    // backing on the parent's cwVersion through the `streamId` key
+    // change (streamId changes whenever the user watches a new channel).
+    val history: List<Pair<Int, RecentChannelStore.Meta>> = remember(streamId, playlistId) {
+        com.hushtv.tv.data.RecentChannelStore.getAll(ctx, playlistId)
+            .filter { it != streamId }
+            .mapNotNull { id ->
+                com.hushtv.tv.data.RecentChannelStore.getMeta(ctx, playlistId, id)
+                    ?.let { id to it }
+            }
+            .take(5)
+    }
+
+    val launchChannel: (Int, String) -> Unit = { sid, name ->
+        val p = playlist
+        if (p != null) {
+            val url = XtreamApi.liveUrl(p.host, p.username, p.password, sid)
+            nav.navigate(
+                mobilePlayerRoute(
+                    playlistId = playlistId,
+                    streamUrl = url,
+                    channelName = name,
+                    isLive = true,
+                ),
+            )
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
         titleBlock()
+        // ── Hero "Resume" card ────────────────────────────────────────
         Box(
             Modifier
                 .fillMaxWidth()
@@ -279,11 +298,10 @@ private fun ResumeLivePage(
                     )
                 )
                 .border(1.5.dp, Color(0xFFEF4444).copy(alpha = 0.55f), RoundedCornerShape(16.dp))
-                .clickable(onClick = launchLive)
+                .clickable { launchChannel(streamId, channelName) }
                 .padding(16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Channel logo / fallback monogram
                 Box(
                     Modifier
                         .size(width = 92.dp, height = 64.dp)
@@ -309,7 +327,6 @@ private fun ResumeLivePage(
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    // LIVE badge
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier
@@ -346,7 +363,6 @@ private fun ResumeLivePage(
                     )
                 }
                 Spacer(Modifier.width(10.dp))
-                // Big round play button
                 Box(
                     Modifier
                         .size(52.dp)
@@ -362,6 +378,95 @@ private fun ResumeLivePage(
                 }
             }
         }
+
+        // ── Channel History rail ─────────────────────────────────────
+        if (history.isNotEmpty()) {
+            Spacer(Modifier.height(22.dp))
+            Row(
+                Modifier.padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "CHANNEL HISTORY",
+                    color = Cyan,
+                    fontSize = 10.sp,
+                    letterSpacing = 2.sp,
+                    fontWeight = FontWeight.Black,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "· last ${history.size}",
+                    color = Color(0xFF64748B),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(history, key = { "hist-${it.first}" }) { (sid, meta) ->
+                    ChannelHistoryTile(
+                        name = meta.name,
+                        poster = meta.poster,
+                        onClick = { launchChannel(sid, meta.name) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChannelHistoryTile(
+    name: String,
+    poster: String?,
+    onClick: () -> Unit,
+) {
+    Column(
+        Modifier
+            .width(110.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF0A1220))
+            .border(1.dp, Color(0x2206B6D4), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(10.dp),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 10f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF1F2937)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!poster.isNullOrBlank()) {
+                AsyncImage(
+                    model = poster,
+                    contentDescription = name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                Text(
+                    name.take(2).uppercase(),
+                    color = Color(0xFF94A3B8),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            name,
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 13.sp,
+        )
     }
 }
 
