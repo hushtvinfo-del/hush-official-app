@@ -113,6 +113,20 @@ fun MobilePlayerScreen(
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         val win = activity?.window
         win?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Record this live channel in the "Recent" MRU so the Live TV
+        // hub can show it above the main list next time the user opens
+        // it. VOD plays are tracked by WatchProgressStore separately.
+        if (isLive && playlist != null) {
+            val card = liveChannels.firstOrNull()
+            val streamIdHint = runCatching {
+                android.net.Uri.parse(streamUrl).lastPathSegment?.substringBeforeLast('.')?.toIntOrNull()
+            }.getOrNull()
+            if (streamIdHint != null) {
+                com.hushtv.tv.data.RecentChannelStore.pushFront(ctx, playlistId, streamIdHint)
+            } else if (card != null) {
+                com.hushtv.tv.data.RecentChannelStore.pushFront(ctx, playlistId, card.streamId)
+            }
+        }
         onDispose {
             activity?.requestedOrientation = prevOri ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             win?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -178,6 +192,7 @@ fun MobilePlayerScreen(
         val url = com.hushtv.tv.data.XtreamApi.liveUrl(
             p.host, p.username, p.password, card.streamId,
         )
+        com.hushtv.tv.data.RecentChannelStore.pushFront(ctx, playlistId, card.streamId)
         currentStreamUrl = url
         currentTitle = card.title
     }

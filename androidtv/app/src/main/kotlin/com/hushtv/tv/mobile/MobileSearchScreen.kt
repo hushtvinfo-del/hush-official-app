@@ -132,23 +132,33 @@ fun MobileSearchScreen(nav: NavController, playlistId: String) {
                         modifier = Modifier.padding(20.dp),
                     )
                 }
-            } else {
-                if (movies.isNotEmpty()) item {
-                    Rail("Movies", movies) { onCard(it, playlistId, nav) }
-                }
-                if (series.isNotEmpty()) item {
-                    Rail("Series", series) { onCard(it, playlistId, nav) }
-                }
-                if (live.isNotEmpty()) item {
-                    Rail("Live", live) { onCard(it, playlistId, nav) }
-                }
-                if (movies.isEmpty() && series.isEmpty() && live.isEmpty()) item {
+            } else if (movies.isEmpty() && series.isEmpty() && live.isEmpty()) {
+                item {
                     Text(
                         "No matches.",
                         color = Color(0xFF64748B),
                         fontSize = 13.sp,
                         modifier = Modifier.padding(20.dp),
                     )
+                }
+            } else {
+                if (movies.isNotEmpty()) {
+                    item { SectionHeader("MOVIES · ${movies.size}") }
+                    items(movies, key = { "m-${it.streamId}" }) { c ->
+                        SearchResultRow(c) { onCard(c, playlistId, nav) }
+                    }
+                }
+                if (series.isNotEmpty()) {
+                    item { SectionHeader("SERIES · ${series.size}") }
+                    items(series, key = { "s-${it.seriesId}" }) { c ->
+                        SearchResultRow(c) { onCard(c, playlistId, nav) }
+                    }
+                }
+                if (live.isNotEmpty()) {
+                    item { SectionHeader("LIVE · ${live.size}") }
+                    items(live, key = { "l-${it.streamId}" }) { c ->
+                        SearchResultRow(c) { onCard(c, playlistId, nav) }
+                    }
                 }
             }
         }
@@ -177,5 +187,68 @@ private fun onCard(card: com.hushtv.tv.data.MediaCard, playlistId: String, nav: 
                 ),
             )
         }
+    }
+}
+
+
+@androidx.compose.runtime.Composable
+private fun SectionHeader(title: String) {
+    Text(
+        title,
+        color = Cyan,
+        fontSize = 10.sp,
+        letterSpacing = 2.sp,
+        fontWeight = FontWeight.Black,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+    )
+}
+
+@androidx.compose.runtime.Composable
+private fun SearchResultRow(
+    card: com.hushtv.tv.data.MediaCard,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF0A1220))
+            .clickable(onClick = onClick)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(width = 54.dp, height = 54.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFF1F2937)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!card.poster.isNullOrBlank()) {
+                coil.compose.AsyncImage(
+                    model = card.poster, contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                )
+            } else {
+                Text(
+                    card.title.take(2).uppercase(),
+                    color = Color(0xFF64748B),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            card.title,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
     }
 }

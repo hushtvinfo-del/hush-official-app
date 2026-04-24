@@ -2,19 +2,27 @@ package com.hushtv.tv.mobile
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -38,8 +46,10 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.hushtv.tv.data.EpgProgram
 import com.hushtv.tv.data.EpgService
+import com.hushtv.tv.data.FavoritesStore
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.PlaylistStore
+import com.hushtv.tv.data.RecentChannelStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamCategory
 import com.hushtv.tv.ui.theme.Cyan
@@ -85,6 +95,10 @@ fun MobileLiveHubScreen(
     var showCatPicker by remember { mutableStateOf(false) }
     var selectedStreamId by rememberSaveable(key = "mlive-sid") { mutableStateOf(-1) }
     var epgVersion by remember { mutableStateOf(0) }   // force recompose after EPG fetch
+    var favVersion by remember { mutableStateOf(0) }   // force recompose after favorites toggle
+    var recentVersion by remember { mutableStateOf(0) } // force recompose after recent update
+    // Long-press quick-action sheet. Holds the target card or null.
+    var actionCard by remember { mutableStateOf<MediaCard?>(null) }
 
     // ── Load categories once ──
     LaunchedEffect(playlistId) {
@@ -151,6 +165,37 @@ fun MobileLiveHubScreen(
         else categories.firstOrNull { it.category_id == selectedCatId }?.category_name ?: "All"
     }
 
+    // ── Derived: favorites set + favorites-first ordered channel list
+    //    + recent channels rail for the current playlist. Keyed off
+    //    fav/recent version counters so toggling re-composes. ──
+    val favSet = remember(favVersion, playlistId) {
+        FavoritesStore.getAll(ctx, playlistId)
+    }
+    val recentIds = remember(recentVersion, playlistId) {
+        RecentChannelStore.getAll(ctx, playlistId)
+    }
+    val orderedChannels = remember(channels, favSet) {
+        val favs = channels.filter { it.streamId in favSet }
+        val rest = channels.filter { it.streamId !in favSet }
+        favs + rest
+    }
+    // For the "Recent" rail we resolve the MediaCard objects. When
+    // switching categories, some recent channels may not belong —
+    // those still show up because the rail is across ALL channels in
+    // the provider, fetched lazily below.
+    var recentCards by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
+    LaunchedEffect(recentIds, playlistId) {
+        if (recentIds.isEmpty() || playlist == null) { recentCards = emptyList(); return@LaunchedEffect }
+        val all = runCatching {
+            withContext(Dispatchers.IO) {
+                XtreamApi.getAllStreams(playlist.host, playlist.username, playlist.password, "live")
+            }
+        }.getOrDefault(emptyList())
+        // Preserve MRU order.
+        val byId = all.associateBy { it.streamId }
+        recentCards = recentIds.mapNotNull { byId[it] }
+    }
+
     Column(Modifier.fillMaxSize().background(Color(0xFF05080F))) {
         // ── Header (title + category pill) ──
         Row(
@@ -206,6 +251,8 @@ fun MobileLiveHubScreen(
                             val p = playlist ?: return@clickable
                             player.pause()
                             val url = XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
+                            RecentChannelStore.pushFront(ctx, playlistId, card.streamId)
+                            recentVersion++
                             nav.navigate(
                                 mobilePlayerRoute(
                                     playlistId = playlistId,
@@ -313,12 +360,59 @@ fun MobileLiveHubScreen(
                     )
                 }
             } else {
-                items(channels, key = { "ch-${it.id}" }) { card ->
+                // ── Recent channels horizontal rail ──
+                if (recentCards.isNotEmpty()) {
+                    item("recent") {
+                        Column {
+                            Row(
+                                Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Default.History, null,
+                                    tint = Color(0xFFFACC15),
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "RECENT",
+                                    color = Color(0xFFFACC15),
+                                    fontSize = 10.sp,
+                                    letterSpacing = 2.sp,
+                                    fontWeight = FontWeight.Black,
+                                )
+                            }
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                items(recentCards, key = { "rc-${it.streamId}" }) { card ->
+                                    RecentChannelChip(card) {
+                                        selectedStreamId = card.streamId
+                                        val p = playlist ?: return@RecentChannelChip
+                                        RecentChannelStore.pushFront(ctx, playlistId, card.streamId)
+                                        recentVersion++
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                        }
+                    }
+                }
+                items(orderedChannels.withIndex().toList(), key = { "ch-${it.value.id}" }) { (idx, card) ->
+                    val isFav = card.streamId in favSet
                     MobileLiveHubRow(
+                        number = idx + 1,
                         card = card,
                         selected = card.streamId == selectedStreamId,
+                        isFavorite = isFav,
                         epgVersion = epgVersion,
-                        onClick = { selectedStreamId = card.streamId },
+                        onClick = {
+                            selectedStreamId = card.streamId
+                            RecentChannelStore.pushFront(ctx, playlistId, card.streamId)
+                            recentVersion++
+                        },
+                        onLongPress = { actionCard = card },
                     )
                 }
                 item("pad") { Spacer(Modifier.height(16.dp)) }
@@ -338,8 +432,99 @@ fun MobileLiveHubScreen(
         )
     }
 
+    // Long-press quick-action sheet — favorites toggle + play full-screen.
+    val card = actionCard
+    if (card != null) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { actionCard = null }) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF0B1220))
+                    .padding(16.dp),
+            ) {
+                Text(
+                    card.title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Channel actions",
+                    color = Cyan,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.5.sp,
+                )
+                Spacer(Modifier.height(14.dp))
+
+                val isFav = card.streamId in favSet
+                QuickActionRow(
+                    icon = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    label = if (isFav) "Remove from Favorites" else "Add to Favorites",
+                    tint = Color(0xFFFACC15),
+                    onClick = {
+                        FavoritesStore.toggle(ctx, playlistId, card.streamId)
+                        favVersion++
+                        actionCard = null
+                    },
+                )
+                QuickActionRow(
+                    icon = Icons.Default.Fullscreen,
+                    label = "Play full-screen",
+                    tint = Cyan,
+                    onClick = {
+                        val p = playlist ?: return@QuickActionRow
+                        val url = XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
+                        RecentChannelStore.pushFront(ctx, playlistId, card.streamId)
+                        recentVersion++
+                        actionCard = null
+                        nav.navigate(
+                            mobilePlayerRoute(
+                                playlistId = playlistId,
+                                streamUrl = url,
+                                channelName = card.title,
+                                isLive = true,
+                                liveCategoryId = selectedCatId.ifBlank { null },
+                            ),
+                        )
+                    },
+                )
+            }
+        }
+    }
+
     // Pause preview when leaving the screen to save battery.
     DisposableEffect(Unit) { onDispose { player.pause() } }
+}
+
+@Composable
+private fun QuickActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(14.dp))
+        Text(
+            label,
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
 }
 
 @Composable
@@ -475,12 +660,16 @@ private fun NowNextPanel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MobileLiveHubRow(
+    number: Int,
     card: MediaCard,
     selected: Boolean,
+    isFavorite: Boolean,
     epgVersion: Int,
     onClick: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     @Suppress("UNUSED_EXPRESSION") epgVersion
     val now = EpgService.nowPlaying(card.streamId)
@@ -496,13 +685,29 @@ private fun MobileLiveHubRow(
                 color = if (selected) Cyan else Color.Transparent,
                 shape = RoundedCornerShape(10.dp),
             )
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress,
+            )
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Channel number in a compact column.
+        Box(
+            Modifier.width(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                number.toString(),
+                color = if (selected) Cyan else Color(0xFF64748B),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Black,
+            )
+        }
+        Spacer(Modifier.width(6.dp))
         Box(
             Modifier
-                .size(48.dp)
+                .size(46.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color(0xFF1F2937)),
             contentAlignment = Alignment.Center,
@@ -518,20 +723,31 @@ private fun MobileLiveHubRow(
                 Text(
                     card.title.take(2).uppercase(),
                     color = Color(0xFF64748B),
-                    fontSize = 14.sp, fontWeight = FontWeight.Black,
+                    fontSize = 13.sp, fontWeight = FontWeight.Black,
                 )
             }
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                card.title,
-                color = if (selected) Cyan else Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    card.title,
+                    color = if (selected) Cyan else Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (isFavorite) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Default.Star, null,
+                        tint = Color(0xFFFACC15),
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+            }
             if (now != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(
@@ -559,6 +775,51 @@ private fun MobileLiveHubRow(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun RecentChannelChip(card: MediaCard, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF112035))
+            .border(1.dp, Color(0x5506B6D4), RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(22.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(Color(0xFF1F2937)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!card.poster.isNullOrBlank()) {
+                AsyncImage(
+                    model = card.poster, contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                )
+            } else {
+                Text(
+                    card.title.take(1).uppercase(),
+                    color = Color(0xFF64748B),
+                    fontSize = 10.sp, fontWeight = FontWeight.Black,
+                )
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            card.title,
+            color = Cyan,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 120.dp),
+        )
     }
 }
 
