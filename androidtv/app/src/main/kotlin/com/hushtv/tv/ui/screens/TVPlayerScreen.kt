@@ -31,7 +31,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -760,6 +762,12 @@ fun TVPlayerScreen(
                                 .fillMaxWidth()
                                 .focusRequester(scrubberFocus)
                                 .onFocusChanged { scrubFocused = it.isFocused }
+                                // Explicit focus wiring — DOWN goes to
+                                // Play/Pause so the user lands on the
+                                // primary control first. Compose's 2D
+                                // search can then walk LEFT/RIGHT through
+                                // the button row.
+                                .focusProperties { down = playPauseFocus }
                                 .focusable()
                                 .onPreviewKeyEvent { ev ->
                                     if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -909,7 +917,16 @@ fun TVPlayerScreen(
                     } else {
                         // VOD player — full control bar: seek, play/pause,
                         // subtitles, audio, speed, more.
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        // `focusGroup()` is CRITICAL here — without it,
+                        // Compose's 2D focus search can't reliably walk
+                        // LEFT/RIGHT between the circle-button cluster
+                        // and the chip cluster separated by the Spacer.
+                        // With it, the whole row is treated as a single
+                        // horizontal strip of focusables.
+                        Row(
+                            Modifier.fillMaxWidth().focusGroup(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             OsdCircleButton(
                                 icon = Icons.Default.Replay30,
                                 size = 56.dp,
