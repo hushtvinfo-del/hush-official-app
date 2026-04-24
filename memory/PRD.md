@@ -102,6 +102,93 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 50 — v1.30.5 Server-side crash reporting (2026-04-24 — completed, deployed)
+User: "I'm seeing crash reports in Diagnostics, but I have no way to
+share them — Shield has no mail clients / share targets. Can we POST
+them to our dedicated server so you + I can view them centrally?"
+
+Server side (lives at `https://hushtv.xyz/crash/`):
+- `/tmp/hushtv_crash_svc.py` — zero-dependency Python 3.12 stdlib
+  HTTP service. Endpoints:
+    • `POST /submit/<SECRET>` — validates the baked-in app token,
+      parses JSON body, enriches with `sent_at` (UTC), clamps string
+      fields, writes to `/var/hushtv-crash/<YYYY-MM-DD>/<HHMMSS-µs>-<device>.json`.
+    • `GET /` — Basic-Auth-gated HTML dashboard listing every
+      report newest-first with chips for version / device / timestamps
+      and a 400-char trace preview per card.
+    • `GET /report/<rel>` — Basic-Auth-gated single-report view
+      (pretty-printed JSON).
+    • `GET /health` — plain-text `ok` for uptime checks.
+  Threaded HTTP server (stdlib `socketserver.ThreadingMixIn`),
+  listens on `127.0.0.1:5055`.
+- `/tmp/hushtv-crash.service` — systemd unit with hardening
+  (`NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths=/var/hushtv-crash`).
+- `/etc/hushtv-crash/config.env` (`chmod 600`) — environment file
+  with submit token, dashboard user/password.
+- nginx patch — new `location /crash/` block reverse-proxies to
+  `127.0.0.1:5055`, with Let's Encrypt SSL inherited from the
+  existing vhost.
+- Generated tokens:
+    • Submit secret (baked in APK): `GbExkT_0wVwqMbw5mwOrRMbe1pS3PghK`
+    • Dashboard user/pass: `admin / rTirJ-dNlfKiYRvqqkg`
+    • Dashboard URL: `https://hushtv.xyz/crash/`
+
+App side:
+- NEW `data/CrashReporter.kt` — background-threaded upload helper:
+    • `uploadIfPending(ctx)` — call from `HushTVApp.onCreate()`; runs
+      on a single daemon thread and POSTs the current `crash.log`
+      iff its mtime differs from the last successfully-uploaded
+      mtime (stored in `crash_reporter` SharedPreferences under
+      `last_uploaded_mtime`). Silent no-op otherwise.
+    • `uploadNow(ctx, callback)` — forced upload used by the
+      Diagnostics "Send to server" button. Runs on the same thread,
+      calls `callback(success: Boolean)` back on the thread (UI
+      mutation uses `mutableStateOf` which is thread-safe for
+      primitives).
+    • `buildPayload(...)` — emits a tiny hand-rolled JSON object
+      with `device` (MANUFACTURER-MODEL-<short ANDROID_ID>),
+      `android_sdk`, `app_version`, `version_code`, `captured_at`,
+      `trace` (capped at 64 KB — server rejects >512 KB bodies).
+    • `postJson(url, body)` — `HttpURLConnection` POST with 10 s
+      connect / 15 s read timeouts. HTTP 200 = success.
+    • Pure stdlib — no OkHttp / Gson / Kotlin serialization
+      pull-ins. ~170 LOC total.
+- `HushTVApp.onCreate()`: calls `CrashReporter.uploadIfPending(this)`
+  right after `installCrashHandler()`. Silent background task —
+  zero UX impact if successful.
+- `mobile/MobileDiagnosticsScreen.kt`:
+  - New cloud-upload circle button (cyan `CloudUpload` icon) in the
+    top bar, next to Share + Delete.
+  - New `uploadState: String?` local state — drives a banner below
+    the top bar: "Uploading to server…" (cyan),
+    "Sent to server. We'll take it from here." (green),
+    "Upload failed. Check internet and try again." (red).
+- `ui/screens/TVDiagnosticsScreen.kt`:
+  - Same CloudUpload D-pad-focusable `TvCircleBtn` + matching
+    banner. Empty-state copy updated to mention auto-upload so
+    users understand that future crashes will be sent without
+    action.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 161 → 162`, `versionName
+  "1.30.4" → "1.30.5"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL.
+- Shipped as versionCode=162 / versionName="1.30.5" — APK (md5
+  `d92c70dd47e1622fba035805c6245aa9`) live on `https://hushtv.xyz`.
+- Verified end-to-end: `curl -s -X POST https://hushtv.xyz/crash/submit/<SECRET>
+  -d '<payload>'` returned `{"ok":true,"stored":...}` and the
+  report appeared on the Basic-Auth-gated dashboard.
+
+Operational notes:
+- Dashboard URL: `https://hushtv.xyz/crash/` (Basic Auth
+  `admin / rTirJ-dNlfKiYRvqqkg`).
+- Reports live at `/var/hushtv-crash/<date>/` — plain JSON, easy to
+  grep / wc. systemd service is `hushtv-crash.service`.
+- Submit secret rotatable via `/etc/hushtv-crash/config.env` +
+  `systemctl restart hushtv-crash`, but note APK has the old
+  secret baked in — rotation requires a new APK release.
+
+
 ### Phase 49 — v1.30.4 CRITICAL: Continue Watching remove → crash on next nav (2026-04-24 — completed, deployed as MANDATORY)
 User: "App is crashing like crazy. After you remove something from
 Continue Watching it will remove it, then when you try to navigate

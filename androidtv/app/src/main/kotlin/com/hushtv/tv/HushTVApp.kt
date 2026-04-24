@@ -25,6 +25,9 @@ class HushTVApp : Application(), ImageLoaderFactory {
         installCrashHandler()
         // Enable HTTP disk cache for Xtream JSON calls.
         XtreamApi.enableDiskCache(this)
+        // If a crash was captured during the last session, POST it to
+        // the server in the background. Silent-no-op if nothing's new.
+        com.hushtv.tv.data.CrashReporter.uploadIfPending(this)
     }
 
     /**

@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.hushtv.tv.BuildConfig
 import com.hushtv.tv.data.CrashLogStore
+import com.hushtv.tv.data.CrashReporter
 import com.hushtv.tv.ui.theme.Cyan
 
 /**
@@ -42,6 +44,8 @@ fun MobileDiagnosticsScreen(nav: NavController) {
     var version by remember { mutableStateOf(0) }
     val contents = remember(version) { CrashLogStore.read(ctx) }
     val hasContent = contents.isNotBlank()
+    // One of: null (idle) | "sending" | "sent" | "failed"
+    var uploadState by remember { mutableStateOf<String?>(null) }
 
     Column(
         Modifier
@@ -87,6 +91,13 @@ fun MobileDiagnosticsScreen(nav: NavController) {
             }
             Spacer(Modifier.weight(1f))
             if (hasContent) {
+                ActionIcon(icon = Icons.Default.CloudUpload, tint = Cyan) {
+                    uploadState = "sending"
+                    CrashReporter.uploadNow(ctx) { success ->
+                        uploadState = if (success) "sent" else "failed"
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
                 ActionIcon(icon = Icons.Default.Share) {
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -108,7 +119,29 @@ fun MobileDiagnosticsScreen(nav: NavController) {
                 ActionIcon(icon = Icons.Default.Delete, tint = Color(0xFFEF4444)) {
                     CrashLogStore.clear(ctx)
                     version++
+                    uploadState = null
                 }
+            }
+        }
+
+        // ── Upload status banner ─────────────────────────────────────
+        if (uploadState != null) {
+            val (bg, fg, msg) = when (uploadState) {
+                "sending" -> Triple(Color(0x1406B6D4), Cyan, "Uploading to server…")
+                "sent" -> Triple(Color(0x1422C55E), Color(0xFF22C55E),
+                    "Sent to server. We'll take it from here.")
+                "failed" -> Triple(Color(0x14EF4444), Color(0xFFEF4444),
+                    "Upload failed. Check internet and try again.")
+                else -> Triple(Color.Transparent, Color.White, "")
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(bg)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(msg, color = fg, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
