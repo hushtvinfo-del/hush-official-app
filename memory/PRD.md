@@ -102,6 +102,48 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 35 — v1.25.0 Mobile Continue Watching (2026-04-24 — completed, deployed)
+Wires `WatchProgressStore` into the mobile player flow so phones get
+the same "resume where you left off" UX the TV already ships.
+
+Files changed:
+- `mobile/MobilePlayerScreen.kt`: added three optional params
+  `vodStreamId: Int?`, `vodKind: String?`, `vodPoster: String?`.
+  New `LaunchedEffect` reads
+  `WatchProgressStore.get(ctx, vodStreamId, vodKind)` on first
+  composition and seeks the player there if the entry exists and
+  `isInProgress`. A second `LaunchedEffect` saves the current
+  position every 4 seconds. A `DisposableEffect.onDispose` captures
+  the final position on screen exit so we never miss the last 3 s.
+  All three are no-ops for `isLive` or when `vodStreamId` / `vodKind`
+  are missing — guarantees zero behaviour change for live channels.
+- `mobile/MobileApp.kt`: extended the `mplayer/...` nav route
+  template to accept three optional query params
+  (`vodId`, `vodKind`, `vodPoster`) and pass them through to
+  `MobilePlayerScreen`. Updated the `mobilePlayerRoute(...)` helper
+  to accept the new params and append them only when non-null.
+  Existing callers that only pass the original 4 args compile
+  unchanged (defaults preserve behaviour).
+- `mobile/MobileBrowseScreen.kt`,
+  `mobile/MobileSearchScreen.kt`,
+  `mobile/MobileCollectionDetailScreen.kt`,
+  `mobile/MobileSeriesDetailScreen.kt`: every VOD-playback
+  call-site now passes `vodStreamId = card.streamId`,
+  `vodKind = "movie" | "series"`, `vodPoster = card.poster`.
+  Series episodes hash the string `ep.id` to an Int so it fits
+  `WatchProgressStore`'s `Int` key — collisions are negligible in
+  practice since Xtream episode IDs are globally unique.
+
+No changes needed to `MobileHomeScreen` — it already reads
+`WatchProgressStore.continueWatching(ctx).take(12)` (line 81) and
+renders a `ContinueWatchingPage` (line 191). The rail now fills
+automatically as users watch movies/episodes from the mobile shell.
+
+- Shipped as versionCode=148 / versionName="1.25.0" — APK (md5
+  `3c9f97a8a25f02d0be8292f2bede984b`, 113,057,507 bytes) live on
+  `https://hushtv.xyz`, `version.json` bumped with changelog.
+
+
 ### Phase 34 — v1.19.1 Layout hint chip on top nav (2026-04-23 — completed, deployed)
 Potential-improvement enhancement approved by the user. Adds a subtle
 discoverability cue to the top nav on Live TV / Movies / Series so new
