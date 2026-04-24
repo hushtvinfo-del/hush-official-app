@@ -62,7 +62,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import com.hushtv.tv.ai.PcmTapAudioProcessor
-import com.hushtv.tv.ai.VoskCaptionEngine
+import com.hushtv.tv.ai.WhisperServerEngine
 import com.hushtv.tv.data.EpgService
 import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.MediaCard
@@ -98,12 +98,12 @@ fun TVPlayerScreen(
     var currentNumber by remember { mutableStateOf(if (NavState.currentChannelIndex >= 0) NavState.currentChannelIndex + 1 else 0) }
 
     // ── AI Captions plumbing — PCM tap lives inside the audio renderer
-    //    pipeline and pumps decoded frames to VoskCaptionEngine. Must
+    //    pipeline and pumps decoded frames to WhisperServerEngine. Must
     //    be created BEFORE the ExoPlayer build so we can install a
     //    custom RenderersFactory that slots it into the audio sink.
     val pcmTap = remember { PcmTapAudioProcessor() }
     var aiCaptionsEnabled by rememberSaveable { mutableStateOf(false) }
-    val aiCaptionText by VoskCaptionEngine.text.collectAsState()
+    val aiCaptionText by WhisperServerEngine.text.collectAsState()
 
     val player = remember {
         val renderersFactory = object : DefaultRenderersFactory(ctx) {
@@ -154,13 +154,13 @@ fun TVPlayerScreen(
     // enables AI captions. No-op on subsequent calls.
     val captionScope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
-        VoskCaptionEngine.prepare(ctx)
+        WhisperServerEngine.prepare(ctx)
     }
 
     // Wire/un-wire the tap depending on user toggle.
     DisposableEffect(aiCaptionsEnabled) {
         if (aiCaptionsEnabled) {
-            pcmTap.onPcm = { bytes, len -> VoskCaptionEngine.onPcmFrame(bytes, len) }
+            pcmTap.onPcm = { bytes, len -> WhisperServerEngine.onPcmFrame(bytes, len) }
             // We don't know the rate until the sink configures the tap,
             // but the processor exposes it. Poll once briefly.
             captionScope.launch {
@@ -168,7 +168,7 @@ fun TVPlayerScreen(
                     val rate = pcmTap.tapSampleRate
                     val ch = pcmTap.tapChannelCount
                     if (rate > 0 && ch > 0) {
-                        VoskCaptionEngine.start(captionScope, rate, ch)
+                        WhisperServerEngine.start(captionScope, rate, ch)
                         return@launch
                     }
                     kotlinx.coroutines.delay(200)
@@ -176,11 +176,11 @@ fun TVPlayerScreen(
             }
         } else {
             pcmTap.onPcm = null
-            VoskCaptionEngine.stop()
+            WhisperServerEngine.stop()
         }
         onDispose {
             pcmTap.onPcm = null
-            VoskCaptionEngine.stop()
+            WhisperServerEngine.stop()
         }
     }
 
@@ -810,7 +810,7 @@ fun TVPlayerScreen(
 
                 // ── AI caption overlay ──
                 if (aiCaptionsEnabled) {
-                    val engineState by VoskCaptionEngine.state.collectAsState()
+                    val engineState by WhisperServerEngine.state.collectAsState()
                     // Placeholder is transient — we show it for a brief
                     // moment after the user enables captions to reassure
                     // them it's working, then fade it out. If a real
@@ -831,11 +831,11 @@ fun TVPlayerScreen(
 
                     val overlayText: String? = when {
                         aiCaptionText.isNotBlank() -> aiCaptionText
-                        engineState == VoskCaptionEngine.EngineState.ERROR ->
+                        engineState == WhisperServerEngine.EngineState.ERROR ->
                             "AI captions unavailable on this stream"
-                        engineState == VoskCaptionEngine.EngineState.PREPARING ->
-                            "Loading English speech model…"
-                        showPlaceholder -> "Listening · English only"
+                        engineState == WhisperServerEngine.EngineState.PREPARING ->
+                            "Connecting to AI server…"
+                        showPlaceholder -> "Listening · any language → English"
                         else -> null
                     }
                     if (overlayText != null) {

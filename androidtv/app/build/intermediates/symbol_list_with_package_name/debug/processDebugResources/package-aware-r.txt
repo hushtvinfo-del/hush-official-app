@@ -694,7 +694,6 @@ string exo_track_unknown
 string exo_track_unknown_name
 string in_progress
 string indeterminate
-string jna_library_appname
 string m3c_bottom_sheet_collapse_description
 string m3c_bottom_sheet_dismiss_description
 string m3c_bottom_sheet_drag_handle_description

@@ -11,8 +11,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 168
-        versionName = "1.31.3"
+        versionCode = 169
+        versionName = "1.32.0"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -44,19 +44,6 @@ android {
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        // Vosk's native JNI ships a linux-arm64/amd64 libvosk.so — the
-        // Android build doesn't load it, but the packager must pick only
-        // the Android variants. Handled by Maven POM; no action needed.
-
-        // AAPT must NOT compress the Vosk model files. StorageService
-        // mmaps them directly from the APK; zlib-compressed assets
-        // return negative file descriptors and the recognizer fails
-        // to initialise with "Failed to open feature_transform.dat".
-        jniLibs.useLegacyPackaging = false
-    }
-    androidResources {
-        // Any path under assets/sync/** must be STORED (not DEFLATED).
-        noCompress += listOf("mdl", "conf", "ie", "fst", "mat", "txt", "list", "int", "dubm", "final")
     }
     sourceSets["main"].java.srcDirs("src/main/kotlin")
 }
@@ -97,9 +84,4 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-
-    // Vosk — on-device streaming speech recognition (English small-en-us-0.15)
-    // model is bundled at assets/sync/ and unpacked to files/ on first launch.
-    implementation("com.alphacephei:vosk-android:0.3.47@aar")
-    implementation("net.java.dev.jna:jna:5.13.0@aar")
 }
