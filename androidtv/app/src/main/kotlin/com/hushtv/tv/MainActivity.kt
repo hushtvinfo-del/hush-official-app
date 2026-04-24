@@ -1,5 +1,7 @@
 package com.hushtv.tv
 
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.NavHost
 import androidx.navigation.NavType
@@ -20,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.LastProfileStore
 import com.hushtv.tv.data.PlaylistStore
+import com.hushtv.tv.mobile.MobileApp
 import com.hushtv.tv.ui.HushSplashScreen
 import com.hushtv.tv.ui.screens.TVAddAccountScreen
 import com.hushtv.tv.ui.screens.TVBrowseScreen
@@ -54,11 +58,32 @@ class MainActivity : ComponentActivity() {
                     color = BgBlack,
                 ) {
                     var splashDone by remember { mutableStateOf(false) }
+                    val ctx = LocalContext.current
+                    val config = LocalConfiguration.current
+
+                    // Form factor detection. We route TV boxes (Leanback +
+                    // UI_MODE_TYPE_TELEVISION) to the original AppContent
+                    // and phones/tablets to MobileApp. The shortest-width
+                    // check catches folding-phone landscape as mobile too,
+                    // since <600dp in ANY orientation means we don't have
+                    // room for the TV layouts.
+                    val isTv = remember {
+                        val pm = ctx.packageManager
+                        val leanback = pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+                            || pm.hasSystemFeature("android.software.leanback_only")
+                        val uiModeTv = (ctx.resources.configuration.uiMode and
+                            Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+                        val wideEnough = config.smallestScreenWidthDp >= 600
+                        // TV if either Leanback is present, OR UI mode is TV,
+                        // OR the shortest screen dimension is large enough
+                        // that the TV layout is the right call (tablets ≥ 600dp).
+                        leanback || uiModeTv || wideEnough
+                    }
 
                     if (!splashDone) {
                         HushSplashScreen(onDone = { splashDone = true })
                     } else {
-                        AppContent()
+                        if (isTv) AppContent() else MobileApp()
                     }
                 }
             }
