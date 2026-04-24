@@ -36,7 +36,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -186,7 +185,6 @@ class ContinueEntriesHandle internal constructor(
 @Composable
 fun rememberContinueEntries(playlistId: String): ContinueEntriesHandle {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     var entries by remember(playlistId) { mutableStateOf<List<ContinueEntry>>(emptyList()) }
     // Version counter — bumping this forces the LaunchedEffect below to
     // re-read from SharedPreferences. Bumped when:
@@ -207,22 +205,42 @@ fun rememberContinueEntries(playlistId: String): ContinueEntriesHandle {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // TMDB hydration runs INSIDE this LaunchedEffect (not rememberCoroutineScope)
+    // so when [version] bumps (e.g. user removed an entry) every stale
+    // hydration coroutine from the previous cycle is CANCELLED automatically.
+    // Previously they'd keep running and clobber `entries` by positional
+    // index — which, after a removal, meant writing tmdb metadata to the
+    // wrong slot AND racing with the fresh cycle's writes, leaving the
+    // UI in a half-assigned state that crashed on next focus / navigation.
     LaunchedEffect(playlistId, version) {
-        val raw = WatchProgressStore.continueWatching(ctx).take(12)
-        if (raw.isEmpty()) {
-            entries = emptyList()
-            return@LaunchedEffect
-        }
-        // Render shells instantly, then hydrate TMDB per-entry in parallel.
-        entries = raw.map { ContinueEntry(it, null) }
-        raw.forEachIndexed { idx, entry ->
-            scope.launch {
-                val tmdb = withContext(Dispatchers.IO) {
-                    val id = TmdbService.searchMovie(entry.title, null)
-                    id?.let { TmdbService.getMovie(it) }
-                }
-                entries = entries.toMutableList().also { list ->
-                    if (idx < list.size) list[idx] = list[idx].copy(tmdb = tmdb)
+        runCatching {
+            val raw = WatchProgressStore.continueWatching(ctx).take(12)
+            if (raw.isEmpty()) {
+                entries = emptyList()
+                return@runCatching
+            }
+            // Render shells instantly.
+            entries = raw.map { ContinueEntry(it, null) }
+            // Hydrate each entry on this scope (auto-cancelled on restart).
+            // Key by (kind, streamId) so a stale completion after removal
+            // silently no-ops instead of writing to a different row.
+            raw.forEach { progress ->
+                launch {
+                    val tmdb = runCatching {
+                        withContext(Dispatchers.IO) {
+                            val id = TmdbService.searchMovie(progress.title, null)
+                            id?.let { TmdbService.getMovie(it) }
+                        }
+                    }.getOrNull()
+                    // Defensive write: look up the slot BY KEY in the
+                    // current list, copy in the tmdb, publish. If the
+                    // entry is gone (removed mid-flight) this is a
+                    // no-op.
+                    entries = entries.map { e ->
+                        if (e.progress.streamId == progress.streamId &&
+                            e.progress.kind == progress.kind
+                        ) e.copy(tmdb = tmdb) else e
+                    }
                 }
             }
         }
@@ -231,8 +249,19 @@ fun rememberContinueEntries(playlistId: String): ContinueEntriesHandle {
     return ContinueEntriesHandle(
         entries = entries,
         remove = { e ->
-            WatchProgressStore.clear(ctx, e.progress.streamId, e.progress.kind)
-            version++
+            runCatching {
+                WatchProgressStore.clear(ctx, e.progress.streamId, e.progress.kind)
+                // Immediately drop the entry from our local state so the
+                // LazyRow re-measures NOW — before SharedPreferences /
+                // LaunchedEffect / TMDB hydration can clash with focus
+                // restoration. The version++ that follows will catch up
+                // but this synchronous drop kills the crash window.
+                entries = entries.filterNot {
+                    it.progress.streamId == e.progress.streamId &&
+                        it.progress.kind == e.progress.kind
+                }
+                version++
+            }
         },
     )
 }

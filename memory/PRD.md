@@ -102,6 +102,68 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 49 — v1.30.4 CRITICAL: Continue Watching remove → crash on next nav (2026-04-24 — completed, deployed as MANDATORY)
+User: "App is crashing like crazy. After you remove something from
+Continue Watching it will remove it, then when you try to navigate
+to another Continue Watching item it's crashing the app. Has
+something to do with removing CW items and the CW page."
+
+ROOT CAUSE (code audit):
+In `ui/screens/home/HomeContinueWatchingSection.kt`
+`rememberContinueEntries(...)`, the TMDB hydration was launched via
+`rememberCoroutineScope().launch { ... }`. That scope OUTLIVES the
+parent `LaunchedEffect(playlistId, version)` — so when the user
+removed an item (version++ bumps), the NEW LaunchedEffect cycle
+started, but the OLD hydration coroutines from the PREVIOUS cycle
+kept running. On completion, each stale coroutine did:
+
+  entries = entries.toMutableList().also { list ->
+      if (idx < list.size) list[idx] = list[idx].copy(tmdb = tmdb)
+  }
+
+The `idx` was the POSITIONAL index from the OLD list. After a
+removal all downstream indices shifted, so stale writes:
+  (a) wrote TMDB metadata to the WRONG entry,
+  (b) lost in-flight writes from the NEW cycle via read-then-write
+      races (no atomic state mutation in coroutines),
+  (c) left `entries` in a half-assigned shape with duplicated /
+      mismatched `ContinueEntry` objects.
+
+This corrupted state caused the NEXT D-pad navigation to crash —
+`focusRestorer()` / `LazyRow`'s focus target resolution resolved to
+a stale node that no longer matched the current children.
+
+Fix:
+- `ui/screens/home/HomeContinueWatchingSection.kt`:
+  - `rememberContinueEntries(...)` rewritten:
+    - Removed the `rememberCoroutineScope()` reference entirely.
+    - TMDB hydration now runs INSIDE the `LaunchedEffect(playlistId,
+      version)` block as child coroutines (`launch { ... }`) of the
+      LaunchedEffect's own scope. When `version` bumps, these
+      children are CANCELLED automatically.
+    - Swapped positional `idx` for key-based lookup when applying
+      hydration results — `entries.map { if (matches) it.copy(tmdb)
+      else it }`. Stale completions silently no-op instead of
+      writing to a shifted slot.
+    - Wrapped the whole effect + per-entry hydration in
+      `runCatching` so any TMDB / IO / SharedPreferences throwable
+      is swallowed (crash handler still logs it to disk).
+  - `remove(e)` lambda: now also filters the entry out of `entries`
+    SYNCHRONOUSLY before bumping `version++`. Eliminates the
+    window where the removed card was still in the list while the
+    dialog was dismissing and focus restoration was hunting for a
+    target. Dialog's released focus now lands on an actual existing
+    adjacent card.
+  - Removed the now-unused `rememberCoroutineScope` import.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 160 → 161`, `versionName
+  "1.30.3" → "1.30.4"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- Shipped as MANDATORY (version.json `mandatory=true`) — APK (md5
+  `7d0a046a7f3b7225655630eb21ba5b6b`) live on `https://hushtv.xyz`.
+
+
 ### Phase 48 — v1.30.3 Diagnostics screen (crash log viewer + sharer) (2026-04-24 — completed, deployed)
 Closes the loop on the v1.30.2 crash handler: the handler WRITES the
 log, now users can READ + SHARE it without adb. This is the real
