@@ -19,8 +19,6 @@ import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.update.UpdateDialog
 import com.hushtv.tv.update.UpdateManager
 import com.hushtv.tv.update.VersionInfo
-import com.hushtv.tv.ui.screens.TVAddAccountScreen
-import com.hushtv.tv.ui.screens.TVHomeScreen
 import kotlinx.coroutines.delay
 
 /**
@@ -51,12 +49,10 @@ fun MobileApp() {
         color = BgBlack,
     ) {
         NavHost(navController = nav, startDestination = startDestination) {
-            composable("home") { TVHomeScreen(nav) }
-            composable("add") { TVAddAccountScreen(nav) }
-            // The profile picker & add-account screens (reused from TV) both
-            // navigate to "menu/{id}" after a successful login/add. Mobile
-            // doesn't have a TV menu — route that intent to the mobile shell
-            // instead. Same destination, same feel, no screen rewrite.
+            composable("home") { MobileProfilePickerScreen(nav) }
+            composable("add") { MobileAddAccountScreen(nav) }
+            // Mobile-native profile & add screens both navigate to "menu/{id}"
+            // after login. Route that to the mobile shell.
             composable("menu/{playlistId}") { bs ->
                 MobileShell(nav, bs.arguments?.getString("playlistId") ?: "")
             }
