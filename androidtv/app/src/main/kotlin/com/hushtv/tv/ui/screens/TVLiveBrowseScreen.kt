@@ -1599,6 +1599,7 @@ private fun ChannelsPane(
                             number = idx + 1,
                             channel = channels[idx],
                             nowPlaying = EpgService.nowPlaying(channels[idx].streamId).also { epgVersion },
+                            nextUp = EpgService.nextUp(channels[idx].streamId).also { epgVersion },
                             isFavorite = favs.contains(channels[idx].streamId),
                             modifier = rowModifier,
                             onFocus = { onFocusChange(idx) },
@@ -1621,6 +1622,7 @@ private fun ChannelRow(
     number: Int,
     channel: MediaCard,
     nowPlaying: EpgProgram?,
+    nextUp: EpgProgram?,
     isFavorite: Boolean,
     modifier: Modifier = Modifier,
     onFocus: () -> Unit,
@@ -1689,13 +1691,48 @@ private fun ChannelRow(
             }
             if (nowPlaying != null) {
                 Spacer(Modifier.height(3.dp))
-                Text(
-                    nowPlaying.title,
-                    color = Color(0xFFD1D5DB), fontSize = 13.sp,
-                    maxLines = 1
-                )
-                // Mini progress bar
-                Spacer(Modifier.height(3.dp))
+                // ── Current show title with LIVE pip ──
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(6.dp)
+                            .background(Cyan, CircleShape)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        nowPlaying.title,
+                        color = Color(0xFFD1D5DB), fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, false),
+                    )
+                }
+                // ── Time range + minutes-left metadata line ──
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${formatClock(nowPlaying.startMs)} – ${formatClock(nowPlaying.stopMs)}",
+                        color = Cyan,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.3.sp,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        Modifier
+                            .size(3.dp)
+                            .background(Color(0x55FFFFFF), CircleShape)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${nowPlaying.minutesLeft.coerceAtLeast(0)} min left",
+                        color = Color(0xFFB3B8C1),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                // ── Mini progress bar ──
+                Spacer(Modifier.height(4.dp))
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -1708,6 +1745,40 @@ private fun ChannelRow(
                             .height(3.dp)
                             .background(Cyan, RoundedCornerShape(2.dp))
                     )
+                }
+                // ── UP-NEXT teaser (only shown when we know it) ──
+                if (nextUp != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .background(Color(0xFFFACC15), RoundedCornerShape(3.dp))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                "NEXT",
+                                color = Color(0xFF111827),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.2.sp,
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            formatClock(nextUp.startMs),
+                            color = Color(0xFFFACC15),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            nextUp.title,
+                            color = Color(0xFFB3B8C1),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
