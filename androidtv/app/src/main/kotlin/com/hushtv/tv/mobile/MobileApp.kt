@@ -113,9 +113,24 @@ fun MobileApp() {
                 )
             }
             composable(
-                route = "mplayer/{playlistId}/{streamUrl}/{channelName}/{isLive}?catId={catId}",
+                route = "mplayer/{playlistId}/{streamUrl}/{channelName}/{isLive}?catId={catId}&vodId={vodId}&vodKind={vodKind}&vodPoster={vodPoster}",
                 arguments = listOf(
                     navArgument("catId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("vodId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("vodKind") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("vodPoster") {
                         type = NavType.StringType
                         nullable = true
                         defaultValue = null
@@ -129,6 +144,9 @@ fun MobileApp() {
                     channelName = bs.arguments?.getString("channelName") ?: "",
                     isLive = bs.arguments?.getString("isLive") == "true",
                     liveCategoryId = bs.arguments?.getString("catId"),
+                    vodStreamId = bs.arguments?.getString("vodId")?.toIntOrNull(),
+                    vodKind = bs.arguments?.getString("vodKind"),
+                    vodPoster = bs.arguments?.getString("vodPoster")?.let(Uri::decode),
                 )
             }
         }
@@ -159,18 +177,32 @@ private fun MobileUpdateCheckHost() {
 
 /** Build a mobile player deep-link. Matches MobileApp's route template.
  *  [liveCategoryId] is optional — supplied when jumping into a live channel
- *  so the player can fetch siblings for prev/next-channel controls. */
+ *  so the player can fetch siblings for prev/next-channel controls.
+ *  [vodStreamId] / [vodKind] / [vodPoster] are optional — supplied for
+ *  movies and series episodes so the player can save + resume progress
+ *  via WatchProgressStore. */
 fun mobilePlayerRoute(
     playlistId: String,
     streamUrl: String,
     channelName: String,
     isLive: Boolean,
     liveCategoryId: String? = null,
+    vodStreamId: Int? = null,
+    vodKind: String? = null,
+    vodPoster: String? = null,
 ): String {
     val base = "mplayer/$playlistId/${Uri.encode(streamUrl)}/${Uri.encode(channelName)}/$isLive"
-    return if (isLive && !liveCategoryId.isNullOrBlank())
-        "$base?catId=${Uri.encode(liveCategoryId)}"
-    else base
+    val q = buildList {
+        if (isLive && !liveCategoryId.isNullOrBlank())
+            add("catId=${Uri.encode(liveCategoryId)}")
+        if (!isLive && vodStreamId != null && vodStreamId > 0)
+            add("vodId=$vodStreamId")
+        if (!isLive && !vodKind.isNullOrBlank())
+            add("vodKind=${Uri.encode(vodKind)}")
+        if (!isLive && !vodPoster.isNullOrBlank())
+            add("vodPoster=${Uri.encode(vodPoster)}")
+    }
+    return if (q.isEmpty()) base else "$base?" + q.joinToString("&")
 }
 
 /** Build a mobile series-detail deep-link. */

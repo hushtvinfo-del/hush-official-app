@@ -175,7 +175,17 @@ private fun onCard(card: com.hushtv.tv.data.MediaCard, playlistId: String, nav: 
         }
         "movie" -> {
             val url = com.hushtv.tv.data.XtreamApi.movieUrl(p.host, p.username, p.password, card.streamId, card.containerExtension)
-            nav.navigate(mobilePlayerRoute(playlistId, url, card.title, isLive = false))
+            nav.navigate(
+                mobilePlayerRoute(
+                    playlistId = playlistId,
+                    streamUrl = url,
+                    channelName = card.title,
+                    isLive = false,
+                    vodStreamId = card.streamId,
+                    vodKind = "movie",
+                    vodPoster = card.poster,
+                ),
+            )
         }
         "series" -> {
             nav.navigate(

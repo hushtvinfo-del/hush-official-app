@@ -73,6 +73,9 @@ fun MobilePlayerScreen(
     channelName: String,
     isLive: Boolean,
     liveCategoryId: String? = null,
+    vodStreamId: Int? = null,
+    vodKind: String? = null,
+    vodPoster: String? = null,
 ) {
     val ctx = LocalContext.current
     val view = LocalView.current
@@ -159,6 +162,67 @@ fun MobilePlayerScreen(
         }
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
+
+    // ── Resume from saved position (VOD only) ──
+    // Using an AtomicBoolean-style one-shot flag so re-seeking doesn't
+    // happen on orientation changes or on channel-flips within the
+    // same player instance.
+    var resumeApplied by remember { mutableStateOf(false) }
+    LaunchedEffect(vodStreamId, vodKind) {
+        if (isLive || vodStreamId == null || vodStreamId <= 0 || vodKind.isNullOrBlank()) return@LaunchedEffect
+        if (resumeApplied) return@LaunchedEffect
+        val saved = com.hushtv.tv.data.WatchProgressStore.get(ctx, vodStreamId, vodKind)
+        if (saved != null && saved.isInProgress) {
+            // Small delay so ExoPlayer has actually parsed the stream
+            // before we seek — otherwise the seek can be ignored.
+            kotlinx.coroutines.delay(250)
+            player.seekTo(saved.positionMs)
+        }
+        resumeApplied = true
+    }
+
+    // ── Periodic progress save (every 4 s while playing) ──
+    LaunchedEffect(vodStreamId, vodKind) {
+        if (isLive || vodStreamId == null || vodStreamId <= 0 || vodKind.isNullOrBlank()) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(4_000)
+            val pos = player.currentPosition
+            val dur = player.duration
+            if (dur > 0 && pos > 1_000) {
+                com.hushtv.tv.data.WatchProgressStore.save(
+                    ctx = ctx,
+                    streamId = vodStreamId,
+                    kind = vodKind,
+                    title = channelName,
+                    poster = vodPoster,
+                    positionMs = pos,
+                    durationMs = dur,
+                )
+            }
+        }
+    }
+
+    // Save one final time when leaving the screen so we capture the
+    // exit position even if the 4-second tick hasn't fired yet.
+    DisposableEffect(vodStreamId, vodKind) {
+        onDispose {
+            if (!isLive && vodStreamId != null && vodStreamId > 0 && !vodKind.isNullOrBlank()) {
+                val pos = player.currentPosition
+                val dur = player.duration
+                if (dur > 0 && pos > 1_000) {
+                    com.hushtv.tv.data.WatchProgressStore.save(
+                        ctx = ctx,
+                        streamId = vodStreamId,
+                        kind = vodKind,
+                        title = channelName,
+                        poster = vodPoster,
+                        positionMs = pos,
+                        durationMs = dur,
+                    )
+                }
+            }
+        }
+    }
 
     // Switching channels (or to a new movie) — swap the media item without
     // releasing the player so we don't blink the surface.

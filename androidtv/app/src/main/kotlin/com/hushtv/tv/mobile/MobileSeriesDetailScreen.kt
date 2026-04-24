@@ -185,7 +185,21 @@ fun MobileSeriesDetailScreen(
                                 p.host, p.username, p.password, ep.id, ep.container_extension,
                             )
                             val title = "$seriesName · S${ep.season ?: currentSeason ?: "?"}E${ep.episode_num}"
-                            nav.navigate(mobilePlayerRoute(playlistId, url, title, isLive = false))
+                            // Episode id is a string in Xtream's API. We
+                            // hash it to an int so it fits WatchProgress's
+                            // Int key, which is unique enough in practice.
+                            val epIntId = ep.id.toIntOrNull() ?: ep.id.hashCode()
+                            nav.navigate(
+                                mobilePlayerRoute(
+                                    playlistId = playlistId,
+                                    streamUrl = url,
+                                    channelName = title,
+                                    isLive = false,
+                                    vodStreamId = epIntId,
+                                    vodKind = "series",
+                                    vodPoster = ep.info?.movie_image ?: posterUrl,
+                                ),
+                            )
                         }
                     }
                 }

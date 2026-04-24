@@ -231,7 +231,17 @@ fun MobileBrowseScreen(
                                     p.host, p.username, p.password,
                                     card.streamId, card.containerExtension,
                                 )
-                                nav.navigate(mobilePlayerRoute(playlistId, url, card.title, isLive = false))
+                                nav.navigate(
+                                    mobilePlayerRoute(
+                                        playlistId = playlistId,
+                                        streamUrl = url,
+                                        channelName = card.title,
+                                        isLive = false,
+                                        vodStreamId = card.streamId,
+                                        vodKind = "movie",
+                                        vodPoster = card.poster,
+                                    ),
+                                )
                             } else {
                                 // Series — open the detail sheet with
                                 // season + episode list (same logic as TV).

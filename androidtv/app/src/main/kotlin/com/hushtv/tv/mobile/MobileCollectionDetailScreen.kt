@@ -182,7 +182,17 @@ fun MobileCollectionDetailScreen(
                                         p.host, p.username, p.password,
                                         match.streamId, match.containerExtension,
                                     )
-                                    nav.navigate(mobilePlayerRoute(playlistId, url, match.title, isLive = false))
+                                    nav.navigate(
+                                        mobilePlayerRoute(
+                                            playlistId = playlistId,
+                                            streamUrl = url,
+                                            channelName = match.title,
+                                            isLive = false,
+                                            vodStreamId = match.streamId,
+                                            vodKind = "movie",
+                                            vodPoster = match.poster ?: entry.posterUrl,
+                                        ),
+                                    )
                                 }
                             }
                         }
