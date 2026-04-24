@@ -62,7 +62,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import com.hushtv.tv.ai.PcmTapAudioProcessor
-import com.hushtv.tv.ai.VoskCaptionEngine
+import com.hushtv.tv.ai.WhisperCaptionEngine
 import com.hushtv.tv.data.EpgService
 import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.MediaCard
@@ -98,12 +98,13 @@ fun TVPlayerScreen(
     var currentNumber by remember { mutableStateOf(if (NavState.currentChannelIndex >= 0) NavState.currentChannelIndex + 1 else 0) }
 
     // ── AI Captions plumbing — PCM tap lives inside the audio renderer
-    //    pipeline and pumps decoded frames to VoskCaptionEngine. Must
+    //    pipeline and pumps decoded frames to WhisperCaptionEngine. Must
     //    be created BEFORE the ExoPlayer build so we can install a
     //    custom RenderersFactory that slots it into the audio sink.
     val pcmTap = remember { PcmTapAudioProcessor() }
     var aiCaptionsEnabled by rememberSaveable { mutableStateOf(false) }
-    val aiCaptionText by VoskCaptionEngine.text.collectAsState()
+    var showAiDownload by remember { mutableStateOf(false) }
+    val aiCaptionText by WhisperCaptionEngine.text.collectAsState()
 
     val player = remember {
         val renderersFactory = object : DefaultRenderersFactory(ctx) {
@@ -154,13 +155,13 @@ fun TVPlayerScreen(
     // enables AI captions. No-op on subsequent calls.
     val captionScope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
-        VoskCaptionEngine.prepare(ctx)
+        WhisperCaptionEngine.prepare(ctx)
     }
 
     // Wire/un-wire the tap depending on user toggle.
     DisposableEffect(aiCaptionsEnabled) {
         if (aiCaptionsEnabled) {
-            pcmTap.onPcm = { bytes, len -> VoskCaptionEngine.onPcmFrame(bytes, len) }
+            pcmTap.onPcm = { bytes, len -> WhisperCaptionEngine.onPcmFrame(bytes, len) }
             // We don't know the rate until the sink configures the tap,
             // but the processor exposes it. Poll once briefly.
             captionScope.launch {
@@ -168,7 +169,7 @@ fun TVPlayerScreen(
                     val rate = pcmTap.tapSampleRate
                     val ch = pcmTap.tapChannelCount
                     if (rate > 0 && ch > 0) {
-                        VoskCaptionEngine.start(captionScope, rate, ch)
+                        WhisperCaptionEngine.start(captionScope, rate, ch)
                         return@launch
                     }
                     kotlinx.coroutines.delay(200)
@@ -176,11 +177,11 @@ fun TVPlayerScreen(
             }
         } else {
             pcmTap.onPcm = null
-            VoskCaptionEngine.stop()
+            WhisperCaptionEngine.stop()
         }
         onDispose {
             pcmTap.onPcm = null
-            VoskCaptionEngine.stop()
+            WhisperCaptionEngine.stop()
         }
     }
 
@@ -810,7 +811,7 @@ fun TVPlayerScreen(
 
                 // ── AI caption overlay ──
                 if (aiCaptionsEnabled) {
-                    val engineState by VoskCaptionEngine.state.collectAsState()
+                    val engineState by WhisperCaptionEngine.state.collectAsState()
                     // Placeholder is transient — we show it for a brief
                     // moment after the user enables captions to reassure
                     // them it's working, then fade it out. If a real
@@ -831,9 +832,9 @@ fun TVPlayerScreen(
 
                     val overlayText: String? = when {
                         aiCaptionText.isNotBlank() -> aiCaptionText
-                        engineState == VoskCaptionEngine.EngineState.ERROR ->
+                        engineState == WhisperCaptionEngine.EngineState.ERROR ->
                             "AI captions unavailable on this stream"
-                        engineState == VoskCaptionEngine.EngineState.PREPARING ->
+                        engineState == WhisperCaptionEngine.EngineState.PREPARING ->
                             "Loading English speech model…"
                         showPlaceholder -> "Listening · English only"
                         else -> null
@@ -1139,7 +1140,15 @@ fun TVPlayerScreen(
                                 icon = Icons.Default.ClosedCaption,
                                 label = if (aiCaptionsEnabled) "AI ON" else "AI CC",
                                 onClick = {
-                                    aiCaptionsEnabled = !aiCaptionsEnabled
+                                    if (aiCaptionsEnabled) {
+                                        // Already on — simple toggle off.
+                                        aiCaptionsEnabled = false
+                                    } else if (com.hushtv.tv.ai.WhisperModelManager.isModelReady(ctx)) {
+                                        aiCaptionsEnabled = true
+                                    } else {
+                                        // First enable: show the download gate.
+                                        showAiDownload = true
+                                    }
                                 },
                                 onInteract = { controlsTick++ },
                                 active = aiCaptionsEnabled,
@@ -1233,6 +1242,13 @@ fun TVPlayerScreen(
                 onShowInfo = { infoVisible = true; infoTick++ },
                 onDismiss = { optionsOpen = false; optionsInitialPane = null },
                 initialPane = optionsInitialPane,
+            )
+        }
+
+        if (showAiDownload) {
+            com.hushtv.tv.ai.AiModelDownloadDialog(
+                onReady = { aiCaptionsEnabled = true },
+                onDismiss = { showAiDownload = false },
             )
         }
     }

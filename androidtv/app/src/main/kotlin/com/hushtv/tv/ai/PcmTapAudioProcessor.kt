@@ -18,7 +18,7 @@ import java.nio.ByteOrder
  *
  * **Consumer contract** — the consumer callback receives 16-bit LE PCM
  * exactly as ExoPlayer decoded it (still stereo, still at source rate).
- * The [VoskCaptionEngine] is responsible for downmixing + resampling
+ * The [WhisperCaptionEngine] is responsible for downmixing + resampling
  * to 16 kHz mono on a background thread.
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)

@@ -47,7 +47,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import com.hushtv.tv.ai.PcmTapAudioProcessor
-import com.hushtv.tv.ai.VoskCaptionEngine
+import com.hushtv.tv.ai.WhisperCaptionEngine
 import com.hushtv.tv.ui.theme.Cyan
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -139,7 +139,8 @@ fun MobilePlayerScreen(
     // AI captions wiring — same as TV player.
     val pcmTap = remember { PcmTapAudioProcessor() }
     var aiCaptions by rememberSaveable { mutableStateOf(false) }
-    val aiCaptionText by VoskCaptionEngine.text.collectAsState()
+    var showAiDownload by remember { mutableStateOf(false) }
+    val aiCaptionText by WhisperCaptionEngine.text.collectAsState()
 
     val player = remember {
         val renderersFactory = object : DefaultRenderersFactory(ctx) {
@@ -275,17 +276,17 @@ fun MobilePlayerScreen(
         currentTitle = card.title
     }
 
-    LaunchedEffect(Unit) { VoskCaptionEngine.prepare(ctx) }
+    LaunchedEffect(Unit) { WhisperCaptionEngine.prepare(ctx) }
 
     DisposableEffect(aiCaptions) {
         if (aiCaptions) {
-            pcmTap.onPcm = { bytes, len -> VoskCaptionEngine.onPcmFrame(bytes, len) }
+            pcmTap.onPcm = { bytes, len -> WhisperCaptionEngine.onPcmFrame(bytes, len) }
             scope.launch {
                 repeat(30) {
                     val rate = pcmTap.tapSampleRate
                     val ch = pcmTap.tapChannelCount
                     if (rate > 0 && ch > 0) {
-                        VoskCaptionEngine.start(scope, rate, ch)
+                        WhisperCaptionEngine.start(scope, rate, ch)
                         return@launch
                     }
                     delay(200)
@@ -293,9 +294,9 @@ fun MobilePlayerScreen(
             }
         } else {
             pcmTap.onPcm = null
-            VoskCaptionEngine.stop()
+            WhisperCaptionEngine.stop()
         }
-        onDispose { pcmTap.onPcm = null; VoskCaptionEngine.stop() }
+        onDispose { pcmTap.onPcm = null; WhisperCaptionEngine.stop() }
     }
 
     // Playback state
@@ -373,7 +374,7 @@ fun MobilePlayerScreen(
 
         // ── AI caption overlay (always on when enabled). ──
         if (aiCaptions) {
-            val engineState by VoskCaptionEngine.state.collectAsState()
+            val engineState by WhisperCaptionEngine.state.collectAsState()
             var showPlaceholder by remember { mutableStateOf(false) }
             LaunchedEffect(aiCaptions) {
                 if (aiCaptions) {
@@ -390,9 +391,9 @@ fun MobilePlayerScreen(
 
             val overlayText: String? = when {
                 aiCaptionText.isNotBlank() -> aiCaptionText
-                engineState == VoskCaptionEngine.EngineState.ERROR ->
+                engineState == WhisperCaptionEngine.EngineState.ERROR ->
                     "AI captions unavailable on this stream"
-                engineState == VoskCaptionEngine.EngineState.PREPARING ->
+                engineState == WhisperCaptionEngine.EngineState.PREPARING ->
                     "Loading English speech model…"
                 showPlaceholder -> "Listening · English only"
                 else -> null
@@ -606,7 +607,13 @@ fun MobilePlayerScreen(
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(if (aiCaptions) Cyan.copy(alpha = 0.22f) else Color(0x22FFFFFF))
                                 .clickable {
-                                    aiCaptions = !aiCaptions
+                                    if (aiCaptions) {
+                                        aiCaptions = false
+                                    } else if (com.hushtv.tv.ai.WhisperModelManager.isModelReady(ctx)) {
+                                        aiCaptions = true
+                                    } else {
+                                        showAiDownload = true
+                                    }
                                     controlsTick++
                                 }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -634,6 +641,13 @@ fun MobilePlayerScreen(
                     }
                 }
             }
+        }
+
+        if (showAiDownload) {
+            com.hushtv.tv.ai.AiModelDownloadDialog(
+                onReady = { aiCaptions = true },
+                onDismiss = { showAiDownload = false },
+            )
         }
     }
 }
