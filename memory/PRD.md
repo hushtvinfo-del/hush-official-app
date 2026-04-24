@@ -102,6 +102,39 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 55 — v1.31.2 AI caption placeholder auto-hide (2026-04-24 — completed, deployed)
+User screenshot: "Listening · English only" placeholder was stacked
+directly below an actual SDH caption ("And she'll be off the hook for
+good"), visually crowding the frame. The overlay rendered the
+placeholder any time `aiCaptionText` was blank — but a Vosk
+transcription lagging behind the movie's embedded subtitle track left
+our placeholder ON perpetually even though captions were arriving
+via the regular SubtitleView.
+
+Fix:
+- `ui/screens/TVPlayerScreen.kt` + `mobile/MobilePlayerScreen.kt`:
+  added `showPlaceholder: Boolean` local state inside the caption
+  overlay. Two LaunchedEffects govern it:
+    • `LaunchedEffect(aiCaptionsEnabled)`: on enable, set
+      `showPlaceholder = true`, then `delay(4_000)` and set it back
+      to false. On disable, clear immediately.
+    • `LaunchedEffect(aiCaptionText)`: as soon as a non-blank
+      caption comes in, set `showPlaceholder = false`. Any
+      subsequent blank periods no longer re-show the placeholder.
+  Placeholder path in the `when {}` expression now checks
+  `showPlaceholder` instead of just `else`, so after the 4 s window
+  the overlay goes null (nothing rendered) until either a real
+  caption appears OR the engine emits ERROR / PREPARING (those two
+  still always show — they contain important info).
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 166 → 167`, `versionName
+  "1.31.1" → "1.31.2"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL.
+- Shipped non-mandatory — APK (md5
+  `ac4ae66d2382e50880a7ff9f877b6e34`) live on `https://hushtv.xyz`.
+
+
 ### Phase 54 — v1.31.1 Mobile update-dialog changelog scroll fix (2026-04-24 — completed, deployed)
 User screenshot showed the v1.31.0 update dialog on a phone with the
 "Update Now" button clipped below the visible area. Dialog had no

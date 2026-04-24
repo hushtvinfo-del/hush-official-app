@@ -374,13 +374,28 @@ fun MobilePlayerScreen(
         // ── AI caption overlay (always on when enabled). ──
         if (aiCaptions) {
             val engineState by VoskCaptionEngine.state.collectAsState()
+            var showPlaceholder by remember { mutableStateOf(false) }
+            LaunchedEffect(aiCaptions) {
+                if (aiCaptions) {
+                    showPlaceholder = true
+                    delay(4_000)
+                    showPlaceholder = false
+                } else {
+                    showPlaceholder = false
+                }
+            }
+            LaunchedEffect(aiCaptionText) {
+                if (aiCaptionText.isNotBlank()) showPlaceholder = false
+            }
+
             val overlayText: String? = when {
                 aiCaptionText.isNotBlank() -> aiCaptionText
                 engineState == VoskCaptionEngine.EngineState.ERROR ->
                     "AI captions unavailable on this stream"
                 engineState == VoskCaptionEngine.EngineState.PREPARING ->
                     "Loading English speech model…"
-                else -> "Listening · English only"
+                showPlaceholder -> "Listening · English only"
+                else -> null
             }
             if (overlayText != null) {
                 Box(

@@ -809,18 +809,34 @@ fun TVPlayerScreen(
                 }
 
                 // ── AI caption overlay ──
-                // Always visible when enabled (regardless of OSD show/hide).
-                // Anchored ABOVE the bottom control bar so it doesn't clash
-                // with it and auto-sits on whatever vertical space exists.
                 if (aiCaptionsEnabled) {
                     val engineState by VoskCaptionEngine.state.collectAsState()
+                    // Placeholder is transient — we show it for a brief
+                    // moment after the user enables captions to reassure
+                    // them it's working, then fade it out. If a real
+                    // caption arrives it disappears immediately.
+                    var showPlaceholder by remember { mutableStateOf(false) }
+                    LaunchedEffect(aiCaptionsEnabled) {
+                        if (aiCaptionsEnabled) {
+                            showPlaceholder = true
+                            delay(4_000)
+                            showPlaceholder = false
+                        } else {
+                            showPlaceholder = false
+                        }
+                    }
+                    LaunchedEffect(aiCaptionText) {
+                        if (aiCaptionText.isNotBlank()) showPlaceholder = false
+                    }
+
                     val overlayText: String? = when {
                         aiCaptionText.isNotBlank() -> aiCaptionText
                         engineState == VoskCaptionEngine.EngineState.ERROR ->
                             "AI captions unavailable on this stream"
                         engineState == VoskCaptionEngine.EngineState.PREPARING ->
                             "Loading English speech model…"
-                        else -> "Listening · English only"
+                        showPlaceholder -> "Listening · English only"
+                        else -> null
                     }
                     if (overlayText != null) {
                         Box(
