@@ -102,6 +102,45 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 44 — v1.29.0 Mobile "Resume Live" home card (2026-04-24 — completed, deployed)
+Potential-improvement enhancement approved by user. Builds on v1.28.1's
+persistent `LiveSessionStore`: adds a new first page to the mobile
+Home pager that one-taps the user straight into fullscreen on their
+last-watched channel.
+
+Files changed:
+- `data/LiveSessionStore.kt`: added `channelName` + `poster` fields
+  (String getters/setters) so the Home card can render the channel
+  name + logo without a network round-trip to Xtream.
+- `mobile/MobileLiveHubScreen.kt`: extended the
+  `LaunchedEffect(selectedStreamId, channels, playlistId)` persist
+  block to also call `LiveSessionStore.setChannelName(...)` and
+  `setPoster(...)` whenever a new preview channel is selected.
+- `mobile/MobileHomeScreen.kt`:
+  - Reads `resumeLiveSid` / `resumeLiveName` / `resumeLivePoster`
+    off the store, keyed on `cwVersion` so they refresh on
+    `ON_RESUME` (same lifecycle observer that already powers
+    Continue Watching — reuse, no new observers).
+  - `hasResumeLive = sid > 0 && name.isNotBlank()` gate.
+  - Prepended a new `PageDef("resume_live", "LAST WATCHING",
+    "Resume Live", accent = red #EF4444)` to the `pages` list when
+    `hasResumeLive` is true. Sits at index 0 — first thing the user
+    sees.
+  - New private composable `ResumeLivePage(...)`: full-page card
+    with a channel logo (or monogram fallback), LIVE badge, TAP TO
+    RESUME eyebrow, channel name, and a large red circular play
+    button. Single tap → builds the Xtream `liveUrl(...)` and
+    navigates to `mobilePlayerRoute(... isLive = true)` to go
+    straight to fullscreen, skipping the Live hub.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 155 → 156`, `versionName
+  "1.28.1" → "1.29.0"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL.
+- Shipped as versionCode=156 / versionName="1.29.0" — APK (md5
+  `6d7ce3554b58a682a21227140c5ceb3e`) live on `https://hushtv.xyz`.
+
+
 ### Phase 43 — v1.28.1 Live TV resume-where-you-left-off (2026-04-24 — completed, deployed)
 User reported: "When I leave Live TV to Movies / Series and come back,
 it resets to the default category instead of remembering the category

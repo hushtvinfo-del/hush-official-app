@@ -131,9 +131,16 @@ fun MobileLiveHubScreen(
     LaunchedEffect(selectedCatId, playlistId) {
         LiveSessionStore.setCategoryId(ctx, playlistId, selectedCatId)
     }
-    LaunchedEffect(selectedStreamId, playlistId) {
+    LaunchedEffect(selectedStreamId, channels, playlistId) {
         if (selectedStreamId >= 0) {
             LiveSessionStore.setStreamId(ctx, playlistId, selectedStreamId)
+            // Also persist name + poster so the mobile Home "Resume
+            // Live" card can render with zero network fetch.
+            val c = channels.firstOrNull { it.streamId == selectedStreamId }
+            if (c != null) {
+                LiveSessionStore.setChannelName(ctx, playlistId, c.title)
+                LiveSessionStore.setPoster(ctx, playlistId, c.poster)
+            }
         }
     }
 

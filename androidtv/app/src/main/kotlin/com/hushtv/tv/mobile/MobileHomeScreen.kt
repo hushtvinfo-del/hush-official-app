@@ -40,6 +40,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.hushtv.tv.data.MediaCard
+import com.hushtv.tv.data.LiveSessionStore
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.WatchProgressStore
@@ -102,9 +103,24 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
     }
     val hasCw = cwEntries.isNotEmpty()
 
+    // Resume Live — pulled from LiveSessionStore. Re-read on every
+    // ON_RESUME (same lifecycle observer above) so returning from
+    // Live Hub / Player updates the card without a manual refresh.
+    val resumeLiveSid = remember(cwVersion, playlistId) {
+        LiveSessionStore.getStreamId(ctx, playlistId)
+    }
+    val resumeLiveName = remember(cwVersion, playlistId) {
+        LiveSessionStore.getChannelName(ctx, playlistId)
+    }
+    val resumeLivePoster = remember(cwVersion, playlistId) {
+        LiveSessionStore.getPoster(ctx, playlistId)
+    }
+    val hasResumeLive = resumeLiveSid > 0 && resumeLiveName.isNotBlank()
+
     // ── Pages ──
     data class PageDef(val id: String, val kicker: String, val title: String, val accent: Color)
     val pages = buildList {
+        if (hasResumeLive) add(PageDef("resume_live", "LAST WATCHING", "Resume Live", Color(0xFFEF4444)))
         if (hasCw) add(PageDef("cw", "PICK UP WHERE YOU LEFT OFF", "Continue Watching", Color(0xFFFACC15)))
         add(PageDef("discovery", "CURATED FOR YOU", "Discover", Cyan))
         add(PageDef("ss_movies", "STREAMING SERVICES", "Movies", Color(0xFFEF4444)))
@@ -191,6 +207,14 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
             }
 
             when (def.id) {
+                "resume_live" -> ResumeLivePage(
+                    nav = nav,
+                    playlistId = playlistId,
+                    streamId = resumeLiveSid,
+                    channelName = resumeLiveName,
+                    poster = resumeLivePoster.ifBlank { null },
+                    titleBlock = titleBlock,
+                )
                 "cw" -> ContinueWatchingPage(
                     nav = nav,
                     playlistId = playlistId,
@@ -208,6 +232,134 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
                 "genres_movies" -> GenresPageMobile(nav, playlistId, genresMovies, "movie", titleBlock)
                 "genres_series" -> GenresPageMobile(nav, playlistId, genresSeries, "series", titleBlock)
                 "years_movies" -> YearsPageMobile(nav, playlistId, movieYears, titleBlock)
+            }
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PAGE: Resume Live
+// ══════════════════════════════════════════════════════════════════
+
+@Composable
+private fun ResumeLivePage(
+    nav: NavController,
+    playlistId: String,
+    streamId: Int,
+    channelName: String,
+    poster: String?,
+    titleBlock: @Composable () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val playlist = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
+
+    val launchLive: () -> Unit = lf@ {
+        val p = playlist ?: return@lf
+        val url = XtreamApi.liveUrl(p.host, p.username, p.password, streamId)
+        nav.navigate(
+            mobilePlayerRoute(
+                playlistId = playlistId,
+                streamUrl = url,
+                channelName = channelName,
+                isLive = true,
+            ),
+        )
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        titleBlock()
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF1A0F14), Color(0xFF0A1220))
+                    )
+                )
+                .border(1.5.dp, Color(0xFFEF4444).copy(alpha = 0.55f), RoundedCornerShape(16.dp))
+                .clickable(onClick = launchLive)
+                .padding(16.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Channel logo / fallback monogram
+                Box(
+                    Modifier
+                        .size(width = 92.dp, height = 64.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1F2937)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (!poster.isNullOrBlank()) {
+                        AsyncImage(
+                            model = poster,
+                            contentDescription = channelName,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        Text(
+                            channelName.take(2).uppercase(),
+                            color = Color(0xFF94A3B8),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    // LIVE badge
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFFEF4444))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                "LIVE",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.2.sp,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "TAP TO RESUME",
+                            color = Color(0xFFEF4444),
+                            fontSize = 9.sp,
+                            letterSpacing = 1.6.sp,
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        channelName,
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 20.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                // Big round play button
+                Box(
+                    Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFEF4444)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow, null,
+                        tint = Color.White,
+                        modifier = Modifier.size(30.dp),
+                    )
+                }
             }
         }
     }

@@ -21,6 +21,8 @@ object LiveSessionStore {
 
     private fun catKey(playlistId: String) = "cat:$playlistId"
     private fun sidKey(playlistId: String) = "sid:$playlistId"
+    private fun nameKey(playlistId: String) = "name:$playlistId"
+    private fun posterKey(playlistId: String) = "poster:$playlistId"
 
     /** Last category id the user picked for this playlist. Empty string = "All". */
     fun getCategoryId(ctx: Context, playlistId: String): String =
@@ -36,5 +38,22 @@ object LiveSessionStore {
 
     fun setStreamId(ctx: Context, playlistId: String, streamId: Int) {
         prefs(ctx).edit().putInt(sidKey(playlistId), streamId).apply()
+    }
+
+    /** Display metadata for the last-watched channel — used by the
+     *  mobile "Resume Live" home card so we can render the channel
+     *  name + logo without a round-trip to Xtream. */
+    fun getChannelName(ctx: Context, playlistId: String): String =
+        prefs(ctx).getString(nameKey(playlistId), "") ?: ""
+
+    fun setChannelName(ctx: Context, playlistId: String, name: String) {
+        prefs(ctx).edit().putString(nameKey(playlistId), name).apply()
+    }
+
+    fun getPoster(ctx: Context, playlistId: String): String =
+        prefs(ctx).getString(posterKey(playlistId), "") ?: ""
+
+    fun setPoster(ctx: Context, playlistId: String, poster: String?) {
+        prefs(ctx).edit().putString(posterKey(playlistId), poster ?: "").apply()
     }
 }
