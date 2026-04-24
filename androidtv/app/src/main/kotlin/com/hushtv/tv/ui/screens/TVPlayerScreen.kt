@@ -194,11 +194,13 @@ fun TVPlayerScreen(
     }
 
     // VOD focus target — when the OSD becomes visible, we move focus to the
-    // primary Play/Pause button so the user can immediately navigate the
-    // control bar with the D-pad. When the OSD hides, we MUST return focus
-    // to the root Box — otherwise the removed-from-composition button takes
-    // focus with it, key events have nowhere to land, and pressing OK does
-    // nothing (the bug shipped in 1.5.1).
+    // Play/Pause button. This is the core UX fix for Android TV remotes:
+    // if we landed on the scrubber, LEFT/RIGHT get swallowed as seek and
+    // users can never reach the CC / Audio / Speed / More chips. Starting
+    // on Play/Pause means LEFT/RIGHT naturally walks the button row
+    // (thanks to focusGroup) and UP reaches the scrubber when the user
+    // actually wants to seek. When the OSD hides, focus returns to the
+    // root Box so key events still get captured.
     val playPauseFocus = remember { FocusRequester() }
     val scrubberFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
@@ -206,13 +208,8 @@ fun TVPlayerScreen(
         if (isLive) return@LaunchedEffect
         if (showControls) {
             delay(50)
-            // Default focus → the scrubber. D-pad DOWN moves to the button row.
-            // This matches Tivimate/Netflix: the scrubber is the primary
-            // interaction and most users want to seek, not pause.
-            runCatching { scrubberFocus.requestFocus() }
+            runCatching { playPauseFocus.requestFocus() }
         } else {
-            // Send focus back home so the root's onKeyEvent handler can
-            // catch the next key press and re-show the OSD.
             runCatching { rootFocus.requestFocus() }
         }
     }
@@ -923,8 +920,18 @@ fun TVPlayerScreen(
                         // and the chip cluster separated by the Spacer.
                         // With it, the whole row is treated as a single
                         // horizontal strip of focusables.
+                        //
+                        // `focusProperties { up = scrubberFocus }` ensures
+                        // D-pad UP from ANY button in the row reaches the
+                        // scrubber — so users can still jump up to scrub
+                        // the timeline without the row's internal 2D
+                        // search getting confused by the progress bar's
+                        // large hit area.
                         Row(
-                            Modifier.fillMaxWidth().focusGroup(),
+                            Modifier
+                                .fillMaxWidth()
+                                .focusGroup()
+                                .focusProperties { up = scrubberFocus },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             OsdCircleButton(
@@ -1025,7 +1032,7 @@ fun TVPlayerScreen(
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "← → Seek 10s   ⏪⏩ Seek 30s   OK Play/Pause   MENU Options",
+                            "← → Navigate   ↑ Scrub bar   OK Play/Pause   MENU Options",
                             color = Color(0xFF9CA3AF), fontSize = 12.sp,
                         )
                     }
