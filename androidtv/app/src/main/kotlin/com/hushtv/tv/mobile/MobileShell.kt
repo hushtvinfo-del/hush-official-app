@@ -58,7 +58,7 @@ fun MobileShell(nav: NavController, playlistId: String) {
                 "home" -> MobileHomeScreen(nav, playlistId)
                 "movies" -> MobileBrowseScreen(nav, playlistId, "movie", inline = true)
                 "series" -> MobileBrowseScreen(nav, playlistId, "series", inline = true)
-                "live" -> MobileBrowseScreen(nav, playlistId, "live", inline = true)
+                "live" -> MobileLiveHubScreen(nav, playlistId)
                 "settings" -> MobileSettingsScreen(nav, playlistId)
                 else -> MobileHomeScreen(nav, playlistId)
             }
