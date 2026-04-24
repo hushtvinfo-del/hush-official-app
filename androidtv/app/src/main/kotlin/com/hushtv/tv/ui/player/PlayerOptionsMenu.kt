@@ -70,13 +70,21 @@ fun PlayerOptionsMenu(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            // BACK key and tap-outside both route through onDismissRequest
+            // so we don't need an onClick on the backdrop — which was
+            // firing on EVERY OK press inside the dialog and closing the
+            // menu before any track/speed/subtitle selection could take
+            // effect. (1.20.4 bug.)
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
     ) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color(0xCC000000))
-                .clickableWithEnter(onDismiss),
+                .background(Color(0xCC000000)),
             contentAlignment = Alignment.BottomCenter
         ) {
             Surface(
