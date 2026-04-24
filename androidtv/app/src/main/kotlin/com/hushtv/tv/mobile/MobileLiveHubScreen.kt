@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
@@ -317,7 +319,9 @@ fun MobileLiveHubScreen(
             if (currentChannel != null) {
                 item("epgstrip") {
                     EpgTimelineStrip(
+                        playlistId = playlistId,
                         streamId = currentChannel.streamId,
+                        channelName = currentChannel.title,
                         epgVersion = epgVersion,
                     )
                 }
@@ -1151,21 +1155,41 @@ private fun MobilePreviewSurface(
  * (0.6 dp per minute, clamped 80–240 dp). The currently-playing
  * program is highlighted in cyan and auto-scrolled into view on
  * first render / channel change.
+ *
+ * Long-press a FUTURE chip → "Set reminder" action sheet. Past /
+ * live programs don't respond to long-press (nothing to remind).
  * ──────────────────────────────────────────────────────────────── */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun EpgTimelineStrip(streamId: Int, epgVersion: Int) {
+private fun EpgTimelineStrip(
+    playlistId: String,
+    streamId: Int,
+    channelName: String,
+    epgVersion: Int,
+) {
     @Suppress("UNUSED_EXPRESSION") epgVersion
+    val ctx = LocalContext.current
     val programs = remember(streamId, epgVersion) { EpgService.programsOf(streamId) }
     if (programs.isEmpty()) return
+
+    // Counter bumped each time a reminder is added / removed so the
+    // bell icons on chips re-render immediately.
+    var reminderVersion by remember { mutableStateOf(0) }
+    // Long-press target — drives the bottom sheet.
+    var reminderFor by remember { mutableStateOf<EpgProgram?>(null) }
+
+    // Android 13+ runtime notification permission launcher. On older
+    // Androids POST_NOTIFICATIONS is granted at install time and the
+    // launcher is a harmless no-op.
+    val notifPerm = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { /* result ignored — if denied, alarm still fires; user just won't see the toast */ }
 
     val listState = rememberLazyListState()
     val liveIdx = remember(programs, epgVersion) {
         programs.indexOfFirst { it.isLive }.let { if (it < 0) 0 else it }
     }
-    // Auto-centre on the currently-live program whenever the channel
-    // or the EPG refreshes.
     LaunchedEffect(streamId, epgVersion) {
-        // small delay lets the list measure before we scroll
         delay(80)
         runCatching { listState.animateScrollToItem(liveIdx) }
     }
@@ -1184,7 +1208,7 @@ private fun EpgTimelineStrip(streamId: Int, epgVersion: Int) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                "· next ${programs.size} programs",
+                "· long-press to set reminder",
                 color = Color(0xFF64748B),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
@@ -1196,15 +1220,122 @@ private fun EpgTimelineStrip(streamId: Int, epgVersion: Int) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items(programs, key = { "prg-${it.startMs}" }) { p ->
-                EpgTimelineChip(p)
+                val hasReminder = remember(p.startMs, streamId, reminderVersion) {
+                    com.hushtv.tv.data.ReminderStore.exists(ctx, streamId, p.startMs)
+                }
+                EpgTimelineChip(
+                    program = p,
+                    hasReminder = hasReminder,
+                    onLongPress = {
+                        // Only future programs can be reminded.
+                        if (p.startMs > System.currentTimeMillis()) {
+                            reminderFor = p
+                        }
+                    },
+                )
             }
         }
         Spacer(Modifier.height(6.dp))
     }
+
+    // ── Reminder action sheet ───────────────────────────────────────
+    val target = reminderFor
+    if (target != null) {
+        val already = com.hushtv.tv.data.ReminderStore.exists(ctx, streamId, target.startMs)
+        androidx.compose.ui.window.Dialog(onDismissRequest = { reminderFor = null }) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF0B1220))
+                    .padding(16.dp),
+            ) {
+                Text(
+                    target.title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${channelName.uppercase()} · ${formatClock(target.startMs)}",
+                    color = Cyan,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.2.sp,
+                )
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            if (already) {
+                                com.hushtv.tv.data.ReminderStore.remove(ctx, streamId, target.startMs)
+                            } else {
+                                // Ask for notification permission first
+                                // on Android 13+. If the user denies,
+                                // the alarm still fires — they just
+                                // won't see the heads-up toast.
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    notifPerm.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                                val r = com.hushtv.tv.data.ReminderStore.Reminder(
+                                    playlistId = playlistId,
+                                    streamId = streamId,
+                                    channelName = channelName,
+                                    programTitle = target.title,
+                                    programStartMs = target.startMs,
+                                )
+                                com.hushtv.tv.data.ReminderStore.add(ctx, r)
+                                com.hushtv.tv.notifications.EpgReminderScheduler.schedule(ctx, r)
+                            }
+                            reminderVersion++
+                            reminderFor = null
+                        }
+                        .padding(vertical = 12.dp, horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (already) Icons.Default.NotificationsOff
+                        else Icons.Default.Notifications,
+                        null,
+                        tint = if (already) Color(0xFFEF4444) else Cyan,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            if (already) "Cancel reminder" else "Set reminder",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (!already) {
+                            Spacer(Modifier.height(1.dp))
+                            Text(
+                                "Notify 5 min before it starts",
+                                color = Color(0xFF64748B),
+                                fontSize = 11.sp,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun EpgTimelineChip(p: EpgProgram) {
+private fun EpgTimelineChip(
+    program: EpgProgram,
+    hasReminder: Boolean,
+    onLongPress: () -> Unit,
+) {
+    val p = program
     val widthDp: Dp = run {
         val minutes = (p.durationMs / 60_000L).toInt().coerceAtLeast(15)
         (minutes * 0.6f).dp.coerceIn(80.dp, 240.dp)
@@ -1236,6 +1367,10 @@ private fun EpgTimelineChip(p: EpgProgram) {
                 color = border,
                 shape = RoundedCornerShape(8.dp),
             )
+            .combinedClickable(
+                onClick = { /* tap does nothing — preview already shows current */ },
+                onLongClick = onLongPress,
+            )
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1254,7 +1389,16 @@ private fun EpgTimelineChip(p: EpgProgram) {
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.4.sp,
+                modifier = Modifier.weight(1f, fill = false),
             )
+            if (hasReminder) {
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    Icons.Default.Notifications, null,
+                    tint = Color(0xFFFACC15),
+                    modifier = Modifier.size(11.dp),
+                )
+            }
         }
         Spacer(Modifier.height(2.dp))
         Text(

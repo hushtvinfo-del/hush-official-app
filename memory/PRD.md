@@ -102,6 +102,68 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 42 — v1.28.0 Mobile EPG reminders (2026-04-24 — completed, deployed)
+Wires the long-press "Set reminder" gesture into the mobile Live Hub
+Timeline strip using the existing `ReminderStore` +
+`EpgReminderScheduler` (which had been implemented previously but not
+surfaced anywhere in the UI, nor properly registered in the manifest).
+
+Infrastructure gap closed — previously broken:
+- `AndroidManifest.xml`:
+  - Added `<receiver android:name=".notifications.ReminderReceiver"
+    android:exported="false"/>` so `AlarmManager` can actually deliver
+    the broadcast when the alarm fires. Without this the alarms were
+    silently dropped on all Android versions.
+  - Added `POST_NOTIFICATIONS` (Android 13+ runtime permission),
+    `SCHEDULE_EXACT_ALARM` + `USE_EXACT_ALARM` (Android 12+),
+    `RECEIVE_BOOT_COMPLETED` (for future reboot-survival work).
+
+UI wiring:
+- `mobile/MobileLiveHubScreen.kt`:
+  - `EpgTimelineStrip(streamId, epgVersion)` signature expanded to
+    `EpgTimelineStrip(playlistId, streamId, channelName, epgVersion)`
+    so the composable can build a full
+    `ReminderStore.Reminder(playlistId, streamId, channelName,
+    programTitle, programStartMs)` without prop-drilling up to the
+    caller.
+  - Added `reminderVersion: Int` counter local to the strip — bumped
+    on add/remove so the per-chip bell icon re-renders immediately.
+  - Added `reminderFor: EpgProgram?` state — drives the bottom
+    dialog. Guard: only set when `p.startMs > now` (past / live
+    programs don't respond to long-press — nothing to remind).
+  - `rememberLauncherForActivityResult(RequestPermission())` to ask
+    for `POST_NOTIFICATIONS` on Android 13+. Denial still schedules
+    the alarm; the user just won't see the heads-up.
+  - `EpgTimelineChip` now takes `hasReminder: Boolean` + `onLongPress`
+    and wraps itself in `combinedClickable(onClick = no-op,
+    onLongClick = onLongPress)`. Yellow `Icons.Default.Notifications`
+    bell renders in the timestamp row when a reminder is set.
+  - New reminder action sheet (`Dialog` with rounded card): shows the
+    program title + channel + start time. Single action toggles
+    between "Set reminder · Notify 5 min before it starts" (when
+    none) and "Cancel reminder" (when one exists). Tap calls
+    `ReminderStore.add`/`remove` + `EpgReminderScheduler.schedule`
+    and bumps `reminderVersion`.
+  - Imports added: `Notifications`, `NotificationsOff`.
+
+Header copy update: strip header now reads "TIMELINE · long-press to
+set reminder" instead of just "· next N programs", teaching the
+gesture directly.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 153 → 154`, `versionName
+  "1.27.2" → "1.28.0"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL.
+- Shipped as versionCode=154 / versionName="1.28.0" — APK (md5
+  `0c8225b70555bc41a476c0d682b9a687`) live on `https://hushtv.xyz`.
+
+Testing note (not yet done at runtime): reminders within the next
+hour or so can be verified by long-pressing a chip ~6 min out, then
+locking the device and waiting. A TV-side surfacing of this flow
+(in `TVLiveBrowseScreen` / `TVEpgGridScreen`) is NOT yet wired — TV
+parity is a backlog item.
+
+
 ### Phase 41 — v1.27.2 Mobile nav rename + reorder (2026-04-24 — completed, deployed)
 User asked to rename "More" → "Settings" and move it to the end of the
 bottom nav, after Search.
