@@ -9,7 +9,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
@@ -281,12 +283,14 @@ private fun PromptBody(
     Column(
         Modifier
             .fillMaxWidth()
+            .heightIn(max = 260.dp)
+            .verticalScroll(rememberScrollState())
             .background(Color(0x14FFFFFF), RoundedCornerShape(10.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         val bullets = info.changelog.ifEmpty { listOf("Bug fixes and improvements") }
-        bullets.take(8).forEach { line ->
+        bullets.forEach { line ->
             Text("•  $line", color = Color(0xFFE5E7EB), fontSize = 13.sp, lineHeight = 17.sp)
         }
     }

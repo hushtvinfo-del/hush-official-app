@@ -102,6 +102,45 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 54 — v1.31.1 Mobile update-dialog changelog scroll fix (2026-04-24 — completed, deployed)
+User screenshot showed the v1.31.0 update dialog on a phone with the
+"Update Now" button clipped below the visible area. Dialog had no
+way to scroll down so the user was stuck.
+
+ROOT CAUSE: `PromptBody` in `update/UpdateDialog.kt` wrapped the
+changelog bullets in a plain `Column` with no height constraint and
+no scroll wrapper. On phones in portrait, a changelog ≥ 6–7 lines
+pushed the bottom-row buttons below the screen edge. Made worse by
+the long v1.31.0 release notes (AI-captions fix had 5 sub-bullets
+alone).
+
+Fix:
+- `update/UpdateDialog.kt` `PromptBody`:
+  - Changelog `Column` now uses `.heightIn(max = 260.dp)
+    .verticalScroll(rememberScrollState())`. Content that exceeds
+    260 dp becomes scrollable inside the card; the Update / Later
+    buttons below stay pinned to a known position.
+  - Dropped the ad-hoc `.take(8)` on the bullet list — all
+    changelog entries are now visible (via scroll if needed).
+  - Added imports: `rememberScrollState`, `verticalScroll`
+    (`heightIn` was already available via the wildcard
+    `androidx.compose.foundation.layout.*` import).
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 165 → 166`, `versionName
+  "1.31.0" → "1.31.1"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- Shipped non-mandatory — APK (md5
+  `3141b90b4ccaf12c0dc19ed8250c5ae2`) live on `https://hushtv.xyz`.
+
+Workaround for users stuck on v1.31.0 on a phone:
+- The new APK is reachable directly at `https://hushtv.xyz/hushtv.apk`.
+  Visiting that in a phone browser triggers a normal APK download
+  which the OS installs via its own package installer — bypassing
+  the broken in-app dialog entirely. Once on v1.31.1, future
+  update prompts will behave correctly.
+
+
 ### Phase 53 — v1.31.0 Three UX fixes: 12-hour EPG, long-press menu, AI captions (2026-04-24 — completed, deployed)
 User reported three distinct issues in one message. Fixed all three.
 
