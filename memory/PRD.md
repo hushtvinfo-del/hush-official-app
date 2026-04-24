@@ -102,6 +102,53 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 37 — v1.26.1 Mobile CW resume fix + long-press remove (2026-04-24 — completed, deployed)
+User reported that (a) Continue Watching on mobile restarts titles from
+the beginning instead of resuming, and (b) there's no way to remove
+entries like the TV's long-press flow. Fixed both.
+
+ROOT CAUSE (bug a): `MobileHomeScreen.ContinueWatchingPage`'s row
+`.clickable{}` called the 4-arg overload
+`mobilePlayerRoute(playlistId, url, e.title, e.kind == "live")` which
+leaves `vodStreamId` / `vodKind` / `vodPoster` all null. The resume
+`LaunchedEffect` in `MobilePlayerScreen` (shipped in v1.25.0) guards
+with `if (vodStreamId == null) return@LaunchedEffect` and never seeks.
+
+Files changed:
+- `mobile/MobileHomeScreen.kt`:
+  - `rememberContinueEntries`-equivalent inline pattern: hoisted
+    `cwVersion` `Int` counter + `DisposableEffect(lifecycleOwner)`
+    that bumps `cwVersion` on `Lifecycle.Event.ON_RESUME`. The
+    `cwEntries` `remember(cwVersion, playlistId)` re-reads
+    `WatchProgressStore.continueWatching(ctx)` every time the user
+    comes back from the player (mirrors TV behaviour at
+    `ui/screens/home/HomeContinueWatchingSection.kt` line 199-208).
+  - `ContinueWatchingPage(...)` gains an `onRemove: (Entry) -> Unit`
+    param and an `@OptIn(ExperimentalFoundationApi::class)` on its
+    signature. Parent passes a lambda that calls
+    `WatchProgressStore.clear(ctx, e.streamId, e.kind)` and bumps
+    `cwVersion` so the list re-renders immediately.
+  - Row's `.clickable{...}` replaced with `.combinedClickable(onClick,
+    onLongClick)`. `onClick` now routes through the 7-arg
+    `mobilePlayerRoute(...)` passing `vodStreamId = e.streamId`,
+    `vodKind = e.kind`, `vodPoster = e.poster` for VOD; live channels
+    leave the params null (no resume needed). `onLongClick` toggles a
+    new `actionEntry: Entry?` state.
+  - New long-press action sheet: when `actionEntry != null` we render
+    a `Dialog` with a single "Remove from Continue Watching" row
+    (red `Delete` icon). Tapping the row calls `onRemove(entry)` and
+    closes the sheet.
+  - Imports added: `ExperimentalFoundationApi`, `combinedClickable`,
+    `Delete`, `LocalLifecycleOwner`, `Lifecycle`,
+    `LifecycleEventObserver`.
+
+Build + deploy:
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- Shipped as versionCode=150 / versionName="1.26.1" — APK (md5
+  `e8806c1092f700503dfab4c74103c756`, 113,057,506 bytes) live on
+  `https://hushtv.xyz`, `version.json` bumped with changelog.
+
+
 ### Phase 36 — v1.26.0 Mobile Live Hub gestures + EPG timeline (2026-04-24 — completed, deployed)
 Makes the mobile Live TV preview card feel native to phones. Adds three
 distinct gestures on the preview surface plus a horizontally-scrolling

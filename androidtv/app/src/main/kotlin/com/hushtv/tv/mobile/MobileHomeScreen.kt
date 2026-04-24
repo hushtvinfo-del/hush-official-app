@@ -1,8 +1,10 @@
 package com.hushtv.tv.mobile
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -15,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -27,10 +30,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.hushtv.tv.data.MediaCard
@@ -78,7 +84,22 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
     val movieYears = rememberMovieYears()
     val discoveryCards = rememberDiscoveryCards(playlistId)
 
-    val cwEntries = remember { WatchProgressStore.continueWatching(ctx).take(12) }
+    // ── Continue Watching state — version-counter pattern so we
+    //    can refresh on (a) user removing an entry and (b) the
+    //    activity returning from the player screen (ON_RESUME).
+    //    Mirrors the TV rememberContinueEntries() contract. ──
+    var cwVersion by remember(playlistId) { mutableStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) cwVersion++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val cwEntries = remember(cwVersion, playlistId) {
+        WatchProgressStore.continueWatching(ctx).take(12)
+    }
     val hasCw = cwEntries.isNotEmpty()
 
     // ── Pages ──
@@ -170,7 +191,16 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
             }
 
             when (def.id) {
-                "cw" -> ContinueWatchingPage(nav, playlistId, cwEntries, titleBlock)
+                "cw" -> ContinueWatchingPage(
+                    nav = nav,
+                    playlistId = playlistId,
+                    entries = cwEntries,
+                    titleBlock = titleBlock,
+                    onRemove = { e ->
+                        WatchProgressStore.clear(ctx, e.streamId, e.kind)
+                        cwVersion++
+                    },
+                )
                 "discovery" -> DiscoveryPageMobile(nav, playlistId, discoveryCards, titleBlock)
                 "ss_movies" -> StreamingServicesPage(nav, playlistId, ssMovies, "movie", titleBlock)
                 "ss_series" -> StreamingServicesPage(nav, playlistId, ssSeries, "series", titleBlock)
@@ -187,15 +217,21 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
 //  PAGE: Continue Watching
 // ══════════════════════════════════════════════════════════════════
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ContinueWatchingPage(
     nav: NavController,
     playlistId: String,
     entries: List<WatchProgressStore.Entry>,
     titleBlock: @Composable () -> Unit,
+    onRemove: (WatchProgressStore.Entry) -> Unit,
 ) {
     val ctx = LocalContext.current
     val playlist = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
+    // Long-press target — when non-null we render a bottom dialog with
+    // the "Remove from Continue Watching" action.
+    var actionEntry by remember { mutableStateOf<WatchProgressStore.Entry?>(null) }
+
     androidx.compose.foundation.lazy.LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 4.dp),
@@ -208,15 +244,32 @@ private fun ContinueWatchingPage(
                     .padding(horizontal = 16.dp, vertical = 5.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(Color(0xFF0A1220))
-                    .clickable {
-                        val p = playlist ?: return@clickable
-                        val url = when (e.kind) {
-                            "live" -> XtreamApi.liveUrl(p.host, p.username, p.password, e.streamId)
-                            "series" -> XtreamApi.episodeUrl(p.host, p.username, p.password, e.streamId.toString(), null)
-                            else -> XtreamApi.movieUrl(p.host, p.username, p.password, e.streamId, null)
-                        }
-                        nav.navigate(mobilePlayerRoute(playlistId, url, e.title, e.kind == "live"))
-                    }
+                    .combinedClickable(
+                        onClick = {
+                            val p = playlist ?: return@combinedClickable
+                            val url = when (e.kind) {
+                                "live" -> XtreamApi.liveUrl(p.host, p.username, p.password, e.streamId)
+                                "series" -> XtreamApi.episodeUrl(p.host, p.username, p.password, e.streamId.toString(), null)
+                                else -> XtreamApi.movieUrl(p.host, p.username, p.password, e.streamId, null)
+                            }
+                            // Pass vod* params so MobilePlayerScreen can
+                            // seek to the saved position. Live channels
+                            // don't need resume — leave the params null.
+                            val isLive = e.kind == "live"
+                            nav.navigate(
+                                mobilePlayerRoute(
+                                    playlistId = playlistId,
+                                    streamUrl = url,
+                                    channelName = e.title,
+                                    isLive = isLive,
+                                    vodStreamId = if (isLive) null else e.streamId,
+                                    vodKind = if (isLive) null else e.kind,
+                                    vodPoster = if (isLive) null else e.poster,
+                                ),
+                            )
+                        },
+                        onLongClick = { actionEntry = e },
+                    )
                     .padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -263,6 +316,62 @@ private fun ContinueWatchingPage(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // ── Long-press action sheet ──
+    val entry = actionEntry
+    if (entry != null) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { actionEntry = null }) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF0B1220))
+                    .padding(16.dp),
+            ) {
+                Text(
+                    entry.title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Continue Watching",
+                    color = Cyan,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.5.sp,
+                )
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            onRemove(entry)
+                            actionEntry = null
+                        }
+                        .padding(vertical = 12.dp, horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.Delete, null,
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Text(
+                        "Remove from Continue Watching",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
         }
