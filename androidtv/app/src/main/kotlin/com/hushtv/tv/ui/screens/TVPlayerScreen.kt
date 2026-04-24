@@ -29,6 +29,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.focusGroup
@@ -47,15 +50,19 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
+import com.hushtv.tv.ai.PcmTapAudioProcessor
+import com.hushtv.tv.ai.VoskCaptionEngine
 import com.hushtv.tv.data.EpgService
 import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.MediaCard
@@ -90,8 +97,32 @@ fun TVPlayerScreen(
     var currentName by remember { mutableStateOf(channelName) }
     var currentNumber by remember { mutableStateOf(if (NavState.currentChannelIndex >= 0) NavState.currentChannelIndex + 1 else 0) }
 
+    // ── AI Captions plumbing — PCM tap lives inside the audio renderer
+    //    pipeline and pumps decoded frames to VoskCaptionEngine. Must
+    //    be created BEFORE the ExoPlayer build so we can install a
+    //    custom RenderersFactory that slots it into the audio sink.
+    val pcmTap = remember { PcmTapAudioProcessor() }
+    var aiCaptionsEnabled by rememberSaveable { mutableStateOf(false) }
+    val aiCaptionText by VoskCaptionEngine.text.collectAsState()
+
     val player = remember {
-        ExoPlayer.Builder(ctx).build().apply {
+        val renderersFactory = object : DefaultRenderersFactory(ctx) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): androidx.media3.exoplayer.audio.AudioSink {
+                // Default sink with our PCM tap prepended to the
+                // processor chain. Pass-through mode is unaffected
+                // because the tap is a no-op on unsupported formats.
+                return androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf<androidx.media3.common.audio.AudioProcessor>(pcmTap))
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+            }
+        }
+        ExoPlayer.Builder(ctx, renderersFactory).build().apply {
             setMediaItem(MediaItem.fromUri(currentUrl))
             prepare()
             // Live channels auto-play. VOD will wait for the Resume-prompt
@@ -101,6 +132,41 @@ fun TVPlayerScreen(
         }
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
+
+    // Lazy model prepare — kicks off in the background as soon as the
+    // player starts so the model is ready the first time the user
+    // enables AI captions. No-op on subsequent calls.
+    val captionScope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        VoskCaptionEngine.prepare(ctx)
+    }
+
+    // Wire/un-wire the tap depending on user toggle.
+    DisposableEffect(aiCaptionsEnabled) {
+        if (aiCaptionsEnabled) {
+            pcmTap.onPcm = { bytes, len -> VoskCaptionEngine.onPcmFrame(bytes, len) }
+            // We don't know the rate until the sink configures the tap,
+            // but the processor exposes it. Poll once briefly.
+            captionScope.launch {
+                repeat(30) {
+                    val rate = pcmTap.tapSampleRate
+                    val ch = pcmTap.tapChannelCount
+                    if (rate > 0 && ch > 0) {
+                        VoskCaptionEngine.start(captionScope, rate, ch)
+                        return@launch
+                    }
+                    kotlinx.coroutines.delay(200)
+                }
+            }
+        } else {
+            pcmTap.onPcm = null
+            VoskCaptionEngine.stop()
+        }
+        onDispose {
+            pcmTap.onPcm = null
+            VoskCaptionEngine.stop()
+        }
+    }
 
     // Thumbnail preview extractor for scrubber (VOD only, MP4/MKV only).
     // The extractor is created lazily and its HTTP handshake runs on
@@ -726,6 +792,38 @@ fun TVPlayerScreen(
                     }
                 }
 
+                // ── AI caption overlay ──
+                // Always visible when enabled (regardless of OSD show/hide).
+                // Anchored ABOVE the bottom control bar so it doesn't clash
+                // with it and auto-sits on whatever vertical space exists.
+                if (aiCaptionsEnabled && aiCaptionText.isNotBlank()) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = if (showControls) 220.dp else 56.dp)
+                            .padding(horizontal = 64.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier
+                                .background(
+                                    Color(0xCC000000),
+                                    RoundedCornerShape(10.dp),
+                                )
+                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                        ) {
+                            Text(
+                                aiCaptionText,
+                                color = Color(0xFFFAFAFA),
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 28.sp,
+                            )
+                        }
+                    }
+                }
+
                 // Bottom controls
                 Column(
                     Modifier
@@ -990,6 +1088,18 @@ fun TVPlayerScreen(
                             // Secondary control cluster — opens options menu
                             // on the matching pane so focus lands right where
                             // the user clicked.
+                            // AI English Captions quick-toggle — cyan border
+                            // lights up when active. LIVE CC has no equivalent.
+                            OsdChipButton(
+                                icon = Icons.Default.ClosedCaption,
+                                label = if (aiCaptionsEnabled) "AI ON" else "AI CC",
+                                onClick = {
+                                    aiCaptionsEnabled = !aiCaptionsEnabled
+                                },
+                                onInteract = { controlsTick++ },
+                                active = aiCaptionsEnabled,
+                            )
+                            Spacer(Modifier.width(10.dp))
                             OsdChipButton(
                                 icon = Icons.Default.ClosedCaption,
                                 label = "CC",
@@ -1241,9 +1351,10 @@ private fun OsdChipButton(
     label: String,
     onClick: () -> Unit,
     onInteract: () -> Unit = {},
+    active: Boolean = false,
 ) {
     Surface(
-        color = Color(0x26FFFFFF),
+        color = if (active) Cyan.copy(alpha = 0.25f) else Color(0x26FFFFFF),
         shape = RoundedCornerShape(28.dp),
         modifier = Modifier
             .height(44.dp)
