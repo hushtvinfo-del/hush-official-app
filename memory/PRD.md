@@ -102,6 +102,62 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 36 — v1.26.0 Mobile Live Hub gestures + EPG timeline (2026-04-24 — completed, deployed)
+Makes the mobile Live TV preview card feel native to phones. Adds three
+distinct gestures on the preview surface plus a horizontally-scrolling
+EPG timeline strip right under it.
+
+Files changed:
+- `mobile/MobileLiveHubScreen.kt`:
+  - New private composable `MobilePreviewSurface(player, hasSelection,
+    onTapFullscreen, onPinchFullscreen, onSwipeUp, onSwipeDown)`. Wraps
+    the 16:9 preview Box and owns a single `pointerInput` block that
+    classifies gestures on the first pointer event:
+      • 2+ pointers → pinch mode; cumulative scale via
+        `PointerEvent.calculateZoom()`; once ≥ 1.25× we fire
+        `onPinchFullscreen` + LONG_PRESS haptic, then drain.
+      • 1 pointer + vertical drag ≥ 60 dp → channel flip
+        (`onSwipeUp` / `onSwipeDown`) + VIRTUAL_KEY haptic; short or
+        horizontal-dominant drags are ignored so taps still pass
+        through to the parent clickable.
+      • Pointer-up with no drag → tap handler (fullscreen).
+    Claims the gesture (consumes events) at ~30% of threshold so the
+    enclosing LazyColumn can't steal vertical drags mid-flip.
+  - `hintVisible` mutable state + `AnimatedVisibility` pill at
+    bottom-centre that teaches the swipe gesture for 2.5 s on first
+    render then fades. A cyan circular arrow (`KeyboardArrowUp/Down`)
+    flashes at centre on each flip for visual confirmation.
+  - Preview surface replaces the old inlined `Box(...).clickable{...}`
+    in `item("preview")`. Fullscreen pill text upgraded from
+    "Tap to expand" → "Tap · pinch to expand" to advertise the new
+    gesture.
+  - New `item("epgstrip")` inserted between `item("preview")` and
+    `item("meta")` calling new composable `EpgTimelineStrip(streamId,
+    epgVersion)`. Empty-fast: returns early if
+    `EpgService.programsOf(streamId)` is empty so we don't render an
+    orphaned header.
+  - New composable `EpgTimelineChip(p)` — per-program tile whose width
+    scales with duration (0.6 dp per minute, clamped 80–240 dp). Live
+    program has red pip + cyan border + inline progress bar; past
+    programs fade to 50% alpha; future programs show a faint cyan
+    border. Title limited to 2 lines with ellipsis.
+  - `rememberLazyListState()` on the timeline `LazyRow` +
+    `LaunchedEffect(streamId, epgVersion)` auto-scrolls to the
+    currently-live program whenever the channel changes or the EPG
+    refreshes (80 ms debounce so the list has time to measure).
+  - Imports added: `HapticFeedbackConstants`, `AnimatedVisibility`,
+    slide/fade transitions, `awaitEachGesture` / `awaitFirstDown` /
+    `calculateZoom`, `positionChange`, `pointerInput`, `LocalView`,
+    `LocalDensity`, `PointerEventPass`, `KeyboardArrowUp/Down` icons.
+
+Build + deploy:
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only, no
+  errors).
+- Shipped as versionCode=149 / versionName="1.26.0" — APK (md5
+  `0577a53848f1c877c3dbe9b3bb462ed0`, 113,057,502 bytes) live on
+  `https://hushtv.xyz`, `version.json` bumped with changelog.
+
+
 ### Phase 35 — v1.25.0 Mobile Continue Watching (2026-04-24 — completed, deployed)
 Wires `WatchProgressStore` into the mobile player flow so phones get
 the same "resume where you left off" UX the TV already ships.

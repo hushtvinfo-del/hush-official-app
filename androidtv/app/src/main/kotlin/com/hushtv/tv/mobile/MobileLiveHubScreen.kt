@@ -2,11 +2,20 @@ package com.hushtv.tv.mobile
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,6 +30,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,9 +44,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -237,83 +254,68 @@ fun MobileLiveHubScreen(
         LazyColumn(
             Modifier.fillMaxSize(),
         ) {
-            // Preview card (player)
+            // Preview card (player) with gesture controls:
+            //   • Single tap      → fullscreen
+            //   • Vertical swipe  → next/prev channel
+            //   • Pinch-out       → fullscreen
             item("preview") {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .background(Color.Black)
-                        .clickable {
-                            // Full-screen the selected channel. We pause the
-                            // in-line preview first so we don't double-play.
-                            val card = currentChannel ?: return@clickable
-                            val p = playlist ?: return@clickable
-                            player.pause()
-                            val url = XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
-                            RecentChannelStore.pushFront(ctx, playlistId, card.streamId)
-                            recentVersion++
-                            nav.navigate(
-                                mobilePlayerRoute(
-                                    playlistId = playlistId,
-                                    streamUrl = url,
-                                    channelName = card.title,
-                                    isLive = true,
-                                    liveCategoryId = selectedCatId.ifBlank { null },
-                                ),
-                            )
-                        },
-                ) {
-                    if (selectedStreamId < 0) {
-                        // Nothing selected yet — show an empty cyan-tinted slate.
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .background(Brush.verticalGradient(
-                                    listOf(Color(0xFF0E1A2E), Color(0xFF05080F))
-                                )),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                "Pick a channel to preview",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 13.sp,
-                            )
-                        }
-                    } else {
-                        AndroidView(
-                            factory = {
-                                PlayerView(it).apply {
-                                    useController = false
-                                    this.player = player
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize(),
-                            update = { pv -> pv.player = player },
-                        )
-                        // Fullscreen affordance pill.
-                        Row(
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(10.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xAA000000))
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Default.Fullscreen, null, tint = Color.White,
-                                modifier = Modifier.size(14.dp),
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                "Tap to expand",
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
+                val idxInList = orderedChannels.indexOfFirst { it.streamId == selectedStreamId }
+                val launchFullscreen: () -> Unit = lf@ {
+                    val card = currentChannel ?: return@lf
+                    val p = playlist ?: return@lf
+                    player.pause()
+                    val url = XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
+                    RecentChannelStore.pushFront(ctx, playlistId, card.streamId)
+                    recentVersion++
+                    nav.navigate(
+                        mobilePlayerRoute(
+                            playlistId = playlistId,
+                            streamUrl = url,
+                            channelName = card.title,
+                            isLive = true,
+                            liveCategoryId = selectedCatId.ifBlank { null },
+                        ),
+                    )
+                }
+                val flipTo: (MediaCard?) -> Unit = { target ->
+                    if (target != null) {
+                        selectedStreamId = target.streamId
+                        RecentChannelStore.pushFront(ctx, playlistId, target.streamId)
+                        recentVersion++
                     }
+                }
+                MobilePreviewSurface(
+                    player = player,
+                    hasSelection = selectedStreamId >= 0,
+                    onTapFullscreen = launchFullscreen,
+                    onPinchFullscreen = launchFullscreen,
+                    onSwipeUp = {
+                        // Next channel in the ordered list (wraps to top).
+                        if (orderedChannels.isNotEmpty()) {
+                            val nextIdx = if (idxInList < 0) 0
+                                else (idxInList + 1) % orderedChannels.size
+                            flipTo(orderedChannels[nextIdx])
+                        }
+                    },
+                    onSwipeDown = {
+                        // Previous channel (wraps to bottom).
+                        if (orderedChannels.isNotEmpty()) {
+                            val prevIdx = if (idxInList < 0) 0
+                                else (idxInList - 1 + orderedChannels.size) % orderedChannels.size
+                            flipTo(orderedChannels[prevIdx])
+                        }
+                    },
+                )
+            }
+
+            // EPG timeline scrubber — horizontally scrollable strip of
+            // cached programs. Shows the next few hours at a glance.
+            if (currentChannel != null) {
+                item("epgstrip") {
+                    EpgTimelineStrip(
+                        streamId = currentChannel.streamId,
+                        epgVersion = epgVersion,
+                    )
                 }
             }
 
@@ -884,4 +886,393 @@ private fun CategorySheetRow(
 
 private fun formatClock(ms: Long): String {
     return SimpleDateFormat("h:mm a", Locale.US).format(Date(ms))
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * Gesture-enabled preview surface.
+ *
+ * Handles three gestures in priority order, classified on the first
+ * pointer event after touch-down:
+ *   • 2 pointers (pinch) → zoom; when cumulative scale crosses
+ *     [PINCH_FULLSCREEN_THRESHOLD] we fire [onPinchFullscreen] and
+ *     consume the gesture.
+ *   • 1 pointer + vertical drag ≥ [SWIPE_FLIP_THRESHOLD_DP] →
+ *     channel flip ([onSwipeUp] / [onSwipeDown]).
+ *   • 1 pointer release with no drag → tap handled by the parent
+ *     clickable below (falls through to [onTapFullscreen]).
+ *
+ * Horizontal jitter is ignored so short left/right wiggles on a
+ * slightly angled finger don't cancel the vertical flip.
+ * ──────────────────────────────────────────────────────────────── */
+private const val PINCH_FULLSCREEN_THRESHOLD = 1.25f
+private val SWIPE_FLIP_THRESHOLD_DP = 60.dp
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun MobilePreviewSurface(
+    player: ExoPlayer,
+    hasSelection: Boolean,
+    onTapFullscreen: () -> Unit,
+    onPinchFullscreen: () -> Unit,
+    onSwipeUp: () -> Unit,
+    onSwipeDown: () -> Unit,
+) {
+    val view = LocalView.current
+    val density = LocalDensity.current
+    val flipThresholdPx = with(density) { SWIPE_FLIP_THRESHOLD_DP.toPx() }
+    // Transient UI hint ("Swipe for channel") — fades out after 2.5 s
+    // on first composition to teach the gesture without being noisy.
+    var hintVisible by remember { mutableStateOf(true) }
+    var flipDirectionHint by remember { mutableStateOf<String?>(null) }  // "UP" / "DOWN"
+    LaunchedEffect(Unit) {
+        delay(2_500)
+        hintVisible = false
+    }
+    // Gesture-triggered arrow flash (plays once per flip).
+    LaunchedEffect(flipDirectionHint) {
+        if (flipDirectionHint != null) {
+            delay(650)
+            flipDirectionHint = null
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .background(Color.Black)
+            .pointerInput(Unit) {
+                // Custom gesture loop. Runs BEFORE the parent clickable
+                // (child-first event ordering in Compose). We only
+                // consume events when we decide the gesture belongs to
+                // us — otherwise we let the tap fall through.
+                awaitEachGesture {
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    var totalDy = 0f
+                    var totalDx = 0f
+                    var zoomFactor = 1f
+                    var isPinching = false
+                    var claimed = false    // once true, the tap can't fire
+
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.size >= 2 && !isPinching) {
+                            isPinching = true
+                        }
+
+                        if (isPinching) {
+                            val z = event.calculateZoom()
+                            if (z > 0f) zoomFactor *= z
+                            // Claim the gesture so LazyColumn doesn't scroll.
+                            event.changes.forEach { it.consume() }
+                            claimed = true
+                            if (zoomFactor >= PINCH_FULLSCREEN_THRESHOLD) {
+                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                onPinchFullscreen()
+                                // Drain remaining events so we don't fire twice.
+                                while (event.changes.any { it.pressed }) {
+                                    val drain = awaitPointerEvent(PointerEventPass.Main)
+                                    drain.changes.forEach { it.consume() }
+                                    if (drain.changes.none { it.pressed }) break
+                                }
+                                return@awaitEachGesture
+                            }
+                        } else {
+                            // Single-pointer tracking for swipe detection.
+                            val change = event.changes.firstOrNull { it.id == first.id } ?: event.changes.firstOrNull()
+                            if (change != null) {
+                                val d = change.positionChange()
+                                totalDy += d.y
+                                totalDx += d.x
+                                // Claim the gesture as soon as drag exceeds
+                                // half the threshold so LazyColumn doesn't
+                                // steal it — but wait for full threshold
+                                // before firing the flip action.
+                                val magnitude = kotlin.math.abs(totalDy)
+                                if (magnitude > flipThresholdPx * 0.3f && magnitude > kotlin.math.abs(totalDx)) {
+                                    change.consume()
+                                    claimed = true
+                                }
+                                if (magnitude >= flipThresholdPx) {
+                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                    if (totalDy < 0) {
+                                        flipDirectionHint = "UP"
+                                        onSwipeUp()
+                                    } else {
+                                        flipDirectionHint = "DOWN"
+                                        onSwipeDown()
+                                    }
+                                    // Drain the rest of this gesture.
+                                    while (event.changes.any { it.pressed }) {
+                                        val drain = awaitPointerEvent(PointerEventPass.Main)
+                                        drain.changes.forEach { it.consume() }
+                                        if (drain.changes.none { it.pressed }) break
+                                    }
+                                    return@awaitEachGesture
+                                }
+                            }
+                        }
+
+                        // End of gesture (all pointers up).
+                        if (event.changes.none { it.pressed }) {
+                            // If we never claimed, let the clickable below
+                            // fire its tap.
+                            if (!claimed && !isPinching && kotlin.math.abs(totalDy) < flipThresholdPx) {
+                                // fall through — tap handled by parent clickable
+                            }
+                            return@awaitEachGesture
+                        }
+                    }
+                }
+            }
+            .clickable(onClick = onTapFullscreen),
+    ) {
+        if (!hasSelection) {
+            // Nothing selected yet — cyan-tinted slate.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Brush.verticalGradient(
+                        listOf(Color(0xFF0E1A2E), Color(0xFF05080F))
+                    )),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "Pick a channel to preview",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 13.sp,
+                )
+            }
+        } else {
+            AndroidView(
+                factory = {
+                    PlayerView(it).apply {
+                        useController = false
+                        this.player = player
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+                update = { pv -> pv.player = player },
+            )
+            // Fullscreen affordance pill (top-right).
+            Row(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xAA000000))
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Default.Fullscreen, null, tint = Color.White,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "Tap · pinch to expand",
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            // Gesture hint pill (bottom-center) — teaches swipe-to-flip
+            // for the first 2.5 s then fades.
+            AnimatedVisibility(
+                visible = hintVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 10.dp),
+            ) {
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xBB000000))
+                        .border(1.dp, Cyan.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowUp, null, tint = Cyan,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Icon(
+                        Icons.Default.KeyboardArrowDown, null, tint = Cyan,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "Swipe for channel",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            // Big arrow flash when user flips channel — visual feedback.
+            AnimatedVisibility(
+                visible = flipDirectionHint != null,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { if (flipDirectionHint == "UP") it else -it }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { if (flipDirectionHint == "UP") -it else it }),
+                modifier = Modifier.align(Alignment.Center),
+            ) {
+                Box(
+                    Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xDD06B6D4)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (flipDirectionHint == "UP") Icons.Default.KeyboardArrowUp
+                        else Icons.Default.KeyboardArrowDown,
+                        null,
+                        tint = Color(0xFF05080F),
+                        modifier = Modifier.size(40.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * EPG Timeline Strip — horizontally scrolling program chips under
+ * the preview. Each chip's width scales with the program's duration
+ * (0.6 dp per minute, clamped 80–240 dp). The currently-playing
+ * program is highlighted in cyan and auto-scrolled into view on
+ * first render / channel change.
+ * ──────────────────────────────────────────────────────────────── */
+@Composable
+private fun EpgTimelineStrip(streamId: Int, epgVersion: Int) {
+    @Suppress("UNUSED_EXPRESSION") epgVersion
+    val programs = remember(streamId, epgVersion) { EpgService.programsOf(streamId) }
+    if (programs.isEmpty()) return
+
+    val listState = rememberLazyListState()
+    val liveIdx = remember(programs, epgVersion) {
+        programs.indexOfFirst { it.isLive }.let { if (it < 0) 0 else it }
+    }
+    // Auto-centre on the currently-live program whenever the channel
+    // or the EPG refreshes.
+    LaunchedEffect(streamId, epgVersion) {
+        // small delay lets the list measure before we scroll
+        delay(80)
+        runCatching { listState.animateScrollToItem(liveIdx) }
+    }
+
+    Column(Modifier.padding(top = 2.dp)) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "TIMELINE",
+                color = Cyan,
+                fontSize = 10.sp,
+                letterSpacing = 2.sp,
+                fontWeight = FontWeight.Black,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "· next ${programs.size} programs",
+                color = Color(0xFF64748B),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        LazyRow(
+            state = listState,
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            items(programs, key = { "prg-${it.startMs}" }) { p ->
+                EpgTimelineChip(p)
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+    }
+}
+
+@Composable
+private fun EpgTimelineChip(p: EpgProgram) {
+    val widthDp: Dp = run {
+        val minutes = (p.durationMs / 60_000L).toInt().coerceAtLeast(15)
+        (minutes * 0.6f).dp.coerceIn(80.dp, 240.dp)
+    }
+    val live = p.isLive
+    val past = p.stopMs < System.currentTimeMillis()
+    val bg = when {
+        live -> Cyan.copy(alpha = 0.18f)
+        past -> Color(0xFF0A1220).copy(alpha = 0.5f)
+        else -> Color(0xFF0A1220)
+    }
+    val border = when {
+        live -> Cyan
+        past -> Color.Transparent
+        else -> Color(0x3306B6D4)
+    }
+    val titleColor = when {
+        live -> Cyan
+        past -> Color(0xFF475569)
+        else -> Color.White
+    }
+    Column(
+        Modifier
+            .width(widthDp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+            .border(
+                width = if (live) 1.5.dp else if (past) 0.dp else 1.dp,
+                color = border,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (live) {
+                Box(
+                    Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFEF4444)),
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                formatClock(p.startMs),
+                color = if (live) Cyan else Color(0xFF94A3B8),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.4.sp,
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(
+            p.title,
+            color = titleColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            lineHeight = 13.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (live) {
+            Spacer(Modifier.height(4.dp))
+            Box(
+                Modifier.fillMaxWidth().height(2.dp)
+                    .background(Color(0x22FFFFFF), RoundedCornerShape(1.dp)),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(p.progressPct)
+                        .height(2.dp)
+                        .background(Cyan, RoundedCornerShape(1.dp)),
+                )
+            }
+        }
+    }
 }
