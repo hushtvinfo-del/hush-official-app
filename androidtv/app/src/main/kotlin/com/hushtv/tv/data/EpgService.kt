@@ -11,7 +11,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.util.Base64
+import android.util.Base64
 import java.util.concurrent.TimeUnit
 
 /** A single program in the EPG. */
@@ -157,7 +157,11 @@ object EpgService {
         )
     }
 
+    // Use android.util.Base64 (NOT java.util.Base64) — the latter only
+    // exists on Android 8.0+ (SDK 26) and crashes Fire TV Stick 4K Max
+    // (SDK 25) the moment the EPG returns a base64-encoded title.
+    // android.util.Base64 ships back to Android 2.2.
     private fun decodeBase64(s: String): String = try {
-        String(Base64.getDecoder().decode(s), Charsets.UTF_8)
+        String(Base64.decode(s, Base64.DEFAULT), Charsets.UTF_8)
     } catch (_: Exception) { "" }
 }

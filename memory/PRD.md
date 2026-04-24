@@ -102,6 +102,65 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 56 — v1.31.3 CRITICAL Fire TV Stick crash on Live TV (2026-04-24 — completed, deployed as MANDATORY)
+User reported: "Friend on Fire Stick — anytime he goes to Live TV
+the app crashes. Just sent the report."
+
+ROOT CAUSE (from server-uploaded crash report
+`223146-067427-Amazon-AFTMM-29352443.json`):
+- Device: Amazon AFTMM (Fire TV Stick 4K Max)
+- Android SDK 25 (Android 7.1.2)
+- App: 1.31.2-debug
+- Stack:
+  ```
+  java.lang.NoClassDefFoundError: Failed resolution of:
+      Ljava/util/Base64;
+      at com.hushtv.tv.data.EpgService.decodeBase64(EpgService.kt:161)
+      at com.hushtv.tv.data.EpgService.toEpgProgram(...)
+      at com.hushtv.tv.data.EpgService.fetchShortEpg(...)
+  ```
+
+`java.util.Base64` was added to Java 8, which on Android only ships
+on **API 26 (8.0 Oreo)** and later. Fire TV Stick 4K Max ships
+Android 7.1.2 / SDK 25. The class literally doesn't exist on that
+device — VM raises `NoClassDefFoundError` at first use. The very
+first thing Live TV does on entry is `fetchShortEpg(...)`, which
+parses program titles base64-decoded by `decodeBase64`. So the
+crash hit on EVERY Live TV entry, never reaching anything else.
+
+Repro is 100% deterministic on any Android 4.x / 5.x / 6.x / 7.x
+device. Earlier missed because all my test devices + Shield run 8+.
+
+Fix:
+- `data/EpgService.kt`:
+  - Import swapped: `java.util.Base64` → `android.util.Base64`.
+    `android.util.Base64` ships back to API 8 (Android 2.2) so it
+    covers every device the app could conceivably run on.
+  - `decodeBase64(s)` body changed from `Base64.getDecoder().decode(s)`
+    → `Base64.decode(s, Base64.DEFAULT)`. Behaviourally identical
+    for our case (default mode is RFC 4648 which is what Xtream
+    EPG payloads use).
+  - Added a long explanatory code comment so this regression doesn't
+    re-emerge if someone refactors it.
+- Codebase audit: `grep -rn "java.util.Base64\|java.time.\|java.nio.file."`
+  returned only the comment line in `EpgService.kt`. No other API-26+
+  Java APIs in use anywhere — single point of failure, single
+  point of fix.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 167 → 168`, `versionName
+  "1.31.2" → "1.31.3"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL in 35 s.
+- Shipped as MANDATORY (version.json `mandatory=true`) — APK (md5
+  `63691ac3985e5693c83b3ca52823370b`) live on `https://hushtv.xyz`.
+
+Going forward — when adding new helpers that might hit
+back-compat APIs, prefer `android.util.*` / `androidx.*` over
+`java.util.*` / `java.time.*` unless we explicitly target SDK 26+.
+HushTV's `minSdk = 24` means we MUST support Fire TVs running
+Android 7.x.
+
+
 ### Phase 55 — v1.31.2 AI caption placeholder auto-hide (2026-04-24 — completed, deployed)
 User screenshot: "Listening · English only" placeholder was stacked
 directly below an actual SDH caption ("And she'll be off the hook for
