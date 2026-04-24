@@ -59,10 +59,12 @@ fun TVEpgGridScreen(nav: NavController, playlistId: String) {
     val channels = remember { NavState.liveChannels.take(100) }
     val channelPrograms = remember { mutableStateMapOf<Int, List<EpgProgram>>() }
 
-    // Timeline anchor: now minus 30 min, ending 6 hours later.
+    // Timeline anchor: now minus 30 min, ending 8 hours later. Wider
+    // window means more upcoming programs visible per row without
+    // needing to D-pad-scroll for ages.
     val nowMs = remember { System.currentTimeMillis() }
     val timelineStart = remember { nowMs - 30L * 60 * 1000 }
-    val timelineEnd = remember { timelineStart + 6L * 60 * 60 * 1000 }
+    val timelineEnd = remember { timelineStart + 8L * 60 * 60 * 1000 }
 
     // Lazy-fetch EPG for all visible channels.
     LaunchedEffect(channels) {
@@ -155,32 +157,45 @@ fun TVEpgGridScreen(nav: NavController, playlistId: String) {
 @Composable
 private fun TimeRuler(start: Long, end: Long) {
     val totalMin = ((end - start) / 60_000L).toInt()
-    val pxPerMin = 8.dp // 8dp per minute → 6hrs = 2880dp wide
+    val pxPerMin = 8.dp // 8dp per minute → 8hrs = 3840dp wide
     val fmt = remember { SimpleDateFormat("h:mm a", Locale.US) }
+    val nowMs = System.currentTimeMillis()
+    val nowOffsetMin = ((nowMs - start) / 60_000L).toInt().coerceIn(0, totalMin)
 
-    Row(
+    Box(
         Modifier
             .width(pxPerMin * totalMin)
             .height(32.dp)
             .background(Color(0x1A000000))
     ) {
-        // Mark every 30 min
-        var t = (start / (30L * 60_000L) + 1) * (30L * 60_000L)
-        var offsetMin = ((t - start) / 60_000L).toInt().coerceAtLeast(0)
-        Spacer(Modifier.width(pxPerMin * offsetMin))
-        while (t < end) {
-            Column(
-                Modifier.width(pxPerMin * 30),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    fmt.format(Date(t)),
-                    color = TextSecondary, fontSize = 11.sp,
-                    modifier = Modifier.padding(horizontal = 6.dp)
-                )
+        Row(Modifier.fillMaxSize()) {
+            // Mark every 30 min
+            var t = (start / (30L * 60_000L) + 1) * (30L * 60_000L)
+            val offsetMin = ((t - start) / 60_000L).toInt().coerceAtLeast(0)
+            Spacer(Modifier.width(pxPerMin * offsetMin))
+            while (t < end) {
+                Column(
+                    Modifier.width(pxPerMin * 30),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        fmt.format(Date(t)),
+                        color = Color(0xFFE5E7EB), fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 6.dp)
+                    )
+                }
+                t += 30L * 60_000L
             }
-            t += 30L * 60_000L
         }
+        // Cyan "NOW" marker pip on the ruler.
+        Box(
+            Modifier
+                .offset(x = pxPerMin * nowOffsetMin - 1.dp)
+                .width(2.dp)
+                .fillMaxHeight()
+                .background(Cyan)
+        )
     }
 }
 
@@ -192,6 +207,7 @@ private fun ProgramsRow(
 ) {
     val totalMin = ((timelineEnd - timelineStart) / 60_000L).toInt()
     val pxPerMin = 8.dp
+    val clockFmt = remember { SimpleDateFormat("h:mm a", Locale.US) }
 
     Box(
         Modifier
@@ -223,12 +239,38 @@ private fun ProgramsRow(
                     )
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                Text(
-                    prog.title,
-                    color = Color.White, fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2
-                )
+                Column {
+                    // Start time + LIVE pip — only shown when the block
+                    // is wide enough to fit it without squeezing the
+                    // title (≥ 25 min of airtime on this screen).
+                    if (durMin >= 25) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                clockFmt.format(Date(prog.startMs)),
+                                color = if (prog.isLive) Cyan else Color(0xFFFACC15),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 0.6.sp,
+                                maxLines = 1,
+                            )
+                            if (prog.isLive) {
+                                Spacer(Modifier.width(4.dp))
+                                Box(
+                                    Modifier
+                                        .size(5.dp)
+                                        .background(Cyan, CircleShape)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(1.dp))
+                    }
+                    Text(
+                        prog.title,
+                        color = Color.White, fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = if (durMin >= 25) 1 else 2,
+                    )
+                }
             }
         }
     }

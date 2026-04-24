@@ -88,6 +88,17 @@ object EpgService {
         return e.programs.firstOrNull { it.startMs > now }
     }
 
+    /**
+     * Returns the next [limit] upcoming programs (after the currently
+     * playing one). Used by the Live TV preview bar to show what's on
+     * in the next few hours, not just the very next show.
+     */
+    fun upcoming(streamId: Int, limit: Int = 3): List<EpgProgram> {
+        val e = cache[streamId] ?: return emptyList()
+        val now = System.currentTimeMillis()
+        return e.programs.filter { it.startMs > now }.take(limit)
+    }
+
     /** All cached programs for the given stream (Now + Next + more). */
     fun programsOf(streamId: Int): List<EpgProgram> =
         cache[streamId]?.programs ?: emptyList()
@@ -113,7 +124,7 @@ object EpgService {
                     .addQueryParameter("password", password)
                     .addQueryParameter("action", "get_short_epg")
                     .addQueryParameter("stream_id", streamId.toString())
-                    .addQueryParameter("limit", "6")
+                    .addQueryParameter("limit", "20")
                     .build()
                 val req = Request.Builder().url(url).build()
                 val body = client.newCall(req).execute().use { r ->

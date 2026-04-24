@@ -571,7 +571,7 @@ private fun PreviewBar(
     Row(
         Modifier
             .fillMaxWidth()
-            .height(130.dp)
+            .height(170.dp)
             .background(Color(0xFF050A15))
             .padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -651,65 +651,69 @@ private fun PreviewBar(
 @Composable
 private fun EpgInfoPanel(channel: MediaCard) {
     val now = EpgService.nowPlaying(channel.streamId)
-    val next = EpgService.nextUp(channel.streamId)
+    val upcoming = EpgService.upcoming(channel.streamId, limit = 3)
 
-    // Channel name
+    // Channel name (compact so we have room for more program rows)
     Text(
         channel.title,
         color = Color.White,
-        fontSize = 18.sp,
+        fontSize = 16.sp,
         fontWeight = FontWeight.Bold,
         maxLines = 1,
     )
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(5.dp))
 
     if (now != null) {
-        // NOW PLAYING
-        Text(
-            "NOW",
-            color = Cyan,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 1.6.sp,
-        )
+        // ── NOW PLAYING ──
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .background(Cyan, RoundedCornerShape(3.dp))
+                    .padding(horizontal = 5.dp, vertical = 1.dp)
+            ) {
+                Text(
+                    "NOW",
+                    color = Color(0xFF05080F),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.3.sp,
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "${formatClock(now.startMs)} – ${formatClock(now.stopMs)}",
+                color = Cyan,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "${now.minutesLeft} min left",
+                color = TextSecondary,
+                fontSize = 10.sp,
+            )
+        }
         Spacer(Modifier.height(2.dp))
         Text(
             now.title,
             color = Color.White,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
         )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "${formatClock(now.startMs)} – ${formatClock(now.stopMs)}  •  ${now.minutesLeft} min left",
-            color = TextSecondary,
-            fontSize = 11.sp,
-        )
         // Progress bar
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(3.dp)
+                .height(2.dp)
                 .background(Color(0x22FFFFFF), RoundedCornerShape(2.dp))
         ) {
             Box(
                 Modifier
                     .fillMaxWidth(now.progressPct)
-                    .height(3.dp)
+                    .height(2.dp)
                     .background(Cyan, RoundedCornerShape(2.dp))
-            )
-        }
-        // Description (truncated)
-        if (now.description.isNotBlank()) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                now.description,
-                color = Color(0xFFB3B8C1),
-                fontSize = 11.sp,
-                lineHeight = 14.sp,
-                maxLines = 2,
             )
         }
     } else {
@@ -720,31 +724,62 @@ private fun EpgInfoPanel(channel: MediaCard) {
         )
     }
 
-    if (next != null) {
-        Spacer(Modifier.height(10.dp))
+    // ── UP NEXT ── (up to 3 upcoming programs — next few hours)
+    if (upcoming.isNotEmpty()) {
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .background(Color(0xFFFACC15), RoundedCornerShape(3.dp))
+                    .padding(horizontal = 5.dp, vertical = 1.dp)
+            ) {
+                Text(
+                    "UP NEXT",
+                    color = Color(0xFF111827),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.3.sp,
+                )
+            }
+            Spacer(Modifier.width(6.dp))
             Text(
-                "NEXT",
-                color = Color(0xFFFACC15),
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp,
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                formatClock(next.startMs),
+                "next few hours",
                 color = TextSecondary,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Medium,
             )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                next.title,
-                color = Color(0xFFD1D5DB),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-            )
+        }
+        Spacer(Modifier.height(3.dp))
+        upcoming.forEachIndexed { idx, prog ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 1.dp),
+            ) {
+                Text(
+                    formatClock(prog.startMs),
+                    color = Color(0xFFFACC15),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(54.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    prog.title,
+                    color = Color(0xFFE5E7EB),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (idx < upcoming.size - 1) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(Color(0x14FFFFFF))
+                )
+            }
         }
     }
 }
