@@ -102,6 +102,57 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 43 — v1.28.1 Live TV resume-where-you-left-off (2026-04-24 — completed, deployed)
+User reported: "When I leave Live TV to Movies / Series and come back,
+it resets to the default category instead of remembering the category
++ previewed channel I was on." Wanted identical behaviour on mobile
+AND TV.
+
+Root cause (mobile): `MobileShell` swaps screens via a plain
+`when(tab)` Kotlin block. When the user taps Movies, the entire
+`MobileLiveHubScreen` composable is DISPOSED — and `rememberSaveable`
+only survives configuration changes (rotation), NOT composable
+disposal. So on return, a fresh screen started with default values.
+
+Root cause (TV): `TVLiveBrowseScreen` restores via `NavState`
+(process-scoped globals). NavState works for mid-session but is
+cleared on process death, and the index-based keys are fragile when
+the category list reloads in a different order.
+
+Fix — new persistent store + wiring across both form factors:
+- NEW `data/LiveSessionStore.kt`: simple SharedPreferences wrapper
+  with per-playlist `categoryId` (String) + `streamId` (Int) get /
+  set helpers. Survives app restart, form-factor agnostic.
+- `mobile/MobileLiveHubScreen.kt`:
+  - Replaced `rememberSaveable(key = "mlive-cat|sid")` with
+    `remember(playlistId) { mutableStateOf(LiveSessionStore.getX(...)) }`.
+  - Added two `LaunchedEffect`s that write `selectedCatId` /
+    `selectedStreamId` back to the store as they change.
+  - Dropped the now-unused `rememberSaveable` import.
+- `ui/screens/TVLiveBrowseScreen.kt`:
+  - Kept `NavState` as the session-scoped fast path for the first
+    render, then layered a `LaunchedEffect(uiCategories, playlistId)`
+    that resolves the persisted `categoryId` String to an index once
+    `uiCategories` has loaded — uses a `catRestored` one-shot flag
+    so user picks aren't clobbered.
+  - Added `focusRestored` one-shot + a
+    `LaunchedEffect(filteredChannels, playlistId, catRestored)` that
+    restores `focusedChannelIdx` from the persisted `streamId` once
+    the channel list for the restored category is loaded.
+  - The existing `LaunchedEffect(focusedChannelIdx)` now also calls
+    `LiveSessionStore.setStreamId(...)`, and the equivalent category
+    effect calls `LiveSessionStore.setCategoryId(...)` (guarded by
+    `catRestored` so the bootstrap doesn't overwrite the saved
+    value).
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 154 → 155`, `versionName
+  "1.28.0" → "1.28.1"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL.
+- Shipped as versionCode=155 / versionName="1.28.1" — APK (md5
+  `f02f1c120d685124fd32de5fcdb80d58`) live on `https://hushtv.xyz`.
+
+
 ### Phase 42 — v1.28.0 Mobile EPG reminders (2026-04-24 — completed, deployed)
 Wires the long-press "Set reminder" gesture into the mobile Live Hub
 Timeline strip using the existing `ReminderStore` +

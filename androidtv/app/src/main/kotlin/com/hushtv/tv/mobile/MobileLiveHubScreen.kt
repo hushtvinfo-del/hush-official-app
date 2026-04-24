@@ -40,7 +40,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +65,7 @@ import coil.compose.AsyncImage
 import com.hushtv.tv.data.EpgProgram
 import com.hushtv.tv.data.EpgService
 import com.hushtv.tv.data.FavoritesStore
+import com.hushtv.tv.data.LiveSessionStore
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.RecentChannelStore
@@ -107,17 +107,35 @@ fun MobileLiveHubScreen(
     val playlist = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
 
     // ── State ──
+    // Category + previewed channel persist across screens (and app
+    // restarts) via LiveSessionStore — user's expectation is that
+    // leaving Live TV and coming back resumes EXACTLY where they
+    // left off, not a fresh "All channels + first channel" state.
     var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
-    var selectedCatId by rememberSaveable(key = "mlive-cat") { mutableStateOf("") }
+    var selectedCatId by remember(playlistId) {
+        mutableStateOf(LiveSessionStore.getCategoryId(ctx, playlistId))
+    }
     var channels by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var showCatPicker by remember { mutableStateOf(false) }
-    var selectedStreamId by rememberSaveable(key = "mlive-sid") { mutableStateOf(-1) }
+    var selectedStreamId by remember(playlistId) {
+        mutableStateOf(LiveSessionStore.getStreamId(ctx, playlistId))
+    }
     var epgVersion by remember { mutableStateOf(0) }   // force recompose after EPG fetch
     var favVersion by remember { mutableStateOf(0) }   // force recompose after favorites toggle
     var recentVersion by remember { mutableStateOf(0) } // force recompose after recent update
     // Long-press quick-action sheet. Holds the target card or null.
     var actionCard by remember { mutableStateOf<MediaCard?>(null) }
+
+    // Persist selection changes back to the store as they happen.
+    LaunchedEffect(selectedCatId, playlistId) {
+        LiveSessionStore.setCategoryId(ctx, playlistId, selectedCatId)
+    }
+    LaunchedEffect(selectedStreamId, playlistId) {
+        if (selectedStreamId >= 0) {
+            LiveSessionStore.setStreamId(ctx, playlistId, selectedStreamId)
+        }
+    }
 
     // ── Load categories once ──
     LaunchedEffect(playlistId) {
