@@ -102,6 +102,72 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 51 — v1.30.6 REAL ROOT CAUSE of TV crashes (2026-04-24 — completed, deployed as MANDATORY)
+First crash reports arrived on the server dashboard from a Shield TV
+running v1.30.5. Two identical traces, same signature:
+
+```
+java.lang.IllegalStateException: Release should only be called once
+    at androidx.compose.foundation.lazy.layout.LazyLayoutPinnableItem.release(LazyLayoutPinnableItem.kt:159)
+    at androidx.compose.ui.focus.FocusRestorerNode$onExit$1.invoke-3ESFkO8(FocusRestorer.kt:103)
+    at androidx.compose.ui.focus.FocusTransactionsKt.performCustomExit-Mxy_nc0(FocusTransactions.kt:646)
+    at androidx.compose.ui.focus.FocusTransactionsKt.performCustomClearFocus-Mxy_nc0(FocusTransactions.kt:288)
+    at androidx.compose.ui.focus.FocusTransactionsKt.performCustomRequestFocus-Mxy_nc0(FocusTransactions.kt:266)
+    ...
+    at androidx.compose.ui.platform.AndroidComposeView.dispatchKeyEvent(...)
+```
+
+This is a KNOWN Jetpack Compose bug (Google issue tracker
+`322811857`, plus several duplicates) where
+`Modifier.focusRestorer()` on a LazyRow whose items get removed at
+runtime can cause the internal `LazyLayoutPinnableItem` to be
+released twice — the first release happens when the item is removed
+from the list, the second during the next D-pad focus traversal via
+`FocusRestorerNode.onExit`. Neither the LazyLayout nor the
+FocusRestorer checks if release was already called.
+
+My earlier phase-49 coroutine-cancellation fix did not address this
+because the crash was not in OUR code — it was inside Compose's
+internal focus machinery, triggered purely by the list-mutation +
+focus-restore combo. The coroutine fix was still correct (it
+prevented stale TMDB writes), just not the actual crash driver.
+
+Files changed:
+- `ui/screens/home/HomeContinueWatchingSection.kt`: dropped
+  `.focusRestorer()` from the CW Column modifier chain (line 122).
+  Now: `Modifier.focusRequester(firstItemFocus).focusGroup()` —
+  just firstItem focus target + focus group, no pinned-item
+  restoration. Added a long explanatory comment pointing to the
+  Compose bug so nobody unknowingly re-adds it.
+- Audited all other `focusRestorer()` call sites in the codebase
+  (Collections / Streaming / Discovery / Years / Genres home rows
+  + TVCollectionsBrowseScreen). All are backed by static lists
+  sourced from TMDB / Xtream — their items never get removed at
+  runtime, so the same bug can't trigger. Left them as-is.
+
+Trade-off:
+- Minor UX regression: when the user D-pad-Ups off the CW row and
+  then comes back Down, focus lands on the first card instead of
+  the exact card they were on. Acceptable — the row is horizontal
+  so the LazyRow's internal focus memory still keeps the user near
+  where they left off when navigating within the row, just not
+  across a row boundary. Zero crashes is worth more than this.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 162 → 163`, `versionName
+  "1.30.5" → "1.30.6"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL.
+- Shipped as MANDATORY — APK (md5
+  `f82133b49b87c462a3d2e07f52ec4468`) live on `https://hushtv.xyz`.
+
+Verification path:
+- User with the crashing Shield should install v1.30.6.
+- Retest the original repro: long-press to remove a CW item →
+  D-pad around to other CW items → no crash expected.
+- Any new crashes will auto-upload to the dashboard so we can see
+  them.
+
+
 ### Phase 50 — v1.30.5 Server-side crash reporting (2026-04-24 — completed, deployed)
 User: "I'm seeing crash reports in Diagnostics, but I have no way to
 share them — Shield has no mail clients / share targets. Can we POST

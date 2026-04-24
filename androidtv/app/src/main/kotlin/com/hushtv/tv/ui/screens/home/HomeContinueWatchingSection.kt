@@ -115,11 +115,19 @@ fun HomeContinueWatchingRow(
 ) {
     if (entries.isEmpty()) return
 
-    // focusRestorer(): Column acts as a focus group remembering the
-    // last-focused Continue Watching card. D-pad Down from the Top Nav
-    // returns focus to where the user left off, not idx 0.
+    // NOTE: we deliberately do NOT use Modifier.focusRestorer() here.
+    // Continue Watching is the only row on the home page whose items
+    // get removed at runtime (long-press → Remove). When the focused
+    // card is removed, focusRestorer()'s LazyLayoutPinnableItem gets
+    // released twice on the next D-pad press and throws
+    // IllegalStateException("Release should only be called once"),
+    // killing the app. Report:
+    // https://issuetracker.google.com/issues/322811857 (same signature).
+    // Trade-off: focus returns to the first CW card rather than the
+    // previously-focused one when the user Ups out and comes back.
+    // That's a minor UX regression vs the crash.
     val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+        Modifier.focusRequester(firstItemFocus).focusGroup()
     else Modifier
 
     Column(
