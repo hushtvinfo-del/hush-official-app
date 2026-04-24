@@ -29,21 +29,31 @@ class PcmTapAudioProcessor : BaseAudioProcessor() {
         private set
     @Volatile var tapChannelCount: Int = 0
         private set
+    /** Latest encoding we're reading from ExoPlayer. Kept for diagnostics. */
+    @Volatile var tapEncoding: Int = 0
+        private set
 
     /** Callback invoked off the audio thread with a fresh PCM chunk.
-     *  Buffer is NOT owned by the callee — copy what you need. */
+     *  Buffer is NOT owned by the callee — copy what you need.
+     *  ALWAYS 16-bit LE regardless of the underlying sink encoding
+     *  (we convert float → Int16 inline). */
     @Volatile var onPcm: ((ByteArray, Int) -> Unit)? = null
 
     override fun onConfigure(
         inputAudioFormat: AudioProcessor.AudioFormat,
     ): AudioProcessor.AudioFormat {
-        // Only accept 16-bit LE PCM. Anything else we refuse to process
-        // (the sink will route around us).
-        if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT) {
-            throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
+        // Accept both classic 16-bit PCM and Android 11+ float PCM.
+        // Anything else (encoded passthrough like AC3 / EAC3 / DTS)
+        // we refuse — the sink will route around us and audio will
+        // still play, just without AI captions.
+        when (inputAudioFormat.encoding) {
+            C.ENCODING_PCM_16BIT,
+            C.ENCODING_PCM_FLOAT -> { /* ok */ }
+            else -> throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
         tapSampleRate = inputAudioFormat.sampleRate
         tapChannelCount = inputAudioFormat.channelCount
+        tapEncoding = inputAudioFormat.encoding
         return inputAudioFormat
     }
 
@@ -56,16 +66,52 @@ class PcmTapAudioProcessor : BaseAudioProcessor() {
         // it the moment queueInput returns.
         val callback = onPcm
         if (callback != null) {
-            val tmp = ByteArray(remaining)
-            val mark = inputBuffer.position()
-            inputBuffer.get(tmp)
-            inputBuffer.position(mark)      // rewind for the sink
-            runCatching { callback.invoke(tmp, remaining) }
+            val tmp: ByteArray = when (tapEncoding) {
+                C.ENCODING_PCM_FLOAT -> floatToInt16LE(inputBuffer, remaining)
+                else -> {
+                    val arr = ByteArray(remaining)
+                    val mark = inputBuffer.position()
+                    inputBuffer.get(arr)
+                    inputBuffer.position(mark)
+                    arr
+                }
+            }
+            runCatching { callback.invoke(tmp, tmp.size) }
         }
 
         // Forward unchanged to the output buffer.
         val out = replaceOutputBuffer(remaining)
         out.put(inputBuffer).flip()
+    }
+
+    /**
+     * Pulls float32 samples from [src] starting at its current position
+     * (no modification to src position — we rewind at the end) and
+     * returns them as 16-bit little-endian PCM bytes. Samples outside
+     * [-1.0f, 1.0f] are clipped.
+     */
+    private fun floatToInt16LE(src: ByteBuffer, remaining: Int): ByteArray {
+        val mark = src.position()
+        val order = src.order()
+        src.order(ByteOrder.nativeOrder())
+        val floatCount = remaining / 4
+        val out = ByteArray(floatCount * 2)
+        var oi = 0
+        val fb = src.asFloatBuffer()
+        for (i in 0 until floatCount) {
+            val f = fb.get()
+            val clipped = when {
+                f >= 1.0f -> Short.MAX_VALUE
+                f <= -1.0f -> Short.MIN_VALUE
+                else -> (f * 32767.0f).toInt().toShort()
+            }
+            out[oi++] = (clipped.toInt() and 0xFF).toByte()
+            out[oi++] = ((clipped.toInt() shr 8) and 0xFF).toByte()
+        }
+        // Restore position + order so the sink read is unaffected.
+        src.order(order)
+        src.position(mark)
+        return out
     }
 
     /** Helpful for tests: best-effort PCM → mono 16kHz conversion. */

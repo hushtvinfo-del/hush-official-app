@@ -125,6 +125,22 @@ fun TVPlayerScreen(
         ExoPlayer.Builder(ctx, renderersFactory).build().apply {
             setMediaItem(MediaItem.fromUri(currentUrl))
             prepare()
+            // Disable audio offload so the PCM processor chain (our
+            // caption tap) actually runs. Offload routes encoded
+            // audio straight to the DSP, completely bypassing our
+            // processors → captions never got any samples.
+            trackSelectionParameters = trackSelectionParameters
+                .buildUpon()
+                .setAudioOffloadPreferences(
+                    androidx.media3.common.TrackSelectionParameters
+                        .AudioOffloadPreferences.Builder()
+                        .setAudioOffloadMode(
+                            androidx.media3.common.TrackSelectionParameters
+                                .AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED,
+                        )
+                        .build(),
+                )
+                .build()
             // Live channels auto-play. VOD will wait for the Resume-prompt
             // decision below (if there's saved progress) or auto-play after
             // a brief moment otherwise.
@@ -796,30 +812,43 @@ fun TVPlayerScreen(
                 // Always visible when enabled (regardless of OSD show/hide).
                 // Anchored ABOVE the bottom control bar so it doesn't clash
                 // with it and auto-sits on whatever vertical space exists.
-                if (aiCaptionsEnabled && aiCaptionText.isNotBlank()) {
-                    Box(
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = if (showControls) 220.dp else 56.dp)
-                            .padding(horizontal = 64.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
+                if (aiCaptionsEnabled) {
+                    val engineState by VoskCaptionEngine.state.collectAsState()
+                    val overlayText: String? = when {
+                        aiCaptionText.isNotBlank() -> aiCaptionText
+                        engineState == VoskCaptionEngine.EngineState.ERROR ->
+                            "AI captions unavailable on this stream"
+                        engineState == VoskCaptionEngine.EngineState.PREPARING ->
+                            "Loading English speech model…"
+                        else -> "Listening · English only"
+                    }
+                    if (overlayText != null) {
                         Box(
                             Modifier
-                                .background(
-                                    Color(0xCC000000),
-                                    RoundedCornerShape(10.dp),
-                                )
-                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = if (showControls) 220.dp else 56.dp)
+                                .padding(horizontal = 64.dp),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Text(
-                                aiCaptionText,
-                                color = Color(0xFFFAFAFA),
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center,
-                                lineHeight = 28.sp,
-                            )
+                            Box(
+                                Modifier
+                                    .background(
+                                        Color(0xCC000000),
+                                        RoundedCornerShape(10.dp),
+                                    )
+                                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                            ) {
+                                Text(
+                                    overlayText,
+                                    color = if (aiCaptionText.isNotBlank())
+                                        Color(0xFFFAFAFA)
+                                    else Color(0xFF94A3B8),
+                                    fontSize = if (aiCaptionText.isNotBlank()) 22.sp else 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 28.sp,
+                                )
+                            }
                         }
                     }
                 }

@@ -102,6 +102,112 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 53 — v1.31.0 Three UX fixes: 12-hour EPG, long-press menu, AI captions (2026-04-24 — completed, deployed)
+User reported three distinct issues in one message. Fixed all three.
+
+1) EPG military time → 12-hour:
+- `ui/screens/TVLiveBrowseScreen.kt` `formatClock(ms)`: `"HH:mm"` →
+  `"h:mm a"`. This helper backs the Tivimate-style preview bar's
+  "now playing / up next" timestamps and every timeline label
+  throughout the TV live hub (previously the only place still
+  showing 24-hour time after phase 45 migrated mobile to 12-hour
+  via the shared helper).
+- Audited all other SimpleDateFormat usages: mobile already used
+  `h:mm a`, TVEpgGridScreen already used `h:mm a`, no further
+  changes needed.
+
+2) Long-press brought up reminder-only (regression from phase 45)
+   — user wanted favorite toggle back:
+- `ui/screens/TVLiveBrowseScreen.kt`:
+  - Renamed `TVReminderDialog` → `TVChannelActionsDialog`. Now
+    TWO-PHASE with internal `phase: "menu" | "reminder"` state.
+  - Menu phase shows two focusable `ActionRow`s:
+     · Add to favorites / Remove from favorites (yellow star
+       icon, instant toggle + auto-dismiss)
+     · Set reminder… (cyan bell icon, transitions to phase
+       "reminder" which is the original upcoming-program list)
+  - `FocusRequester` + `LaunchedEffect(phase)` auto-focuses the
+    first row on each phase so D-pad users can OK-through without
+    hunting.
+  - `FavoritesStore.isFavorite(ctx, playlistId, streamId)` read
+    inside the composable keyed on a local `favVersion: Int` so
+    the Star ↔ StarBorder icon flips live if toggled (although
+    we dismiss immediately on toggle so it mostly matters when the
+    user re-opens).
+  - New private `ActionRow(icon, iconTint, title, subtitle,
+    focusRequester, onClick)` composable — reusable rounded card
+    focusable, cyan border on focus.
+- Kept the existing `ReminderRow` composable untouched — the
+  reminder phase reuses it verbatim.
+- Mobile already had a long-press quick-action sheet w/ favorite
+  toggle; added a new "Set reminder…" QuickActionRow that opens
+  a secondary `MobileReminderDialog` (new composable mirroring
+  the TV reminder list).
+
+3) AI subtitles: toggle had no effect, no text rendered, no
+   language selection:
+- RCA (via code audit):
+  a) `PcmTapAudioProcessor.onConfigure` only accepted
+     `C.ENCODING_PCM_16BIT`. Modern Media3 on Shield / Fire TV
+     often negotiates `C.ENCODING_PCM_FLOAT` — which made the
+     processor throw `UnhandledAudioFormatException`, causing the
+     sink to ROUTE AROUND the processor chain. Tap never ran, AI
+     engine never got samples.
+  b) ExoPlayer's AUDIO OFFLOAD path routes encoded audio (EAC3,
+     Opus, AC3) directly to the DSP, bypassing Media3's processor
+     chain entirely. Many live IPTV streams use EAC3 and were
+     silently invoking offload on capable TVs. Again: tap never
+     ran.
+  c) UI showed nothing at all when captions were toggled on but
+     no text had arrived yet — no indication that it was listening,
+     loading the model, or that the stream format was
+     incompatible. User reasonably interpreted this as "toggle is
+     broken".
+- Fix:
+  - `ai/PcmTapAudioProcessor.kt`:
+     · `onConfigure` now accepts both `ENCODING_PCM_16BIT` and
+       `ENCODING_PCM_FLOAT`. Rejects only encoded formats.
+     · New `@Volatile var tapEncoding: Int` field captures the
+       negotiated encoding.
+     · `queueInput` routes float samples through a new
+       `floatToInt16LE(src, remaining)` helper that reads float32
+       samples, clips to [-1.0, 1.0], and writes Int16 LE. Output
+       stays float (unchanged forwarding to sink) so playback
+       quality is untouched, but the consumer callback always
+       receives Int16 LE regardless of sink encoding. Vosk already
+       expects Int16 so the engine side needs no changes.
+  - `ui/screens/TVPlayerScreen.kt` + `mobile/MobilePlayerScreen.kt`:
+     Right after `ExoPlayer.Builder.build()` and `prepare()`, now
+     set `trackSelectionParameters.buildUpon().setAudioOffloadPreferences(
+     AudioOffloadPreferences.Builder()
+     .setAudioOffloadMode(AUDIO_OFFLOAD_MODE_DISABLED).build())
+     .build()`. This forces every audio renderer path through the
+     processor chain, making the PCM tap authoritative again.
+  - UI feedback:
+     · TV + Mobile AI caption overlays now render when
+       `aiCaptionsEnabled` is true even if `aiCaptionText` is blank.
+       Overlay text driven by `VoskCaptionEngine.state`:
+        - PREPARING → "Loading English speech model…"
+        - ERROR → "AI captions unavailable on this stream"
+        - IDLE / READY / RUNNING with no text yet → "Listening ·
+          English only"
+        - Non-blank text → the actual caption (larger font)
+     · Placeholder states render in muted grey at smaller size so
+       they don't compete visually with real captions.
+- Language-selection UX deferred: Vosk ships one 50 MB English
+  model; cross-language translation would require either an
+  additional translation model (likely >200 MB) or an online LLM
+  call per caption. Out of scope for this release. User now knows
+  it's English-only thanks to the overlay copy.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 164 → 165`, `versionName
+  "1.30.7" → "1.31.0"` (minor bump: multi-user-facing feature work).
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- Shipped as non-mandatory — APK (md5
+  `c6d890caf5c11879e34e8e2b45075cc7`) live on `https://hushtv.xyz`.
+
+
 ### Phase 52 — v1.30.7 Crash reporter proper timestamping (2026-04-24 — completed, deployed)
 User sent a third crash report after updating to v1.30.6. Analysis:
 

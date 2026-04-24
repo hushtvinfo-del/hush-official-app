@@ -158,6 +158,20 @@ fun MobilePlayerScreen(
         ExoPlayer.Builder(ctx, renderersFactory).build().apply {
             setMediaItem(MediaItem.fromUri(currentStreamUrl))
             prepare()
+            // Disable audio offload so the PCM tap (AI captions) sees
+            // decoded samples. Offload bypasses processors entirely.
+            trackSelectionParameters = trackSelectionParameters
+                .buildUpon()
+                .setAudioOffloadPreferences(
+                    androidx.media3.common.TrackSelectionParameters
+                        .AudioOffloadPreferences.Builder()
+                        .setAudioOffloadMode(
+                            androidx.media3.common.TrackSelectionParameters
+                                .AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED,
+                        )
+                        .build(),
+                )
+                .build()
             playWhenReady = true
         }
     }
@@ -358,27 +372,40 @@ fun MobilePlayerScreen(
         )
 
         // ── AI caption overlay (always on when enabled). ──
-        if (aiCaptions && aiCaptionText.isNotBlank()) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = if (showControls) 130.dp else 40.dp)
-                    .padding(horizontal = 24.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+        if (aiCaptions) {
+            val engineState by VoskCaptionEngine.state.collectAsState()
+            val overlayText: String? = when {
+                aiCaptionText.isNotBlank() -> aiCaptionText
+                engineState == VoskCaptionEngine.EngineState.ERROR ->
+                    "AI captions unavailable on this stream"
+                engineState == VoskCaptionEngine.EngineState.PREPARING ->
+                    "Loading English speech model…"
+                else -> "Listening · English only"
+            }
+            if (overlayText != null) {
                 Box(
                     Modifier
-                        .background(Color(0xCC000000), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = if (showControls) 130.dp else 40.dp)
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        aiCaptionText,
-                        color = Color(0xFFFAFAFA),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp,
-                    )
+                    Box(
+                        Modifier
+                            .background(Color(0xCC000000), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            overlayText,
+                            color = if (aiCaptionText.isNotBlank())
+                                Color(0xFFFAFAFA)
+                            else Color(0xFF94A3B8),
+                            fontSize = if (aiCaptionText.isNotBlank()) 16.sp else 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp,
+                        )
+                    }
                 }
             }
         }

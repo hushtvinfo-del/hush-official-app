@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
@@ -126,6 +127,8 @@ fun MobileLiveHubScreen(
     var recentVersion by remember { mutableStateOf(0) } // force recompose after recent update
     // Long-press quick-action sheet. Holds the target card or null.
     var actionCard by remember { mutableStateOf<MediaCard?>(null) }
+    // Secondary sheet for "Set reminder…" chosen from the action menu.
+    var reminderCard by remember { mutableStateOf<MediaCard?>(null) }
 
     // Persist selection changes back to the store as they happen.
     LaunchedEffect(selectedCatId, playlistId) {
@@ -534,8 +537,28 @@ fun MobileLiveHubScreen(
                         )
                     },
                 )
+                QuickActionRow(
+                    icon = Icons.Default.Notifications,
+                    label = "Set reminder…",
+                    tint = Cyan,
+                    onClick = {
+                        // Swap this dialog out for the reminder sub-dialog.
+                        reminderCard = card
+                        actionCard = null
+                    },
+                )
             }
         }
+    }
+
+    // ── Reminder sub-dialog opened from the action sheet ──
+    val remCard = reminderCard
+    if (remCard != null) {
+        MobileReminderDialog(
+            playlistId = playlistId,
+            channel = remCard,
+            onDismiss = { reminderCard = null },
+        )
     }
 
     // Pause preview when leaving the screen to save battery.
@@ -565,6 +588,119 @@ private fun QuickActionRow(
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
         )
+    }
+}
+
+/* Reminder sub-dialog — shown from the channel action menu.
+   Lists the next 6 upcoming programs on the channel; user can toggle
+   a 5-min-before reminder on each. */
+@Composable
+private fun MobileReminderDialog(
+    playlistId: String,
+    channel: MediaCard,
+    onDismiss: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    var reminderVersion by remember { mutableStateOf(0) }
+    val upcoming = remember(reminderVersion, channel.streamId) {
+        EpgService.upcoming(channel.streamId, limit = 6)
+    }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF0B1220))
+                .padding(16.dp),
+        ) {
+            Text(
+                channel.title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "SET REMINDER",
+                color = Cyan,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.5.sp,
+            )
+            Spacer(Modifier.height(14.dp))
+            if (upcoming.isEmpty()) {
+                Text(
+                    "No upcoming programs found for this channel.",
+                    color = Color(0xFF64748B),
+                    fontSize = 12.sp,
+                )
+            } else {
+                upcoming.forEach { prog ->
+                    val hasReminder = remember(prog.startMs, channel.streamId, reminderVersion) {
+                        com.hushtv.tv.data.ReminderStore.exists(ctx, channel.streamId, prog.startMs)
+                    }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                if (hasReminder) {
+                                    com.hushtv.tv.data.ReminderStore.remove(
+                                        ctx, channel.streamId, prog.startMs,
+                                    )
+                                } else {
+                                    val r = com.hushtv.tv.data.ReminderStore.Reminder(
+                                        playlistId = playlistId,
+                                        streamId = channel.streamId,
+                                        channelName = channel.title,
+                                        programTitle = prog.title,
+                                        programStartMs = prog.startMs,
+                                    )
+                                    com.hushtv.tv.data.ReminderStore.add(ctx, r)
+                                    com.hushtv.tv.notifications.EpgReminderScheduler.schedule(ctx, r)
+                                }
+                                reminderVersion++
+                            }
+                            .padding(vertical = 10.dp, horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            formatClock(prog.startMs),
+                            color = if (hasReminder) Cyan else Color(0xFFFACC15),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp,
+                            modifier = Modifier.width(72.dp),
+                        )
+                        Text(
+                            prog.title,
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            if (hasReminder) Icons.Default.Notifications
+                            else Icons.Default.NotificationsNone,
+                            null,
+                            tint = if (hasReminder) Color(0xFFFACC15) else Color(0xFF64748B),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Tap a show to toggle · notifies 5 min before it starts.",
+                color = Color(0xFF64748B),
+                fontSize = 10.sp,
+            )
+        }
     }
 }
 
