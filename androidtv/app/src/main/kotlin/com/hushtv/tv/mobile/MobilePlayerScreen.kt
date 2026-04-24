@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -70,10 +72,39 @@ fun MobilePlayerScreen(
     streamUrl: String,
     channelName: String,
     isLive: Boolean,
+    liveCategoryId: String? = null,
 ) {
     val ctx = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+
+    // Live-TV only — load the full channel list for this category so we
+    // can hop to the next / previous channel without backing out.
+    val playlist = remember(playlistId) {
+        com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
+    }
+    var liveChannels by remember { mutableStateOf<List<com.hushtv.tv.data.MediaCard>>(emptyList()) }
+    LaunchedEffect(liveCategoryId, playlistId, isLive) {
+        if (!isLive || playlist == null) return@LaunchedEffect
+        val list = runCatching {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                if (liveCategoryId.isNullOrBlank()) {
+                    com.hushtv.tv.data.XtreamApi.getAllStreams(
+                        playlist.host, playlist.username, playlist.password, "live",
+                    )
+                } else {
+                    com.hushtv.tv.data.XtreamApi.getStreamsForCategory(
+                        playlist.host, playlist.username, playlist.password, "live", liveCategoryId,
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
+        liveChannels = list
+    }
+
+    // State-backed so the screen can repaint when user hits ±channel.
+    var currentStreamUrl by remember { mutableStateOf(streamUrl) }
+    var currentTitle by remember { mutableStateOf(channelName) }
 
     // Lock to landscape for comfortable viewing, keep screen on.
     DisposableEffect(Unit) {
@@ -108,12 +139,48 @@ fun MobilePlayerScreen(
             }
         }
         ExoPlayer.Builder(ctx, renderersFactory).build().apply {
-            setMediaItem(MediaItem.fromUri(streamUrl))
+            setMediaItem(MediaItem.fromUri(currentStreamUrl))
             prepare()
             playWhenReady = true
         }
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
+
+    // Switching channels (or to a new movie) — swap the media item without
+    // releasing the player so we don't blink the surface.
+    LaunchedEffect(currentStreamUrl) {
+        if (player.currentMediaItem?.localConfiguration?.uri?.toString() != currentStreamUrl) {
+            player.setMediaItem(MediaItem.fromUri(currentStreamUrl))
+            player.prepare()
+            player.playWhenReady = true
+        }
+    }
+
+    // Compute prev/next indices in the live channel list so we can
+    // grey out the chevrons when we're at the edges.
+    val currentIndex = remember(liveChannels, currentStreamUrl) {
+        if (!isLive || liveChannels.isEmpty() || playlist == null) -1
+        else liveChannels.indexOfFirst {
+            com.hushtv.tv.data.XtreamApi.liveUrl(
+                playlist.host, playlist.username, playlist.password, it.streamId,
+            ) == currentStreamUrl
+        }
+    }
+    val canPrev = isLive && currentIndex > 0
+    val canNext = isLive && currentIndex in 0 until liveChannels.size - 1
+
+    fun goChannel(delta: Int) {
+        val p = playlist ?: return
+        if (!isLive || liveChannels.isEmpty() || currentIndex < 0) return
+        val nextIdx = (currentIndex + delta).coerceIn(0, liveChannels.size - 1)
+        if (nextIdx == currentIndex) return
+        val card = liveChannels[nextIdx]
+        val url = com.hushtv.tv.data.XtreamApi.liveUrl(
+            p.host, p.username, p.password, card.streamId,
+        )
+        currentStreamUrl = url
+        currentTitle = card.title
+    }
 
     LaunchedEffect(Unit) { VoskCaptionEngine.prepare(ctx) }
 
@@ -275,7 +342,7 @@ fun MobilePlayerScreen(
                     }
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        channelName,
+                        currentTitle,
                         color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -284,6 +351,17 @@ fun MobilePlayerScreen(
                         modifier = Modifier.weight(1f),
                     )
                     if (isLive) {
+                        // Channel position indicator (e.g. "42 / 318") —
+                        // gives users a sense of place in the category.
+                        if (currentIndex >= 0 && liveChannels.isNotEmpty()) {
+                            Text(
+                                "${currentIndex + 1}/${liveChannels.size}",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                        }
                         Box(
                             Modifier
                                 .background(Cyan, RoundedCornerShape(4.dp))
@@ -296,13 +374,23 @@ fun MobilePlayerScreen(
 
                 Spacer(Modifier.weight(1f))
 
-                // Center cluster — Replay / Play / Forward
+                // Center cluster — Replay / Play / Forward (VOD) or
+                // Prev-Channel / Play / Next-Channel (Live).
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (!isLive) {
+                    if (isLive) {
+                        CircleBtn(
+                            Icons.Default.SkipPrevious,
+                            52.dp,
+                            enabled = canPrev,
+                        ) {
+                            goChannel(-1); controlsTick++
+                        }
+                        Spacer(Modifier.width(20.dp))
+                    } else {
                         CircleBtn(Icons.Default.Replay10, 52.dp) {
                             player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0L))
                             controlsTick++
@@ -316,7 +404,16 @@ fun MobilePlayerScreen(
                         if (isPlaying) player.pause() else player.play()
                         controlsTick++
                     }
-                    if (!isLive) {
+                    if (isLive) {
+                        Spacer(Modifier.width(20.dp))
+                        CircleBtn(
+                            Icons.Default.SkipNext,
+                            52.dp,
+                            enabled = canNext,
+                        ) {
+                            goChannel(+1); controlsTick++
+                        }
+                    } else {
                         Spacer(Modifier.width(20.dp))
                         CircleBtn(Icons.Default.Forward10, 52.dp) {
                             player.seekTo((player.currentPosition + 10_000).coerceAtMost(player.duration.coerceAtLeast(0L)))
@@ -424,17 +521,23 @@ fun MobilePlayerScreen(
 private fun CircleBtn(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     size: androidx.compose.ui.unit.Dp,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val alpha = if (enabled) 1f else 0.35f
     Box(
         Modifier
             .size(size)
             .clip(CircleShape)
             .background(Color(0x33000000))
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(size * 0.5f))
+        Icon(
+            icon, null,
+            tint = Color.White.copy(alpha = alpha),
+            modifier = Modifier.size(size * 0.5f),
+        )
     }
 }
 

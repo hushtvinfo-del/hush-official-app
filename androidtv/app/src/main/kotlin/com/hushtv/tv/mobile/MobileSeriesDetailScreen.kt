@@ -77,115 +77,136 @@ fun MobileSeriesDetailScreen(
         loading = false
     }
 
-    Column(
+    // Single LazyColumn for the whole page so landscape can scroll past
+    // the hero to reach the episode list. Hero is the first item with
+    // a fixed height so it doesn't eat the entire viewport in landscape.
+    val currentSeason = activeSeason
+    val episodes = if (currentSeason != null) episodesBySeason[currentSeason].orEmpty() else emptyList()
+
+    Box(
         Modifier
             .fillMaxSize()
             .background(Color(0xFF05080F)),
     ) {
-        // ── Backdrop + title ──
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-            if (!posterUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = posterUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Brush.verticalGradient(
-                            listOf(Color(0xFF1E293B), Color(0xFF05080F))
-                        ))
-                )
-            }
-            Box(
-                Modifier.fillMaxSize().background(Brush.verticalGradient(
-                    0f to Color(0x66000000),
-                    0.5f to Color.Transparent,
-                    1f to Color(0xFF05080F),
-                ))
-            )
-            // Back button.
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0x88000000))
-                    .clickable { nav.popBackStack() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
-            }
-            // Series title overlay.
-            Text(
-                seriesName,
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Black,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
-            )
-        }
-
-        // ── Loading / content ──
-        if (loading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Cyan)
-            }
-            return
-        }
-        if (seasonKeys.isEmpty()) {
-            Text(
-                "No episodes found for this series.",
-                color = Color(0xFF94A3B8),
-                fontSize = 13.sp,
-                modifier = Modifier.padding(20.dp),
-            )
-            return
-        }
-
-        // Season chip row — only render when there's more than one season.
-        if (seasonKeys.size > 1) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(seasonKeys, key = { it }) { s ->
-                    SeasonChip(
-                        label = "Season $s",
-                        selected = s == activeSeason,
-                        onClick = { activeSeason = s },
-                    )
-                }
-            }
-        } else {
-            Spacer(Modifier.height(8.dp))
-        }
-
-        val currentSeason = activeSeason ?: return
-        val episodes = episodesBySeason[currentSeason].orEmpty()
-
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         ) {
-            items(episodes, key = { "ep-${it.id}-${it.episode_num}" }) { ep ->
-                EpisodeRow(ep) {
-                    val p = playlist ?: return@EpisodeRow
-                    val url = XtreamApi.episodeUrl(
-                        p.host, p.username, p.password, ep.id, ep.container_extension,
+            // ── Backdrop hero ──
+            item {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(240.dp),
+                ) {
+                    if (!posterUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = posterUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(Brush.verticalGradient(
+                                    listOf(Color(0xFF1E293B), Color(0xFF05080F))
+                                ))
+                        )
+                    }
+                    Box(
+                        Modifier.fillMaxSize().background(Brush.verticalGradient(
+                            0f to Color(0x66000000),
+                            0.5f to Color.Transparent,
+                            1f to Color(0xFF05080F),
+                        ))
                     )
-                    val title = "$seriesName · S${ep.season ?: currentSeason}E${ep.episode_num}"
-                    nav.navigate(mobilePlayerRoute(playlistId, url, title, isLive = false))
+                    Text(
+                        seriesName,
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(horizontal = 18.dp, vertical = 14.dp),
+                    )
                 }
             }
+
+            // ── Loading / empty states ──
+            if (loading) {
+                item {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(color = Cyan)
+                    }
+                }
+            } else if (seasonKeys.isEmpty()) {
+                item {
+                    Text(
+                        "No episodes found for this series.",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(20.dp),
+                    )
+                }
+            } else {
+                // Season chip row — sticky-feeling strip under the hero.
+                if (seasonKeys.size > 1) {
+                    item {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(seasonKeys, key = { it }) { s ->
+                                SeasonChip(
+                                    label = "Season $s",
+                                    selected = s == activeSeason,
+                                    onClick = { activeSeason = s },
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    item { Spacer(Modifier.height(8.dp)) }
+                }
+
+                items(episodes, key = { "ep-${it.id}-${it.episode_num}" }) { ep ->
+                    Box(Modifier.padding(horizontal = 12.dp)) {
+                        EpisodeRow(ep) {
+                            val p = playlist ?: return@EpisodeRow
+                            val url = XtreamApi.episodeUrl(
+                                p.host, p.username, p.password, ep.id, ep.container_extension,
+                            )
+                            val title = "$seriesName · S${ep.season ?: currentSeason ?: "?"}E${ep.episode_num}"
+                            nav.navigate(mobilePlayerRoute(playlistId, url, title, isLive = false))
+                        }
+                    }
+                }
+
+                item { Spacer(Modifier.height(16.dp)) }
+            }
+        }
+
+        // Floating back button — always reachable even when scrolled
+        // deep into episodes.
+        Box(
+            Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .size(40.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xCC000000))
+                .clickable { nav.popBackStack() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
     }
 }

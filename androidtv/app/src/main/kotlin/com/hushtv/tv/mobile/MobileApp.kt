@@ -102,13 +102,23 @@ fun MobileApp() {
                     posterUrl = bs.arguments?.getString("poster")?.let(Uri::decode),
                 )
             }
-            composable("mplayer/{playlistId}/{streamUrl}/{channelName}/{isLive}") { bs ->
+            composable(
+                route = "mplayer/{playlistId}/{streamUrl}/{channelName}/{isLive}?catId={catId}",
+                arguments = listOf(
+                    navArgument("catId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) { bs ->
                 MobilePlayerScreen(
                     nav = nav,
                     playlistId = bs.arguments?.getString("playlistId") ?: "",
                     streamUrl = bs.arguments?.getString("streamUrl") ?: "",
                     channelName = bs.arguments?.getString("channelName") ?: "",
                     isLive = bs.arguments?.getString("isLive") == "true",
+                    liveCategoryId = bs.arguments?.getString("catId"),
                 )
             }
         }
@@ -137,9 +147,21 @@ private fun MobileUpdateCheckHost() {
     }
 }
 
-/** Build a mobile player deep-link. Matches MobileApp's route template. */
-fun mobilePlayerRoute(playlistId: String, streamUrl: String, channelName: String, isLive: Boolean): String =
-    "mplayer/$playlistId/${Uri.encode(streamUrl)}/${Uri.encode(channelName)}/$isLive"
+/** Build a mobile player deep-link. Matches MobileApp's route template.
+ *  [liveCategoryId] is optional — supplied when jumping into a live channel
+ *  so the player can fetch siblings for prev/next-channel controls. */
+fun mobilePlayerRoute(
+    playlistId: String,
+    streamUrl: String,
+    channelName: String,
+    isLive: Boolean,
+    liveCategoryId: String? = null,
+): String {
+    val base = "mplayer/$playlistId/${Uri.encode(streamUrl)}/${Uri.encode(channelName)}/$isLive"
+    return if (isLive && !liveCategoryId.isNullOrBlank())
+        "$base?catId=${Uri.encode(liveCategoryId)}"
+    else base
+}
 
 /** Build a mobile series-detail deep-link. */
 fun mobileSeriesRoute(playlistId: String, seriesId: String, name: String, poster: String?): String {

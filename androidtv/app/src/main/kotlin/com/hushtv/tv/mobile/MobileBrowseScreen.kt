@@ -56,7 +56,13 @@ fun MobileBrowseScreen(
     val isLive = type == "live"
 
     var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
-    var selectedCatId by remember { mutableStateOf(initialCategoryId ?: "") }
+    // Survive back-nav from the player — category choice MUST persist.
+    var selectedCatId by androidx.compose.runtime.saveable.rememberSaveable(
+        key = "mbrowse-cat-$type",
+    ) { mutableStateOf(initialCategoryId ?: "") }
+    var lastPlayedStreamId by androidx.compose.runtime.saveable.rememberSaveable(
+        key = "mbrowse-last-$type",
+    ) { mutableStateOf(-1) }
     var cardList by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var showCatPicker by remember { mutableStateOf(false) }
@@ -174,15 +180,40 @@ fun MobileBrowseScreen(
                     fontSize = 14.sp,
                     modifier = Modifier.align(Alignment.Center),
                 )
-                isLive -> LazyColumn(
-                    Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    listItems(cardList, key = { "live-${it.id}" }) { card ->
-                        MobileLiveRow(card) {
-                            val p = playlist ?: return@MobileLiveRow
-                            val url = XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
-                            nav.navigate(mobilePlayerRoute(playlistId, url, card.title, isLive = true))
+                isLive -> {
+                    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                    // When coming back from the player, auto-scroll so the
+                    // last-played channel is visible. Keyed off the stream
+                    // id so switching channels re-aligns correctly.
+                    LaunchedEffect(cardList, lastPlayedStreamId) {
+                        if (lastPlayedStreamId >= 0) {
+                            val idx = cardList.indexOfFirst { it.streamId == lastPlayedStreamId }
+                            if (idx >= 0) listState.scrollToItem(idx)
+                        }
+                    }
+                    LazyColumn(
+                        Modifier.fillMaxSize(),
+                        state = listState,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        listItems(cardList, key = { "live-${it.id}" }) { card ->
+                            MobileLiveRow(
+                                card = card,
+                                isSelected = card.streamId == lastPlayedStreamId,
+                            ) {
+                                val p = playlist ?: return@MobileLiveRow
+                                val url = XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
+                                lastPlayedStreamId = card.streamId
+                                nav.navigate(
+                                    mobilePlayerRoute(
+                                        playlistId = playlistId,
+                                        streamUrl = url,
+                                        channelName = card.title,
+                                        isLive = true,
+                                        liveCategoryId = selectedCatId.ifBlank { null },
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
@@ -277,13 +308,22 @@ private fun MobileVodCard(card: MediaCard, onClick: () -> Unit) {
 }
 
 @androidx.compose.runtime.Composable
-private fun MobileLiveRow(card: MediaCard, onClick: () -> Unit) {
+private fun MobileLiveRow(
+    card: MediaCard,
+    isSelected: Boolean = false,
+    onClick: () -> Unit,
+) {
     Row(
         Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF0A1220))
+            .background(if (isSelected) Cyan.copy(alpha = 0.18f) else Color(0xFF0A1220))
+            .border(
+                width = if (isSelected) 1.dp else 0.dp,
+                color = if (isSelected) Cyan else Color.Transparent,
+                shape = RoundedCornerShape(10.dp),
+            )
             .clickable(onClick = onClick)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -312,7 +352,7 @@ private fun MobileLiveRow(card: MediaCard, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(
                 card.title,
-                color = Color.White,
+                color = if (isSelected) Cyan else Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -320,7 +360,7 @@ private fun MobileLiveRow(card: MediaCard, onClick: () -> Unit) {
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                "Live channel",
+                if (isSelected) "Playing now" else "Live channel",
                 color = Cyan,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
