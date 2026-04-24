@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Movie
@@ -274,6 +276,11 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     }
     DisposableEffect(Unit) { onDispose { previewPlayer.release() } }
 
+    // ── Reminder dialog state — non-null = dialog is open for this channel.
+    //    Long-pressing OK on a channel row sets this; the dialog clears it
+    //    on dismiss. ──
+    var reminderChannel by remember { mutableStateOf<MediaCard?>(null) }
+
     // Track whether focus is currently inside the channels pane. The preview
     // only plays while the user is actively browsing channels — not while
     // navigating the category sidebar.
@@ -417,6 +424,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     firstChannelFocus = firstChannelFocus,
                     onLeftEdge = { runCatching { sidebarFirstItemFocus.requestFocus() } },
                     onPlay = onPlay,
+                    onLongPress = { idx -> reminderChannel = filteredChannels.getOrNull(idx) },
                     emptyReason = if (channels.isEmpty() && !loadingChans)
                         "No channels in this category" else null,
                     topRowUpTarget = null,
@@ -497,6 +505,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                 firstChannelFocus = firstChannelFocus,
                 onLeftEdge = { /* no sidebar to return to */ },
                 onPlay = onPlay,
+                onLongPress = { idx -> reminderChannel = filteredChannels.getOrNull(idx) },
                 emptyReason = when {
                     searchQuery.isNotBlank() && filteredChannels.isEmpty() ->
                         "No channels matching \"$searchQuery\""
@@ -597,6 +606,16 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                 showLayoutChooser = false
             },
             onDismiss = { showLayoutChooser = false },
+        )
+    }
+
+    // ── Reminder dialog — opens on long-press of a channel row ──
+    val rc = reminderChannel
+    if (rc != null) {
+        TVReminderDialog(
+            playlistId = playlistId,
+            channel = rc,
+            onDismiss = { reminderChannel = null },
         )
     }
 }
@@ -1566,6 +1585,7 @@ private fun ChannelsPane(
     onLeftEdge: () -> Unit,
     onFocusChange: (Int) -> Unit,
     onPlay: (Int) -> Unit,
+    onLongPress: (Int) -> Unit,
     topRowUpTarget: FocusRequester? = null,
 ) {
     val ctx = LocalContext.current
@@ -1650,6 +1670,7 @@ private fun ChannelsPane(
                             modifier = rowModifier,
                             onFocus = { onFocusChange(idx) },
                             onPlay = { onPlay(idx) },
+                            onLongPress = { onLongPress(idx) },
                             onLeftEdge = onLeftEdge,
                             onToggleFav = {
                                 FavoritesStore.toggle(ctx, playlistId, channels[idx].streamId)
@@ -1673,10 +1694,16 @@ private fun ChannelRow(
     modifier: Modifier = Modifier,
     onFocus: () -> Unit,
     onPlay: () -> Unit,
+    onLongPress: () -> Unit,
     onLeftEdge: () -> Unit,
     onToggleFav: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
+    // Long-press detection on OK / D-pad center — mirrors the
+    // ContinueCard pattern. Fires on KeyUp after 500 ms+ hold so the
+    // dialog we open isn't immediately dismissed by the tail-end of
+    // the user's key release.
+    var keyDownAtMs by remember { mutableStateOf(0L) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -1696,8 +1723,29 @@ private fun ChannelRow(
             .onPreviewKeyEvent { ev ->
                 if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
                     onLeftEdge()
-                    true
-                } else false
+                    return@onPreviewKeyEvent true
+                }
+                val isEnterKey = ev.key == Key.Enter ||
+                    ev.key == Key.DirectionCenter ||
+                    ev.key == Key.NumPadEnter
+                if (!isEnterKey) return@onPreviewKeyEvent false
+                when (ev.type) {
+                    KeyEventType.KeyDown -> {
+                        if (keyDownAtMs == 0L) keyDownAtMs = System.currentTimeMillis()
+                        // Let KeyDown fall through so clickableWithEnter
+                        // sees it for the short-press path.
+                        false
+                    }
+                    KeyEventType.KeyUp -> {
+                        val held = System.currentTimeMillis() - keyDownAtMs
+                        keyDownAtMs = 0L
+                        if (held >= 500L) {
+                            onLongPress()
+                            true  // consume — suppress the short-press
+                        } else false
+                    }
+                    else -> false
+                }
             }
             .onFocusChanged {
                 focused = it.isFocused
@@ -1924,4 +1972,162 @@ private fun Modifier.focusTvCircle(): Modifier {
         )
         .onFocusChanged { focused = it.isFocused }
         .focusable()
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  TV Reminder Dialog — opens on long-press OK of a channel row.
+ *  Shows the next 4 upcoming programs and lets the user toggle a
+ *  "notify 5 min before" reminder on each via D-pad + OK.
+ * ═══════════════════════════════════════════════════════════════════ */
+@Composable
+private fun TVReminderDialog(
+    playlistId: String,
+    channel: MediaCard,
+    onDismiss: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    // Counter bumped each time a reminder is added/removed so the
+    // per-row bell icon re-renders immediately.
+    var reminderVersion by remember { mutableStateOf(0) }
+    // Kick off a short-EPG fetch if we don't have upcoming programs
+    // cached yet — otherwise the dialog would render empty for
+    // channels the user hasn't browsed past.
+    val upcoming = remember(reminderVersion, channel.streamId) {
+        com.hushtv.tv.data.EpgService.upcoming(channel.streamId, limit = 6)
+    }
+
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(120)
+        runCatching { firstFocus.requestFocus() }
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .width(560.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF0B1220))
+                .border(1.5.dp, Cyan.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                .padding(24.dp),
+        ) {
+            Text(
+                "SET REMINDER",
+                color = Cyan,
+                fontSize = 11.sp,
+                letterSpacing = 2.sp,
+                fontWeight = FontWeight.Black,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                channel.title,
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+            )
+            Spacer(Modifier.height(14.dp))
+            if (upcoming.isEmpty()) {
+                Text(
+                    "No upcoming programs found for this channel.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                )
+            } else {
+                upcoming.forEachIndexed { idx, prog ->
+                    val hasReminder = remember(prog.startMs, channel.streamId, reminderVersion) {
+                        com.hushtv.tv.data.ReminderStore.exists(ctx, channel.streamId, prog.startMs)
+                    }
+                    ReminderRow(
+                        program = prog,
+                        hasReminder = hasReminder,
+                        focusRequester = if (idx == 0) firstFocus else null,
+                        onToggle = {
+                            if (hasReminder) {
+                                com.hushtv.tv.data.ReminderStore.remove(
+                                    ctx, channel.streamId, prog.startMs,
+                                )
+                            } else {
+                                val r = com.hushtv.tv.data.ReminderStore.Reminder(
+                                    playlistId = playlistId,
+                                    streamId = channel.streamId,
+                                    channelName = channel.title,
+                                    programTitle = prog.title,
+                                    programStartMs = prog.startMs,
+                                )
+                                com.hushtv.tv.data.ReminderStore.add(ctx, r)
+                                com.hushtv.tv.notifications.EpgReminderScheduler.schedule(ctx, r)
+                            }
+                            reminderVersion++
+                        },
+                    )
+                    if (idx < upcoming.size - 1) Spacer(Modifier.height(6.dp))
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Hint: Press BACK to close · OK to toggle · We'll notify you 5 min before the show starts.",
+                color = TextSecondary,
+                fontSize = 10.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReminderRow(
+    program: EpgProgram,
+    hasReminder: Boolean,
+    focusRequester: FocusRequester?,
+    onToggle: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val clockFmt = remember { java.text.SimpleDateFormat("h:mm a", java.util.Locale.US) }
+    val base: Modifier = if (focusRequester != null)
+        Modifier.focusRequester(focusRequester) else Modifier
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = base
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                if (focused) Color(0x3306B6D4) else Color(0x0AFFFFFF),
+            )
+            .border(
+                if (focused) 2.dp else 1.dp,
+                if (focused) Cyan else Color(0x1FFFFFFF),
+                RoundedCornerShape(10.dp),
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onToggle)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(
+            clockFmt.format(java.util.Date(program.startMs)),
+            color = if (focused) Cyan else Color(0xFFFACC15),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 0.6.sp,
+            modifier = Modifier.width(72.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            program.title,
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(10.dp))
+        Icon(
+            if (hasReminder) Icons.Default.Notifications
+            else Icons.Default.NotificationsNone,
+            contentDescription = if (hasReminder) "Reminder set" else "Set reminder",
+            tint = if (hasReminder) Color(0xFFFACC15) else Color(0xFF64748B),
+            modifier = Modifier.size(20.dp),
+        )
+    }
 }

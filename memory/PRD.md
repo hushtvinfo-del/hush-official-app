@@ -102,6 +102,69 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 45 — v1.30.0 TV "Set reminder" long-press (2026-04-24 — completed, deployed)
+Brings the mobile v1.28.0 reminder feature to the TV form factor.
+UX approach was deliberately less invasive than making every EPG
+program block focusable (which would have disrupted existing D-pad
+flow): long-press OK on a CHANNEL row opens a modal that lists the
+next 6 upcoming programs with individual bell toggles.
+
+Files changed:
+- `ui/screens/TVLiveBrowseScreen.kt`:
+  - Added hoisted `var reminderChannel by remember { mutableStateOf<
+    MediaCard?>(null) }` to the top-level `TVLiveBrowseScreen`
+    function. Non-null = dialog open.
+  - `ChannelsPane(...)` signature extended with `onLongPress: (Int)
+    -> Unit`. Both call sites (sidebar branch line 408 + top-bar
+    branch line 488) wire it to
+    `{ idx -> reminderChannel = filteredChannels.getOrNull(idx) }`.
+  - `ChannelRow` signature extended with `onLongPress: () -> Unit`.
+    Reused the `ContinueCard` long-press detection pattern from
+    `HomeContinueWatchingSection`: tracks `keyDownAtMs` via
+    `onPreviewKeyEvent`, fires `onLongPress` on KeyUp if held ≥
+    500 ms AND consumes the KeyUp so `clickableWithEnter` doesn't
+    ALSO fire (which would have played the channel under the
+    dialog). Short-press path unchanged — quick tap still plays.
+  - New bottom-of-file composable `TVReminderDialog(playlistId,
+    channel, onDismiss)` — rounded cyan-bordered 560 dp wide modal
+    backed by `androidx.compose.ui.window.Dialog`. Renders
+    `EpgService.upcoming(channel.streamId, limit = 6)` as a
+    vertical list of `ReminderRow`s. Auto-focuses the first row
+    via `FocusRequester`. BACK dismisses (default Dialog behaviour).
+  - New private composable `ReminderRow(program, hasReminder,
+    focusRequester, onToggle)` — focusable D-pad row with cyan
+    border on focus, start time + program title + bell icon
+    (`Notifications` yellow when set, `NotificationsNone` grey when
+    not). OK toggles:
+    * If already reminded → `ReminderStore.remove(...)`.
+    * If not → builds `ReminderStore.Reminder(...)`, calls
+      `ReminderStore.add(...)` + `EpgReminderScheduler.schedule(...)`.
+  - Bumped `reminderVersion: Int` counter on each toggle so the
+    per-row bell + state re-reads fresh without a full dialog
+    teardown.
+  - Added imports: `Icons.Default.Notifications`,
+    `Icons.Default.NotificationsNone` (uses fully-qualified
+    `java.text.SimpleDateFormat` / `java.util.Date` / `java.util.
+    Locale` inline to avoid top-level import churn).
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 156 → 157`, `versionName
+  "1.29.0" → "1.30.0"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- Shipped as versionCode=157 / versionName="1.30.0" — APK (md5
+  `3c7a98a9fda051709efb394fbbc1830f`) live on `https://hushtv.xyz`.
+
+Gap — `TVEpgGridScreen` not covered:
+Originally the P1 included both `TVLiveBrowseScreen` AND
+`TVEpgGridScreen`. TVLiveBrowseScreen is the primary browse
+surface users reach when Live-TV + EPG are needed, so reminders
+are now discoverable there. TVEpgGridScreen (the dense timeline
+grid) would require making the individual program blocks focusable
+which is a non-trivial D-pad refactor. Deferred — can be promoted
+back to P1 if the TVLiveBrowseScreen flow feels insufficient once
+the user tries it.
+
+
 ### Phase 44 — v1.29.0 Mobile "Resume Live" home card (2026-04-24 — completed, deployed)
 Potential-improvement enhancement approved by user. Builds on v1.28.1's
 persistent `LiveSessionStore`: adds a new first page to the mobile
