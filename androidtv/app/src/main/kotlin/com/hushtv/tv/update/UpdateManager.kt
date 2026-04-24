@@ -16,10 +16,12 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
 /** Server-side update manifest published at https://hushtv.xyz/version.json */
@@ -82,47 +84,160 @@ object UpdateManager {
 
     private const val DOWNLOAD_FILENAME = "HushTV-update.apk"
 
-    /** Enqueues a download via the system DownloadManager. Returns the
-     *  download ID so the caller can observe progress. */
-    fun enqueueDownload(ctx: Context, apkUrl: String): Long {
-        val dm = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    /**
+     * Dedicated OkHttp client for APK streaming. We DON'T share the tiny
+     * `client` used for version.json — the APK download needs long read
+     * windows (the whole file can take a minute over a weak connection)
+     * and should NOT time out during the streaming phase.
+     */
+    private val apkClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)   // unbounded — we stream
+        .writeTimeout(0, TimeUnit.MILLISECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .retryOnConnectionFailure(true)
+        .build()
 
-        // Remove any previous file so we always pull the freshest APK.
-        val dest = File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), DOWNLOAD_FILENAME)
-        if (dest.exists()) dest.delete()
-
-        val req = DownloadManager.Request(Uri.parse(apkUrl))
-            .setTitle("HushTV update")
-            .setDescription("Downloading the latest HushTV app…")
-            .setMimeType("application/vnd.android.package-archive")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-            .setDestinationInExternalFilesDir(ctx, Environment.DIRECTORY_DOWNLOADS, DOWNLOAD_FILENAME)
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(true)
-
-        return dm.enqueue(req)
-    }
-
-    /** Queries progress + status for an in-flight download. */
+    /** Status snapshot used by the UI's progress poller. */
     data class DownloadProgress(
         val status: Int,
         val bytesDownloaded: Long,
         val bytesTotal: Long,
-        val reason: Int
+        val reason: Int,
     )
 
-    fun queryProgress(ctx: Context, downloadId: Long): DownloadProgress? {
-        val dm = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val q = DownloadManager.Query().setFilterById(downloadId)
-        dm.query(q).use { c ->
-            if (c == null || !c.moveToFirst()) return null
-            val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-            val down = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-            val total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-            val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
-            return DownloadProgress(status, down, total, reason)
+    /** Mutable in-memory snapshot of the current direct-HTTP download.
+     *  [UpdateDialog] polls this instead of `DownloadManager.Query()`. */
+    @Volatile
+    private var directProgress: DownloadProgress = DownloadProgress(0, 0, 0, 0)
+
+    @Volatile
+    private var currentDownloadJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Downloads the APK directly via OkHttp. Blocks until either:
+     *  • the full file has been streamed and written to disk, OR
+     *  • an exception is thrown (propagates to caller).
+     *
+     * Progress is exposed through [queryProgress] on the synthetic
+     * download id returned here. This completely bypasses the Android
+     * system DownloadManager, which has been observed hanging at 0% on
+     * several Android TV / Fire TV OEM builds.
+     */
+    suspend fun downloadApkDirect(
+        ctx: Context,
+        apkUrl: String,
+    ): Unit = withContext(Dispatchers.IO) {
+        // Seed the snapshot so the UI flips from 0 to "downloading" state
+        // immediately instead of waiting for the first progress tick.
+        directProgress = DownloadProgress(
+            status = DownloadManager.STATUS_RUNNING,
+            bytesDownloaded = 0L,
+            bytesTotal = 0L,
+            reason = 0,
+        )
+
+        val dest = File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), DOWNLOAD_FILENAME)
+        val tmp = File(dest.parentFile, "$DOWNLOAD_FILENAME.part")
+        runCatching { dest.delete() }
+        runCatching { tmp.delete() }
+        dest.parentFile?.mkdirs()
+
+        try {
+            val req = Request.Builder()
+                .url(apkUrl)
+                .header("User-Agent", "HushTV/${BuildConfig.VERSION_NAME}")
+                .header("Cache-Control", "no-cache")
+                .build()
+
+            apkClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    directProgress = directProgress.copy(
+                        status = DownloadManager.STATUS_FAILED,
+                        reason = resp.code,
+                    )
+                    throw IllegalStateException("HTTP ${resp.code} fetching APK")
+                }
+                val body = resp.body ?: throw IllegalStateException("Empty APK body")
+                val total = body.contentLength().coerceAtLeast(0L)
+                directProgress = directProgress.copy(bytesTotal = total)
+
+                body.byteStream().use { input ->
+                    FileOutputStream(tmp).use { output ->
+                        val buf = ByteArray(64 * 1024)
+                        var downloaded = 0L
+                        var lastTick = 0L
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n == -1) break
+                            output.write(buf, 0, n)
+                            downloaded += n
+                            val now = System.currentTimeMillis()
+                            // Throttle snapshot writes to ~10 Hz so we
+                            // don't thrash CPU on ultra-fast downloads.
+                            if (now - lastTick > 100 || downloaded == total) {
+                                lastTick = now
+                                directProgress = DownloadProgress(
+                                    status = DownloadManager.STATUS_RUNNING,
+                                    bytesDownloaded = downloaded,
+                                    bytesTotal = total,
+                                    reason = 0,
+                                )
+                            }
+                        }
+                        output.flush()
+                        output.fd.sync()
+                    }
+                }
+            }
+
+            // Rename .part → final. Atomic-ish on same filesystem.
+            if (!tmp.renameTo(dest)) {
+                // Fallback: copy+delete if rename refuses (rare on some
+                // FAT-formatted external dirs).
+                tmp.copyTo(dest, overwrite = true)
+                tmp.delete()
+            }
+
+            directProgress = DownloadProgress(
+                status = DownloadManager.STATUS_SUCCESSFUL,
+                bytesDownloaded = dest.length(),
+                bytesTotal = dest.length(),
+                reason = 0,
+            )
+        } catch (e: Exception) {
+            runCatching { tmp.delete() }
+            directProgress = directProgress.copy(
+                status = DownloadManager.STATUS_FAILED,
+                reason = -1,
+            )
+            throw e
         }
     }
+
+    /** Launches the direct download on a coroutine and returns a synthetic
+     *  id so callers can treat it like a DownloadManager job. Pass the id
+     *  to [queryProgress] for streaming progress. */
+    fun startDownload(
+        ctx: Context,
+        apkUrl: String,
+        scope: kotlinx.coroutines.CoroutineScope,
+        onFinished: (Boolean) -> Unit,
+    ): Long {
+        currentDownloadJob?.cancel()
+        currentDownloadJob = scope.launch(Dispatchers.IO) {
+            val ok = runCatching { downloadApkDirect(ctx, apkUrl) }.isSuccess
+            withContext(Dispatchers.Main) { onFinished(ok) }
+        }
+        // Synthetic id — any non-zero value works; we only use it to match
+        // poller calls to THIS download.
+        return 1L
+    }
+
+    /** Returns the latest snapshot of the in-flight direct download. */
+    @Suppress("UNUSED_PARAMETER")
+    fun queryProgress(ctx: Context, downloadId: Long): DownloadProgress = directProgress
 
     /** Locates the downloaded APK file on disk. */
     fun downloadedApk(ctx: Context): File =

@@ -35,7 +35,10 @@ import androidx.compose.ui.window.DialogProperties
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.Red
 import com.hushtv.tv.ui.theme.TextSecondary
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.rememberCoroutineScope
 
 private enum class UpdateUiState {
     PROMPT,
@@ -62,9 +65,12 @@ fun UpdateDialog(
 
     var ui by remember { mutableStateOf(initialState) }
     var progressPct by remember { mutableStateOf(0f) }
+    var progressBytes by remember { mutableStateOf(Pair(0L, 0L)) }
     var downloadId by remember { mutableStateOf<Long?>(null) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var manualPath by remember { mutableStateOf<String?>(null) }
+    // Scope that survives configuration changes inside this Composable.
+    val downloadScope = rememberCoroutineScope()
 
     // Re-check permission on resume (user may have granted it in settings and come back).
     LaunchedEffect(ui) {
@@ -77,31 +83,17 @@ fun UpdateDialog(
         }
     }
 
-    // Broadcast receiver for download completion.
-    DisposableEffect(Unit) {
-        val r = UpdateManager.registerOnComplete(ctx) { id ->
-            if (id == downloadId && ui == UpdateUiState.DOWNLOADING) {
-                val p = UpdateManager.queryProgress(ctx, id)
-                if (p?.status == DownloadManager.STATUS_SUCCESSFUL) {
-                    ui = UpdateUiState.INSTALLING
-                } else {
-                    ui = UpdateUiState.FAILED
-                    errorMsg = "Download failed (code ${p?.reason ?: -1})"
-                }
-            }
-        }
-        onDispose { UpdateManager.unregister(ctx, r) }
-    }
-
-    // Polling fallback — some TV boxes suppress the ACTION_DOWNLOAD_COMPLETE broadcast.
+    // Polling loop — reads the direct-download snapshot every 400 ms.
+    // Switches the UI to INSTALLING once the file finishes writing.
     LaunchedEffect(ui, downloadId) {
         if (ui == UpdateUiState.DOWNLOADING && downloadId != null) {
             while (ui == UpdateUiState.DOWNLOADING) {
                 val p = UpdateManager.queryProgress(ctx, downloadId!!)
-                if (p != null && p.bytesTotal > 0) {
+                if (p.bytesTotal > 0) {
                     progressPct = (p.bytesDownloaded.toFloat() / p.bytesTotal.toFloat()).coerceIn(0f, 1f)
                 }
-                when (p?.status) {
+                progressBytes = Pair(p.bytesDownloaded, p.bytesTotal)
+                when (p.status) {
                     DownloadManager.STATUS_SUCCESSFUL -> {
                         ui = UpdateUiState.INSTALLING
                         break
@@ -112,7 +104,7 @@ fun UpdateDialog(
                         break
                     }
                 }
-                delay(600)
+                delay(400)
             }
         }
     }
@@ -200,7 +192,21 @@ fun UpdateDialog(
                             info = info,
                             onUpdate = {
                                 try {
-                                    downloadId = UpdateManager.enqueueDownload(ctx, info.apkUrl)
+                                    downloadId = UpdateManager.startDownload(
+                                        ctx = ctx,
+                                        apkUrl = info.apkUrl,
+                                        scope = downloadScope,
+                                        onFinished = { ok ->
+                                            // If direct download failed and we
+                                            // haven't already flipped to FAILED
+                                            // via the polling snapshot, surface
+                                            // the error now.
+                                            if (!ok && ui == UpdateUiState.DOWNLOADING) {
+                                                ui = UpdateUiState.FAILED
+                                                errorMsg = "Download failed — check your connection"
+                                            }
+                                        },
+                                    )
                                     ui = UpdateUiState.DOWNLOADING
                                 } catch (e: Exception) {
                                     errorMsg = e.message ?: "Could not start download"
@@ -218,7 +224,11 @@ fun UpdateDialog(
                             },
                             onCancel = onDismiss,
                         )
-                        UpdateUiState.DOWNLOADING -> DownloadingBody(progressPct)
+                        UpdateUiState.DOWNLOADING -> DownloadingBody(
+                            pct = progressPct,
+                            bytesDownloaded = progressBytes.first,
+                            bytesTotal = progressBytes.second,
+                        )
                         UpdateUiState.INSTALLING -> InstallingBody()
                         UpdateUiState.NEEDS_PERMISSION_POST -> NeedsPermissionBody(
                             introText = "Permission was revoked. Re-enable \"Install unknown apps\" for HushTV to finish the update.",
@@ -302,7 +312,7 @@ private fun PromptBody(
 }
 
 @Composable
-private fun DownloadingBody(pct: Float) {
+private fun DownloadingBody(pct: Float, bytesDownloaded: Long, bytesTotal: Long) {
     Text(
         "Downloading update…",
         color = Color.White,
@@ -327,11 +337,29 @@ private fun DownloadingBody(pct: Float) {
         )
     }
     Spacer(Modifier.height(10.dp))
+    val sizeLine = if (bytesTotal > 0)
+        "${formatBytes(bytesDownloaded)} / ${formatBytes(bytesTotal)}"
+    else if (bytesDownloaded > 0) formatBytes(bytesDownloaded)
+    else "Starting…"
     Text(
-        "${(pct * 100).toInt()}% — please stay on this screen",
+        "${(pct * 100).toInt()}% — $sizeLine",
         color = TextSecondary,
         fontSize = 12.sp,
     )
+    Spacer(Modifier.height(2.dp))
+    Text(
+        "Please stay on this screen",
+        color = Color(0xFF6B7280),
+        fontSize = 11.sp,
+    )
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    return if (mb >= 1.0) String.format("%.1f MB", mb)
+    else String.format("%.0f KB", kb)
 }
 
 @Composable
