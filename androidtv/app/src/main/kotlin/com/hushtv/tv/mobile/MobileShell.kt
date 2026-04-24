@@ -74,8 +74,8 @@ private fun MobileBottomNav(
 ) {
     val items = listOf(
         BottomItem("home", "Home", Icons.Default.Home),
-        BottomItem("movies", "Movies", Icons.Default.Movie),
         BottomItem("live", "Live", Icons.Default.LiveTv),
+        BottomItem("movies", "Movies", Icons.Default.Movie),
         BottomItem("series", "Series", Icons.Default.Tv),
         BottomItem("settings", "More", Icons.Default.Settings),
     )
