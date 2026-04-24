@@ -475,8 +475,12 @@ private fun CollectionsPageMobile(
                 backdropUrl = col.backdropUrl,
                 accent = col.accent,
                 onClick = {
-                    // Collections open a filtered movie search in Browse.
-                    nav.navigate("mbrowse/$playlistId/movie")
+                    // Open the TMDB-backed franchise detail with
+                    // library matching — same flow as the TV app.
+                    nav.navigate(
+                        "mcollection/$playlistId/${col.tmdbCollectionId}/" +
+                            android.net.Uri.encode(col.displayName)
+                    )
                 },
             )
         }

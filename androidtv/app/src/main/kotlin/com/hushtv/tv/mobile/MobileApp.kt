@@ -103,6 +103,16 @@ fun MobileApp() {
                 )
             }
             composable(
+                route = "mcollection/{playlistId}/{collectionId}/{name}",
+            ) { bs ->
+                MobileCollectionDetailScreen(
+                    nav = nav,
+                    playlistId = bs.arguments?.getString("playlistId") ?: "",
+                    tmdbCollectionId = bs.arguments?.getString("collectionId")?.toIntOrNull() ?: 0,
+                    collectionName = Uri.decode(bs.arguments?.getString("name") ?: ""),
+                )
+            }
+            composable(
                 route = "mplayer/{playlistId}/{streamUrl}/{channelName}/{isLive}?catId={catId}",
                 arguments = listOf(
                     navArgument("catId") {
