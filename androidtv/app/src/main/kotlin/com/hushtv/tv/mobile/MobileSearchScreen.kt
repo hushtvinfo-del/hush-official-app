@@ -155,15 +155,27 @@ fun MobileSearchScreen(nav: NavController, playlistId: String) {
     }
 }
 
-private fun onCard(card: MediaCard, playlistId: String, nav: NavController) {
-    // Resolve playlist by id (we're outside a composable, so grab from context
-    // via the last-known store). If missing, abort silently.
+private fun onCard(card: com.hushtv.tv.data.MediaCard, playlistId: String, nav: androidx.navigation.NavController) {
     val ctx = nav.context
-    val p = PlaylistStore.find(ctx, playlistId) ?: return
-    val url = when (card.kind) {
-        "live" -> XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
-        "movie" -> XtreamApi.movieUrl(p.host, p.username, p.password, card.streamId, card.containerExtension)
-        else -> return        // series handled separately in the future
+    val p = com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId) ?: return
+    when (card.kind) {
+        "live" -> {
+            val url = com.hushtv.tv.data.XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
+            nav.navigate(mobilePlayerRoute(playlistId, url, card.title, isLive = true))
+        }
+        "movie" -> {
+            val url = com.hushtv.tv.data.XtreamApi.movieUrl(p.host, p.username, p.password, card.streamId, card.containerExtension)
+            nav.navigate(mobilePlayerRoute(playlistId, url, card.title, isLive = false))
+        }
+        "series" -> {
+            nav.navigate(
+                mobileSeriesRoute(
+                    playlistId = playlistId,
+                    seriesId = card.seriesId.toString(),
+                    name = card.title,
+                    poster = card.poster,
+                ),
+            )
+        }
     }
-    nav.navigate(mobilePlayerRoute(playlistId, url, card.title, isLive = card.kind == "live"))
 }

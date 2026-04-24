@@ -202,11 +202,16 @@ fun MobileBrowseScreen(
                                 )
                                 nav.navigate(mobilePlayerRoute(playlistId, url, card.title, isLive = false))
                             } else {
-                                // Series — for MVP jump into the first episode
-                                // isn't feasible without series detail; keep
-                                // a placeholder that opens nothing for now.
-                                // A future iteration would pop a bottom sheet
-                                // of seasons / episodes.
+                                // Series — open the detail sheet with
+                                // season + episode list (same logic as TV).
+                                nav.navigate(
+                                    mobileSeriesRoute(
+                                        playlistId = playlistId,
+                                        seriesId = card.seriesId.toString(),
+                                        name = card.title,
+                                        poster = card.poster,
+                                    ),
+                                )
                             }
                         }
                     }

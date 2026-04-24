@@ -73,6 +73,24 @@ fun MobileApp() {
             composable("msearch/{playlistId}") { bs ->
                 MobileSearchScreen(nav, bs.arguments?.getString("playlistId") ?: "")
             }
+            composable(
+                route = "mseries/{playlistId}/{seriesId}/{name}?poster={poster}",
+                arguments = listOf(
+                    navArgument("poster") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) { bs ->
+                MobileSeriesDetailScreen(
+                    nav = nav,
+                    playlistId = bs.arguments?.getString("playlistId") ?: "",
+                    seriesId = bs.arguments?.getString("seriesId") ?: "",
+                    seriesName = Uri.decode(bs.arguments?.getString("name") ?: ""),
+                    posterUrl = bs.arguments?.getString("poster")?.let(Uri::decode),
+                )
+            }
             composable("mplayer/{playlistId}/{streamUrl}/{channelName}/{isLive}") { bs ->
                 MobilePlayerScreen(
                     nav = nav,
@@ -111,3 +129,9 @@ private fun MobileUpdateCheckHost() {
 /** Build a mobile player deep-link. Matches MobileApp's route template. */
 fun mobilePlayerRoute(playlistId: String, streamUrl: String, channelName: String, isLive: Boolean): String =
     "mplayer/$playlistId/${Uri.encode(streamUrl)}/${Uri.encode(channelName)}/$isLive"
+
+/** Build a mobile series-detail deep-link. */
+fun mobileSeriesRoute(playlistId: String, seriesId: String, name: String, poster: String?): String {
+    val base = "mseries/$playlistId/$seriesId/${Uri.encode(name)}"
+    return if (poster.isNullOrBlank()) base else "$base?poster=${Uri.encode(poster)}"
+}

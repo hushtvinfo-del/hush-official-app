@@ -126,9 +126,15 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
                 title = "Series",
                 cards = series,
                 onCardClick = { card ->
-                    // For MVP we jump to series browse — individual episode
-                    // picker is a future enhancement.
-                    nav.navigate("mbrowse/$playlistId/series")
+                    // Open series detail with seasons + episodes.
+                    nav.navigate(
+                        mobileSeriesRoute(
+                            playlistId = playlistId,
+                            seriesId = card.seriesId.toString(),
+                            name = card.title,
+                            poster = card.poster,
+                        ),
+                    )
                 },
             )
         }

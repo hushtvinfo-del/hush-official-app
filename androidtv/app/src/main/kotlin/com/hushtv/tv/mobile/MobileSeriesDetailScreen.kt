@@ -1,0 +1,288 @@
+package com.hushtv.tv.mobile
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import com.hushtv.tv.data.PlaylistStore
+import com.hushtv.tv.data.XtreamApi
+import com.hushtv.tv.data.XtreamEpisode
+import com.hushtv.tv.ui.theme.Cyan
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/**
+ * Mobile series detail — Netflix-style:
+ *   • Backdrop hero with the series title/plot.
+ *   • Horizontal season chip row (S1, S2, … – tap to switch).
+ *   • Vertical list of episodes for the active season with tap-to-play.
+ *
+ * Picks the first season automatically on load. Uses the same
+ * `get_series_info` API that TV uses (XtreamApi.getSeriesInfo) so no
+ * new backend work.
+ */
+@Composable
+fun MobileSeriesDetailScreen(
+    nav: NavController,
+    playlistId: String,
+    seriesId: String,
+    seriesName: String,
+    posterUrl: String?,
+) {
+    val ctx = LocalContext.current
+    val playlist = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
+
+    var loading by remember { mutableStateOf(true) }
+    var seasonKeys by remember { mutableStateOf<List<String>>(emptyList()) }
+    var episodesBySeason by remember { mutableStateOf<Map<String, List<XtreamEpisode>>>(emptyMap()) }
+    var activeSeason by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(playlistId, seriesId) {
+        if (playlist == null) { loading = false; return@LaunchedEffect }
+        val info = runCatching {
+            withContext(Dispatchers.IO) {
+                XtreamApi.getSeriesInfo(playlist.host, playlist.username, playlist.password, seriesId)
+            }
+        }.getOrNull()
+        val eps = info?.episodes.orEmpty()
+        val keys = eps.keys.sortedWith(
+            compareBy { it.toIntOrNull() ?: Int.MAX_VALUE },
+        )
+        seasonKeys = keys
+        episodesBySeason = eps
+        activeSeason = keys.firstOrNull()
+        loading = false
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF05080F)),
+    ) {
+        // ── Backdrop + title ──
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+            if (!posterUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = posterUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(
+                            listOf(Color(0xFF1E293B), Color(0xFF05080F))
+                        ))
+                )
+            }
+            Box(
+                Modifier.fillMaxSize().background(Brush.verticalGradient(
+                    0f to Color(0x66000000),
+                    0.5f to Color.Transparent,
+                    1f to Color(0xFF05080F),
+                ))
+            )
+            // Back button.
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0x88000000))
+                    .clickable { nav.popBackStack() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+            // Series title overlay.
+            Text(
+                seriesName,
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+            )
+        }
+
+        // ── Loading / content ──
+        if (loading) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Cyan)
+            }
+            return
+        }
+        if (seasonKeys.isEmpty()) {
+            Text(
+                "No episodes found for this series.",
+                color = Color(0xFF94A3B8),
+                fontSize = 13.sp,
+                modifier = Modifier.padding(20.dp),
+            )
+            return
+        }
+
+        // Season chip row — only render when there's more than one season.
+        if (seasonKeys.size > 1) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(seasonKeys, key = { it }) { s ->
+                    SeasonChip(
+                        label = "Season $s",
+                        selected = s == activeSeason,
+                        onClick = { activeSeason = s },
+                    )
+                }
+            }
+        } else {
+            Spacer(Modifier.height(8.dp))
+        }
+
+        val currentSeason = activeSeason ?: return
+        val episodes = episodesBySeason[currentSeason].orEmpty()
+
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            items(episodes, key = { "ep-${it.id}-${it.episode_num}" }) { ep ->
+                EpisodeRow(ep) {
+                    val p = playlist ?: return@EpisodeRow
+                    val url = XtreamApi.episodeUrl(
+                        p.host, p.username, p.password, ep.id, ep.container_extension,
+                    )
+                    val title = "$seriesName · S${ep.season ?: currentSeason}E${ep.episode_num}"
+                    nav.navigate(mobilePlayerRoute(playlistId, url, title, isLive = false))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeasonChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) Cyan.copy(alpha = 0.24f) else Color(0x18FFFFFF))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Text(
+            label,
+            color = if (selected) Cyan else Color(0xFFE5E7EB),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+        )
+    }
+}
+
+@Composable
+private fun EpisodeRow(ep: XtreamEpisode, onPlay: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF0A1220))
+            .clickable(onClick = onPlay)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(width = 92.dp, height = 54.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFF1F2937)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val img = ep.info?.movie_image
+            if (!img.isNullOrBlank()) {
+                AsyncImage(
+                    model = img,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Text(
+                    "E${ep.episode_num}",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+            Icon(
+                Icons.Default.PlayArrow, null, tint = Color.White,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(28.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "E${ep.episode_num} · ${ep.title.ifBlank { "Untitled" }}",
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val plot = ep.info?.plot
+            if (!plot.isNullOrBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    plot,
+                    color = Color(0xFF94A3B8),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val dur = ep.info?.duration
+            if (!dur.isNullOrBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    dur,
+                    color = Cyan,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+    }
+}
