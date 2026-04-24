@@ -102,6 +102,65 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 48 — v1.30.3 Diagnostics screen (crash log viewer + sharer) (2026-04-24 — completed, deployed)
+Closes the loop on the v1.30.2 crash handler: the handler WRITES the
+log, now users can READ + SHARE it without adb. This is the real
+"monitor crash reports" infrastructure promised in the phase-47
+follow-up.
+
+Files added:
+- `data/CrashLogStore.kt`: thin helper around `filesDir/crash.log`.
+  Three methods: `read(ctx): String`, `clear(ctx)`,
+  `hasContent(ctx): Boolean`. Uses `runCatching` on every I/O so a
+  missing / locked file never crashes the diagnostics screen itself.
+- `mobile/MobileDiagnosticsScreen.kt`: touch-first log viewer.
+  Top bar with back button + "Diagnostics · v<VERSION> · Crash log"
+  eyebrow + Share + Delete circle buttons (Share/Delete only shown
+  when content is present). Body = scrollable monospaced text in a
+  cyan-bordered card, or a centred "No crashes logged" empty state
+  when the file is empty. Share uses `Intent.ACTION_SEND` with
+  `type = "text/plain"` and `EXTRA_SUBJECT = "HushTV crash log —
+  v<VERSION>"` so the system chooser shows email / messaging /
+  Gmail / Messenger / etc. as targets.
+- `ui/screens/TVDiagnosticsScreen.kt`: D-pad-first equivalent for
+  TV. Same layout, but circle buttons are cyan-bordered on focus +
+  focusable + use the existing `clickableWithEnter` helper so OK
+  triggers the action. Back button auto-focuses on entry via
+  `FocusRequester` so BACK on the remote immediately returns to
+  Settings. Monospaced log text in a rounded border-cyan card;
+  vertical scroll works out-of-the-box with TV remotes via
+  `verticalScroll(rememberScrollState())`.
+
+Wiring:
+- `mobile/MobileApp.kt`: added `composable("mdiag") {
+  MobileDiagnosticsScreen(nav) }` next to the search route.
+- `mobile/MobileSettingsScreen.kt`: added a `SettingsItem(icon =
+  Icons.Default.Report, title = "Diagnostics", subtitle = "Share
+  crash reports", onClick = { nav.navigate("mdiag") })` right after
+  the "Check for updates" row.
+- `MainActivity.kt` (TV): added `composable("diag") {
+  TVDiagnosticsScreen(nav) }` next to the TV settings route.
+- `ui/screens/TVSettingsScreen.kt`: added a new "DIAGNOSTICS"
+  section header + a `SettingsCard(title = "View crash log",
+  subtitle = "Share a crash report if the app ever force-closes",
+  icon = Report)` that navigates to `"diag"`.
+
+Build + deploy:
+- `app/build.gradle.kts`: `versionCode 159 → 160`, `versionName
+  "1.30.2" → "1.30.3"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- Shipped as versionCode=160 / versionName="1.30.3" — APK (md5
+  `f56de95324223b143c1699b2cddc2e4e`) live on `https://hushtv.xyz`.
+
+How the user reports a crash now:
+1. App force-closes → HushTVApp's UncaughtExceptionHandler writes
+   the trace to `filesDir/crash.log`.
+2. User reopens the app → Settings → Diagnostics.
+3. Sees the trace + taps Share → picks Gmail / Messenger / etc. →
+   ships the log to us.
+4. We parse the stack trace, fix the root cause, bump version.
+
+
 ### Phase 47 — v1.30.2 CRITICAL STABILITY FIX: random TV app exits (2026-04-24 — completed, deployed as MANDATORY update)
 User reported: "Major issues with TV. App randomly exiting — happens
 on Continue Watching when scrolling/clicking/long-pressing to remove,

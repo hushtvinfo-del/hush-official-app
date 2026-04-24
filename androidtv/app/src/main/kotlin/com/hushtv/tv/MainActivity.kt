@@ -29,6 +29,7 @@ import com.hushtv.tv.ui.screens.TVAddAccountScreen
 import com.hushtv.tv.ui.screens.TVBrowseScreen
 import com.hushtv.tv.ui.screens.TVCollectionDetailScreen
 import com.hushtv.tv.ui.screens.TVCollectionsBrowseScreen
+import com.hushtv.tv.ui.screens.TVDiagnosticsScreen
 import com.hushtv.tv.ui.screens.TVEpgGridScreen
 import com.hushtv.tv.ui.screens.TVUnifiedSearchScreen
 import com.hushtv.tv.ui.screens.TVHomeScreen
@@ -186,6 +187,7 @@ private fun AppContent() {
         composable("settings/{playlistId}") { bs ->
             TVSettingsScreen(nav, bs.arguments?.getString("playlistId") ?: "")
         }
+        composable("diag") { TVDiagnosticsScreen(nav) }
         composable("player/{playlistId}/{streamUrl}/{channelName}/{isLive}") { bs ->
             TVPlayerScreen(
                 nav,

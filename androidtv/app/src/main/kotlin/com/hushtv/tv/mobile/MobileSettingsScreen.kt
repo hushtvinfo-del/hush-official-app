@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -102,6 +103,12 @@ fun MobileSettingsScreen(nav: NavController, playlistId: String) {
             title = "Check for updates",
             subtitle = "v${BuildConfig.VERSION_NAME}",
             onClick = { /* auto-check runs on launch */ },
+        )
+        SettingsItem(
+            icon = Icons.Default.Report,
+            title = "Diagnostics",
+            subtitle = "Share crash reports",
+            onClick = { nav.navigate("mdiag") },
         )
         SettingsItem(
             icon = Icons.Default.Logout,

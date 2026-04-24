@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Report
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -123,6 +124,19 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 subtitle = "Currently using $currentLayoutLabel — applies to Live TV, Movies, Series",
                 icon = { Icon(Icons.Default.Dashboard, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                 onClick = { showLayoutChooser = true },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "DIAGNOSTICS",
+                color = TextSecondary, fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+            )
+            SettingsCard(
+                title = "View crash log",
+                subtitle = "Share a crash report if the app ever force-closes",
+                icon = { Icon(Icons.Default.Report, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                onClick = { nav.navigate("diag") },
             )
 
             Spacer(Modifier.height(12.dp))
