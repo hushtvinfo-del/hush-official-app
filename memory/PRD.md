@@ -102,6 +102,26 @@ OTA: users get an in-app update dialog when `/version.json` reports a newer
 
 ## Implementation history
 
+### Phase 41 — v1.27.2 Mobile nav rename + reorder (2026-04-24 — completed, deployed)
+User asked to rename "More" → "Settings" and move it to the end of the
+bottom nav, after Search.
+
+Files changed:
+- `mobile/MobileShell.kt`: `MobileBottomNav` — removed the
+  `BottomItem("settings", "More", ...)` entry from the `items` list
+  (so the main 4 tabs are Home / Live / Movies / Series only) and
+  added a standalone `BottomNavBtn(label = "Settings", ...)` AFTER
+  the Search button. This yields the new order: Home · Live ·
+  Movies · Series · Search · Settings.
+- `app/build.gradle.kts`: `versionCode 152 → 153`, `versionName
+  "1.27.1" → "1.27.2"`.
+
+Build + deploy:
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL.
+- Shipped as versionCode=153 / versionName="1.27.2" — APK (md5
+  `e6522ca201bd8d52fb460013a17f881d`) live on `https://hushtv.xyz`.
+
+
 ### Phase 40 — v1.27.1 Mobile Search layout bug + polish (2026-04-24 — completed, deployed)
 User uploaded a screenshot showing the search screen with a full-screen
 cyan-bordered rectangle and no results rendering. Typed "terminator"

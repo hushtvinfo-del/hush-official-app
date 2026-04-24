@@ -77,7 +77,6 @@ private fun MobileBottomNav(
         BottomItem("live", "Live", Icons.Default.LiveTv),
         BottomItem("movies", "Movies", Icons.Default.Movie),
         BottomItem("series", "Series", Icons.Default.Tv),
-        BottomItem("settings", "More", Icons.Default.Settings),
     )
     Row(
         Modifier
@@ -104,6 +103,15 @@ private fun MobileBottomNav(
             icon = Icons.Default.Search,
             selected = false,
             onClick = onSearch,
+        )
+        // Settings lives at the very end — logical "account & more"
+        // bucket that the user reaches for last, just like the
+        // settings gear in the TV top-nav.
+        BottomNavBtn(
+            label = "Settings",
+            icon = Icons.Default.Settings,
+            selected = active == "settings",
+            onClick = { onTab("settings") },
         )
     }
 }
