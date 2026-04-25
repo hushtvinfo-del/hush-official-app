@@ -23,7 +23,7 @@ import java.net.URL
  */
 object ContentRequestApi {
 
-    private const val ENDPOINT = "https://hushtv.base44.app/api/hushtvapiGateway"
+    private const val ENDPOINT = "https://hushtv.com/api/functions/hushtvapiGateway"
     private const val API_KEY =
         "htv_FIe0oUPLXQ8PorAoxgWgewYjxcsLal78ls4DR1jx7omxBGSi"
 

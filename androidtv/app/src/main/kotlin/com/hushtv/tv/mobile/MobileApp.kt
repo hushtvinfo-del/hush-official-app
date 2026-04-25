@@ -86,6 +86,7 @@ fun MobileApp() {
             }
             composable("mdiag") { MobileDiagnosticsScreen(nav) }
             composable("mspeed") { MobileSpeedTestScreen(nav) }
+            composable("mrequests") { com.hushtv.tv.ui.requests.MobileMyRequestsScreen(nav) }
             composable(
                 route = "mseries/{playlistId}/{seriesId}/{name}?poster={poster}",
                 arguments = listOf(

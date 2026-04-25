@@ -190,6 +190,7 @@ private fun AppContent() {
         }
         composable("diag") { TVDiagnosticsScreen(nav) }
         composable("speedtest") { TVSpeedTestScreen(nav) }
+        composable("myrequests") { com.hushtv.tv.ui.requests.TVMyRequestsScreen(nav) }
         composable("player/{playlistId}/{streamUrl}/{channelName}/{isLive}") { bs ->
             TVPlayerScreen(
                 nav,

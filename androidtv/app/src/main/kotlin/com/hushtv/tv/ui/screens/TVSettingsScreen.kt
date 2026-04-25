@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Person
@@ -132,6 +133,12 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 "DIAGNOSTICS",
                 color = TextSecondary, fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+            )
+            SettingsCard(
+                title = "My content requests",
+                subtitle = "See the status of your missing-content requests",
+                icon = { Icon(Icons.Default.Inbox, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                onClick = { nav.navigate("myrequests") },
             )
             SettingsCard(
                 title = "Speed test",

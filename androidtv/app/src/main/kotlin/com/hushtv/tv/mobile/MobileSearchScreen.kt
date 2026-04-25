@@ -129,7 +129,10 @@ fun MobileSearchScreen(nav: NavController, playlistId: String) {
         keyboard?.show()
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF05080F))) {
+    var showRequestModal by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize().background(Color(0xFF05080F))) {
+    Column(Modifier.fillMaxSize()) {
         // ── Search bar row ──────────────────────────────────────────
         Row(
             Modifier
@@ -269,12 +272,25 @@ fun MobileSearchScreen(nav: NavController, playlistId: String) {
                 }
                 movies.isEmpty() && series.isEmpty() && live.isEmpty() -> {
                     item {
-                        Text(
-                            "No matches for \"${query.trim()}\"",
-                            color = Color(0xFF64748B),
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(20.dp),
-                        )
+                        Column(
+                            Modifier.fillMaxWidth().padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                "No matches for \"${query.trim()}\"",
+                                color = Color(0xFF64748B),
+                                fontSize = 13.sp,
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            // Primary CTA — submit a request for the
+                            // exact title the user just typed. We send
+                            // the query through to RequestContentSheet
+                            // as a preset so the user only has to pick
+                            // movie/series and tap submit.
+                            RequestThisCta(presetTitle = query.trim()) {
+                                showRequestModal = true
+                            }
+                        }
                     }
                 }
                 else -> {
