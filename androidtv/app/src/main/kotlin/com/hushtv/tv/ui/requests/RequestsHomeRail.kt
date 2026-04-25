@@ -48,6 +48,7 @@ import com.hushtv.tv.data.RequestSeenStore
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.UserContactStore
 import com.hushtv.tv.ui.screens.clickableWithEnter
+import com.hushtv.tv.ui.screens.clickableWithEnterAndLongPress
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
@@ -80,6 +81,12 @@ fun RequestsHomeRail(
 ) {
     val ctx = LocalContext.current
     var requests by remember { mutableStateOf(RequestCache.all()) }
+    // Long-press → confirm dialog state. Stays at the rail level so
+    // the dialog overlays the entire home screen, not just the card.
+    var hideTarget by remember { mutableStateOf<ContentRequestApi.Request?>(null) }
+    // Bumping this re-triggers the filter step so a hidden request
+    // disappears from the rail immediately after confirmation.
+    var hideTick by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         if (UserContactStore.get(ctx) == null) return@LaunchedEffect
@@ -99,7 +106,24 @@ fun RequestsHomeRail(
         }
     }
 
-    val highlight = filterForHomeRail(ctx, requests)
+    val highlight = remember(requests, hideTick) {
+        filterForHomeRail(ctx, requests)
+    }
+    if (highlight.isEmpty() && hideTarget == null) return
+
+    if (hideTarget != null) {
+        val t = hideTarget!!
+        RemoveRequestDialog(
+            title = t.title,
+            onConfirm = {
+                com.hushtv.tv.data.RequestHiddenStore.hide(ctx, t.id)
+                hideTarget = null
+                hideTick += 1
+            },
+            onDismiss = { hideTarget = null },
+        )
+    }
+
     if (highlight.isEmpty()) return
 
     val outerPad = if (isTv) 64.dp else 16.dp
@@ -166,6 +190,7 @@ fun RequestsHomeRail(
                     req = req,
                     unseen = RequestSeenStore.isUnseen(ctx, req),
                     onClick = { onOpen(req) },
+                    onLongPress = { hideTarget = req },
                     isTv = isTv,
                 )
             }
@@ -185,7 +210,8 @@ private fun filterForHomeRail(
     requests: List<ContentRequestApi.Request>,
 ): List<ContentRequestApi.Request> {
     if (requests.isEmpty()) return emptyList()
-    return requests
+    val visible = com.hushtv.tv.data.RequestHiddenStore.filterVisible(ctx, requests)
+    return visible
         .filter { r ->
             val open = r.status == ContentRequestApi.Status.PENDING ||
                 r.status == ContentRequestApi.Status.IN_PROGRESS
@@ -240,6 +266,7 @@ private fun BackdropRequestCard(
     req: ContentRequestApi.Request,
     unseen: Boolean,
     onClick: () -> Unit,
+    onLongPress: () -> Unit,
     isTv: Boolean,
 ) {
     val ctx = LocalContext.current
@@ -291,7 +318,10 @@ private fun BackdropRequestCard(
             )
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clickableWithEnter(onClick),
+            .clickableWithEnterAndLongPress(
+                onClick = onClick,
+                onLongPress = onLongPress,
+            ),
     ) {
         // ── Backdrop (or status-tinted fallback) ─────────────────────
         val backdropUrl = meta?.backdropPath?.let { TmdbService.img(it, "w780") }

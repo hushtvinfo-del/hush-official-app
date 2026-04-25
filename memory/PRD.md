@@ -1,6 +1,88 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.40.1 — 2026-04-25 (versionCode 195)  ⬅ LATEST  (non-mandatory)
+## v1.40.2 — 2026-04-25 (versionCode 196)  ⬅ LATEST  (non-mandatory)
+
+**TV main menu overlap fix + long-press to remove a request.**
+User reported on TV the rail was overlapping the top nav header
+text and the Discover section below. Plus they wanted a way to
+fully remove a request from their app.
+
+### TV overlap fix
+The TV main menu's top region is a Box overlay (top nav float over
+hero pager). Adding the rail to that overlay caused two visual
+collisions:
+- "MY REQUESTS" header text was rendering on the same line as
+  the right-side TopNavBar elements (clock / settings icon),
+  producing the jumbled "M⛧REQUESTSPSED" composition glitch.
+- Backdrop cards stretched into the home Discovery rails area,
+  hiding the "DISCOVER · Latest Movies" header.
+
+There's no clean place to insert the rail in the existing TV
+home structure without restructuring the entire pager + hero
+overlay design. Pragmatic call: **removed the rail from
+TVMainMenuScreen** and kept the existing access points:
+- Settings → My content requests (still works, list view with
+  stats + filter chips)
+- Notification banner on cold launch (slides down at the top with
+  a "Watch now" deep-link)
+- Detail screen route (`requestdetail/{playlistId}/{requestId}`)
+  reachable from any list / banner tap
+
+Mobile rail is unchanged (it sits cleanly below the pager in the
+home Column; that's the documented pattern from v1.40.0).
+
+### Long-press → "Remove this request"
+The HushTV gateway has no `deleteContentRequest` /
+`cancelContentRequest` action — only `getContentRequests`,
+`createContentRequest`, `updateContentRequest`, and the latter is
+locked to the 5 lifecycle statuses (no "cancelled"). So
+deletion is implemented client-side:
+
+- NEW `data/RequestHiddenStore.kt` — SharedPreferences string-set
+  of hidden request ids
+- NEW `ui/requests/RemoveRequestDialog.kt` — confirmation dialog
+  with "Remove" (red) + "Cancel" buttons; D-pad-focusable for TV
+- NEW `ui/screens/clickableWithEnterAndLongPress` — extension on
+  Modifier that combines the existing `clickableWithEnter`
+  semantics (D-pad Enter / NumPadEnter) with `combinedClickable`'s
+  long-press detection. Also wires Key.Menu → onLongPress for TV
+  remotes that have a contextual-menu button.
+
+Long-press handlers wired into:
+- `BackdropRequestCard` (home rail) — 700 ms hold opens the dialog
+- `RequestRow` (My Requests list) — same
+
+Confirmation copy makes the behaviour explicit:
+"\"$title\" will be hidden from your app. Our team will still see
+it in the admin panel and may still fulfill it."
+
+### Filter pipeline
+`RequestHiddenStore.filterVisible` is applied at three read sites
+so a hidden request disappears immediately AND on next process:
+- `MyRequestsList` initial fetch
+- `RequestsHomeRail.filterForHomeRail`
+- `RequestNotificationHost` polling result
+
+### Build + deploy
+- `versionCode 195 → 196`, `versionName "1.40.1" → "1.40.2"`.
+- BUILD SUCCESSFUL. APK md5 `0162c3940d459825251d4e3f96194716`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Non-mandatory.
+
+### Container infra note
+The pod's JDK + Android SDK had been wiped between sessions. Had
+to reinstall:
+- `apt-get install openjdk-17-jdk-headless`
+- `cmdline-tools` from Google + `sdkmanager` to fetch
+  `platforms;android-34` + `build-tools;34.0.0`
+- The cached `aapt2-8.5.2-11315950-linux` is x86_64 — pod is
+  arm64 — so wrapped it with `qemu-x86_64-static` (+ `libc6-amd64-cross`,
+  `libgcc-s1-amd64-cross`, `libstdc++6-amd64-cross`) and
+  pointed `gradle.properties` `android.aapt2FromMavenOverride`
+  at the wrapper. Builds in 1m 40s.
+
+---
+
+## v1.40.1 — 2026-04-25 (versionCode 195)
 
 **Retroactive TMDB metadata for legacy requests + TV cinematic
 rail.** User screenshot showed the new mobile cards fell back to

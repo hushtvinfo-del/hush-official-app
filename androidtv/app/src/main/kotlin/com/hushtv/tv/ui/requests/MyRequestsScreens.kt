@@ -52,6 +52,7 @@ import com.hushtv.tv.data.RequestCache
 import com.hushtv.tv.data.RequestSeenStore
 import com.hushtv.tv.data.UserContactStore
 import com.hushtv.tv.ui.screens.clickableWithEnter
+import com.hushtv.tv.ui.screens.clickableWithEnterAndLongPress
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.SurfaceNavy
@@ -84,6 +85,7 @@ fun MyRequestsList(
     var error by remember { mutableStateOf<String?>(null) }
     var requests by remember { mutableStateOf<List<ContentRequestApi.Request>>(emptyList()) }
     var refreshTick by remember { mutableStateOf(0) }
+    var hideTarget by remember { mutableStateOf<ContentRequestApi.Request?>(null) }
 
     LaunchedEffect(refreshTick) {
         if (UserContactStore.get(ctx) == null) {
@@ -98,9 +100,11 @@ fun MyRequestsList(
         loading = false
         when (res) {
             is ContentRequestApi.ListResult.Success -> {
-                requests = res.requests
-                RequestCache.put(res.requests)
-                error = if (res.requests.isEmpty()) "No requests yet." else null
+                val visible = com.hushtv.tv.data.RequestHiddenStore
+                    .filterVisible(ctx, res.requests)
+                requests = visible
+                RequestCache.put(visible)
+                error = if (visible.isEmpty()) "No requests yet." else null
             }
             is ContentRequestApi.ListResult.Error -> error = res.message
         }
@@ -149,11 +153,30 @@ fun MyRequestsList(
                             RequestSeenStore.markSeen(ctx, r)
                             onOpen(r)
                         },
+                        onLongPress = { hideTarget = r },
                     )
                 }
                 item { Spacer(Modifier.height(40.dp)) }
             }
         }
+    }
+
+    // Long-press → "remove this request" confirmation. Hides the
+    // request client-side via RequestHiddenStore (gateway has no
+    // delete endpoint), so the row disappears from the list and rail
+    // immediately. Admin-side request data is unchanged.
+    val ht = hideTarget
+    if (ht != null) {
+        RemoveRequestDialog(
+            title = ht.title,
+            onConfirm = {
+                com.hushtv.tv.data.RequestHiddenStore.hide(ctx, ht.id)
+                requests = requests.filterNot { it.id == ht.id }
+                RequestCache.put(requests)
+                hideTarget = null
+            },
+            onDismiss = { hideTarget = null },
+        )
     }
 }
 
@@ -331,6 +354,7 @@ private fun RequestRow(
     r: ContentRequestApi.Request,
     unseen: Boolean,
     onClick: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
@@ -366,7 +390,10 @@ private fun RequestRow(
             )
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clickableWithEnter(onClick)
+            .clickableWithEnterAndLongPress(
+                onClick = onClick,
+                onLongPress = onLongPress,
+            )
             .padding(14.dp),
         verticalAlignment = Alignment.Top,
     ) {

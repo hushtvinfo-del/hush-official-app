@@ -128,9 +128,13 @@ fun RequestNotificationHost(
             val list = (res as? ContentRequestApi.ListResult.Success)?.requests
                 ?: return@runCatching
 
+            // Drop any requests the user explicitly hid via long-press.
+            val visible = com.hushtv.tv.data.RequestHiddenStore
+                .filterVisible(ctx, list)
+
             // Populate the cache so the home rail / list / detail
             // screens can render without a fresh network call.
-            RequestCache.put(list)
+            RequestCache.put(visible)
 
             // Surface the banner for any request whose
             // (status, adminResponse) signature is *new* compared to
@@ -140,7 +144,7 @@ fun RequestNotificationHost(
             //   • in-progress updates with a fresh admin message
             // PENDING-only flips (e.g. priority change with no note)
             // are intentionally ignored — too noisy.
-            val noticeable = RequestSeenStore.filterUnseen(ctx, list).filter {
+            val noticeable = RequestSeenStore.filterUnseen(ctx, visible).filter {
                 it.status != ContentRequestApi.Status.PENDING ||
                     !it.adminResponse.isNullOrBlank()
             }
