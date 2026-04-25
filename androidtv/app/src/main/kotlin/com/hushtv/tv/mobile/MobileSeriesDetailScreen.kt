@@ -198,6 +198,7 @@ fun MobileSeriesDetailScreen(
                                     seasonNumber = ep.season ?: currentSeason?.toIntOrNull(),
                                     episodeNumber = ep.episode_num.takeIf { it > 0 },
                                     kind = "episode",
+                                    streamUrl = url,
                                 ),
                             )
                             nav.navigate(

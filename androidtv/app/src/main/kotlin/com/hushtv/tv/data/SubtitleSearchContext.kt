@@ -25,6 +25,13 @@ object SubtitleSearchContext {
         val episodeNumber: Int? = null,
         /** "movie" or "episode"; everything else (e.g. live) hides the UI. */
         val kind: String = "movie",
+        /**
+         * Playable URL for the current title. Used by the AI subtitle
+         * fallback: when OpenSubtitles has no English SRT, the dialog
+         * sends this URL to our backend, which extracts audio + runs
+         * Whisper to produce an English SRT. Live TV doesn't set this.
+         */
+        val streamUrl: String? = null,
     )
 
     @Volatile

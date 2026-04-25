@@ -156,6 +156,7 @@ fun TVMovieDetailScreen(
                     ?.take(4)?.toIntOrNull()
                     ?: inner?.releasedate?.take(4)?.toIntOrNull(),
                 kind = "movie",
+                streamUrl = url,
             ),
         )
         nav.navigate(

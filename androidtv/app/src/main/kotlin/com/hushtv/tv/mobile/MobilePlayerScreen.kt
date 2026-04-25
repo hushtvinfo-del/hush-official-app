@@ -157,6 +157,7 @@ fun MobilePlayerScreen(
             ?: if (!isLive) com.hushtv.tv.data.SubtitleSearchContext.Query(
                 title = channelName,
                 kind = "movie",
+                streamUrl = currentStreamUrl,
             ) else null
     }
     var showSubtitleDownload by remember { mutableStateOf(false) }
