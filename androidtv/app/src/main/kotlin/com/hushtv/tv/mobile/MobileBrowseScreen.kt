@@ -313,6 +313,14 @@ private fun MobileVodCard(card: MediaCard, onClick: () -> Unit) {
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 )
             }
+            // IMDb rating badge — overlay on the poster top-left. Only
+            // renders when the Xtream provider supplied a usable rating.
+            com.hushtv.tv.ui.components.ImdbBadge(
+                rating = card.rating,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp),
+            )
         }
         Spacer(Modifier.height(6.dp))
         // minLines=2 reserves the same vertical space for every card so

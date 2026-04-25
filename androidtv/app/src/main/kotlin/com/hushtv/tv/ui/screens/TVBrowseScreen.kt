@@ -1692,27 +1692,17 @@ private fun CompactPoster(
                 PosterStub()
             }
 
-            // Rating badge (top-right)
-            item.rating?.toFloatOrNull()?.takeIf { it > 0 }?.let { r ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(5.dp)
-                        .background(Color(0xCC000000), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                ) {
-                    Icon(Icons.Default.Star, null, tint = Amber, modifier = Modifier.size(9.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text(
-                        String.format("%.1f", r),
-                        color = TextPrimary,
-                        fontSize = 9.sp,
-                        fontFamily = Inter,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
+            // IMDb rating badge (top-right). Same component as Mobile
+            // for visual consistency. Internal parser handles rescaling
+            // 0..5 ratings to 0..10 and rejects junk like "N/A" or
+            // MPAA codes.
+            com.hushtv.tv.ui.components.ImdbBadge(
+                rating = item.rating,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(5.dp),
+                fontSize = 9.sp,
+            )
 
             // Favorited corner badge (star)
             if (isInList) {
