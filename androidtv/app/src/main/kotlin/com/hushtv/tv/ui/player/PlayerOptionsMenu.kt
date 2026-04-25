@@ -277,6 +277,18 @@ private fun TrackPicker(
     allowOff: Boolean = false
 ) {
     val tracksState = remember { mutableStateOf<Tracks>(player.currentTracks) }
+    // Track changes happen async (e.g. side-loaded SRT just finished
+    // parsing) so we keep tracksState live via a Player.Listener instead
+    // of taking a one-shot snapshot.
+    DisposableEffect(player) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onTracksChanged(tracks: Tracks) {
+                tracksState.value = tracks
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
     val groups = tracksState.value.groups.filter { it.type == trackType }
 
     Row(verticalAlignment = Alignment.CenterVertically) {

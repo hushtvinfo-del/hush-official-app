@@ -150,6 +150,53 @@ fun TVPlayerScreen(
         player.playWhenReady = true
     }
 
+    // ── Subtitle on/off state for the OSD CC chip ──
+    // Subscribe to Player.Listener.onTracksChanged so the chip shows
+    // up only when there's actually a text track to toggle, and
+    // reflects the current enabled/disabled state in real time.
+    var subsAvailable by remember { mutableStateOf(false) }
+    var subsEnabled by remember { mutableStateOf(false) }
+    DisposableEffect(player) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                val textGroups = tracks.groups.filter {
+                    it.type == androidx.media3.common.C.TRACK_TYPE_TEXT
+                }
+                subsAvailable = textGroups.isNotEmpty()
+                subsEnabled = textGroups.any { grp ->
+                    (0 until grp.length).any { i -> grp.isTrackSelected(i) }
+                }
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
+    fun toggleSubtitles() {
+        val params = player.trackSelectionParameters
+        if (subsEnabled) {
+            // Disable text tracks entirely.
+            player.trackSelectionParameters = params.buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+                .build()
+        } else {
+            // Re-enable. ExoPlayer auto-selects the default-flagged
+            // track (the SRT we side-loaded), or the first available
+            // group if no DEFAULT exists.
+            val firstGroup = player.currentTracks.groups
+                .firstOrNull { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
+            val builder = params.buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            if (firstGroup != null) {
+                builder.setOverrideForType(
+                    androidx.media3.common.TrackSelectionOverride(firstGroup.mediaTrackGroup, 0)
+                )
+            }
+            player.trackSelectionParameters = builder.build()
+        }
+    }
+
     // Thumbnail preview extractor for scrubber (VOD only, MP4/MKV only).
     // The extractor is created lazily and its HTTP handshake runs on
     // Dispatchers.IO — NEVER on the composition thread, because
@@ -1040,12 +1087,21 @@ fun TVPlayerScreen(
                             // the user clicked.
                             OsdChipButton(
                                 icon = Icons.Default.ClosedCaption,
-                                label = "CC",
+                                label = when {
+                                    subsAvailable && subsEnabled -> "CC ON"
+                                    subsAvailable -> "CC OFF"
+                                    else -> "CC"
+                                },
                                 onClick = {
-                                    optionsInitialPane = "subtitle"
-                                    optionsOpen = true
+                                    if (subsAvailable) {
+                                        toggleSubtitles()
+                                    } else {
+                                        optionsInitialPane = "subtitle"
+                                        optionsOpen = true
+                                    }
                                 },
                                 onInteract = { controlsTick++ },
+                                active = subsAvailable && subsEnabled,
                             )
                             Spacer(Modifier.width(10.dp))
                             OsdChipButton(

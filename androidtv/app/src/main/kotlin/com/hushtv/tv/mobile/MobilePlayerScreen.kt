@@ -179,6 +179,46 @@ fun MobilePlayerScreen(
         player.playWhenReady = true
     }
 
+    // Subtitle on/off state for the CC chip in the controls bar.
+    var subsAvailable by remember { mutableStateOf(false) }
+    var subsEnabled by remember { mutableStateOf(false) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                val textGroups = tracks.groups.filter {
+                    it.type == androidx.media3.common.C.TRACK_TYPE_TEXT
+                }
+                subsAvailable = textGroups.isNotEmpty()
+                subsEnabled = textGroups.any { grp ->
+                    (0 until grp.length).any { i -> grp.isTrackSelected(i) }
+                }
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
+    fun toggleSubtitles() {
+        val params = player.trackSelectionParameters
+        if (subsEnabled) {
+            player.trackSelectionParameters = params.buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+                .build()
+        } else {
+            val firstGroup = player.currentTracks.groups
+                .firstOrNull { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
+            val builder = params.buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            if (firstGroup != null) {
+                builder.setOverrideForType(
+                    androidx.media3.common.TrackSelectionOverride(firstGroup.mediaTrackGroup, 0)
+                )
+            }
+            player.trackSelectionParameters = builder.build()
+        }
+    }
+
     // ── Resume from saved position (VOD only) ──
     // Using an AtomicBoolean-style one-shot flag so re-seeking doesn't
     // happen on orientation changes or on channel-flips within the
@@ -527,29 +567,52 @@ fun MobilePlayerScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (subtitleQuery != null) {
-                            // Touch-friendly CC chip → opens OpenSubtitles
-                            // dialog. Hidden for live TV (no metadata to
-                            // search by).
+                            // CC chip — single state with three modes:
+                            //   • No SRT loaded yet → tap opens download dialog.
+                            //   • SRT loaded ON     → tap turns it OFF, long-press
+                            //                         re-opens dialog to swap language.
+                            //   • SRT loaded OFF    → tap turns it back ON.
+                            //
+                            // Long-press always opens the download dialog so the
+                            // user can swap to a different SRT at any time.
+                            val chipLabel = when {
+                                subsAvailable && subsEnabled -> "CC ON"
+                                subsAvailable -> "CC OFF"
+                                else -> "CC"
+                            }
+                            val chipActive = subsAvailable && subsEnabled
                             Row(
                                 Modifier
                                     .clip(RoundedCornerShape(16.dp))
-                                    .background(Color(0x22FFFFFF))
-                                    .clickable {
-                                        showSubtitleDownload = true
-                                        controlsTick++
+                                    .background(
+                                        if (chipActive) Cyan.copy(alpha = 0.22f)
+                                        else Color(0x22FFFFFF),
+                                    )
+                                    .pointerInput(subsAvailable, subsEnabled) {
+                                        detectTapGestures(
+                                            onTap = {
+                                                if (subsAvailable) toggleSubtitles()
+                                                else showSubtitleDownload = true
+                                                controlsTick++
+                                            },
+                                            onLongPress = {
+                                                showSubtitleDownload = true
+                                                controlsTick++
+                                            },
+                                        )
                                     }
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
                                     Icons.Default.ClosedCaption, null,
-                                    tint = Color.White,
+                                    tint = if (chipActive) Cyan else Color.White,
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    "CC",
-                                    color = Color.White,
+                                    chipLabel,
+                                    color = if (chipActive) Cyan else Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                 )
