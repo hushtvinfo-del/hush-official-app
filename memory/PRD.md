@@ -1,6 +1,124 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.37.2 — 2026-04-25 (versionCode 188)  ⬅ LATEST  (MANDATORY)
+## v1.38.0 — 2026-04-25 (versionCode 189)  ⬅ LATEST  (MANDATORY)
+
+**My Requests — Tier 1 advanced upgrade.** User asked for a much
+richer requests experience: home-screen visibility, tappable rows,
+admin-note rendering, and per-request status notifications. Shipped
+all of it in one batch.
+
+### What's new
+- **Home rail** (`RequestsHomeRail`) — horizontal "MY REQUESTS"
+  section at the top of both Mobile Home and TV Main Menu. Hidden
+  entirely when the user has zero open or unseen-update requests
+  (no impact on users who never use the feature). Up to 6 most-
+  recent open / recently-updated cards, each tappable to detail.
+- **Request Detail screen** (`TVRequestDetailScreen`,
+  `MobileRequestDetailScreen`, shared `RequestDetailContent`):
+  • Hero card with title + type emoji + big status badge + priority
+    chip (when not default)
+  • Visual three-step timeline: Pending → In Progress → Added,
+    plus terminal-state callouts for Already Available / Not Found
+  • **Admin response card** in the cyan accent — surfaces every
+    note the admin types from the Base44 panel, full text, no
+    truncation
+  • Meta section: submission date, last update, scope, seasons,
+    episodes, additional info
+  • Context-aware action buttons: "▶ Watch now" when added (deep-
+    links via `TitleMatcher.normalize` against the user's Xtream
+    library); "🔁 Re-request with more info" when not_found;
+    Refresh always available
+  • D-pad-focusable (TV) / touch (Mobile), reuses
+    `clickableWithEnter` pattern.
+- **Unread / NEW badges** — `RequestSeenStore` tracks per-request
+  `(status, adminResponseHash)` signature in SharedPreferences. Any
+  row whose current signature differs from the user's last-
+  acknowledged signature gets a cyan "NEW" pill, bold weight, and
+  a cyan border tint. Acknowledged automatically when the user
+  opens the detail screen.
+- **Stats header** at the top of the My Requests list: TOTAL · OPEN
+  · AVAILABLE · CLOSED counts, color-coded per state.
+- **Tappable rows** in My Requests — every row navigates to its
+  detail screen. Embedded admin response preview (3-line clamp)
+  visible right on the row so the user sees notes even before
+  tapping in.
+- **Refresh button** (top-right on Mobile, header chip on TV) —
+  manually re-polls the gateway on demand.
+- **Extended status-change notifications** — `RequestNotificationHost`
+  now uses `RequestSeenStore.signatureFor(...)` and surfaces:
+  • added / already_available (existing)
+  • not_found (new) with the admin's reason in the subtext
+  • in_progress *only when* the admin attached a note
+  • Banner header text + accent color now adapt per status (green
+    for added, amber for not_found, blue for in_progress, etc.)
+  • "Watch now" button is hidden for non-watchable statuses.
+
+### API
+No new gateway actions used yet. We added one parsed field —
+`updated_date` — so the detail screen and the notification
+signature can detect "admin edited the note but kept status the
+same". Cancel / re-request / reply will need new gateway actions
+when you share the Base44 admin code.
+
+### Routes
+- `requestdetail/{playlistId}/{requestId}` (TV)
+- `mrequestdetail/{playlistId}/{requestId}` (Mobile)
+- `myrequests/{playlistId}` (TV — was `myrequests`, now requires
+  playlistId so the list/detail screens can resolve "Watch now"
+  deep-links)
+- `mrequests/{playlistId}` (Mobile, same)
+
+### Files
+- NEW `data/RequestSeenStore.kt` — per-request signature tracker
+  (replaces the old `seen_added_ids` set; status + admin-note hash)
+- NEW `data/RequestCache.kt` — process-scoped snapshot for fast
+  list → detail navigation (avoids re-fetching the whole list)
+- NEW `ui/requests/RequestDetailScreen.kt` — TV + Mobile wrappers
+  + shared `RequestDetailContent`
+- NEW `ui/requests/RequestsHomeRail.kt` — home-screen rail
+  composable used on both form factors
+- `data/ContentRequestApi.kt` — `Request.updatedDate` + `priority`
+  fields, both parsed from gateway payload
+- `ui/requests/MyRequestsScreens.kt` — full rewrite: tappable
+  rows, NEW badges, stats header, refresh, navigation
+- `ui/requests/RequestNotificationHost.kt` — uses RequestSeenStore,
+  status-aware banner copy + colours
+- `mobile/MobileHomeScreen.kt`, `ui/screens/TVMainMenuScreen.kt` —
+  embed the home rail
+- `MainActivity.kt`, `mobile/MobileApp.kt` — new detail routes,
+  playlistId on `myrequests` / `mrequests`
+- `mobile/MobileSettingsScreen.kt`, `ui/screens/TVSettingsScreen.kt`,
+  `mobile/MobileSearchScreen.kt`, `mobile/MobileSeriesDetailScreen.kt`,
+  `ui/screens/TVUnifiedSearchScreen.kt`,
+  `ui/screens/TVSeriesDetailScreen.kt` — call sites updated to
+  pass playlistId on the new routes
+
+### Build + deploy
+- `versionCode 188 → 189`, `versionName "1.37.2" → "1.38.0"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- APK md5 `21df973d9c1780f9df7801e2d9487ddb`, 17.5 MB, live on
+  `https://hushtv.xyz/hushtv.apk`. Shipped as **MANDATORY** so
+  every user picks up the home-rail visibility + detail screen.
+
+### Backlog after v1.38.0
+- **Tier 2** (waiting on user signal):
+  - Filter chips (All / Open / Available / Closed) at the top of
+    My Requests
+  - Pull-to-refresh on Mobile (currently button-only)
+  - Cancel request — needs a new gateway action; provide Base44
+    admin code to wire up
+  - Empty-state CTA — big "Request your first title" button
+- **Tier 3**:
+  - Search inside My Requests
+  - Group view (collapsible Open / Available / Closed sections)
+  - Inline reply to admin
+- **P2** Picture-in-Picture (Mobile + TV)
+- **P2** Xtream Catch-up / Archive
+- **P3** OS-level push (FCM) for users not in the app
+
+---
+
+## v1.37.2 — 2026-04-25 (versionCode 188)
 
 **Fix: TV D-pad couldn't navigate the Request Missing Content modal.**
 User report (with on-device photo) showed the modal rendered correctly

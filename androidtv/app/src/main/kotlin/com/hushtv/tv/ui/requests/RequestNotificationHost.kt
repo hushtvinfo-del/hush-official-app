@@ -50,7 +50,9 @@ import androidx.compose.ui.unit.sp
 import com.hushtv.tv.data.ContentRequestApi
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.PlaylistStore
+import com.hushtv.tv.data.RequestCache
 import com.hushtv.tv.data.RequestNotificationStore
+import com.hushtv.tv.data.RequestSeenStore
 import com.hushtv.tv.data.TitleMatcher
 import com.hushtv.tv.data.UserContactStore
 import com.hushtv.tv.data.XtreamApi
@@ -126,19 +128,30 @@ fun RequestNotificationHost(
             val list = (res as? ContentRequestApi.ListResult.Success)?.requests
                 ?: return@runCatching
 
-            val newlyAdded = list.filter { r ->
-                (r.status == ContentRequestApi.Status.ADDED ||
-                    r.status == ContentRequestApi.Status.ALREADY_AVAILABLE) &&
-                    !RequestNotificationStore.isSeen(ctx, r.id)
+            // Populate the cache so the home rail / list / detail
+            // screens can render without a fresh network call.
+            RequestCache.put(list)
+
+            // Surface the banner for any request whose
+            // (status, adminResponse) signature is *new* compared to
+            // the last one the user acknowledged. This catches:
+            //   • status flips (added / not_found / already_available)
+            //   • admin notes added or edited mid-pipeline
+            //   • in-progress updates with a fresh admin message
+            // PENDING-only flips (e.g. priority change with no note)
+            // are intentionally ignored — too noisy.
+            val noticeable = RequestSeenStore.filterUnseen(ctx, list).filter {
+                it.status != ContentRequestApi.Status.PENDING ||
+                    !it.adminResponse.isNullOrBlank()
             }
-            if (newlyAdded.isNotEmpty()) {
-                pendingNotices = newlyAdded
+            if (noticeable.isNotEmpty()) {
+                pendingNotices = noticeable
                 visibleIdx = 0
                 isVisible = true
                 // Mark them seen immediately — the user will see the
                 // banner *now*, no need to re-show on the next launch
                 // even if they dismiss without tapping.
-                RequestNotificationStore.markSeen(ctx, newlyAdded.map { it.id })
+                RequestSeenStore.markSeen(ctx, noticeable)
             }
         }
     }
@@ -161,6 +174,25 @@ fun RequestNotificationHost(
                 delay(180)
                 runCatching { watchFocus.requestFocus() }
             }
+
+            // Tone the banner per status — added is green, in-progress
+            // is cyan, not-found is amber. Keeps the same shape so
+            // one user can never mistake one for the other.
+            val (headerLabel, headerColor, headerIconTint) = when (req.status) {
+                ContentRequestApi.Status.ADDED ->
+                    Triple("Your request is in!", Color(0xFF34D399), Color(0xFF22C55E))
+                ContentRequestApi.Status.ALREADY_AVAILABLE ->
+                    Triple("Already in your library", Color(0xFFC084FC), Color(0xFFA855F7))
+                ContentRequestApi.Status.IN_PROGRESS ->
+                    Triple("We're on it", Color(0xFF60A5FA), Color(0xFF3B82F6))
+                ContentRequestApi.Status.NOT_FOUND ->
+                    Triple("Update on your request", Color(0xFFF87171), Color(0xFFEF4444))
+                ContentRequestApi.Status.PENDING ->
+                    Triple("Update on your request", Color(0xFFFCD34D), Color(0xFFF59E0B))
+            }
+            val canWatchNow = req.status == ContentRequestApi.Status.ADDED ||
+                req.status == ContentRequestApi.Status.ALREADY_AVAILABLE
+
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -178,14 +210,14 @@ fun RequestNotificationHost(
                 ) {
                     Icon(
                         Icons.Default.CheckCircle, null,
-                        tint = Color(0xFF22C55E),
+                        tint = headerIconTint,
                         modifier = Modifier.size(28.dp),
                     )
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "Your request is in!",
-                            color = Color(0xFF34D399),
+                            headerLabel,
+                            color = headerColor,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.5.sp,
@@ -211,23 +243,25 @@ fun RequestNotificationHost(
                         }
                     }
                     Spacer(Modifier.width(10.dp))
-                    WatchNowButton(
-                        focusRequester = watchFocus,
-                        loading = resolving,
-                        onClick = onClick@{
-                            if (resolving) return@onClick
-                            resolving = true
-                            scope.launch {
-                                val target = withContext(Dispatchers.IO) {
-                                    resolveWatchTarget(ctx, playlistId, req)
+                    if (canWatchNow) {
+                        WatchNowButton(
+                            focusRequester = watchFocus,
+                            loading = resolving,
+                            onClick = onClick@{
+                                if (resolving) return@onClick
+                                resolving = true
+                                scope.launch {
+                                    val target = withContext(Dispatchers.IO) {
+                                        resolveWatchTarget(ctx, playlistId, req)
+                                    }
+                                    resolving = false
+                                    isVisible = false
+                                    onWatchNow(target)
                                 }
-                                resolving = false
-                                isVisible = false
-                                onWatchNow(target)
-                            }
-                        },
-                    )
-                    Spacer(Modifier.width(8.dp))
+                            },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
                     DismissButton(
                         onClick = {
                             // Move to the next pending notice if any,

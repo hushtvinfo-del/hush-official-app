@@ -110,7 +110,7 @@ fun MobileSettingsScreen(nav: NavController, playlistId: String) {
             icon = Icons.Default.Inbox,
             title = "My content requests",
             subtitle = "Track requested movies / series",
-            onClick = { nav.navigate("mrequests") },
+            onClick = { nav.navigate("mrequests/$playlistId") },
         )
         SettingsItem(
             icon = Icons.Default.Speed,

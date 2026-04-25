@@ -157,6 +157,17 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
             )
         }
 
+        // ── My Requests rail (only shows when user has open or
+        //    unseen-update requests). Sits between the header and
+        //    the pager dots so the user always notices it. ──
+        com.hushtv.tv.ui.requests.RequestsHomeRail(
+            isTv = false,
+            onOpen = { req ->
+                nav.navigate("mrequestdetail/$playlistId/${req.id}")
+            },
+            onViewAll = { nav.navigate("mrequests/$playlistId") },
+        )
+
         // ── Page dots ──
         Row(
             Modifier.fillMaxWidth().padding(bottom = 8.dp),

@@ -277,7 +277,7 @@ fun MobileSeriesDetailScreen(
             onDismiss = { showRequestModal = false },
             onViewMyRequests = {
                 showRequestModal = false
-                nav.navigate("mrequests")
+                nav.navigate("mrequests/$playlistId")
             },
         )
     }

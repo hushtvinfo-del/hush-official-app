@@ -48,10 +48,12 @@ object ContentRequestApi {
         val status: Status,
         val adminResponse: String?,
         val createdDate: String,         // ISO-8601 UTC
+        val updatedDate: String,         // ISO-8601 UTC — last admin/system mutation
         val seriesRequestType: String?,  // "entire_series" | "specific_episodes"
         val seasons: String?,
         val episodes: String?,
         val additionalInfo: String?,
+        val priority: String?,           // "low" | "medium" | "high"
     )
 
     sealed interface SubmitResult {
@@ -138,10 +140,13 @@ object ContentRequestApi {
                         status = Status.of(o.optString("status")),
                         adminResponse = o.optString("admin_response").takeIf { it.isNotBlank() && it != "null" },
                         createdDate = o.optString("created_date"),
+                        updatedDate = o.optString("updated_date").takeIf { it.isNotBlank() && it != "null" }
+                            ?: o.optString("created_date"),
                         seriesRequestType = o.optString("series_request_type").takeIf { it.isNotBlank() && it != "null" },
                         seasons = o.optString("seasons").takeIf { it.isNotBlank() && it != "null" },
                         episodes = o.optString("episodes").takeIf { it.isNotBlank() && it != "null" },
                         additionalInfo = o.optString("additional_info").takeIf { it.isNotBlank() && it != "null" },
+                        priority = o.optString("priority").takeIf { it.isNotBlank() && it != "null" },
                     )
                 }
                 ListResult.Success(items)

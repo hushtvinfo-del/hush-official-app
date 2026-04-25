@@ -350,7 +350,7 @@ fun MobileSearchScreen(nav: NavController, playlistId: String) {
             onDismiss = { showRequestModal = false },
             onViewMyRequests = {
                 showRequestModal = false
-                nav.navigate("mrequests")
+                nav.navigate("mrequests/$playlistId")
             },
         )
     }

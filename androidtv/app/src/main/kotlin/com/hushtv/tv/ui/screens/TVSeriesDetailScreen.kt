@@ -443,7 +443,7 @@ fun TVSeriesDetailScreen(
             onDismiss = { showRequestModal = false },
             onViewMyRequests = {
                 showRequestModal = false
-                nav.navigate("myrequests")
+                nav.navigate("myrequests/$playlistId")
             },
         )
     }

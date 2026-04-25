@@ -138,7 +138,7 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 title = "My content requests",
                 subtitle = "See the status of your missing-content requests",
                 icon = { Icon(Icons.Default.Inbox, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
-                onClick = { nav.navigate("myrequests") },
+                onClick = { nav.navigate("myrequests/$playlistId") },
             )
             SettingsCard(
                 title = "Speed test",

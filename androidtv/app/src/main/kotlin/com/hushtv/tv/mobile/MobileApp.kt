@@ -88,7 +88,19 @@ fun MobileApp() {
             }
             composable("mdiag") { MobileDiagnosticsScreen(nav) }
             composable("mspeed") { MobileSpeedTestScreen(nav) }
-            composable("mrequests") { com.hushtv.tv.ui.requests.MobileMyRequestsScreen(nav) }
+            composable("mrequests/{playlistId}") { bs ->
+                com.hushtv.tv.ui.requests.MobileMyRequestsScreen(
+                    nav,
+                    bs.arguments?.getString("playlistId") ?: "",
+                )
+            }
+            composable("mrequestdetail/{playlistId}/{requestId}") { bs ->
+                com.hushtv.tv.ui.requests.MobileRequestDetailScreen(
+                    nav = nav,
+                    requestId = bs.arguments?.getString("requestId") ?: "",
+                    playlistId = bs.arguments?.getString("playlistId") ?: "",
+                )
+            }
             composable(
                 route = "mseries/{playlistId}/{seriesId}/{name}?poster={poster}",
                 arguments = listOf(
@@ -189,7 +201,7 @@ fun MobileApp() {
                                 ),
                             )
                         } else {
-                            nav.navigate("mrequests")
+                            nav.navigate("mrequests/$pid")
                         }
                     }
                     is WatchTarget.Series -> nav.navigate(
@@ -200,7 +212,7 @@ fun MobileApp() {
                             poster = target.poster,
                         ),
                     )
-                    WatchTarget.NotFound -> nav.navigate("mrequests")
+                    WatchTarget.NotFound -> nav.navigate("mrequests/$pid")
                 }
             },
         )

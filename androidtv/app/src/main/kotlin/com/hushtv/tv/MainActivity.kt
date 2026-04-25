@@ -192,7 +192,19 @@ private fun AppContent() {
         }
         composable("diag") { TVDiagnosticsScreen(nav) }
         composable("speedtest") { TVSpeedTestScreen(nav) }
-        composable("myrequests") { com.hushtv.tv.ui.requests.TVMyRequestsScreen(nav) }
+        composable("myrequests/{playlistId}") { bs ->
+            com.hushtv.tv.ui.requests.TVMyRequestsScreen(
+                nav,
+                bs.arguments?.getString("playlistId") ?: "",
+            )
+        }
+        composable("requestdetail/{playlistId}/{requestId}") { bs ->
+            com.hushtv.tv.ui.requests.TVRequestDetailScreen(
+                nav = nav,
+                requestId = bs.arguments?.getString("requestId") ?: "",
+                playlistId = bs.arguments?.getString("playlistId") ?: "",
+            )
+        }
         composable("player/{playlistId}/{streamUrl}/{channelName}/{isLive}") { bs ->
             TVPlayerScreen(
                 nav,
@@ -242,7 +254,7 @@ private fun AppContent() {
                 is WatchTarget.Series -> nav.navigate(
                     "series/$pid/${target.seriesId}/${Uri.encode(target.title)}"
                 )
-                WatchTarget.NotFound -> nav.navigate("myrequests")
+                WatchTarget.NotFound -> nav.navigate("myrequests/$pid")
             }
         },
     )

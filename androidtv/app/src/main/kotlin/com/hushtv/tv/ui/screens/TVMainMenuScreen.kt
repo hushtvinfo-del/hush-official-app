@@ -645,14 +645,30 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     } else false
                 },
         ) {
-            com.hushtv.tv.ui.screens.home.TopNavBar(
-                tabs = tabs,
-                activeKey = "home",
-                homeFocus = topNavHomeFocus,
-                onTab = { t -> t.route?.let { nav.navigate(it) } },
-                onSettings = { nav.navigate("settings/$playlistId") },
-                daysLeft = daysLeft,
-            )
+            // Column so the Requests rail can sit BELOW the top nav
+            // instead of overlapping it.
+            androidx.compose.foundation.layout.Column {
+                com.hushtv.tv.ui.screens.home.TopNavBar(
+                    tabs = tabs,
+                    activeKey = "home",
+                    homeFocus = topNavHomeFocus,
+                    onTab = { t -> t.route?.let { nav.navigate(it) } },
+                    onSettings = { nav.navigate("settings/$playlistId") },
+                    daysLeft = daysLeft,
+                )
+                // My Requests rail — sits just below the top nav and
+                // is hidden entirely when the user has no open or
+                // recently-updated requests, so the hero backdrop
+                // runs edge-to-edge for users who never use the
+                // feature.
+                com.hushtv.tv.ui.requests.RequestsHomeRail(
+                    isTv = true,
+                    onOpen = { req ->
+                        nav.navigate("requestdetail/$playlistId/${req.id}")
+                    },
+                    onViewAll = { nav.navigate("myrequests/$playlistId") },
+                )
+            }
         }
 
         // ── First-run / Settings layout chooser modal ──
