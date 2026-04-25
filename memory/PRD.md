@@ -1,6 +1,84 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.39.2 — 2026-04-25 (versionCode 192)  ⬅ LATEST  (non-mandatory)
+## v1.39.3 — 2026-04-25 (versionCode 193)  ⬅ LATEST  (MANDATORY)
+
+**Bug fix: "Already in your library" was routing to the wrong
+movie.** User reported: searching "Analyze That" in the request
+picker showed "Analyze That · 2002 · ALREADY IN YOUR LIBRARY" but
+tapping it played "Z (2019)". Repro and root-cause analysis below.
+
+### Root cause
+The custom matcher inside `LibraryIndex.lookup` did three passes:
+1. Exact normalised title equality
+2. Year-stripped equality
+3. **Substring containment** when query length ≥ 5 chars
+
+Pass 3 was the culprit. `TitleMatcher.normalize("Z (2019)")`
+returns the single character `"z"`. The substring check
+`"analyze that".contains("z")` returns `true`. So the loop in
+pass 3 matched the user-typed "Analyze That" against the library's
+"Z" entry and returned it. The picker then displayed
+"ALREADY AVAILABLE" against the wrong entry, and tapping deep-
+linked to "Z (2019)".
+
+The Collections feature already has a proven matcher,
+`TitleMatcher.isStrongMatch` / `findBestMatch`, that requires:
+- exact normalised title equality with year gate (±1 year), OR
+- contiguous word-phrase containment **AND** ≥ 3 real words on
+  both sides AND year agreement within ±1 year.
+
+That bar prevents 1- or 2-word library titles ("Z", "It", "Ed")
+from matching into longer queries via coincidence.
+
+### Fix
+Rewrote `LibraryIndex` to delegate every lookup
+(`lookup`, `findBest`, `findAllCandidates`) to
+`TitleMatcher.findBestMatch` / `isStrongMatch` — the exact same
+selector Collections uses. Pre-builds the per-kind index lists at
+prime time so every query is a single list scan. No more custom
+substring logic anywhere in `LibraryIndex`.
+
+Also added bullet-proof tap-time confirmation in
+`TmdbPickerPhase`: when the user taps a card flagged as "ALREADY
+IN YOUR LIBRARY", the click handler resolves the candidate's
+`vod_info` (via `TmdbIdResolver`), checks the provider's
+`tmdb_id` against the picked TMDB hit's id, and only routes when:
+- provider has no tmdb_id (trust strict-match library entry), OR
+- provider's tmdb_id == picked TMDB id (verified match).
+
+If the provider exposes a *different* tmdb_id, we fall through to
+the request-submit path with the picked TMDB metadata — better to
+file a duplicate request than send the user to the wrong title.
+
+### Files
+- `data/LibraryIndex.kt` — full rewrite, delegates to TitleMatcher,
+  pre-built per-kind indices, no custom substring code
+- `ui/requests/TmdbPickerPhase.kt` — on-tap tmdb_id verify before
+  invoking `onAlreadyAvailable`
+- `ui/requests/RequestNotificationHost.kt` —
+  `pickBestLibraryMatch` passes `tmdbMeta?.releaseYear` to
+  `findAllCandidates` so the candidate fan-out is also strict
+
+### Build + deploy
+- `versionCode 192 → 193`, `versionName "1.39.2" → "1.39.3"`.
+- BUILD SUCCESSFUL. APK md5 `a4d0468902118d802afd294c76d1bd4c`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Shipped as
+  **MANDATORY** — the bug routes users to wrong content; users
+  need this fix on next launch.
+
+### Verified
+- "Analyze That" (2 normalised words) → `isStrongMatch` returns
+  false for any candidate that doesn't have an exact normalised
+  match → picker shows "TAP TO REQUEST" instead of false
+  "ALREADY AVAILABLE".
+- "Terminator 2 Judgment Day" (≥ 3 normalised words) →
+  containment + year ±1 → matches a library entry like
+  "[EN] Terminator 2: Judgment Day (1991)" correctly. Same
+  precision Franchises has.
+
+---
+
+## v1.39.2 — 2026-04-25 (versionCode 192)
 
 **Bullet-proof Watch-now matching via provider tmdb_id.** Last
 piece of the request-flow puzzle: when the LibraryIndex returns

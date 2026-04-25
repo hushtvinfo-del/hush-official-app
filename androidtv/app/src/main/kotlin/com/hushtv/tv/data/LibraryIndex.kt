@@ -6,20 +6,21 @@ import kotlinx.coroutines.withContext
 
 /**
  * Lazy-loaded, in-memory snapshot of every movie + series title in
- * the active Xtream library, grouped by [TitleMatcher.normalize] key.
+ * the active Xtream library. Uses [TitleMatcher.isStrongMatch] /
+ * [TitleMatcher.findBestMatch] under the hood — the SAME proven
+ * matcher the Collections system relies on. That matcher requires:
  *
- * Powers the "Already in your library" deduplication on the request
- * picker — when the user types "Terminator" and TMDB returns 8
- * candidates, we use this index to flag which ones the user can
- * already stream right now (and route them straight to the title
- * instead of letting them submit a duplicate request).
+ *   • exact normalised-title equality (with year gate ±1y), OR
+ *   • contiguous word-phrase containment **with** ≥ 3 real words on
+ *     both sides AND year agreement within ±1 year.
+ *
+ * That's strict enough to prevent a 1-letter library title like
+ * "Z" matching "Analyze That" via naive substring, which the
+ * earlier custom matcher allowed and produced spectacularly wrong
+ * Watch-now deep-links from.
  *
  * Cached per playlist for the lifetime of the process; refreshed
  * automatically if the playlist tuple changes (host/user/pass).
- *
- * Construction is cheap (does NOT hit the network on cache hit) but
- * the initial `prime` call talks to Xtream and lists all VOD/series
- * — so call it from a background coroutine.
  */
 object LibraryIndex {
 
@@ -38,14 +39,20 @@ object LibraryIndex {
     )
 
     @Volatile private var primedKey: String? = null
-    @Volatile private var byNormalisedTitle: Map<String, List<Entry>> = emptyMap()
-    @Volatile private var byNormalisedTitleNoYear: Map<String, List<Entry>> = emptyMap()
+    @Volatile private var allEntries: List<Entry> = emptyList()
+
+    // Pre-built TitleMatcher indices, one per kind, so every lookup
+    // is a list scan over normalised-key tuples instead of rebuilding
+    // the index on each call.
+    @Volatile private var movieIdx: List<TitleMatcher.LibraryEntry<Entry>> = emptyList()
+    @Volatile private var seriesIdx: List<TitleMatcher.LibraryEntry<Entry>> = emptyList()
 
     /** Drop the cache, e.g. when user switches profile. */
     fun reset() {
         primedKey = null
-        byNormalisedTitle = emptyMap()
-        byNormalisedTitleNoYear = emptyMap()
+        allEntries = emptyList()
+        movieIdx = emptyList()
+        seriesIdx = emptyList()
     }
 
     /**
@@ -58,7 +65,7 @@ object LibraryIndex {
     suspend fun prime(ctx: Context, playlist: Playlist): Boolean =
         withContext(Dispatchers.IO) {
             val key = "${playlist.host}|${playlist.username}|${playlist.password}"
-            if (primedKey == key && byNormalisedTitle.isNotEmpty()) return@withContext true
+            if (primedKey == key && allEntries.isNotEmpty()) return@withContext true
 
             val movieResult = runCatching {
                 XtreamApi.getAllStreams(playlist.host, playlist.username,
@@ -69,159 +76,86 @@ object LibraryIndex {
                     playlist.password, "series")
             }.getOrNull() ?: return@withContext false
 
-            val mainBucket = HashMap<String, MutableList<Entry>>()
-            val noYearBucket = HashMap<String, MutableList<Entry>>()
-
-            fun ingest(entries: List<MediaCard>, kind: String) {
-                for (c in entries) {
-                    val raw = c.title
-                    val full = TitleMatcher.normalize(raw)
-                    if (full.isBlank()) continue
-                    val e = Entry(
-                        kind = kind,
-                        streamId = if (kind == "movie") c.streamId else 0,
-                        seriesId = if (kind == "series") c.seriesId else 0,
-                        title = raw,
-                        poster = c.poster,
-                        releaseYear = extractYear(raw),
-                    )
-                    mainBucket.getOrPut(full) { mutableListOf() } += e
-                    val withoutYear = stripTrailingYear(full)
-                    if (withoutYear != full) {
-                        noYearBucket.getOrPut(withoutYear) { mutableListOf() } += e
-                    }
-                }
+            val combined = mutableListOf<Entry>()
+            for (c in movieResult) {
+                combined += Entry(
+                    kind = "movie",
+                    streamId = c.streamId,
+                    seriesId = 0,
+                    title = c.title,
+                    poster = c.poster,
+                    releaseYear = TitleMatcher.extractYear(c.title),
+                )
+            }
+            for (c in seriesResult) {
+                combined += Entry(
+                    kind = "series",
+                    streamId = 0,
+                    seriesId = c.seriesId,
+                    title = c.title,
+                    poster = c.poster,
+                    releaseYear = TitleMatcher.extractYear(c.title),
+                )
             }
 
-            ingest(movieResult, "movie")
-            ingest(seriesResult, "series")
-
-            byNormalisedTitle = mainBucket
-            byNormalisedTitleNoYear = noYearBucket
+            allEntries = combined
+            movieIdx = TitleMatcher.buildIndex(combined.filter { it.kind == "movie" }) { it.title }
+            seriesIdx = TitleMatcher.buildIndex(combined.filter { it.kind == "series" }) { it.title }
             primedKey = key
             true
         }
 
-    /**
-     * Tolerant exact / near-exact lookup. Returns the first matching
-     * library entry restricted to [kind] ("movie" or "series") OR
-     * null if nothing matches.
-     *
-     * Match passes (in order):
-     *   1. Normalised title equality
-     *   2. Normalised title equality with a trailing "(YYYY)" / "YYYY"
-     *      stripped from the candidate side
-     *   3. Substring containment (either direction) — only when the
-     *      query is at least 5 chars to avoid false positives like
-     *      "It" matching "Its Always Sunny".
-     */
-    fun lookup(rawTitle: String, kind: String): Entry? {
-        val norm = TitleMatcher.normalize(rawTitle)
-        if (norm.isBlank()) return null
-        byNormalisedTitle[norm]?.firstOrNull { it.kind == kind }?.let { return it }
-        val withoutYear = stripTrailingYear(norm)
-        if (withoutYear != norm) {
-            byNormalisedTitle[withoutYear]?.firstOrNull { it.kind == kind }?.let { return it }
-            byNormalisedTitleNoYear[withoutYear]?.firstOrNull { it.kind == kind }?.let { return it }
-        }
-        if (norm.length >= 5) {
-            byNormalisedTitle.entries.firstOrNull { (k, list) ->
-                list.any { it.kind == kind } &&
-                    (k.contains(norm) || norm.contains(k))
-            }?.value?.firstOrNull { it.kind == kind }?.let { return it }
-        }
-        return null
-    }
+    private fun indexFor(kind: String) =
+        if (kind == "series") seriesIdx else movieIdx
 
     /**
-     * Year-aware best-match lookup. Used by Watch-now resolvers when
-     * the request has TMDB metadata — multiple library candidates
-     * with the same normalised title (e.g. "Aladdin" 1992 vs.
-     * "Aladdin" 2019) are disambiguated by [preferredYear].
-     *
-     * Selection rules, in order:
-     *   1. Exact normalised-title hit AND year matches → win
-     *   2. Exact normalised-title hit AND year within ±1 → win (TMDB
-     *      and Xtream sometimes disagree by a calendar year)
-     *   3. Year-stripped normalised hit AND year matches → win
-     *   4. Whatever the plain [lookup] returns (current behaviour)
+     * Strict lookup using the same [TitleMatcher.findBestMatch] that
+     * the Collections feature uses. Returns null when no library
+     * entry passes the strong-match bar. Year-aware when caller
+     * provides one.
+     */
+    fun lookup(rawTitle: String, kind: String): Entry? =
+        TitleMatcher.findBestMatch(
+            tmdbTitle = rawTitle,
+            tmdbYear = null,
+            libraryIndex = indexFor(kind),
+        )
+
+    /**
+     * Year-aware best match — preferred when caller has TMDB
+     * metadata. Pure delegation to [TitleMatcher.findBestMatch].
+     * Same selector Collections relies on, so request "Watch now"
+     * resolution and franchise tile clicks always agree.
      */
     fun findBest(
         rawTitle: String,
         kind: String,
         preferredYear: Int?,
-    ): Entry? {
-        if (preferredYear == null) return lookup(rawTitle, kind)
-        val norm = TitleMatcher.normalize(rawTitle)
-        if (norm.isBlank()) return null
-
-        val exactBucket = byNormalisedTitle[norm]?.filter { it.kind == kind }.orEmpty()
-        exactBucket.firstOrNull { it.releaseYear == preferredYear }?.let { return it }
-        exactBucket.firstOrNull {
-            it.releaseYear != null && kotlin.math.abs(it.releaseYear - preferredYear) <= 1
-        }?.let { return it }
-
-        val withoutYear = stripTrailingYear(norm)
-        if (withoutYear != norm) {
-            val noYearBucket =
-                byNormalisedTitleNoYear[withoutYear]?.filter { it.kind == kind }.orEmpty()
-            noYearBucket.firstOrNull { it.releaseYear == preferredYear }?.let { return it }
-            noYearBucket.firstOrNull {
-                it.releaseYear != null && kotlin.math.abs(it.releaseYear - preferredYear) <= 1
-            }?.let { return it }
-        }
-
-        // Fall through to the title-only matcher.
-        return lookup(rawTitle, kind)
-    }
-
-    /** Extract the first 4-digit year from a raw title — handles
-     *  "Title (2024)", "Title 2024", "Title - 2024 - HD" etc. */
-    private fun extractYear(rawTitle: String): Int? {
-        val match = Regex("\\b(19|20)\\d{2}\\b").find(rawTitle) ?: return null
-        return match.value.toIntOrNull()
-    }
+    ): Entry? = TitleMatcher.findBestMatch(
+        tmdbTitle = rawTitle,
+        tmdbYear = preferredYear,
+        libraryIndex = indexFor(kind),
+    )
 
     /**
-     * Returns every library candidate that could plausibly be
-     * [rawTitle] of [kind]. Used by [TmdbIdResolver] when it needs
-     * to fan out per-title info calls and pick by tmdb_id.
-     *
-     * Same three-pass behaviour as [lookup] but returning the full
-     * list at each step instead of stopping at the first hit.
-     * De-duplicated by streamId / seriesId.
+     * Returns every library entry that passes [TitleMatcher.isStrongMatch]
+     * for the given title + year. Used by [TmdbIdResolver] to fan
+     * out per-title `vod_info` calls when more than one candidate
+     * passes the strong-match bar (rare, but happens with sequels
+     * sharing a phrase).
      */
-    fun findAllCandidates(rawTitle: String, kind: String): List<Entry> {
-        val norm = TitleMatcher.normalize(rawTitle)
-        if (norm.isBlank()) return emptyList()
-        val out = mutableListOf<Entry>()
-        val seen = HashSet<String>()
-        fun add(e: Entry) {
-            val key = if (kind == "movie") "m-${e.streamId}" else "s-${e.seriesId}"
-            if (seen.add(key)) out += e
+    fun findAllCandidates(
+        rawTitle: String,
+        kind: String,
+        preferredYear: Int? = null,
+    ): List<Entry> = indexFor(kind)
+        .filter { entry ->
+            TitleMatcher.isStrongMatch(
+                tmdbTitle = rawTitle,
+                tmdbYear = preferredYear,
+                libTitle = entry.raw,
+                libYear = entry.year,
+            )
         }
-
-        byNormalisedTitle[norm]?.filter { it.kind == kind }?.forEach(::add)
-        val withoutYear = stripTrailingYear(norm)
-        if (withoutYear != norm) {
-            byNormalisedTitle[withoutYear]?.filter { it.kind == kind }?.forEach(::add)
-            byNormalisedTitleNoYear[withoutYear]?.filter { it.kind == kind }?.forEach(::add)
-        }
-        if (norm.length >= 5 && out.isEmpty()) {
-            byNormalisedTitle.entries.forEach { (k, list) ->
-                if (k.contains(norm) || norm.contains(k)) {
-                    list.filter { it.kind == kind }.forEach(::add)
-                }
-            }
-        }
-        return out
-    }
-
-    private fun stripTrailingYear(norm: String): String {
-        // matches "title 1984" or "title (1984)" — both already lowered
-        // by TitleMatcher.normalize(). Removes the year + any leading
-        // whitespace.
-        val regex = Regex("\\s*\\(?(19|20)\\d{2}\\)?\\s*$")
-        return norm.replace(regex, "").trim()
-    }
+        .map { it.payload }
 }

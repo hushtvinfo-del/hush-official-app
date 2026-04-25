@@ -236,7 +236,41 @@ fun TmdbPickerPhase(
                                 library = wrapped.libraryEntry,
                             )
                             if (wrapped.libraryEntry != null) {
-                                onAlreadyAvailable(wrapped.libraryEntry)
+                                // Bullet-proof confirm: refetch the
+                                // candidate's `vod_info` and verify the
+                                // provider's tmdb_id matches the picked
+                                // TMDB id BEFORE routing the user. If the
+                                // provider doesn't expose tmdb_id, we
+                                // trust the strict-match library entry.
+                                // If the provider exposes a DIFFERENT
+                                // tmdb_id, treat as not-in-library and
+                                // submit the request instead — better to
+                                // file a duplicate request than send the
+                                // user to the wrong movie.
+                                scope.launch {
+                                    val playlist = withContext(Dispatchers.IO) {
+                                        com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
+                                    }
+                                    val confirmed = if (playlist != null) {
+                                        val resolved = withContext(Dispatchers.IO) {
+                                            com.hushtv.tv.data.TmdbIdResolver
+                                                .resolveTmdbId(playlist, wrapped.libraryEntry)
+                                        }
+                                        // resolved == null → provider has
+                                        // no tmdb_id, trust strict match.
+                                        // resolved == hit.id → match.
+                                        // resolved != hit.id → mismatch.
+                                        resolved == null || resolved == wrapped.hit.id
+                                    } else true
+                                    if (confirmed) {
+                                        onAlreadyAvailable(wrapped.libraryEntry)
+                                    } else {
+                                        // Fall through to the request
+                                        // submit path with the picked
+                                        // TMDB metadata.
+                                        onPicked(pick)
+                                    }
+                                }
                             } else {
                                 onPicked(pick)
                             }

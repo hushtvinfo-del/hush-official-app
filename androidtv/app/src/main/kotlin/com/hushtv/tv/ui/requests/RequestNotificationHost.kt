@@ -370,7 +370,15 @@ internal suspend fun pickBestLibraryMatch(
     kind: String,
     tmdbMeta: com.hushtv.tv.data.RequestMetaStore.Meta?,
 ): com.hushtv.tv.data.LibraryIndex.Entry? {
-    val candidates = com.hushtv.tv.data.LibraryIndex.findAllCandidates(requestTitle, kind)
+    // findAllCandidates uses TitleMatcher.isStrongMatch — same strict
+    // bar Collections uses — so single-letter library titles can never
+    // match into long TMDB titles via substring (the "analyze that"
+    // → "Z (2019)" bug).
+    val candidates = com.hushtv.tv.data.LibraryIndex.findAllCandidates(
+        rawTitle = requestTitle,
+        kind = kind,
+        preferredYear = tmdbMeta?.releaseYear,
+    )
     if (candidates.isEmpty()) return null
     if (candidates.size == 1) return candidates.first()
 
@@ -378,8 +386,6 @@ internal suspend fun pickBestLibraryMatch(
         com.hushtv.tv.data.TmdbIdResolver
             .pickByTmdbId(playlist, candidates, tmdbMeta.tmdbId)
             ?.let { return it }
-        // pickByTmdbId returns null only when no candidate exposed a
-        // tmdb_id; fall through to year-aware matching.
     }
     return com.hushtv.tv.data.LibraryIndex
         .findBest(requestTitle, kind, tmdbMeta?.releaseYear)
