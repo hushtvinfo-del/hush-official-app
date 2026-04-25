@@ -38,10 +38,13 @@ fun Modifier.clickableWithEnter(onClick: () -> Unit): Modifier {
 
 /**
  * Like [clickableWithEnter] but ALSO accepts a long-press handler
- * for touch gestures. Long-press on TV (DPAD Center hold) maps to
- * Key.DirectionCenter held, which we approximate via the Menu key
- * — TV remotes that have a contextual menu button send Key.Menu on
- * press, which is the closest analogue to a long-press on touch.
+ * for touch gestures + TV remote alternatives:
+ *   • Holding DPAD Center / Enter for ≥ 700 ms triggers onLongPress
+ *     (we measure between KeyDown and KeyUp events).
+ *   • A short single press still fires onClick (≤ 700 ms).
+ *   • Key.Menu (contextual menu button) immediately fires onLongPress
+ *     when pressed — quick affordance for remotes that have it.
+ *   • Touch long-press (Android Compose default) fires onLongPress.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -50,15 +53,32 @@ fun Modifier.clickableWithEnterAndLongPress(
     onLongPress: () -> Unit,
 ): Modifier {
     val interaction = remember { MutableInteractionSource() }
+    val keyDownMs = remember { kotlin.collections.ArrayDeque<Long>() }
     return this
         .onKeyEvent { e ->
-            if (e.type == KeyEventType.KeyUp &&
-                (e.key == Key.Enter || e.key == Key.DirectionCenter || e.key == Key.NumPadEnter)
-            ) {
-                onClick(); true
-            } else if (e.type == KeyEventType.KeyUp && e.key == Key.Menu) {
-                onLongPress(); true
-            } else false
+            val isCenter = e.key == Key.Enter ||
+                e.key == Key.DirectionCenter ||
+                e.key == Key.NumPadEnter
+            when {
+                isCenter && e.type == KeyEventType.KeyDown -> {
+                    if (keyDownMs.isEmpty()) {
+                        keyDownMs.addLast(System.currentTimeMillis())
+                    }
+                    true
+                }
+                isCenter && e.type == KeyEventType.KeyUp -> {
+                    val downMs = keyDownMs.removeLastOrNull()
+                    val held = if (downMs != null) {
+                        System.currentTimeMillis() - downMs
+                    } else 0L
+                    if (held >= 700L) onLongPress() else onClick()
+                    true
+                }
+                e.type == KeyEventType.KeyUp && e.key == Key.Menu -> {
+                    onLongPress(); true
+                }
+                else -> false
+            }
         }
         .combinedClickable(
             interactionSource = interaction,

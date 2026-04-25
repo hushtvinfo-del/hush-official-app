@@ -74,6 +74,7 @@ fun TVRequestsPage(
     firstItemFocus: FocusRequester,
     onUpFromRow: () -> Unit,
     onDownFromRow: () -> Unit,
+    onRequestHidden: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     var focusedReq by remember(requests) {
@@ -123,6 +124,14 @@ fun TVRequestsPage(
                             fontWeight = FontWeight.Black,
                         )
                     }
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "HOLD OK TO REMOVE",
+                        color = Color(0x99FFFFFF),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                    )
                 }
                 TVRequestsRow(
                     requests = requests,
@@ -146,10 +155,8 @@ fun TVRequestsPage(
             title = ht.title,
             onConfirm = {
                 com.hushtv.tv.data.RequestHiddenStore.hide(ctx, ht.id)
-                // Filter handled by the parent's request fetcher on
-                // recompose — we just dismiss the dialog. The hidden
-                // store is read by everyone next render.
                 hideTarget = null
+                onRequestHidden()
             },
             onDismiss = { hideTarget = null },
         )

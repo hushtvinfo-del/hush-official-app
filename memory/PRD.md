@@ -1,6 +1,83 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.41.0 — 2026-04-25 (versionCode 197)  ⬅ LATEST  (MANDATORY)
+## v1.41.1 — 2026-04-25 (versionCode 198)  ⬅ LATEST  (MANDATORY)
+
+**TV REQUESTS page — UX fixes after first install of v1.41.0.**
+User feedback after v1.41.0 surfaced four issues:
+
+### 1. D-pad UP from card row was blocked
+`TVRequestsPage.onUpFromRow` was wired to `{}` (no-op) — fixed to
+`showNavAndFocus` (the same callback CW / Discovery use to focus
+the top nav and reveal it).
+
+### 2. REQUESTS page disappeared after navigating away
+`currentPage` was wrapped in `remember(hasCw, hasRequests)`, so
+when `hasRequests` flipped (e.g. user navigated, focus state
+reset, fresh fetch arrived) the remembered page got reset to the
+first available page in the new order — yanking the user. Plus
+`requestsForPage` filter included `RequestSeenStore.isUnseen`,
+which would mark items as "seen" once viewed and immediately drop
+them from the page.
+
+Fix:
+- `currentPage` now uses single-shot `remember { ... }` —
+  initialised once, never reset on flag flips.
+- `requestsForPage` no longer filters by "unseen" — it shows ALL
+  requests by default. Terminal states (added /
+  already_available / not_found) auto-drop after 24 h via the
+  new `parseIsoTimestamp` helper. Pending / in_progress always
+  show.
+- `LaunchedEffect(pageOrder)` watchdog: if the page list shrinks
+  to zero items in `currentPage`, fall back to the first
+  available page rather than rendering nothing.
+
+### 3. Long-press to remove was undiscoverable
+v1.40.2 wired long-press but only via Key.Menu (TV remotes
+without a Menu button had no way to trigger it).
+
+Fix:
+- `clickableWithEnterAndLongPress` now tracks DPAD Center / Enter
+  KeyDown → KeyUp duration. Hold ≥ 700 ms triggers `onLongPress`,
+  short press triggers `onClick`.
+- "HOLD OK TO REMOVE" hint added to the right side of the
+  section header on the requests page so the affordance is
+  visible without needing a tutorial.
+
+### 4. Removed requests didn't update the page
+Page received `requests` as a prop, parent's `homeRequests` state
+didn't bump when a card was hidden via `RequestHiddenStore.hide`.
+
+Fix:
+- Added `hideTick` state in `TVMainMenuScreen` and
+  `LaunchedEffect(playlistId, hideTick)` so the fetch re-runs
+  the hidden-set filter on every bump.
+- New `onRequestHidden` callback on `TVRequestsPage` bumps
+  `hideTick` so the row vanishes immediately after the user
+  confirms removal.
+
+### Files
+- `ui/screens/TVMainMenuScreen.kt`:
+  - `currentPage` switched to single-shot remember
+  - new `parseIsoTimestamp` helper at file bottom
+  - 24 h cutoff for terminal-state requests via `requestsForPage`
+  - `LaunchedEffect(pageOrder)` watchdog
+  - `hideTick` state + `onRequestHidden` plumbing
+- `ui/requests/TVRequestsPage.kt`:
+  - new `onRequestHidden: () -> Unit = {}` param
+  - "HOLD OK TO REMOVE" header hint
+- `ui/screens/ClickWithEnter.kt`:
+  - DPAD Center / Enter hold-detection in
+    `clickableWithEnterAndLongPress` (≥ 700 ms = long-press)
+
+### Build + deploy
+- `versionCode 197 → 198`, `versionName "1.41.0" → "1.41.1"`.
+- BUILD SUCCESSFUL. APK md5 `6ea30bfd5bfae56a668931cb20b3c381`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Shipped as
+  **MANDATORY** so users get the fixes on next launch.
+
+---
+
+## v1.41.0 — 2026-04-25 (versionCode 197)
 
 **TV: dedicated "REQUESTS" page in the home pager.** Restored TV
 Home rail visibility — but as its own page in the vertical pager,

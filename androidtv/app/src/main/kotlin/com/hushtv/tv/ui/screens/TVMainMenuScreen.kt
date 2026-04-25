@@ -264,14 +264,18 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     var homeRequests by remember {
         mutableStateOf(com.hushtv.tv.data.RequestCache.all())
     }
-    LaunchedEffect(playlistId) {
+    // Bumping triggers a recomposition with the latest hidden-set
+    // applied — long-press → "Remove" hides via RequestHiddenStore
+    // and signals here so the row vanishes immediately.
+    var hideTick by remember { mutableStateOf(0) }
+    LaunchedEffect(playlistId, hideTick) {
         if (com.hushtv.tv.data.UserContactStore.get(ctxLocal) == null) return@LaunchedEffect
+        // Re-apply the hidden filter to the existing cache snapshot.
+        homeRequests = com.hushtv.tv.data.RequestHiddenStore
+            .filterVisible(ctxLocal, com.hushtv.tv.data.RequestCache.all())
         if (com.hushtv.tv.data.RequestCache.all().isNotEmpty() &&
             com.hushtv.tv.data.RequestCache.ageMs() < 60_000
-        ) {
-            homeRequests = com.hushtv.tv.data.RequestCache.all()
-            return@LaunchedEffect
-        }
+        ) return@LaunchedEffect
         kotlinx.coroutines.delay(800)
         runCatching {
             val res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -286,22 +290,39 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         }
     }
     val requestsForPage = remember(homeRequests) {
+        val now = System.currentTimeMillis()
+        val twentyFourHoursMs = 24L * 60L * 60L * 1000L
         homeRequests
             .filter { r ->
-                val open = r.status == com.hushtv.tv.data.ContentRequestApi.Status.PENDING ||
-                    r.status == com.hushtv.tv.data.ContentRequestApi.Status.IN_PROGRESS
-                open || com.hushtv.tv.data.RequestSeenStore.isUnseen(ctxLocal, r)
+                when (r.status) {
+                    com.hushtv.tv.data.ContentRequestApi.Status.PENDING,
+                    com.hushtv.tv.data.ContentRequestApi.Status.IN_PROGRESS -> {
+                        // Always show open requests so the user can
+                        // see what they've asked for at a glance.
+                        true
+                    }
+                    else -> {
+                        // Terminal states (added / already_available /
+                        // not_found) auto-hide once the user has had
+                        // 24 h to digest the result. Falls back to
+                        // createdDate if the gateway didn't echo an
+                        // updatedDate. Bad timestamps → keep the
+                        // request visible (safer than hiding it).
+                        val ts = parseIsoTimestamp(r.updatedDate.ifBlank { r.createdDate })
+                        ts == null || (now - ts) < twentyFourHoursMs
+                    }
+                }
             }
             .sortedByDescending { it.updatedDate.ifBlank { it.createdDate } }
-            .take(10)
+            .take(15)
     }
     val hasRequests = requestsForPage.isNotEmpty()
 
-    var currentPage by remember(hasCw, hasRequests) {
-        // First-load priority: requests > continue-watching > discovery.
-        // User feedback explicitly wanted requests as their own page
-        // when present. We do NOT auto-jump to "requests" if the page
-        // was already manually moved past it.
+    var currentPage by remember {
+        // Sticky: initialised once on first composition and not reset
+        // when hasRequests / hasCw flip later. Prevents the user from
+        // being teleported back to REQUESTS after they navigated to
+        // DISCOVERY (or vice versa) when a fresh request fetch lands.
         mutableStateOf(
             when {
                 hasRequests -> "requests"
@@ -321,6 +342,14 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             add("genres_movies")
             add("genres_series")
             add("years_movies")
+        }
+    }
+    // If the page list shrinks (e.g. requests dropped to zero) and
+    // the user was on a page that no longer exists, fall back to
+    // discovery rather than an undefined branch.
+    LaunchedEffect(pageOrder) {
+        if (currentPage !in pageOrder) {
+            currentPage = pageOrder.firstOrNull() ?: "discovery"
         }
     }
 
@@ -506,7 +535,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         nav = nav,
                         requests = requestsForPage,
                         firstItemFocus = firstRequestsFocus,
-                        onUpFromRow = { /* nothing above the row */ },
+                        onUpFromRow = showNavAndFocus,
                         onDownFromRow = {
                             // Move to the next page in pageOrder.
                             val idx = pageOrder.indexOf("requests")
@@ -514,6 +543,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                                 currentPage = pageOrder[idx + 1]
                             }
                         },
+                        onRequestHidden = { hideTick += 1 },
                     )
                     "cw" -> CwPage(
                         playlistId = playlistId,
@@ -1716,4 +1746,25 @@ private fun CollectionsPage(
             }
         }
     }
+}
+
+
+/**
+ * Tolerantly parses the ISO-8601 timestamps returned by the HushTV
+ * gateway (shapes seen in the wild include
+ * "2026-04-25T16:04:36.835000", "2026-04-25T16:04:36Z", and
+ * "2026-04-25T16:04:36+00:00"). Returns null on failure so callers
+ * can fall back to a "treat as fresh" default — better to over-show
+ * than to incorrectly hide a legitimate request.
+ */
+private fun parseIsoTimestamp(iso: String): Long? {
+    if (iso.isBlank()) return null
+    val cleaned = iso.substringBefore('.').substringBefore('+').removeSuffix("Z")
+    return runCatching {
+        val sdf = java.text.SimpleDateFormat(
+            "yyyy-MM-dd'T'HH:mm:ss",
+            java.util.Locale.US,
+        ).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+        sdf.parse(cleaned)?.time
+    }.getOrNull()
 }
