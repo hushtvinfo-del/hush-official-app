@@ -98,6 +98,13 @@ fun TVPlayerScreen(
         ExoPlayer.Builder(ctx).build().apply {
             setMediaItem(MediaItem.fromUri(currentUrl))
             prepare()
+            // Subtitles default OFF on every new playback session.
+            // Some HLS / MKV streams come with embedded text tracks
+            // that ExoPlayer would otherwise auto-select. Users want
+            // explicit opt-in via the CC chip per-session.
+            trackSelectionParameters = trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                .build()
             // Live channels auto-play. VOD will wait for the Resume-prompt
             // decision below (if there's saved progress) or auto-play after
             // a brief moment otherwise.
@@ -140,7 +147,11 @@ fun TVPlayerScreen(
                     )
                         .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_SUBRIP)
                         .setLanguage(lang)
-                        .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
+                        // No DEFAULT flag — we explicitly enable below.
+                        // Stays consistent with the "subs OFF until user
+                        // opts in" rule, even though the user *did* opt
+                        // in by tapping Download (handled by clearing
+                        // the disabled flag after prepare).
                         .build(),
                 ),
             )
@@ -148,6 +159,12 @@ fun TVPlayerScreen(
         player.setMediaItem(item, savedPos)
         player.prepare()
         player.playWhenReady = true
+        // Re-enable text tracks so the freshly-loaded SRT actually
+        // shows. The user's intent in tapping Download is "I want subs
+        // now"; future sessions still start with subs off.
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            .build()
     }
 
     // ── Subtitle on/off state for the OSD CC chip ──

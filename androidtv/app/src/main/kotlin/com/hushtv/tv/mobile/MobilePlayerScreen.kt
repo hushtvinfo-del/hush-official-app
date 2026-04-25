@@ -135,6 +135,13 @@ fun MobilePlayerScreen(
         ExoPlayer.Builder(ctx).build().apply {
             setMediaItem(MediaItem.fromUri(currentStreamUrl))
             prepare()
+            // Subtitles default OFF on every new playback session.
+            // Some HLS / MKV streams come with embedded text tracks
+            // that ExoPlayer would otherwise auto-select. Users want
+            // explicit opt-in via the CC chip per-session.
+            trackSelectionParameters = trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                .build()
             playWhenReady = true
         }
     }
@@ -169,7 +176,6 @@ fun MobilePlayerScreen(
                     )
                         .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_SUBRIP)
                         .setLanguage(lang)
-                        .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
                         .build(),
                 ),
             )
@@ -177,6 +183,11 @@ fun MobilePlayerScreen(
         player.setMediaItem(item, savedPos)
         player.prepare()
         player.playWhenReady = true
+        // Re-enable text tracks so the freshly-loaded SRT shows. Future
+        // sessions still default to off.
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            .build()
     }
 
     // Subtitle on/off state for the CC chip in the controls bar.
