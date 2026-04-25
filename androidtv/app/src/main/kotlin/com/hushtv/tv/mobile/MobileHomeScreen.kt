@@ -424,6 +424,10 @@ private fun ChannelHistoryTile(
     poster: String?,
     onClick: () -> Unit,
 ) {
+    // Fixed-size grid tile so the rail looks like a uniform strip
+    // regardless of channel name length. Title is hard-clamped to one
+    // line (was 2, so "US: BET HER WEST" wrapped and the card grew
+    // taller than its neighbours).
     Column(
         Modifier
             .width(110.dp)
@@ -441,19 +445,20 @@ private fun ChannelHistoryTile(
                 .background(Color(0xFF1F2937)),
             contentAlignment = Alignment.Center,
         ) {
+            // Initials are drawn unconditionally so a slow/failed image
+            // never leaves an empty tile. Image overlays on success.
+            Text(
+                name.take(2).uppercase(),
+                color = Color(0xFF94A3B8),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Black,
+            )
             if (!poster.isNullOrBlank()) {
                 AsyncImage(
                     model = poster,
                     contentDescription = name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit,
-                )
-            } else {
-                Text(
-                    name.take(2).uppercase(),
-                    color = Color(0xFF94A3B8),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Black,
                 )
             }
         }
@@ -463,7 +468,7 @@ private fun ChannelHistoryTile(
             color = Color.White,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             lineHeight = 13.sp,
         )

@@ -295,6 +295,16 @@ private fun MobileVodCard(card: MediaCard, onClick: () -> Unit) {
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF1F2937)),
         ) {
+            // Initials fallback drawn behind the poster so a slow/failed
+            // image never leaves an empty tile.
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    card.title.take(2).uppercase(),
+                    color = Color(0xFF64748B),
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
             if (!card.poster.isNullOrBlank()) {
                 coil.compose.AsyncImage(
                     model = card.poster,
@@ -302,23 +312,18 @@ private fun MobileVodCard(card: MediaCard, onClick: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 )
-            } else {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        card.title.take(2).uppercase(),
-                        color = Color(0xFF64748B),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black,
-                    )
-                }
             }
         }
         Spacer(Modifier.height(6.dp))
+        // minLines=2 reserves the same vertical space for every card so
+        // the grid stays a clean rectangle even when titles vary 1–2
+        // lines. maxLines=2 caps the bleed.
         Text(
             card.title,
             color = Color.White,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
+            minLines = 2,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             lineHeight = 14.sp,
