@@ -311,9 +311,16 @@ private fun RequestDetailContent(
 @Composable
 private fun DetailHero(req: ContentRequestApi.Request) {
     val ctx = LocalContext.current
-    val meta = remember(req.id, req.additionalInfo) {
-        com.hushtv.tv.data.RequestMetaStore.get(ctx, req.id)
-            ?: com.hushtv.tv.data.RequestMetaStore.parseTag(req.additionalInfo)
+    var meta by remember(req.id) {
+        mutableStateOf(
+            com.hushtv.tv.data.RequestMetaStore.get(ctx, req.id)
+                ?: com.hushtv.tv.data.RequestMetaStore.parseTag(req.additionalInfo)
+        )
+    }
+    LaunchedEffect(req.id) {
+        if (meta == null) {
+            meta = RequestPosterResolver.resolveOrFetch(ctx, req)
+        }
     }
     Row(
         Modifier
@@ -365,10 +372,11 @@ private fun DetailHero(req: ContentRequestApi.Request) {
                 fontWeight = FontWeight.Black,
                 lineHeight = 26.sp,
             )
-            if (meta?.releaseYear != null) {
+            val metaYear = meta?.releaseYear
+            if (metaYear != null) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    meta.releaseYear.toString(),
+                    metaYear.toString(),
                     color = TextSecondary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,

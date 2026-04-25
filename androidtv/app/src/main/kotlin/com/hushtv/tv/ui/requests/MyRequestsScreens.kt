@@ -334,13 +334,19 @@ private fun RequestRow(
 ) {
     val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
-    // Resolve TMDB metadata for this request — local cache first,
-    // then fall back to parsing the [TMDB ...] tag the app embeds in
-    // additional_info at submit time. Either way the user sees a
-    // proper poster on the row instead of a generic emoji.
-    val meta = remember(r.id, r.additionalInfo) {
-        com.hushtv.tv.data.RequestMetaStore.get(ctx, r.id)
-            ?: com.hushtv.tv.data.RequestMetaStore.parseTag(r.additionalInfo)
+    // Resolve TMDB metadata for this request — local cache, then
+    // tag-parse, then a lazy retroactive TMDB title-search for
+    // legacy requests that predate the TMDB picker.
+    var meta by remember(r.id) {
+        mutableStateOf(
+            com.hushtv.tv.data.RequestMetaStore.get(ctx, r.id)
+                ?: com.hushtv.tv.data.RequestMetaStore.parseTag(r.additionalInfo)
+        )
+    }
+    LaunchedEffect(r.id) {
+        if (meta == null) {
+            meta = RequestPosterResolver.resolveOrFetch(ctx, r)
+        }
     }
     val cleanedAdditionalInfo = remember(r.additionalInfo) {
         com.hushtv.tv.data.RequestMetaStore.stripTag(r.additionalInfo)
@@ -396,10 +402,11 @@ private fun RequestRow(
                             }
                         }
                     }
-                    if (meta?.releaseYear != null) {
+                    val metaYear = meta?.releaseYear
+                    if (metaYear != null) {
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            meta.releaseYear.toString(),
+                            metaYear.toString(),
                             color = TextSecondary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,

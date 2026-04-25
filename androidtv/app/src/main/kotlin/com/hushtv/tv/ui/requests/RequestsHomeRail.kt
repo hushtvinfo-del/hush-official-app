@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -259,8 +260,18 @@ private fun BackdropRequestCard(
         ContentRequestApi.Status.NOT_FOUND ->
             Triple(Color(0xCCEF4444), Color.White, Color(0xFFF87171))
     }
-    val meta = remember(req.id, req.additionalInfo) {
-        RequestMetaStore.get(ctx, req.id) ?: RequestMetaStore.parseTag(req.additionalInfo)
+    // Lazy TMDB metadata — falls back to retroactive title search
+    // for legacy requests that pre-date the TMDB picker. The state
+    // var triggers recomposition when the network call resolves.
+    var meta by remember(req.id) {
+        mutableStateOf(
+            RequestMetaStore.get(ctx, req.id) ?: RequestMetaStore.parseTag(req.additionalInfo)
+        )
+    }
+    LaunchedEffect(req.id) {
+        if (meta == null) {
+            meta = RequestPosterResolver.resolveOrFetch(ctx, req)
+        }
     }
 
     Box(
@@ -375,14 +386,15 @@ private fun BackdropRequestCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (meta?.releaseYear != null || req.type == "series") {
+            val metaYear = meta?.releaseYear
+            if (metaYear != null || req.type == "series") {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     buildString {
                         append(if (req.type == "series") "Series" else "Movie")
-                        if (meta?.releaseYear != null) {
+                        if (metaYear != null) {
                             append(" · ")
-                            append(meta.releaseYear)
+                            append(metaYear)
                         }
                     },
                     color = Color(0xCCFFFFFF),

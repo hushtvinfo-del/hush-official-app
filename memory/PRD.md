@@ -1,6 +1,58 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.40.0 — 2026-04-25 (versionCode 194)  ⬅ LATEST  (non-mandatory)
+## v1.40.1 — 2026-04-25 (versionCode 195)  ⬅ LATEST  (non-mandatory)
+
+**Retroactive TMDB metadata for legacy requests + TV cinematic
+rail.** User screenshot showed the new mobile cards fell back to
+the amber gradient (no backdrop) for requests that were submitted
+*before* v1.39.0 introduced TMDB metadata capture. Plus the TV
+main menu was still on the old emoji/poster icon design.
+
+### Fix 1 — Lazy retroactive TMDB lookup
+NEW `RequestPosterResolver.resolveOrFetch(ctx, request)` —
+walks a 3-stage ladder:
+1. Local `RequestMetaStore` cache (instant)
+2. `[TMDB ...]` tag parsed out of `additional_info` (sub-ms)
+3. **Best-effort TMDB title-search** — uses
+   `searchMoviesList` / `searchTvList`, takes the most popular
+   hit, persists to `RequestMetaStore` so subsequent renders are
+   instant. De-duped via a process-scoped mutex so a cold home
+   screen with 5 backdrop cards doesn't fan out 5 identical
+   TMDB calls.
+
+Wired into all three render paths via `LaunchedEffect`:
+- `BackdropRequestCard` (home rail — both Mobile + TV)
+- `RequestRow` (My Requests list)
+- `DetailHero` (request detail screen)
+
+State is managed via `mutableStateOf` so when the network call
+resolves, the card recomposes with the actual TMDB backdrop.
+Free-text requests for obscure titles that TMDB doesn't index
+still fall back gracefully to the status-tinted gradient.
+
+### Fix 2 — TV cinematic rail
+The new `BackdropRequestCard` already supports `isTv = true` (auto-
+scales to 320 × 180 px and uses TV-friendly focus visuals). The
+TV main menu integration in `TVMainMenuScreen` was already passing
+`isTv = true`, so the cinematic 16:9 backdrop cards now render
+automatically on TV — no other changes needed.
+
+### Files
+- NEW `ui/requests/RequestPosterResolver.kt` — retroactive TMDB
+  fetch with mutex-guarded de-dup
+- `ui/requests/RequestsHomeRail.kt` — `BackdropRequestCard` now
+  uses lazy `var meta` + `LaunchedEffect`
+- `ui/requests/MyRequestsScreens.kt` — `RequestRow` same upgrade
+- `ui/requests/RequestDetailScreen.kt` — `DetailHero` same upgrade
+
+### Build + deploy
+- `versionCode 194 → 195`, `versionName "1.40.0" → "1.40.1"`.
+- BUILD SUCCESSFUL. APK md5 `5b7e5a51f8e594a01fa8fdf54a8e38cb`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Non-mandatory.
+
+---
+
+## v1.40.0 — 2026-04-25 (versionCode 194)
 
 **Cinematic Home rail redesign + repositioning.** User feedback:
 the rail sat between the header and the pager dots, visually
