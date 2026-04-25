@@ -46,8 +46,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import com.hushtv.tv.ui.theme.Cyan
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Mobile player — touch-first.
@@ -237,6 +239,51 @@ fun MobilePlayerScreen(
                 .setPreferredTextLanguage(preferredLang)
                 .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
                 .build()
+        }
+    }
+
+    // ── Auto-load best English SRT on first CC tap ──
+    var autoLoading by remember { mutableStateOf(false) }
+    var autoLoadFailed by remember { mutableStateOf(false) }
+
+    fun autoLoadEnglishSrt() {
+        val q = subtitleQuery ?: return
+        if (downloadedSrt != null || autoLoading) return
+        autoLoading = true
+        autoLoadFailed = false
+        scope.launch {
+            val file = withContext(Dispatchers.IO) {
+                runCatching {
+                    val hits = if (q.kind == "episode" &&
+                        q.seasonNumber != null && q.episodeNumber != null
+                    ) {
+                        com.hushtv.tv.data.OpenSubtitlesApi.searchEpisode(
+                            seriesTitle = q.title,
+                            seasonNumber = q.seasonNumber,
+                            episodeNumber = q.episodeNumber,
+                            languages = listOf("en"),
+                        )
+                    } else {
+                        com.hushtv.tv.data.OpenSubtitlesApi.searchMovie(
+                            title = q.title,
+                            year = q.year,
+                            languages = listOf("en"),
+                        )
+                    }
+                    val best = hits.sortedWith(
+                        compareByDescending<com.hushtv.tv.data.OpenSubtitlesApi.Hit> { it.fromTrusted }
+                            .thenByDescending { it.downloadCount }
+                    ).firstOrNull() ?: return@runCatching null
+                    com.hushtv.tv.data.OpenSubtitlesApi.fetchSrt(ctx, best.fileId)
+                }.getOrNull()
+            }
+            autoLoading = false
+            if (file != null) {
+                downloadedSrt = file
+                downloadedSrtLang = "en"
+            } else {
+                autoLoadFailed = true
+            }
         }
     }
 
@@ -588,19 +635,19 @@ fun MobilePlayerScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (subtitleQuery != null) {
-                            // CC chip — single state with three modes:
-                            //   • No SRT loaded yet → tap opens download dialog.
-                            //   • SRT loaded ON     → tap turns it OFF, long-press
-                            //                         re-opens dialog to swap language.
-                            //   • SRT loaded OFF    → tap turns it back ON.
-                            //
-                            // Long-press always opens the download dialog so the
-                            // user can swap to a different SRT at any time.
+                            // CC chip:
+                            //   • No SRT yet → tap auto-downloads top English.
+                            //   • SRT loaded → tap toggles ON/OFF.
+                            //   • Long-press → opens manual picker dialog
+                            //     (so users can choose a different language
+                            //     or a different release).
                             val srtIsAi = downloadedSrt?.name?.startsWith("ai_") == true
                             val chipLabel = when {
+                                autoLoading -> "CC…"
                                 subsAvailable && subsEnabled && srtIsAi -> "CC · AI"
                                 subsAvailable && subsEnabled -> "CC ON"
                                 subsAvailable -> "CC OFF"
+                                autoLoadFailed -> "CC ?"
                                 else -> "CC"
                             }
                             val chipActive = subsAvailable && subsEnabled
@@ -611,11 +658,14 @@ fun MobilePlayerScreen(
                                         if (chipActive) Cyan.copy(alpha = 0.22f)
                                         else Color(0x22FFFFFF),
                                     )
-                                    .pointerInput(subsAvailable, subsEnabled) {
+                                    .pointerInput(subsAvailable, subsEnabled, autoLoading) {
                                         detectTapGestures(
                                             onTap = {
-                                                if (subsAvailable) toggleSubtitles()
-                                                else showSubtitleDownload = true
+                                                when {
+                                                    autoLoading -> Unit
+                                                    subsAvailable -> toggleSubtitles()
+                                                    else -> autoLoadEnglishSrt()
+                                                }
                                                 controlsTick++
                                             },
                                             onLongPress = {

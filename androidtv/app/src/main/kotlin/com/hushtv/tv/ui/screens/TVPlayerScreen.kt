@@ -229,6 +229,62 @@ fun TVPlayerScreen(
         }
     }
 
+    // ── Auto-load best English SRT when user taps CC ────────────────
+    // When the player launches, the user should be able to tap CC and
+    // get captions in one shot — no dialog, no language picker — same
+    // way every other media app handles it (Netflix, Plex, etc.).
+    //
+    // This kicks off an async OpenSubtitles search for the most-popular
+    // English SRT and downloads it. The CC chip flips from "CC" to a
+    // small spinner state while loading, then to "CC ON" once the SRT
+    // is side-loaded. Long-press / Player Options → Subtitles still
+    // opens the manual picker for users who want a different language.
+    val autoLoadScope = rememberCoroutineScope()
+    var autoLoading by remember { mutableStateOf(false) }
+    var autoLoadFailed by remember { mutableStateOf(false) }
+
+    fun autoLoadEnglishSrt() {
+        val q = subtitleQuery ?: return
+        if (downloadedSrt != null || autoLoading) return
+        autoLoading = true
+        autoLoadFailed = false
+        autoLoadScope.launch {
+            val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val hits = if (q.kind == "episode" &&
+                        q.seasonNumber != null && q.episodeNumber != null
+                    ) {
+                        com.hushtv.tv.data.OpenSubtitlesApi.searchEpisode(
+                            seriesTitle = q.title,
+                            seasonNumber = q.seasonNumber,
+                            episodeNumber = q.episodeNumber,
+                            languages = listOf("en"),
+                        )
+                    } else {
+                        com.hushtv.tv.data.OpenSubtitlesApi.searchMovie(
+                            title = q.title,
+                            year = q.year,
+                            languages = listOf("en"),
+                        )
+                    }
+                    // Prefer trusted uploaders, then most-downloaded.
+                    val best = hits.sortedWith(
+                        compareByDescending<com.hushtv.tv.data.OpenSubtitlesApi.Hit> { it.fromTrusted }
+                            .thenByDescending { it.downloadCount }
+                    ).firstOrNull() ?: return@runCatching null
+                    com.hushtv.tv.data.OpenSubtitlesApi.fetchSrt(ctx, best.fileId)
+                }.getOrNull()
+            }
+            autoLoading = false
+            if (file != null) {
+                downloadedSrt = file
+                downloadedSrtLang = "en"
+            } else {
+                autoLoadFailed = true
+            }
+        }
+    }
+
     // Thumbnail preview extractor for scrubber (VOD only, MP4/MKV only).
     // The extractor is created lazily and its HTTP handshake runs on
     // Dispatchers.IO — NEVER on the composition thread, because
@@ -1118,26 +1174,29 @@ fun TVPlayerScreen(
                             // on the matching pane so focus lands right where
                             // the user clicked.
                             // Local helper — the AI fallback writes its
-                            // SRT cache files with an "ai_" prefix, so the
-                            // chip can show a tiny "AI" badge whenever the
-                            // active subtitle came from Whisper rather than
-                            // a human-curated OpenSubtitles SRT or an
-                            // embedded English track.
+                            // SRT cache files with an "ai_" prefix. We no
+                            // longer use AI fallback, but keep the helper
+                            // in case future subtitle providers ever flag
+                            // their files differently.
                             val srtIsAi = downloadedSrt?.name?.startsWith("ai_") == true
                             OsdChipButton(
                                 icon = Icons.Default.ClosedCaption,
                                 label = when {
+                                    autoLoading -> "CC…"
                                     subsAvailable && subsEnabled && srtIsAi -> "CC · AI"
                                     subsAvailable && subsEnabled -> "CC ON"
                                     subsAvailable -> "CC OFF"
+                                    autoLoadFailed -> "CC ?"
                                     else -> "CC"
                                 },
                                 onClick = {
-                                    if (subsAvailable) {
-                                        toggleSubtitles()
-                                    } else {
-                                        optionsInitialPane = "subtitle"
-                                        optionsOpen = true
+                                    when {
+                                        autoLoading -> Unit
+                                        subsAvailable -> toggleSubtitles()
+                                        // No SRT yet — try silent auto-download
+                                        // first. User can still hit Player
+                                        // Options → Subtitles for the picker.
+                                        else -> autoLoadEnglishSrt()
                                     }
                                 },
                                 onInteract = { controlsTick++ },
