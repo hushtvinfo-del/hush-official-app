@@ -805,21 +805,15 @@ private suspend fun resolveTarget(
     val tmdbMeta = com.hushtv.tv.data.RequestMetaStore.get(ctx, req.id)
         ?: com.hushtv.tv.data.RequestMetaStore.parseTag(req.additionalInfo)
 
-    // Year-aware library lookup — when the request was made via the
-    // TMDB picker we know the exact release year, so two films with
-    // the same title (e.g. "Aladdin" 1992 vs 2019) resolve correctly.
+    // Best-of-three matcher: TMDB id exact → year-aware → title-only.
+    // See pickBestLibraryMatch in RequestNotificationHost.kt.
     if (LibraryIndex.prime(ctx, playlist)) {
-        LibraryIndex.findBest(req.title, targetKind, tmdbMeta?.releaseYear)?.let { entry ->
+        com.hushtv.tv.ui.requests.pickBestLibraryMatch(
+            playlist, req.title, targetKind, tmdbMeta,
+        )?.let { entry ->
             return when (entry.kind) {
-                "series" -> WatchTarget.Series(
-                    seriesId = entry.seriesId,
-                    title = entry.title,
-                    poster = entry.poster,
-                )
-                else -> WatchTarget.Movie(
-                    streamId = entry.streamId,
-                    title = entry.title,
-                )
+                "series" -> WatchTarget.Series(entry.seriesId, entry.title, entry.poster)
+                else -> WatchTarget.Movie(entry.streamId, entry.title)
             }
         }
         return WatchTarget.NotFound

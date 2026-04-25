@@ -182,6 +182,41 @@ object LibraryIndex {
         return match.value.toIntOrNull()
     }
 
+    /**
+     * Returns every library candidate that could plausibly be
+     * [rawTitle] of [kind]. Used by [TmdbIdResolver] when it needs
+     * to fan out per-title info calls and pick by tmdb_id.
+     *
+     * Same three-pass behaviour as [lookup] but returning the full
+     * list at each step instead of stopping at the first hit.
+     * De-duplicated by streamId / seriesId.
+     */
+    fun findAllCandidates(rawTitle: String, kind: String): List<Entry> {
+        val norm = TitleMatcher.normalize(rawTitle)
+        if (norm.isBlank()) return emptyList()
+        val out = mutableListOf<Entry>()
+        val seen = HashSet<String>()
+        fun add(e: Entry) {
+            val key = if (kind == "movie") "m-${e.streamId}" else "s-${e.seriesId}"
+            if (seen.add(key)) out += e
+        }
+
+        byNormalisedTitle[norm]?.filter { it.kind == kind }?.forEach(::add)
+        val withoutYear = stripTrailingYear(norm)
+        if (withoutYear != norm) {
+            byNormalisedTitle[withoutYear]?.filter { it.kind == kind }?.forEach(::add)
+            byNormalisedTitleNoYear[withoutYear]?.filter { it.kind == kind }?.forEach(::add)
+        }
+        if (norm.length >= 5 && out.isEmpty()) {
+            byNormalisedTitle.entries.forEach { (k, list) ->
+                if (k.contains(norm) || norm.contains(k)) {
+                    list.filter { it.kind == kind }.forEach(::add)
+                }
+            }
+        }
+        return out
+    }
+
     private fun stripTrailingYear(norm: String): String {
         // matches "title 1984" or "title (1984)" — both already lowered
         // by TitleMatcher.normalize(). Removes the year + any leading

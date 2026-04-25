@@ -299,31 +299,18 @@ private suspend fun resolveWatchTarget(
     val pid = playlistId ?: return WatchTarget.NotFound
     val playlist = PlaylistStore.find(ctx, pid) ?: return WatchTarget.NotFound
 
-    // Prefer the library index if it's already primed — its lookup
-    // handles year-aware disambiguation when the request was filed
-    // via TMDB picker. For requests without TMDB metadata, this still
-    // works the same as the legacy title-only matcher.
     val tmdbMeta = com.hushtv.tv.data.RequestMetaStore.get(ctx, req.id)
         ?: com.hushtv.tv.data.RequestMetaStore.parseTag(req.additionalInfo)
-
     val targetKind = if (req.type == "series") "series" else "movie"
 
     if (com.hushtv.tv.data.LibraryIndex.prime(ctx, playlist)) {
-        com.hushtv.tv.data.LibraryIndex
-            .findBest(req.title, targetKind, tmdbMeta?.releaseYear)
-            ?.let { entry ->
-                return when (entry.kind) {
-                    "series" -> WatchTarget.Series(
-                        seriesId = entry.seriesId,
-                        title = entry.title,
-                        poster = entry.poster,
-                    )
-                    else -> WatchTarget.Movie(
-                        streamId = entry.streamId,
-                        title = entry.title,
-                    )
-                }
+        val entry = pickBestLibraryMatch(playlist, req.title, targetKind, tmdbMeta)
+        if (entry != null) {
+            return when (entry.kind) {
+                "series" -> WatchTarget.Series(entry.seriesId, entry.title, entry.poster)
+                else -> WatchTarget.Movie(entry.streamId, entry.title)
             }
+        }
     }
 
     // Fallback path — same logic as before but without year. Only
@@ -360,6 +347,42 @@ private suspend fun resolveWatchTarget(
             title = match.title,
         )
     }
+}
+
+/**
+ * Best-of-three matcher used by every Watch-now resolver. Walks
+ * down the precision ladder:
+ *   1. **TMDB id exact** — fetch `get_vod_info` / `get_series_info`
+ *      for each candidate and pick the entry whose `tmdb_id`
+ *      matches the request's saved TMDB id. Bullet-proof when the
+ *      provider exposes tmdb_id (most premium Xtream lines do).
+ *   2. **Year-aware title match** — when no candidate exposes a
+ *      tmdb_id, prefer the entry whose parsed year matches the
+ *      request's TMDB year (±1 year tolerance).
+ *   3. **Title-only fallback** — `LibraryIndex.lookup`, the original
+ *      behaviour, as a last resort.
+ *
+ * Marked `internal` so the Detail screen can also call it.
+ */
+internal suspend fun pickBestLibraryMatch(
+    playlist: com.hushtv.tv.data.Playlist,
+    requestTitle: String,
+    kind: String,
+    tmdbMeta: com.hushtv.tv.data.RequestMetaStore.Meta?,
+): com.hushtv.tv.data.LibraryIndex.Entry? {
+    val candidates = com.hushtv.tv.data.LibraryIndex.findAllCandidates(requestTitle, kind)
+    if (candidates.isEmpty()) return null
+    if (candidates.size == 1) return candidates.first()
+
+    if (tmdbMeta != null && tmdbMeta.tmdbId > 0) {
+        com.hushtv.tv.data.TmdbIdResolver
+            .pickByTmdbId(playlist, candidates, tmdbMeta.tmdbId)
+            ?.let { return it }
+        // pickByTmdbId returns null only when no candidate exposed a
+        // tmdb_id; fall through to year-aware matching.
+    }
+    return com.hushtv.tv.data.LibraryIndex
+        .findBest(requestTitle, kind, tmdbMeta?.releaseYear)
 }
 
 @Composable

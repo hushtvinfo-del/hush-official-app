@@ -1,6 +1,60 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.39.1 — 2026-04-25 (versionCode 191)  ⬅ LATEST  (non-mandatory)
+## v1.39.2 — 2026-04-25 (versionCode 192)  ⬅ LATEST  (non-mandatory)
+
+**Bullet-proof Watch-now matching via provider tmdb_id.** Last
+piece of the request-flow puzzle: when the LibraryIndex returns
+multiple candidates for a request title, we now confirm correctness
+by hitting Xtream's per-title `get_vod_info` / `get_series_info`
+endpoint and exact-comparing `tmdb_id` against the request's saved
+TMDB id. Provider metadata wins over title heuristics — fixes edge
+cases where titles look completely different (e.g. provider
+labelled the file "Le Fabuleux Destin d'Amélie Poulain" but the
+user requested "Amélie").
+
+### Match precision ladder
+1. **TMDB id exact** — `XtreamApi.getVodInfo` / `getSeriesInfo`
+   per candidate (parallel async), pick the one whose `tmdb_id`
+   matches the request's saved TMDB id. Process-cached so repeat
+   resolves are instant.
+2. **Year-aware title match** — when no candidate exposes a
+   tmdb_id (free Xtream lines often don't), prefer the entry whose
+   parsed year matches the request's TMDB year (±1 tolerance).
+   Same logic as v1.39.1.
+3. **Title-only fallback** — `LibraryIndex.lookup`, the original
+   behaviour, last resort.
+
+### Files
+- NEW `data/TmdbIdResolver.kt` — per-stream-id /
+  per-series-id TMDB id resolver with in-memory cache + parallel
+  pickByTmdbId fan-out
+- `data/LibraryIndex.kt` — added `findAllCandidates(title, kind)`
+  returning every plausible match (de-duped by streamId/seriesId)
+- `ui/requests/RequestNotificationHost.kt` — extracted the
+  matching logic into `pickBestLibraryMatch` (internal so the
+  detail screen can call it too); banner Watch-now uses the new
+  three-stage matcher
+- `ui/requests/RequestDetailScreen.kt` — same upgrade for the
+  detail screen Watch-now button
+
+### Build + deploy
+- `versionCode 191 → 192`, `versionName "1.39.1" → "1.39.2"`.
+- BUILD SUCCESSFUL. APK md5 `7af9f13491a036cacca8003112533ff5`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Shipped as
+  **non-mandatory**.
+
+### Note
+The TMDB picker's "Already in your library" badge still uses the
+year-aware matcher (`findBest`) — fan-out via `vod_info` per hit
+during type-as-you-go would be too slow on every keystroke. The
+bullet-proof check fires only when the user taps a result that
+the year heuristic flagged as "already available", and on Watch-
+now from the detail/banner. This is the right perf/correctness
+tradeoff.
+
+---
+
+## v1.39.1 — 2026-04-25 (versionCode 191)
 
 **Year-aware library matching for Watch-now and the picker.**
 Quick refinement on top of v1.39.0: when a request has saved TMDB
