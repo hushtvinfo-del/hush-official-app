@@ -219,8 +219,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     // Focus requester for the first card in each page. Nav-Down lands on
     // the first card of whichever page is currently showing.
     val firstCwFocus = remember { FocusRequester() }
-    val firstRequestsFocus = remember { FocusRequester() }
-    val firstHubFocus = remember { FocusRequester() }
     val firstDiscoveryFocus = remember { FocusRequester() }
     val firstSsMoviesFocus = remember { FocusRequester() }
     val firstSsSeriesFocus = remember { FocusRequester() }
@@ -257,128 +255,15 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val continueEntries = continueHandle.entries
     val hasCw = continueEntries.isNotEmpty()
 
-    // Outstanding-requests fetch — drives the dedicated REQUESTS
-    // page in the home pager. Refetched on each main-menu mount via
-    // RequestCache (which is also populated by the notification host
-    // and the My Requests list).
     val ctxLocal = androidx.compose.ui.platform.LocalContext.current
-    var homeRequests by remember {
-        mutableStateOf(com.hushtv.tv.data.RequestCache.all())
-    }
-    // Bumping triggers a recomposition with the latest hidden-set
-    // applied — long-press → "Remove" hides via RequestHiddenStore
-    // and signals here so the row vanishes immediately.
-    var hideTick by remember { mutableStateOf(0) }
-    // Resume-tick: bumped every time the activity returns to the
-    // foreground (e.g. user backs out of the player). Drives BOTH
-    // the request refetch and the channel-history snapshot below so
-    // anything mutated while a sub-screen was in front becomes
-    // visible immediately.
-    var resumeTick by remember(playlistId) { mutableStateOf(0) }
-    val hubLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
-    DisposableEffect(hubLifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, ev ->
-            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) resumeTick += 1
-        }
-        hubLifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { hubLifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-    LaunchedEffect(playlistId, hideTick, resumeTick) {
-        if (com.hushtv.tv.data.UserContactStore.get(ctxLocal) == null) return@LaunchedEffect
-        // Re-apply the hidden filter to the existing cache snapshot.
-        homeRequests = com.hushtv.tv.data.RequestHiddenStore
-            .filterVisible(ctxLocal, com.hushtv.tv.data.RequestCache.all())
-        if (com.hushtv.tv.data.RequestCache.all().isNotEmpty() &&
-            com.hushtv.tv.data.RequestCache.ageMs() < 60_000
-        ) return@LaunchedEffect
-        kotlinx.coroutines.delay(800)
-        runCatching {
-            val res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.hushtv.tv.data.ContentRequestApi.listRequests(ctxLocal, limit = 20)
-            }
-            if (res is com.hushtv.tv.data.ContentRequestApi.ListResult.Success) {
-                val visible = com.hushtv.tv.data.RequestHiddenStore
-                    .filterVisible(ctxLocal, res.requests)
-                com.hushtv.tv.data.RequestCache.put(visible)
-                homeRequests = visible
-            }
-        }
-    }
-    val requestsForPage = remember(homeRequests) {
-        val now = System.currentTimeMillis()
-        val twentyFourHoursMs = 24L * 60L * 60L * 1000L
-        homeRequests
-            .filter { r ->
-                when (r.status) {
-                    com.hushtv.tv.data.ContentRequestApi.Status.PENDING,
-                    com.hushtv.tv.data.ContentRequestApi.Status.IN_PROGRESS -> {
-                        // Always show open requests so the user can
-                        // see what they've asked for at a glance.
-                        true
-                    }
-                    else -> {
-                        // Terminal states (added / already_available /
-                        // not_found) auto-hide once the user has had
-                        // 24 h to digest the result. Falls back to
-                        // createdDate if the gateway didn't echo an
-                        // updatedDate. Bad timestamps → keep the
-                        // request visible (safer than hiding it).
-                        val ts = parseIsoTimestamp(r.updatedDate.ifBlank { r.createdDate })
-                        ts == null || (now - ts) < twentyFourHoursMs
-                    }
-                }
-            }
-            .sortedByDescending { it.updatedDate.ifBlank { it.createdDate } }
-            .take(15)
-    }
-    val hasRequests = requestsForPage.isNotEmpty()
-
-    // Channel history snapshot (last 5 entries with metadata).
-    // Refreshed every time the screen comes back to the foreground (e.g.
-    // after the user exits the player) so newly-zapped channels appear
-    // without requiring an app restart. continueHandle.entries already
-    // covers VOD progress; resumeTick (declared above) adds a separate
-    // tick for the RecentChannelStore which is only mutated by the
-    // live player.
-    val channelHistory = remember(continueHandle.entries, playlistId, resumeTick) {
-        com.hushtv.tv.data.RecentChannelStore.getAll(ctxLocal, playlistId)
-            .mapNotNull { id ->
-                com.hushtv.tv.data.RecentChannelStore.getMeta(ctxLocal, playlistId, id)
-                    ?.let { id to it }
-            }
-            .take(5)
-    }
-    val hasChannelHistory = channelHistory.isNotEmpty()
-    // Hub is the new combined "FOR YOU" page — visible whenever any
-    // of channel history / continue watching / requests has content.
-    val hasHub = hasChannelHistory || hasCw || hasRequests
 
     var currentPage by remember {
-        // Sticky: initialised once on first composition and not reset
-        // when flags flip later. Prevents the user from being yanked
-        // back to the hub after they navigated to DISCOVERY.
-        mutableStateOf(if (hasHub) "hub" else "discovery")
+        // Hub was removed from TV by user request; default landing page
+        // is now Discovery, regardless of cache state.
+        mutableStateOf("discovery")
     }
-    // One-shot auto-promotion to "hub":
-    // hasHub may be false on first composition (caches not yet warm —
-    // RequestCache empty + RecentChannelStore not yet read on cold
-    // launch) and become true a few hundred ms later when the request
-    // fetch completes. Without this, the user sees Discovery with no
-    // way to find their Hub. This LaunchedEffect waits for hasHub to
-    // flip to true exactly once and, if the user is still parked on
-    // the initial Discovery landing page, swaps them to the Hub.
-    var hubAutoSwitchedOnce by remember { mutableStateOf(false) }
-    LaunchedEffect(hasHub) {
-        if (hasHub && !hubAutoSwitchedOnce && currentPage == "discovery") {
-            currentPage = "hub"
-            hubAutoSwitchedOnce = true
-        } else if (hasHub) {
-            hubAutoSwitchedOnce = true
-        }
-    }
-    val pageOrder = remember(hasHub) {
+    val pageOrder = remember {
         buildList {
-            if (hasHub) add("hub")
             add("discovery")
             add("ss_movies")
             add("ss_series")
@@ -478,11 +363,9 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         //   "ss_movies"  → Streaming Services (Movies)
         //   "ss_series"  → Streaming Services (Series)
         //
-        // If CW drops to empty while the user is on the CW page (they
-        // long-pressed remove), bounce them to Discovery.
-        LaunchedEffect(hasCw) {
-            if (!hasCw && currentPage == "cw") currentPage = "discovery"
-        }
+        // No "cw" page exists in pageOrder anymore (Hub was removed).
+        // CwPage / hasCw plumbing is left in place only because the
+        // Discovery page composable still accepts the parameter.
 
         // Streaming service state (loaded lazily on composition).
         val ssMovies = com.hushtv.tv.ui.screens.home.rememberStreamingServices("movie")
@@ -574,23 +457,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 label = "home-pager",
             ) { page ->
                 when (page) {
-                    "hub" -> com.hushtv.tv.ui.requests.TVHomeHubPage(
-                        playlistId = playlistId,
-                        nav = nav,
-                        channelHistory = channelHistory,
-                        cwEntries = continueEntries,
-                        requests = requestsForPage,
-                        firstItemFocus = firstHubFocus,
-                        onUpFromTop = showNavAndFocus,
-                        onDownFromBottom = {
-                            val idx = pageOrder.indexOf("hub")
-                            if (idx >= 0 && idx + 1 < pageOrder.size) {
-                                currentPage = pageOrder[idx + 1]
-                            }
-                        },
-                        onRemoveCw = { removePromptFor = it },
-                        onRequestHidden = { hideTick += 1 },
-                    )
                     "ss_movies" -> SsPage(
                         playlistId = playlistId,
                         nav = nav,
@@ -671,9 +537,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                             focusedDiscoveryCard = it
                             heroSection = "discovery"
                         },
-                        onUpFromRow = {
-                            if (hasCw) currentPage = "cw" else showNavAndFocus()
-                        },
+                        onUpFromRow = { showNavAndFocus() },
                         onDownFromRow = { currentPage = "ss_movies" },
                     )
                 }
@@ -685,9 +549,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 kotlinx.coroutines.delay(320)
                 runCatching {
                     when (currentPage) {
-                        "hub" -> if (hasHub) firstHubFocus.requestFocus()
-                        "requests" -> if (hasRequests) firstRequestsFocus.requestFocus()
-                        "cw" -> if (hasCw) firstCwFocus.requestFocus()
                         "discovery" -> firstDiscoveryFocus.requestFocus()
                         "collections" -> firstCollectionsFocus.requestFocus()
                         "ss_movies" -> firstSsMoviesFocus.requestFocus()
@@ -722,9 +583,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 com.hushtv.tv.ui.screens.home.HomePage(
                     key = k,
                     label = when (k) {
-                        "hub" -> "FOR YOU"
-                        "requests" -> "REQUESTS"
-                        "cw" -> "WATCHING"
                         "discovery" -> "DISCOVER"
                         "collections" -> "COLLECT"
                         "ss_movies" -> "MOVIES"
@@ -765,9 +623,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         ev.key == androidx.compose.ui.input.key.Key.DirectionDown
                     ) {
                         val target = when (navDownTarget) {
-                            "hub" -> firstHubFocus
-                            "requests" -> firstRequestsFocus
-                            "cw" -> firstCwFocus
                             "collections" -> firstCollectionsFocus
                             "ss_movies" -> firstSsMoviesFocus
                             "ss_series" -> firstSsSeriesFocus

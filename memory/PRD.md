@@ -1,5 +1,37 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.3 — 2026-04-26 (versionCode 203)  ⬅ LATEST  (MANDATORY)
+
+**TV "For You" Home hub removed.** User reported the unified hub
+(Channel History / Continue Watching / My Requests) was visually ugly
+and not working well in practice. Pulled it from TV entirely; will
+redesign from scratch later. Mobile hub is unaffected.
+
+### Changes
+- `TVMainMenuScreen.kt`
+  - Default `currentPage` is hard-coded to `"discovery"` (no more
+    sticky hub / auto-promote).
+  - `pageOrder` no longer contains `"hub"`.
+  - Dropped all hub-specific state: `homeRequests`, `requestsForPage`,
+    `hasRequests`, `channelHistory`, `hasChannelHistory`, `hasHub`,
+    `hubAutoSwitchedOnce`, `hideTick`, `resumeTick`, the
+    `LifecycleEventObserver` for ON_RESUME ticks, the request-fetch
+    `LaunchedEffect`, and the auto-promote-to-hub `LaunchedEffect`.
+  - Dropped the `"hub"` branch from the home pager `AnimatedContent`,
+    plus all `firstHubFocus` / `firstRequestsFocus` plumbing and the
+    `"FOR YOU"` / `"REQUESTS"` / `"WATCHING"` page-indicator labels.
+  - Discovery-row UP-from-row now goes straight to the top nav (no
+    longer tries to navigate to a non-existent `"cw"` page).
+- Deleted `ui/requests/TVHomeHubPage.kt` outright.
+- `RecentChannelStore` writes added in v1.42.1 to `TVPlayerScreen.kt`
+  are kept — they're harmless and will be useful again when a new
+  TV home experience is built.
+
+### Build + deploy
+- `versionCode 202 → 203`, `versionName "1.42.2" → "1.42.3"`.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.2 — 2026-04-26 (versionCode 202)  ⬅ LATEST  (MANDATORY)
 
 **VOD player focus regression fix.** Users could no longer D-pad UP
