@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.hushtv.tv.data.ContentRequestApi
+import com.hushtv.tv.data.LibraryIndex
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.RequestCache
@@ -800,6 +801,31 @@ private suspend fun resolveTarget(
 ): WatchTarget {
     val playlist = PlaylistStore.find(ctx, playlistId) ?: return WatchTarget.NotFound
     val targetKind = if (req.type == "series") "series" else "movie"
+
+    val tmdbMeta = com.hushtv.tv.data.RequestMetaStore.get(ctx, req.id)
+        ?: com.hushtv.tv.data.RequestMetaStore.parseTag(req.additionalInfo)
+
+    // Year-aware library lookup — when the request was made via the
+    // TMDB picker we know the exact release year, so two films with
+    // the same title (e.g. "Aladdin" 1992 vs 2019) resolve correctly.
+    if (LibraryIndex.prime(ctx, playlist)) {
+        LibraryIndex.findBest(req.title, targetKind, tmdbMeta?.releaseYear)?.let { entry ->
+            return when (entry.kind) {
+                "series" -> WatchTarget.Series(
+                    seriesId = entry.seriesId,
+                    title = entry.title,
+                    poster = entry.poster,
+                )
+                else -> WatchTarget.Movie(
+                    streamId = entry.streamId,
+                    title = entry.title,
+                )
+            }
+        }
+        return WatchTarget.NotFound
+    }
+
+    // Fallback for when LibraryIndex prime fails (Xtream outage).
     val pool: List<MediaCard> = runCatching {
         XtreamApi.getAllStreams(playlist.host, playlist.username, playlist.password, targetKind)
     }.getOrNull() ?: return WatchTarget.NotFound

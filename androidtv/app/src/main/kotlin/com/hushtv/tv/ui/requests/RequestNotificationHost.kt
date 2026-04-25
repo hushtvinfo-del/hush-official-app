@@ -299,7 +299,36 @@ private suspend fun resolveWatchTarget(
     val pid = playlistId ?: return WatchTarget.NotFound
     val playlist = PlaylistStore.find(ctx, pid) ?: return WatchTarget.NotFound
 
+    // Prefer the library index if it's already primed — its lookup
+    // handles year-aware disambiguation when the request was filed
+    // via TMDB picker. For requests without TMDB metadata, this still
+    // works the same as the legacy title-only matcher.
+    val tmdbMeta = com.hushtv.tv.data.RequestMetaStore.get(ctx, req.id)
+        ?: com.hushtv.tv.data.RequestMetaStore.parseTag(req.additionalInfo)
+
     val targetKind = if (req.type == "series") "series" else "movie"
+
+    if (com.hushtv.tv.data.LibraryIndex.prime(ctx, playlist)) {
+        com.hushtv.tv.data.LibraryIndex
+            .findBest(req.title, targetKind, tmdbMeta?.releaseYear)
+            ?.let { entry ->
+                return when (entry.kind) {
+                    "series" -> WatchTarget.Series(
+                        seriesId = entry.seriesId,
+                        title = entry.title,
+                        poster = entry.poster,
+                    )
+                    else -> WatchTarget.Movie(
+                        streamId = entry.streamId,
+                        title = entry.title,
+                    )
+                }
+            }
+    }
+
+    // Fallback path — same logic as before but without year. Only
+    // hit when the LibraryIndex prime failed (e.g. transient Xtream
+    // outage). Keeps Watch-now working in degraded conditions.
     val pool: List<MediaCard> = runCatching {
         XtreamApi.getAllStreams(playlist.host, playlist.username, playlist.password, targetKind)
     }.getOrNull() ?: return WatchTarget.NotFound
@@ -307,7 +336,6 @@ private suspend fun resolveWatchTarget(
     val needle = TitleMatcher.normalize(req.title)
     if (needle.isBlank()) return WatchTarget.NotFound
 
-    // Three-pass match: exact normalised → contains → word-prefix.
     val exact = pool.firstOrNull { TitleMatcher.normalize(it.title) == needle }
     val contains = exact ?: pool.firstOrNull {
         val n = TitleMatcher.normalize(it.title)

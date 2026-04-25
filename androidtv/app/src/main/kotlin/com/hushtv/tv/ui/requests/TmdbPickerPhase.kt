@@ -147,11 +147,16 @@ fun TmdbPickerPhase(
                 else TmdbService.searchMoviesList(q)
             }
             // Decorate each hit with library-membership so the UI
-            // knows which ones to show "ALREADY AVAILABLE" on.
+            // knows which ones to show "ALREADY AVAILABLE" on. Year-
+            // aware so a 1991 remake doesn't false-match a 2024
+            // original (or vice versa) — keeps the Already-Available
+            // promise honest.
             hits = raw.map { hit ->
                 val title = hit.title ?: hit.name ?: ""
                 val libKind = if (type == "series") "series" else "movie"
-                val libHit = LibraryIndex.lookup(title, libKind)
+                val year = parseYear(hit.release_date)
+                    ?: parseYear(hit.first_air_date)
+                val libHit = LibraryIndex.findBest(title, libKind, year)
                 TmdbHitWithLibrary(hit = hit, libraryEntry = libHit)
             }
             lastSearchedQuery = q

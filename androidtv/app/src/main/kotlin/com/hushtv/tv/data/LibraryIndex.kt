@@ -33,6 +33,8 @@ object LibraryIndex {
         val seriesId: Int,          // series id       (0 for movies)
         val title: String,
         val poster: String?,
+        /** Best-effort year parsed from the title (e.g. "Title (2024)"). */
+        val releaseYear: Int?,
     )
 
     @Volatile private var primedKey: String? = null
@@ -81,6 +83,7 @@ object LibraryIndex {
                         seriesId = if (kind == "series") c.seriesId else 0,
                         title = raw,
                         poster = c.poster,
+                        releaseYear = extractYear(raw),
                     )
                     mainBucket.getOrPut(full) { mutableListOf() } += e
                     val withoutYear = stripTrailingYear(full)
@@ -128,6 +131,55 @@ object LibraryIndex {
             }?.value?.firstOrNull { it.kind == kind }?.let { return it }
         }
         return null
+    }
+
+    /**
+     * Year-aware best-match lookup. Used by Watch-now resolvers when
+     * the request has TMDB metadata — multiple library candidates
+     * with the same normalised title (e.g. "Aladdin" 1992 vs.
+     * "Aladdin" 2019) are disambiguated by [preferredYear].
+     *
+     * Selection rules, in order:
+     *   1. Exact normalised-title hit AND year matches → win
+     *   2. Exact normalised-title hit AND year within ±1 → win (TMDB
+     *      and Xtream sometimes disagree by a calendar year)
+     *   3. Year-stripped normalised hit AND year matches → win
+     *   4. Whatever the plain [lookup] returns (current behaviour)
+     */
+    fun findBest(
+        rawTitle: String,
+        kind: String,
+        preferredYear: Int?,
+    ): Entry? {
+        if (preferredYear == null) return lookup(rawTitle, kind)
+        val norm = TitleMatcher.normalize(rawTitle)
+        if (norm.isBlank()) return null
+
+        val exactBucket = byNormalisedTitle[norm]?.filter { it.kind == kind }.orEmpty()
+        exactBucket.firstOrNull { it.releaseYear == preferredYear }?.let { return it }
+        exactBucket.firstOrNull {
+            it.releaseYear != null && kotlin.math.abs(it.releaseYear - preferredYear) <= 1
+        }?.let { return it }
+
+        val withoutYear = stripTrailingYear(norm)
+        if (withoutYear != norm) {
+            val noYearBucket =
+                byNormalisedTitleNoYear[withoutYear]?.filter { it.kind == kind }.orEmpty()
+            noYearBucket.firstOrNull { it.releaseYear == preferredYear }?.let { return it }
+            noYearBucket.firstOrNull {
+                it.releaseYear != null && kotlin.math.abs(it.releaseYear - preferredYear) <= 1
+            }?.let { return it }
+        }
+
+        // Fall through to the title-only matcher.
+        return lookup(rawTitle, kind)
+    }
+
+    /** Extract the first 4-digit year from a raw title — handles
+     *  "Title (2024)", "Title 2024", "Title - 2024 - HD" etc. */
+    private fun extractYear(rawTitle: String): Int? {
+        val match = Regex("\\b(19|20)\\d{2}\\b").find(rawTitle) ?: return null
+        return match.value.toIntOrNull()
     }
 
     private fun stripTrailingYear(norm: String): String {

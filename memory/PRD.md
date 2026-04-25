@@ -1,6 +1,41 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.39.0 — 2026-04-25 (versionCode 190)  ⬅ LATEST  (MANDATORY)
+## v1.39.1 — 2026-04-25 (versionCode 191)  ⬅ LATEST  (non-mandatory)
+
+**Year-aware library matching for Watch-now and the picker.**
+Quick refinement on top of v1.39.0: when a request has saved TMDB
+metadata, the "Watch now" deep-link in the detail screen and the
+status notification banner now disambiguate using the release year.
+Two films that share a normalised title (Aladdin 1992 vs 2019,
+Dune 1984 vs 2021, Tron 1982 vs 2010) used to coin-flip; now the
+right one wins.
+
+### What changed
+- `LibraryIndex.Entry.releaseYear` — best-effort year parsed at
+  prime time from the raw library title (handles "Title (2024)",
+  "Title 2024", "Title - 2024 - HD")
+- `LibraryIndex.findBest(title, kind, preferredYear)` — new
+  selector that prefers exact-year matches, then ±1 year, then
+  falls back to the existing title-only matcher
+- `RequestNotificationHost.resolveWatchTarget` — primed via
+  `LibraryIndex` (with year) instead of one-off
+  `XtreamApi.getAllStreams + TitleMatcher` lookup; falls back to
+  the legacy path only when the library prime fails
+- `RequestDetailScreen.resolveTarget` — same upgrade
+- `TmdbPickerPhase` — "Already in your library" badge now uses
+  `findBest` with the TMDB hit's year, so a 1991 film never false-
+  matches a 2024 remake just because the titles normalise the same
+
+### Build + deploy
+- `versionCode 190 → 191`, `versionName "1.39.0" → "1.39.1"`.
+- BUILD SUCCESSFUL. APK md5 `5e072f61128a2ea6063ecefe73be4f01`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Shipped as
+  **non-mandatory** — v1.39.0 was already mandatory and pulled
+  everyone forward.
+
+---
+
+## v1.39.0 — 2026-04-25 (versionCode 190)
 
 **Smarter Request flow — TMDB-powered picker + library
 deduplication.** User wanted a Franchises-style search experience
