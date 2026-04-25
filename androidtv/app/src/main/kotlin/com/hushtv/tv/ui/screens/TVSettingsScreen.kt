@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Report
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -131,6 +132,12 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 "DIAGNOSTICS",
                 color = TextSecondary, fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+            )
+            SettingsCard(
+                title = "Speed test",
+                subtitle = "Check your network against the streaming tiers",
+                icon = { Icon(Icons.Default.Speed, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                onClick = { nav.navigate("speedtest") },
             )
             SettingsCard(
                 title = "View crash log",

@@ -85,6 +85,7 @@ fun MobileApp() {
                 MobileSearchScreen(nav, bs.arguments?.getString("playlistId") ?: "")
             }
             composable("mdiag") { MobileDiagnosticsScreen(nav) }
+            composable("mspeed") { MobileSpeedTestScreen(nav) }
             composable(
                 route = "mseries/{playlistId}/{seriesId}/{name}?poster={poster}",
                 arguments = listOf(

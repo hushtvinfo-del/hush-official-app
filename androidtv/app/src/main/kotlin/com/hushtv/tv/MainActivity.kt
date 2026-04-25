@@ -39,6 +39,7 @@ import com.hushtv.tv.ui.screens.TVMovieDetailScreen
 import com.hushtv.tv.ui.screens.TVPlayerScreen
 import com.hushtv.tv.ui.screens.TVSeriesDetailScreen
 import com.hushtv.tv.ui.screens.TVSettingsScreen
+import com.hushtv.tv.ui.screens.TVSpeedTestScreen
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.HushTVTheme
 import com.hushtv.tv.update.UpdateDialog
@@ -188,6 +189,7 @@ private fun AppContent() {
             TVSettingsScreen(nav, bs.arguments?.getString("playlistId") ?: "")
         }
         composable("diag") { TVDiagnosticsScreen(nav) }
+        composable("speedtest") { TVSpeedTestScreen(nav) }
         composable("player/{playlistId}/{streamUrl}/{channelName}/{isLive}") { bs ->
             TVPlayerScreen(
                 nav,
