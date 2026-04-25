@@ -160,18 +160,30 @@ fun TVPlayerScreen(
         player.setMediaItem(item, savedPos)
         player.prepare()
         player.playWhenReady = true
-        // Re-enable text tracks so the freshly-loaded SRT actually
-        // shows. The user's intent in tapping Download is "I want subs
-        // now"; future sessions still start with subs off.
+        // Re-enable text tracks AND set preferred language to the
+        // SRT's language so ExoPlayer picks our side-loaded SRT over
+        // any embedded foreign text tracks baked into the IPTV stream.
+        // Without setPreferredTextLanguage, ExoPlayer would happily
+        // select an embedded Dutch / Danish track over our English SRT
+        // because embedded tracks come first in the source order.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            .setPreferredTextLanguage(lang)
+            .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
             .build()
     }
 
     // ── Subtitle on/off state for the OSD CC chip ──
     // Subscribe to Player.Listener.onTracksChanged so the chip shows
-    // up only when there's actually a text track to toggle, and
-    // reflects the current enabled/disabled state in real time.
+    // up only when there's a *user-relevant* text track to toggle.
+    //
+    // "User-relevant" means:
+    //   • the user has explicitly side-loaded an SRT (downloadedSrt), OR
+    //   • the stream has an embedded English text track.
+    // Embedded foreign-language tracks (e.g. Dutch / Danish baked into
+    // the HLS stream) are ignored here so a tap on CC routes to the
+    // download dialog instead of silently toggling on a track the user
+    // can't read.
     var subsAvailable by remember { mutableStateOf(false) }
     var subsEnabled by remember { mutableStateOf(false) }
     DisposableEffect(player) {
@@ -180,7 +192,13 @@ fun TVPlayerScreen(
                 val textGroups = tracks.groups.filter {
                     it.type == androidx.media3.common.C.TRACK_TYPE_TEXT
                 }
-                subsAvailable = textGroups.isNotEmpty()
+                val hasUserSrt = downloadedSrt != null
+                val hasEnglishEmbedded = textGroups.any { grp ->
+                    (0 until grp.length).any { i ->
+                        grp.getTrackFormat(i).language?.lowercase()?.startsWith("en") == true
+                    }
+                }
+                subsAvailable = hasUserSrt || hasEnglishEmbedded
                 subsEnabled = textGroups.any { grp ->
                     (0 until grp.length).any { i -> grp.isTrackSelected(i) }
                 }
@@ -199,19 +217,15 @@ fun TVPlayerScreen(
                 .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
                 .build()
         } else {
-            // Re-enable. ExoPlayer auto-selects the default-flagged
-            // track (the SRT we side-loaded), or the first available
-            // group if no DEFAULT exists.
-            val firstGroup = player.currentTracks.groups
-                .firstOrNull { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
-            val builder = params.buildUpon()
+            // Re-enable. Strongly prefer the language of the user-loaded
+            // SRT (or "en" if none) so ExoPlayer doesn't fall through
+            // to a foreign embedded track baked into the IPTV stream.
+            val preferredLang = downloadedSrtLang ?: "en"
+            player.trackSelectionParameters = params.buildUpon()
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-            if (firstGroup != null) {
-                builder.setOverrideForType(
-                    androidx.media3.common.TrackSelectionOverride(firstGroup.mediaTrackGroup, 0)
-                )
-            }
-            player.trackSelectionParameters = builder.build()
+                .setPreferredTextLanguage(preferredLang)
+                .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+                .build()
         }
     }
 

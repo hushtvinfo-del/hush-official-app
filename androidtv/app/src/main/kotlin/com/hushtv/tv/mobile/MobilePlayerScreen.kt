@@ -184,14 +184,21 @@ fun MobilePlayerScreen(
         player.setMediaItem(item, savedPos)
         player.prepare()
         player.playWhenReady = true
-        // Re-enable text tracks so the freshly-loaded SRT shows. Future
-        // sessions still default to off.
+        // Re-enable text tracks AND prefer the SRT's language so
+        // ExoPlayer picks our side-loaded SRT over any embedded
+        // foreign text track baked into the IPTV stream.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            .setPreferredTextLanguage(lang)
+            .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
             .build()
     }
 
     // Subtitle on/off state for the CC chip in the controls bar.
+    // Embedded foreign-language tracks (Dutch/Danish baked into HLS)
+    // are ignored — only user-acquired SRTs or embedded English count
+    // as "available" so the CC chip routes to the download dialog
+    // when only foreign embedded tracks exist.
     var subsAvailable by remember { mutableStateOf(false) }
     var subsEnabled by remember { mutableStateOf(false) }
     DisposableEffect(player) {
@@ -200,7 +207,13 @@ fun MobilePlayerScreen(
                 val textGroups = tracks.groups.filter {
                     it.type == androidx.media3.common.C.TRACK_TYPE_TEXT
                 }
-                subsAvailable = textGroups.isNotEmpty()
+                val hasUserSrt = downloadedSrt != null
+                val hasEnglishEmbedded = textGroups.any { grp ->
+                    (0 until grp.length).any { i ->
+                        grp.getTrackFormat(i).language?.lowercase()?.startsWith("en") == true
+                    }
+                }
+                subsAvailable = hasUserSrt || hasEnglishEmbedded
                 subsEnabled = textGroups.any { grp ->
                     (0 until grp.length).any { i -> grp.isTrackSelected(i) }
                 }
@@ -218,16 +231,12 @@ fun MobilePlayerScreen(
                 .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
                 .build()
         } else {
-            val firstGroup = player.currentTracks.groups
-                .firstOrNull { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
-            val builder = params.buildUpon()
+            val preferredLang = downloadedSrtLang ?: "en"
+            player.trackSelectionParameters = params.buildUpon()
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-            if (firstGroup != null) {
-                builder.setOverrideForType(
-                    androidx.media3.common.TrackSelectionOverride(firstGroup.mediaTrackGroup, 0)
-                )
-            }
-            player.trackSelectionParameters = builder.build()
+                .setPreferredTextLanguage(preferredLang)
+                .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+                .build()
         }
     }
 
