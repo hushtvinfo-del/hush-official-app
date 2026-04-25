@@ -1,6 +1,59 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.37.1 — 2026-04-25 (versionCode 187)  ⬅ LATEST
+## v1.37.2 — 2026-04-25 (versionCode 188)  ⬅ LATEST  (MANDATORY)
+
+**Fix: TV D-pad couldn't navigate the Request Missing Content modal.**
+User report (with on-device photo) showed the modal rendered correctly
+but D-pad input was passing through to the background screen — focus
+moved between Home / Live TV / Movies / Series / Search instead of the
+modal's name field, email field and Continue button. Mobile worked
+fine because touch doesn't traverse focus.
+
+### Root cause
+`RequestContentSheet` rendered as a plain `Box` scrim layered on top of
+the screen via z-order. Compose's focus engine doesn't treat that as
+a focus boundary — D-pad keys still walk the underlying focus tree.
+On top of that, the modal's TypeRadio / ScopeRow / PrimaryButton /
+SecondaryButton / TextOnlyButton used `clickable {}` (touch only) with
+no `.focusable()` modifier, so even if focus had reached the modal
+nothing inside it would have accepted D-pad Enter.
+
+### Fix
+- Wrapped the entire modal in `androidx.compose.ui.window.Dialog`
+  with `usePlatformDefaultWidth = false`. Dialog creates its own
+  window + focus root, so D-pad input is automatically trapped inside.
+  Same pattern the project already uses for `LayoutChooserDialog`,
+  `PinDialog` and `TVChannelActionsDialog`.
+- Replaced every `.clickable {}` on interactive surfaces with
+  `.clickableWithEnter {}` (the project's standard helper that
+  handles KEYCODE_DPAD_CENTER + Enter + NumPadEnter).
+- Added `.focusable()` to TypeRadio, ScopeRow, PrimaryButton,
+  SecondaryButton, TextOnlyButton, and the LabeledField inner Box.
+- Added cyan focus borders + filled-bg-on-focus visuals to every
+  control so users can see exactly where their cursor is.
+- Each phase auto-focuses its first interactive widget on mount via
+  `FocusRequester` + a 220 ms delay (matching the existing TV dialog
+  cadence).
+- BACK on the remote dismisses the dialog (`dismissOnBackPress = true`).
+  `dismissOnClickOutside = false` so accidental overscroll past the
+  scrim doesn't lose data.
+
+### Files
+- `ui/requests/RequestContentSheet.kt` — full refactor (kept the
+  three-phase `Phase.CONTACT/FORM/SUCCESS` flow + every prior style
+  decision; only the focus + D-pad layer changed).
+
+### Build + deploy
+- `versionCode 187 → 188`, `versionName "1.37.1" → "1.37.2"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- APK md5 `71892d79d469478597ddc61a351434a8`, 17.5 MB, live on
+  `https://hushtv.xyz/hushtv.apk`. Shipped as **MANDATORY** so every
+  TV user picks up the fix on next launch — without it the request
+  feature is unreachable on TV.
+
+---
+
+## v1.37.1 — 2026-04-25 (versionCode 187)
 
 **"Your request is in!" notification banner.** Closes the loop on the
 v1.37.0 request feature: when the admin marks a user's request as

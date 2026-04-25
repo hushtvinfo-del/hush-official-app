@@ -2,7 +2,6 @@ package com.hushtv.tv.ui.requests
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +32,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
@@ -39,14 +43,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.hushtv.tv.data.ContentRequestApi
 import com.hushtv.tv.data.UserContactStore
+import com.hushtv.tv.ui.screens.clickableWithEnter
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.SurfaceElev
 import com.hushtv.tv.ui.theme.SurfaceNavy
 import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -54,9 +62,11 @@ import kotlinx.coroutines.withContext
  * Modal for submitting a "Request Missing Content" entry to the
  * HushTV admin API.
  *
- * Single composable used by both TV (D-pad / clicker focus) and
- * Mobile (touch). Centered card layout, ~600 dp max width — safe on
- * both 10-foot displays and phones in portrait.
+ * Wrapped in `Dialog(usePlatformDefaultWidth = false)` so the modal
+ * gets its own focus root and D-pad input can't escape to the
+ * background screen. Every interactive surface uses
+ * [clickableWithEnter] + [focusable] so TV remotes can navigate the
+ * form natively. Touch on mobile still works the same way.
  *
  * Three internal screens, swapped by [Phase]:
  *   • CONTACT  — first-time prompt for name + email; skipped on
@@ -64,15 +74,16 @@ import kotlinx.coroutines.withContext
  *   • FORM     — type (movie/series), pre-filled title, optional
  *                series details, optional notes.
  *   • SUCCESS  — confirmation with "View My Requests" link.
- *   • ERROR    — inline; never an alert dialog (per spec).
+ *
+ * Errors are rendered inline (never in a nested alert dialog).
  *
  * The dialog accepts [presetType] / [presetTitle] / [presetSeason] /
  * [presetEpisode] so callers can pre-fill from the screen the user
  * came from (search query, missing episode, etc.).
  *
  * [onViewMyRequests] navigates to the My Requests screen on success.
- * Caller can pass null on TV/Mobile screens that don't have nav set
- * up yet — the link just won't render.
+ * Caller can pass null on screens that don't have nav set up — the
+ * link just won't render.
  */
 @Composable
 fun RequestContentSheet(
@@ -115,101 +126,110 @@ fun RequestContentSheet(
     var submitError by remember { mutableStateOf<String?>(null) }
     var lastResult by remember { mutableStateOf<ContentRequestApi.SubmitResult.Success?>(null) }
 
-    // Outer scrim — fills the screen and absorbs taps so background
-    // controls don't fire underneath.
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0xEE000000))
-            .clickable(enabled = false) {},
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+        ),
     ) {
-        Column(
+        // Outer scrim — fills the dialog's window. Dialog already
+        // traps focus inside, so the D-pad can't reach the
+        // background screen anymore.
+        Box(
             Modifier
-                .align(Alignment.Center)
-                .widthIn(max = 600.dp)
-                .fillMaxWidth(0.94f)
-                .heightIn(max = 720.dp)
-                .background(SurfaceNavy, RoundedCornerShape(20.dp))
-                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(20.dp))
-                .padding(horizontal = 28.dp, vertical = 26.dp)
-                .verticalScroll(rememberScrollState()),
+                .fillMaxSize()
+                .background(Color(0xEE000000)),
         ) {
-            when (phase) {
-                Phase.CONTACT -> ContactPhase(
-                    name = contactName,
-                    email = contactEmail,
-                    error = contactError,
-                    onName = { contactName = it },
-                    onEmail = { contactEmail = it },
-                    onContinue = {
-                        val n = contactName.trim()
-                        val e = contactEmail.trim()
-                        when {
-                            n.isEmpty() -> contactError = "Please enter your name."
-                            !UserContactStore.isValidEmail(e) ->
-                                contactError = "That doesn't look like a valid email."
-                            else -> {
-                                UserContactStore.set(ctx, n, e)
-                                contactError = null
-                                phase = Phase.FORM
-                            }
-                        }
-                    },
-                    onCancel = onDismiss,
-                )
-                Phase.FORM -> FormPhase(
-                    type = type, onType = { type = it },
-                    title = title, onTitle = { title = it },
-                    seriesScope = seriesScope, onSeriesScope = { seriesScope = it },
-                    seasons = seasons, onSeasons = { seasons = it },
-                    episodes = episodes, onEpisodes = { episodes = it },
-                    notes = notes, onNotes = { notes = it },
-                    submitting = submitting,
-                    error = submitError,
-                    onChangeContact = {
-                        contactError = null
-                        phase = Phase.CONTACT
-                    },
-                    onCancel = onDismiss,
-                    onSubmit = submit@{
-                        val cleanTitle = title.trim()
-                        if (cleanTitle.isEmpty()) {
-                            submitError = "Please enter a title."
-                            return@submit
-                        }
-                        submitting = true
-                        submitError = null
-                        scope.launch {
-                            val res = withContext(Dispatchers.IO) {
-                                ContentRequestApi.submitRequest(
-                                    ctx = ctx,
-                                    type = type,
-                                    title = cleanTitle,
-                                    additionalInfo = notes.trim().ifBlank { null },
-                                    seriesRequestType = if (type == "series") seriesScope else null,
-                                    seasons = if (type == "series" && seriesScope == "specific_episodes")
-                                        seasons.trim().ifBlank { null } else null,
-                                    episodes = if (type == "series" && seriesScope == "specific_episodes")
-                                        episodes.trim().ifBlank { null } else null,
-                                )
-                            }
-                            submitting = false
-                            when (res) {
-                                is ContentRequestApi.SubmitResult.Success -> {
-                                    lastResult = res
-                                    phase = Phase.SUCCESS
+            Column(
+                Modifier
+                    .align(Alignment.Center)
+                    .widthIn(max = 600.dp)
+                    .fillMaxWidth(0.94f)
+                    .heightIn(max = 720.dp)
+                    .background(SurfaceNavy, RoundedCornerShape(20.dp))
+                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 28.dp, vertical = 26.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                when (phase) {
+                    Phase.CONTACT -> ContactPhase(
+                        name = contactName,
+                        email = contactEmail,
+                        error = contactError,
+                        onName = { contactName = it },
+                        onEmail = { contactEmail = it },
+                        onContinue = {
+                            val n = contactName.trim()
+                            val e = contactEmail.trim()
+                            when {
+                                n.isEmpty() -> contactError = "Please enter your name."
+                                !UserContactStore.isValidEmail(e) ->
+                                    contactError = "That doesn't look like a valid email."
+                                else -> {
+                                    UserContactStore.set(ctx, n, e)
+                                    contactError = null
+                                    phase = Phase.FORM
                                 }
-                                is ContentRequestApi.SubmitResult.Error ->
-                                    submitError = res.message
                             }
-                        }
-                    },
-                )
-                Phase.SUCCESS -> SuccessPhase(
-                    title = title.trim().ifEmpty { "your title" },
-                    onClose = onDismiss,
-                    onViewMyRequests = onViewMyRequests,
-                )
+                        },
+                        onCancel = onDismiss,
+                    )
+                    Phase.FORM -> FormPhase(
+                        type = type, onType = { type = it },
+                        title = title, onTitle = { title = it },
+                        seriesScope = seriesScope, onSeriesScope = { seriesScope = it },
+                        seasons = seasons, onSeasons = { seasons = it },
+                        episodes = episodes, onEpisodes = { episodes = it },
+                        notes = notes, onNotes = { notes = it },
+                        submitting = submitting,
+                        error = submitError,
+                        onChangeContact = {
+                            contactError = null
+                            phase = Phase.CONTACT
+                        },
+                        onCancel = onDismiss,
+                        onSubmit = submit@{
+                            val cleanTitle = title.trim()
+                            if (cleanTitle.isEmpty()) {
+                                submitError = "Please enter a title."
+                                return@submit
+                            }
+                            submitting = true
+                            submitError = null
+                            scope.launch {
+                                val res = withContext(Dispatchers.IO) {
+                                    ContentRequestApi.submitRequest(
+                                        ctx = ctx,
+                                        type = type,
+                                        title = cleanTitle,
+                                        additionalInfo = notes.trim().ifBlank { null },
+                                        seriesRequestType = if (type == "series") seriesScope else null,
+                                        seasons = if (type == "series" && seriesScope == "specific_episodes")
+                                            seasons.trim().ifBlank { null } else null,
+                                        episodes = if (type == "series" && seriesScope == "specific_episodes")
+                                            episodes.trim().ifBlank { null } else null,
+                                    )
+                                }
+                                submitting = false
+                                when (res) {
+                                    is ContentRequestApi.SubmitResult.Success -> {
+                                        lastResult = res
+                                        phase = Phase.SUCCESS
+                                    }
+                                    is ContentRequestApi.SubmitResult.Error ->
+                                        submitError = res.message
+                                }
+                            }
+                        },
+                    )
+                    Phase.SUCCESS -> SuccessPhase(
+                        title = title.trim().ifEmpty { "your title" },
+                        onClose = onDismiss,
+                        onViewMyRequests = onViewMyRequests,
+                    )
+                }
             }
         }
     }
@@ -226,6 +246,12 @@ private fun ContactPhase(
     onName: (String) -> Unit, onEmail: (String) -> Unit,
     onContinue: () -> Unit, onCancel: () -> Unit,
 ) {
+    val nameFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(220)
+        runCatching { nameFocus.requestFocus() }
+    }
+
     Text("First, who are you?", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(6.dp))
     Text(
@@ -234,7 +260,7 @@ private fun ContactPhase(
         color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
     )
     Spacer(Modifier.height(20.dp))
-    LabeledField("Your name", name, onName, KeyboardType.Text)
+    LabeledField("Your name", name, onName, KeyboardType.Text, focusRequester = nameFocus)
     Spacer(Modifier.height(12.dp))
     LabeledField("Your email", email, onEmail, KeyboardType.Email)
     if (error != null) {
@@ -261,6 +287,12 @@ private fun FormPhase(
     submitting: Boolean, error: String?,
     onChangeContact: () -> Unit, onCancel: () -> Unit, onSubmit: () -> Unit,
 ) {
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(220)
+        runCatching { firstFocus.requestFocus() }
+    }
+
     Text("Request missing content", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(4.dp))
     Text(
@@ -273,7 +305,10 @@ private fun FormPhase(
         fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        TypeRadio("🎬", "Movie", type == "movie", Modifier.weight(1f)) { onType("movie") }
+        TypeRadio(
+            "🎬", "Movie", type == "movie",
+            modifier = Modifier.weight(1f).focusRequester(firstFocus),
+        ) { onType("movie") }
         TypeRadio("📺", "Series", type == "series", Modifier.weight(1f)) { onType("series") }
     }
 
@@ -343,6 +378,12 @@ private fun SuccessPhase(
     onClose: () -> Unit,
     onViewMyRequests: (() -> Unit)?,
 ) {
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(220)
+        runCatching { firstFocus.requestFocus() }
+    }
+
     Box(
         Modifier
             .fillMaxWidth()
@@ -368,12 +409,20 @@ private fun SuccessPhase(
 
     Spacer(Modifier.height(22.dp))
     if (onViewMyRequests != null) {
-        PrimaryButton(label = "View my requests", enabled = true, loading = false) {
-            onViewMyRequests()
-        }
+        PrimaryButton(
+            label = "View my requests",
+            enabled = true, loading = false,
+            modifier = Modifier.focusRequester(firstFocus),
+        ) { onViewMyRequests() }
         Spacer(Modifier.height(8.dp))
+        SecondaryButton(label = "Close", onClick = onClose)
+    } else {
+        SecondaryButton(
+            label = "Close",
+            onClick = onClose,
+            modifier = Modifier.focusRequester(firstFocus),
+        )
     }
-    SecondaryButton(label = "Close", onClick = onClose)
 }
 
 
@@ -387,6 +436,7 @@ private fun TypeRadio(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    var focused by remember { mutableStateOf(false) }
     Column(
         modifier
             .background(
@@ -394,11 +444,13 @@ private fun TypeRadio(
                 RoundedCornerShape(14.dp),
             )
             .border(
-                if (selected) 2.dp else 1.dp,
-                if (selected) Cyan else Color(0x33FFFFFF),
+                if (focused || selected) 2.dp else 1.dp,
+                if (focused) Cyan else if (selected) Cyan.copy(alpha = 0.7f) else Color(0x33FFFFFF),
                 RoundedCornerShape(14.dp),
             )
-            .clickable(onClick = onClick)
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
             .padding(vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -406,7 +458,7 @@ private fun TypeRadio(
         Spacer(Modifier.height(6.dp))
         Text(
             label,
-            color = if (selected) Cyan else TextPrimary,
+            color = if (selected || focused) Cyan else TextPrimary,
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
         )
@@ -415,6 +467,7 @@ private fun TypeRadio(
 
 @Composable
 private fun ScopeRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
@@ -423,11 +476,13 @@ private fun ScopeRow(label: String, selected: Boolean, onClick: () -> Unit) {
                 RoundedCornerShape(12.dp),
             )
             .border(
-                if (selected) 2.dp else 1.dp,
-                if (selected) Cyan else Color(0x33FFFFFF),
+                if (focused || selected) 2.dp else 1.dp,
+                if (focused) Cyan else if (selected) Cyan.copy(alpha = 0.7f) else Color(0x33FFFFFF),
                 RoundedCornerShape(12.dp),
             )
-            .clickable(onClick = onClick)
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -458,7 +513,9 @@ private fun LabeledField(
     keyboardType: KeyboardType,
     placeholder: String? = null,
     minHeight: androidx.compose.ui.unit.Dp = 56.dp,
+    focusRequester: FocusRequester? = null,
 ) {
+    var focused by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         Text(label, color = TextSecondary, fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold, letterSpacing = 1.5.sp)
@@ -468,7 +525,11 @@ private fun LabeledField(
                 .fillMaxWidth()
                 .heightIn(min = minHeight)
                 .background(SurfaceElev, RoundedCornerShape(10.dp))
-                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(10.dp))
+                .border(
+                    if (focused) 2.dp else 1.dp,
+                    if (focused) Cyan else Color(0x33FFFFFF),
+                    RoundedCornerShape(10.dp),
+                )
                 .padding(horizontal = 14.dp, vertical = 14.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -482,7 +543,10 @@ private fun LabeledField(
                 ),
                 cursorBrush = SolidColor(Cyan),
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                    .onFocusChanged { focused = it.isFocused },
             )
             if (value.isEmpty() && placeholder != null) {
                 Text(placeholder, color = Color(0xFF64748B), fontSize = 14.sp)
@@ -496,17 +560,27 @@ private fun PrimaryButton(
     label: String,
     enabled: Boolean,
     loading: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    var focused by remember { mutableStateOf(false) }
     Box(
-        Modifier
+        modifier
             .fillMaxWidth()
             .height(56.dp)
             .background(
-                if (enabled) Cyan else Cyan.copy(alpha = 0.35f),
+                if (enabled) (if (focused) Color.White else Cyan)
+                else Cyan.copy(alpha = 0.35f),
                 RoundedCornerShape(14.dp),
             )
-            .clickable(enabled = enabled, onClick = onClick),
+            .border(
+                if (focused) 2.dp else 0.dp,
+                if (focused) Cyan else Color.Transparent,
+                RoundedCornerShape(14.dp),
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable(enabled = enabled)
+            .clickableWithEnter { if (enabled) onClick() },
         contentAlignment = Alignment.Center,
     ) {
         if (loading) {
@@ -522,26 +596,54 @@ private fun PrimaryButton(
 }
 
 @Composable
-private fun SecondaryButton(label: String, onClick: () -> Unit) {
+private fun SecondaryButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
     Box(
-        Modifier
+        modifier
             .fillMaxWidth()
             .height(48.dp)
-            .background(SurfaceElev, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .background(
+                if (focused) Cyan.copy(alpha = 0.18f) else SurfaceElev,
+                RoundedCornerShape(12.dp),
+            )
+            .border(
+                if (focused) 2.dp else 0.dp,
+                if (focused) Cyan else Color.Transparent,
+                RoundedCornerShape(12.dp),
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            label,
+            color = if (focused) Cyan else TextPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
 @Composable
 private fun TextOnlyButton(label: String, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .background(
+                if (focused) Cyan.copy(alpha = 0.16f) else Color.Transparent,
+                RoundedCornerShape(8.dp),
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
+            .padding(vertical = 8.dp, horizontal = 8.dp),
     ) {
-        Text(label, color = Cyan, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = Cyan, fontSize = 13.sp,
+            fontWeight = if (focused) FontWeight.Black else FontWeight.SemiBold)
     }
 }
