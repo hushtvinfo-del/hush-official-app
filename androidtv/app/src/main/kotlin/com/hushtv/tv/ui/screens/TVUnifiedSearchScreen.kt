@@ -68,6 +68,7 @@ import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.TitleMatcher
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.XtreamApi
+import com.hushtv.tv.ui.requests.RequestContentSheet
 import com.hushtv.tv.ui.screens.home.MovieCollection
 import com.hushtv.tv.ui.screens.home.TopNavBar
 import com.hushtv.tv.ui.screens.home.TopNavTab
@@ -163,6 +164,9 @@ fun TVUnifiedSearchScreen(
     val firstMovieFocus = remember { FocusRequester() }
     val firstSeriesFocus = remember { FocusRequester() }
     val firstCollFocus = remember { FocusRequester() }
+    val requestCtaFocus = remember { FocusRequester() }
+
+    var showRequestModal by remember { mutableStateOf(false) }
 
     // Auto-focus search on entry.
     LaunchedEffect(Unit) {
@@ -233,7 +237,11 @@ fun TVUnifiedSearchScreen(
                 loading -> CenterNote("Indexing your library…")
                 query.isBlank() -> CenterNote("Type anything — channels, movies, series or franchises.")
                 filtering -> CenterNote("Searching…")
-                totalHits == 0 -> CenterNote("Nothing matches \"$query\".")
+                totalHits == 0 -> NoMatchesState(
+                    query = query.trim(),
+                    requestFocus = requestCtaFocus,
+                    onRequest = { showRequestModal = true },
+                )
                 else -> {
                     androidx.compose.foundation.lazy.LazyColumn(
                         contentPadding = PaddingValues(vertical = 18.dp),
@@ -320,6 +328,23 @@ fun TVUnifiedSearchScreen(
                                 )
                             }
                         }
+                        // Footer: request CTA — even when matches
+                        // exist, give users a way to request the exact
+                        // title they were looking for (e.g. typo, or
+                        // their library doesn't carry that franchise).
+                        item("request") {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 40.dp, vertical = 8.dp),
+                            ) {
+                                RequestCta(
+                                    label = "Don't see it? Request \"${query.trim()}\"",
+                                    focusRequester = requestCtaFocus,
+                                    onClick = { showRequestModal = true },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -335,6 +360,22 @@ fun TVUnifiedSearchScreen(
                 onSettings = { nav.navigate("settings/$playlistId") },
             )
         }
+    }
+
+    // Request modal — full-screen scrim. Renders ON TOP of the search
+    // surface and dismissed via the Cancel / Close buttons inside the
+    // sheet.
+    if (showRequestModal) {
+        val presetType = if (seriesHits.isNotEmpty() && moviesHits.isEmpty()) "series" else "movie"
+        RequestContentSheet(
+            presetType = presetType,
+            presetTitle = query.trim(),
+            onDismiss = { showRequestModal = false },
+            onViewMyRequests = {
+                showRequestModal = false
+                nav.navigate("myrequests")
+            },
+        )
     }
 }
 
@@ -415,6 +456,90 @@ private fun CenterNote(msg: String) {
             color = Color(0xFF94A3B8),
             fontSize = 14.sp,
             fontFamily = Inter,
+        )
+    }
+}
+
+/**
+ * Empty-results state with a primary "Request this title" CTA. Used
+ * when the live search index has zero matches across all four
+ * buckets — users can submit a content request directly from here.
+ */
+@Composable
+private fun NoMatchesState(
+    query: String,
+    requestFocus: FocusRequester,
+    onRequest: () -> Unit,
+) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier.padding(horizontal = 40.dp),
+        ) {
+            Text(
+                "Nothing matches \"$query\".",
+                color = Color(0xFFE2E8F0),
+                fontSize = 18.sp,
+                fontFamily = Inter,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "Want it added? Submit a request and we'll get on it.",
+                color = Color(0xFF94A3B8),
+                fontSize = 13.sp,
+                fontFamily = Inter,
+            )
+            RequestCta(
+                label = "Request \"$query\"",
+                focusRequester = requestFocus,
+                onClick = onRequest,
+            )
+        }
+    }
+    LaunchedEffect(query) {
+        delay(180)
+        runCatching { requestFocus.requestFocus() }
+    }
+}
+
+/**
+ * D-pad-focusable cyan pill that opens the request modal. Mirrors the
+ * primary CTA styling used elsewhere in the TV UI.
+ */
+@Composable
+private fun RequestCta(
+    label: String,
+    focusRequester: FocusRequester,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(24.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(48.dp)
+            .background(if (focused) Cyan else Cyan.copy(alpha = 0.85f), shape)
+            .border(
+                width = if (focused) 2.dp else 0.dp,
+                color = if (focused) Color.White else Color.Transparent,
+                shape = shape,
+            )
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
+            .padding(horizontal = 22.dp),
+    ) {
+        Text(
+            label,
+            color = Color(0xFF05080F),
+            fontSize = 13.sp,
+            fontFamily = Inter,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

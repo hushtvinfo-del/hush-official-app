@@ -59,6 +59,7 @@ import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.TmdbTv
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamEpisode
+import com.hushtv.tv.ui.requests.RequestContentSheet
 import com.hushtv.tv.ui.theme.Amber
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
@@ -90,6 +91,7 @@ fun TVSeriesDetailScreen(
     var xtreamEpisodesBySeason by remember { mutableStateOf<Map<String, List<XtreamEpisode>>>(emptyMap()) }
     var tmdbTv by remember { mutableStateOf<TmdbTv?>(null) }
     var loading by remember { mutableStateOf(true) }
+    var showRequestModal by remember { mutableStateOf(false) }
 
     // Selected season → fetched TMDB season detail (with episode stills)
     var selectedSeasonNum by remember { mutableStateOf<Int?>(null) }
@@ -406,6 +408,15 @@ fun TVSeriesDetailScreen(
                         )
                     }
                 }
+                Spacer(Modifier.height(16.dp))
+                // Per-season footer CTA — for users whose Xtream
+                // provider is missing one or more episodes from this
+                // season. Pre-fills the request form with the show
+                // name + current season so the user only has to type
+                // which episode is missing.
+                RequestEpisodeCta(
+                    onClick = { showRequestModal = true },
+                )
                 Spacer(Modifier.height(28.dp))
             }
 
@@ -421,6 +432,57 @@ fun TVSeriesDetailScreen(
                 Spacer(Modifier.height(28.dp))
             }
         }
+    }
+
+    // Request modal — full-screen scrim overlay above the series page.
+    if (showRequestModal) {
+        RequestContentSheet(
+            presetType = "series",
+            presetTitle = displayTitle,
+            presetSeason = selectedSeasonNum?.let { "Season $it" }.orEmpty(),
+            onDismiss = { showRequestModal = false },
+            onViewMyRequests = {
+                showRequestModal = false
+                nav.navigate("myrequests")
+            },
+        )
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────── */
+/*  REQUEST EPISODE CTA                                             */
+/* ──────────────────────────────────────────────────────────────── */
+
+@Composable
+private fun RequestEpisodeCta(onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(46.dp)
+            .background(
+                if (focused) Cyan else Cyan.copy(alpha = 0.16f),
+                shape,
+            )
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Color.White else Cyan.copy(alpha = 0.4f),
+                shape = shape,
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
+            .padding(horizontal = 22.dp),
+    ) {
+        Text(
+            "Missing an episode? Request it",
+            color = if (focused) Color(0xFF05080F) else Cyan,
+            fontSize = 13.sp,
+            fontFamily = Inter,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+        )
     }
 }
 

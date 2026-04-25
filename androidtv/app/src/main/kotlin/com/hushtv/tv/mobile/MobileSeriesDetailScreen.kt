@@ -30,6 +30,7 @@ import coil.compose.AsyncImage
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamEpisode
+import com.hushtv.tv.ui.requests.RequestContentSheet
 import com.hushtv.tv.ui.theme.Cyan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -59,6 +60,7 @@ fun MobileSeriesDetailScreen(
     var seasonKeys by remember { mutableStateOf<List<String>>(emptyList()) }
     var episodesBySeason by remember { mutableStateOf<Map<String, List<XtreamEpisode>>>(emptyMap()) }
     var activeSeason by remember { mutableStateOf<String?>(null) }
+    var showRequestModal by remember { mutableStateOf(false) }
 
     LaunchedEffect(playlistId, seriesId) {
         if (playlist == null) { loading = false; return@LaunchedEffect }
@@ -216,6 +218,35 @@ fun MobileSeriesDetailScreen(
                     }
                 }
 
+                // Per-season footer CTA — for users whose Xtream
+                // provider is missing one or more episodes from this
+                // season. Pre-fills the request form with the show
+                // name + season number so the user only has to type
+                // which episode is missing.
+                item {
+                    Spacer(Modifier.height(14.dp))
+                    Box(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(Cyan.copy(alpha = 0.16f))
+                                .clickable { showRequestModal = true }
+                                .padding(horizontal = 18.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "Missing an episode? Request it",
+                                color = Cyan,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                }
+
                 item { Spacer(Modifier.height(16.dp)) }
             }
         }
@@ -234,6 +265,21 @@ fun MobileSeriesDetailScreen(
         ) {
             Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
+    }
+
+    // Request modal — full-screen scrim overlay, dismissed via the
+    // sheet's own Cancel / Close buttons.
+    if (showRequestModal) {
+        RequestContentSheet(
+            presetType = "series",
+            presetTitle = seriesName,
+            presetSeason = currentSeason?.let { "Season $it" }.orEmpty(),
+            onDismiss = { showRequestModal = false },
+            onViewMyRequests = {
+                showRequestModal = false
+                nav.navigate("mrequests")
+            },
+        )
     }
 }
 

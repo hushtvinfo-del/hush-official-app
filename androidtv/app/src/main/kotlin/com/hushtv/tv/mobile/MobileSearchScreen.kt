@@ -40,6 +40,7 @@ import coil.compose.AsyncImage
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
+import com.hushtv.tv.ui.requests.RequestContentSheet
 import com.hushtv.tv.ui.theme.Cyan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -312,10 +313,48 @@ fun MobileSearchScreen(nav: NavController, playlistId: String) {
                             SearchResultRow(c) { onCard(c, playlistId, nav) }
                         }
                     }
+                    // Even when SOME results matched, give the user a
+                    // way to request the exact thing they were looking
+                    // for if the matches don't include it.
+                    item {
+                        Spacer(Modifier.height(20.dp))
+                        Box(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            RequestThisCta(presetTitle = query.trim()) {
+                                showRequestModal = true
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+
+    // Modal overlay — sits above everything else. Blocks the search
+    // surface beneath while the user fills in the form.
+    if (showRequestModal) {
+        // Heuristic: if the active filter is "series" OR there are
+        // already series matches but no movie matches, default the
+        // type radio to "series". Otherwise default to "movie".
+        val presetType = when {
+            filter == "series" -> "series"
+            filter == "movie" -> "movie"
+            series.isNotEmpty() && movies.isEmpty() -> "series"
+            else -> "movie"
+        }
+        RequestContentSheet(
+            presetType = presetType,
+            presetTitle = query.trim(),
+            onDismiss = { showRequestModal = false },
+            onViewMyRequests = {
+                showRequestModal = false
+                nav.navigate("mrequests")
+            },
+        )
+    }
+}
 }
 
 private fun onCard(card: MediaCard, playlistId: String, nav: NavController) {
@@ -449,6 +488,35 @@ private fun SearchResultRow(card: MediaCard, onClick: () -> Unit) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * "Request this title" CTA — primary button that opens the request
+ * sheet pre-filled with whatever the user just typed. Shown both
+ * after a no-results search AND alongside partial matches (in case
+ * the matches don't include the exact thing the user wanted).
+ */
+@Composable
+private fun RequestThisCta(presetTitle: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(22.dp))
+            .background(Cyan)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (presetTitle.isBlank()) "Request missing content"
+            else "Request \"$presetTitle\"",
+            color = Color(0xFF05080F),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 0.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

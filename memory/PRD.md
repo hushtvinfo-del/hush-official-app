@@ -1,5 +1,89 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.37.0 — 2026-04-25 (versionCode 186)  ⬅ LATEST
+
+**Request Missing Content** — full feature shipped. Users who can't find
+a movie or a specific episode can submit a request straight from the
+app. The request is POSTed to the HushTV admin gateway
+(`https://hushtv.com/api/functions/hushtvapiGateway`) using the
+`htv_FIe0…` API key and surfaces in the admin dashboard alongside an
+auto-saved customer email/name.
+
+### Where the user can request
+- **Mobile Search**: when a query has zero matches, a primary "Request
+  '<query>'" pill appears under the empty state. When matches exist,
+  the same pill renders as a footer (in case the matches don't include
+  the exact thing the user wanted).
+- **TV Search** (`TVUnifiedSearchScreen.kt`): same two trigger spots,
+  D-pad-focusable cyan pill that auto-receives focus on the empty
+  state.
+- **Mobile Series Detail**: a "Missing an episode? Request it" cyan
+  chip is appended below every season's episode list. Pre-fills the
+  modal with the show name + currently-selected season.
+- **TV Series Detail**: identical D-pad-focusable chip in the same
+  spot. Pre-fills the modal with the show name + season.
+- **Settings → My content requests** (Mobile + TV): list view of all
+  requests with status badges (Pending · In Progress · Already
+  Available · Added · Not Found) and the admin's response when set.
+
+### One-time contact prompt
+The first time a user opens the request modal, they're asked for their
+name + email. Both go to `UserContactStore` (SharedPreferences) and
+are reused on every subsequent submit. They can edit them via
+"Change contact info" inside the modal.
+
+### Files
+- NEW `data/ContentRequestApi.kt` — REST client + `Status` enum +
+  result sealed types (`SubmitResult`, `ListResult`).
+- NEW `data/UserContactStore.kt` — name/email persistence + RFC-style
+  email validation.
+- NEW `ui/requests/RequestContentSheet.kt` — three-phase modal
+  (Contact → Form → Success), reusable on both TV and Mobile.
+- NEW `ui/requests/MyRequestsScreens.kt` — `MyRequestsList` shared
+  composable + `TVMyRequestsScreen` / `MobileMyRequestsScreen`
+  wrappers.
+- `mobile/MobileSearchScreen.kt` — wired no-results CTA + footer CTA +
+  modal overlay.
+- `ui/screens/TVUnifiedSearchScreen.kt` — same.
+- `mobile/MobileSeriesDetailScreen.kt` — per-season "Request missing
+  episode" CTA + modal overlay.
+- `ui/screens/TVSeriesDetailScreen.kt` — same (D-pad focusable).
+- `mobile/MobileSettingsScreen.kt` — "My content requests" entry.
+- `ui/screens/TVSettingsScreen.kt` — "My content requests" entry under
+  the DIAGNOSTICS group.
+- `MainActivity.kt` — `composable("myrequests") { TVMyRequestsScreen
+  (nav) }` route.
+- `mobile/MobileApp.kt` — `composable("mrequests") { MobileMyRequests
+  Screen(nav) }` route.
+
+### API contract (verified live on 2026-04-25)
+- `POST https://hushtv.com/api/functions/hushtvapiGateway`
+- Headers: `Content-Type: application/json`, `X-API-Key: htv_FIe0…`
+- `createContentRequest` body: `{action, customer_email, customer_name,
+  type, title, priority, additional_info?, series_request_type?,
+  seasons?, episodes?}` → `{success, request_id, status, message}`
+- `getContentRequests` body: `{action, customer_email, limit}` →
+  `{success, count, requests:[…]}`
+- Smoke-test confirmed: created request `69ece614d72261e63259b77c`
+  successfully and read it back through the same gateway.
+
+### Build + deploy
+- `versionCode 185 → 186`, `versionName "1.36.1" → "1.37.0"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- APK md5 `57097a0f6d0ba665cbf31c54c99e3545`, 17.5 MB, live on
+  `https://hushtv.xyz/hushtv.apk`. Shipped as **MANDATORY** so every
+  user receives the new feature on next launch.
+
+### Backlog after v1.37.0
+- **P2** Picture-in-Picture (TV + Mobile)
+- **P2** Xtream Catch-up / Archive (`tv_archive=1` → timeshift URL)
+- **P2** "Re-request" / status-detail dialog on My Requests rows
+- **P3** Push-style toast or notification when a request flips to
+  `added` so users come back to watch it
+- **P3** Re-evaluate Gemini AI Search
+
+---
+
 ## Original problem statement
 
 I have a React web app on GitHub that includes an Android TV interface. I need a
