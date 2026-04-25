@@ -1117,9 +1117,17 @@ fun TVPlayerScreen(
                             // Secondary control cluster — opens options menu
                             // on the matching pane so focus lands right where
                             // the user clicked.
+                            // Local helper — the AI fallback writes its
+                            // SRT cache files with an "ai_" prefix, so the
+                            // chip can show a tiny "AI" badge whenever the
+                            // active subtitle came from Whisper rather than
+                            // a human-curated OpenSubtitles SRT or an
+                            // embedded English track.
+                            val srtIsAi = downloadedSrt?.name?.startsWith("ai_") == true
                             OsdChipButton(
                                 icon = Icons.Default.ClosedCaption,
                                 label = when {
+                                    subsAvailable && subsEnabled && srtIsAi -> "CC · AI"
                                     subsAvailable && subsEnabled -> "CC ON"
                                     subsAvailable -> "CC OFF"
                                     else -> "CC"

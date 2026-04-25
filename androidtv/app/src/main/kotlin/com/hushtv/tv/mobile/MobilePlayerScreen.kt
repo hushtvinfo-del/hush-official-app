@@ -596,7 +596,9 @@ fun MobilePlayerScreen(
                             //
                             // Long-press always opens the download dialog so the
                             // user can swap to a different SRT at any time.
+                            val srtIsAi = downloadedSrt?.name?.startsWith("ai_") == true
                             val chipLabel = when {
+                                subsAvailable && subsEnabled && srtIsAi -> "CC · AI"
                                 subsAvailable && subsEnabled -> "CC ON"
                                 subsAvailable -> "CC OFF"
                                 else -> "CC"
