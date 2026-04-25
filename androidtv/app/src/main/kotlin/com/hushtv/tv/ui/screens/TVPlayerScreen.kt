@@ -56,13 +56,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
-import com.hushtv.tv.ai.PcmTapAudioProcessor
-import com.hushtv.tv.ai.WhisperServerEngine
 import com.hushtv.tv.data.EpgService
 import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.MediaCard
@@ -97,50 +94,10 @@ fun TVPlayerScreen(
     var currentName by remember { mutableStateOf(channelName) }
     var currentNumber by remember { mutableStateOf(if (NavState.currentChannelIndex >= 0) NavState.currentChannelIndex + 1 else 0) }
 
-    // ── AI Captions plumbing — PCM tap lives inside the audio renderer
-    //    pipeline and pumps decoded frames to WhisperServerEngine. Must
-    //    be created BEFORE the ExoPlayer build so we can install a
-    //    custom RenderersFactory that slots it into the audio sink.
-    val pcmTap = remember { PcmTapAudioProcessor() }
-    var aiCaptionsEnabled by rememberSaveable { mutableStateOf(false) }
-    val aiCaptionText by WhisperServerEngine.text.collectAsState()
-
     val player = remember {
-        val renderersFactory = object : DefaultRenderersFactory(ctx) {
-            override fun buildAudioSink(
-                context: android.content.Context,
-                enableFloatOutput: Boolean,
-                enableAudioTrackPlaybackParams: Boolean,
-            ): androidx.media3.exoplayer.audio.AudioSink {
-                // Default sink with our PCM tap prepended to the
-                // processor chain. Pass-through mode is unaffected
-                // because the tap is a no-op on unsupported formats.
-                return androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf<androidx.media3.common.audio.AudioProcessor>(pcmTap))
-                    .setEnableFloatOutput(enableFloatOutput)
-                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                    .build()
-            }
-        }
-        ExoPlayer.Builder(ctx, renderersFactory).build().apply {
+        ExoPlayer.Builder(ctx).build().apply {
             setMediaItem(MediaItem.fromUri(currentUrl))
             prepare()
-            // Disable audio offload so the PCM processor chain (our
-            // caption tap) actually runs. Offload routes encoded
-            // audio straight to the DSP, completely bypassing our
-            // processors → captions never got any samples.
-            trackSelectionParameters = trackSelectionParameters
-                .buildUpon()
-                .setAudioOffloadPreferences(
-                    androidx.media3.common.TrackSelectionParameters
-                        .AudioOffloadPreferences.Builder()
-                        .setAudioOffloadMode(
-                            androidx.media3.common.TrackSelectionParameters
-                                .AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED,
-                        )
-                        .build(),
-                )
-                .build()
             // Live channels auto-play. VOD will wait for the Resume-prompt
             // decision below (if there's saved progress) or auto-play after
             // a brief moment otherwise.
@@ -149,39 +106,48 @@ fun TVPlayerScreen(
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
 
-    // Lazy model prepare — kicks off in the background as soon as the
-    // player starts so the model is ready the first time the user
-    // enables AI captions. No-op on subsequent calls.
-    val captionScope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
-        WhisperServerEngine.prepare(ctx)
+    // ── OpenSubtitles plumbing ──────────────────────────────────────
+    // The detail screen stashes the title / season / episode in
+    // [SubtitleSearchContext] right before navigating here. We consume
+    // it once on launch and keep it for the duration of this player
+    // session (so user can re-open the dialog after dismissing it
+    // without losing context). VOD entry points without rich metadata
+    // (search, browse, home rails) fall back to channel title.
+    val subtitleQuery = remember {
+        com.hushtv.tv.data.SubtitleSearchContext.consume()
+            ?: if (!isLive) com.hushtv.tv.data.SubtitleSearchContext.Query(
+                title = channelName,
+                kind = "movie",
+            ) else null
     }
+    var showSubtitleDownload by remember { mutableStateOf(false) }
+    var downloadedSrt by remember { mutableStateOf<java.io.File?>(null) }
+    var downloadedSrtLang by remember { mutableStateOf<String?>(null) }
 
-    // Wire/un-wire the tap depending on user toggle.
-    DisposableEffect(aiCaptionsEnabled) {
-        if (aiCaptionsEnabled) {
-            pcmTap.onPcm = { bytes, len -> WhisperServerEngine.onPcmFrame(bytes, len) }
-            // We don't know the rate until the sink configures the tap,
-            // but the processor exposes it. Poll once briefly.
-            captionScope.launch {
-                repeat(30) {
-                    val rate = pcmTap.tapSampleRate
-                    val ch = pcmTap.tapChannelCount
-                    if (rate > 0 && ch > 0) {
-                        WhisperServerEngine.start(captionScope, rate, ch, ctx)
-                        return@launch
-                    }
-                    kotlinx.coroutines.delay(200)
-                }
-            }
-        } else {
-            pcmTap.onPcm = null
-            WhisperServerEngine.stop()
-        }
-        onDispose {
-            pcmTap.onPcm = null
-            WhisperServerEngine.stop()
-        }
+    // Whenever a fresh SRT is downloaded, swap the player's MediaItem
+    // to one that includes the SRT as a side-loaded text track.
+    // Position is preserved so the user doesn't lose their place.
+    LaunchedEffect(downloadedSrt, downloadedSrtLang, currentUrl) {
+        val srt = downloadedSrt ?: return@LaunchedEffect
+        val lang = downloadedSrtLang ?: "en"
+        val savedPos = player.currentPosition
+        val item = androidx.media3.common.MediaItem.Builder()
+            .setUri(currentUrl)
+            .setSubtitleConfigurations(
+                listOf(
+                    androidx.media3.common.MediaItem.SubtitleConfiguration.Builder(
+                        android.net.Uri.fromFile(srt),
+                    )
+                        .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_SUBRIP)
+                        .setLanguage(lang)
+                        .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
+                        .build(),
+                ),
+            )
+            .build()
+        player.setMediaItem(item, savedPos)
+        player.prepare()
+        player.playWhenReady = true
     }
 
     // Thumbnail preview extractor for scrubber (VOD only, MP4/MKV only).
@@ -808,67 +774,6 @@ fun TVPlayerScreen(
                     }
                 }
 
-                // ── AI caption overlay ──
-                if (aiCaptionsEnabled) {
-                    val engineState by WhisperServerEngine.state.collectAsState()
-                    // Placeholder is transient — we show it for a brief
-                    // moment after the user enables captions to reassure
-                    // them it's working, then fade it out. If a real
-                    // caption arrives it disappears immediately.
-                    var showPlaceholder by remember { mutableStateOf(false) }
-                    LaunchedEffect(aiCaptionsEnabled) {
-                        if (aiCaptionsEnabled) {
-                            showPlaceholder = true
-                            delay(4_000)
-                            showPlaceholder = false
-                        } else {
-                            showPlaceholder = false
-                        }
-                    }
-                    LaunchedEffect(aiCaptionText) {
-                        if (aiCaptionText.isNotBlank()) showPlaceholder = false
-                    }
-
-                    val overlayText: String? = when {
-                        aiCaptionText.isNotBlank() -> aiCaptionText
-                        engineState == WhisperServerEngine.EngineState.ERROR ->
-                            "AI captions unavailable on this stream"
-                        engineState == WhisperServerEngine.EngineState.PREPARING ->
-                            "Connecting to AI server…"
-                        showPlaceholder -> "Listening · any language → English"
-                        else -> null
-                    }
-                    if (overlayText != null) {
-                        Box(
-                            Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = if (showControls) 220.dp else 56.dp)
-                                .padding(horizontal = 64.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                Modifier
-                                    .background(
-                                        Color(0xCC000000),
-                                        RoundedCornerShape(10.dp),
-                                    )
-                                    .padding(horizontal = 18.dp, vertical = 10.dp),
-                            ) {
-                                Text(
-                                    overlayText,
-                                    color = if (aiCaptionText.isNotBlank())
-                                        Color(0xFFFAFAFA)
-                                    else Color(0xFF94A3B8),
-                                    fontSize = if (aiCaptionText.isNotBlank()) 22.sp else 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    textAlign = TextAlign.Center,
-                                    lineHeight = 28.sp,
-                                )
-                            }
-                        }
-                    }
-                }
-
                 // Bottom controls
                 Column(
                     Modifier
@@ -1133,18 +1038,6 @@ fun TVPlayerScreen(
                             // Secondary control cluster — opens options menu
                             // on the matching pane so focus lands right where
                             // the user clicked.
-                            // AI English Captions quick-toggle — cyan border
-                            // lights up when active. LIVE CC has no equivalent.
-                            OsdChipButton(
-                                icon = Icons.Default.ClosedCaption,
-                                label = if (aiCaptionsEnabled) "AI ON" else "AI CC",
-                                onClick = {
-                                    aiCaptionsEnabled = !aiCaptionsEnabled
-                                },
-                                onInteract = { controlsTick++ },
-                                active = aiCaptionsEnabled,
-                            )
-                            Spacer(Modifier.width(10.dp))
                             OsdChipButton(
                                 icon = Icons.Default.ClosedCaption,
                                 label = "CC",
@@ -1233,6 +1126,27 @@ fun TVPlayerScreen(
                 onShowInfo = { infoVisible = true; infoTick++ },
                 onDismiss = { optionsOpen = false; optionsInitialPane = null },
                 initialPane = optionsInitialPane,
+                onDownloadSubtitles = if (subtitleQuery != null) {
+                    {
+                        optionsOpen = false
+                        optionsInitialPane = null
+                        showSubtitleDownload = true
+                    }
+                } else null,
+            )
+        }
+
+        // Full-screen dialog for OpenSubtitles search/download. Only
+        // available for VOD movies/series — Live TV passes null query.
+        if (showSubtitleDownload && subtitleQuery != null) {
+            com.hushtv.tv.ui.player.SubtitleDownloadDialog(
+                query = subtitleQuery,
+                onDismiss = { showSubtitleDownload = false },
+                onPicked = { file, lang ->
+                    showSubtitleDownload = false
+                    downloadedSrt = file
+                    downloadedSrtLang = lang
+                },
             )
         }
     }

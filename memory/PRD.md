@@ -2442,6 +2442,74 @@ the official Google 2026 TV guidance (Create scrollable layouts for TV):
 
 ---
 
+## v1.33.0 — 2026-04-25 (versionCode 172)
+
+**Subtitles re-platformed.** Ripped out the entire AI Subtitles stack
+(both Vosk on-device and the AssemblyAI/Whisper server pipeline)
+because perceived lag on live TV was unacceptable. Replaced with a
+clean OpenSubtitles.com integration: human-timed SRTs, zero lag.
+
+### Removed
+- All Android AI code: `WhisperServerEngine.kt`, `PcmTapAudioProcessor.kt`,
+  `AiEngineStore.kt`, the audio-tap renderers factory, the AI captions
+  overlay, the "AI CC" toggles in TV + Mobile players, the audio-offload
+  override, the AI Subtitles section in both settings screens.
+- GPU server `216.152.147.177`: `hushtv-ai` systemd unit stopped &
+  disabled, `/opt/hushtv-ai`, `/etc/hushtv-ai`, `/var/log/hushtv-ai` all
+  removed. Nginx site `/etc/nginx/sites-{available,enabled}/ai.hushtv.xyz`
+  deleted. Let's Encrypt cert for `ai.hushtv.xyz` revoked + deleted.
+  WS upgrade `/etc/nginx/conf.d/ws_upgrade.conf` removed.
+  AssemblyAI key + Emergent LLM key removed from server env.
+- **User action item**: delete the `ai` A-record from Namecheap so the
+  subdomain stops resolving. Server itself can be cancelled / repurposed.
+
+### Added
+- `OpenSubtitlesApi.kt` — REST client for `api.opensubtitles.com/api/v1`.
+  Search (movie + episode), download with on-device cache keyed by
+  `file_id`. Custom `User-Agent: Hushtvapp` + `Api-Key` header.
+- `SubtitleSearchContext` — singleton holder so detail screens can hand
+  rich metadata (title/year/season/episode) to the player without
+  bloating the nav route signature.
+- `SubtitleLangPrefStore` — persists user's preferred subtitle language.
+- `SubtitleDownloadDialog` — reusable composable for both TV (D-pad
+  focusable) and Mobile (touch). Shows top hits sorted by download
+  count, language strip with 7 quick-pick languages, one-tap download
+  with progress spinner.
+- `SubtitlePane` — wraps the existing `TrackPicker` in
+  `PlayerOptionsMenu` and adds a "Download from OpenSubtitles" CTA.
+  Hidden when `onDownloadSubtitles == null` (Live TV).
+- Player wiring: when an SRT is downloaded, the player rebuilds its
+  `MediaItem` with `SubtitleConfiguration(SUBRIP, language, DEFAULT)`
+  while preserving playback position, then re-prepares — ExoPlayer
+  picks up the side-loaded text track natively.
+- Mobile: small `CC` chip in the controls bar to open the dialog.
+- Detail screens wired to stash `SubtitleSearchContext` before nav:
+  TV Movie Detail (title + year), TV Series Detail (show + season +
+  episode), Mobile Series Detail (show + season + episode). Other
+  entry points (Browse, Home, Search) fall back to using the playback
+  title as the search query — works for ~80% of titles automatically.
+
+### Quota / cost
+- Account is on a paid OpenSubtitles tier: ~5,000 downloads/day quota
+  per IP. Free tier is 5/day. SRTs are cached locally per `file_id`,
+  so a re-watch never re-downloads.
+- No ongoing costs for AI/STT — both servers gone.
+
+### Files of reference
+- `app/src/main/kotlin/com/hushtv/tv/data/OpenSubtitlesApi.kt`
+- `app/src/main/kotlin/com/hushtv/tv/data/SubtitleSearchContext.kt`
+- `app/src/main/kotlin/com/hushtv/tv/ui/player/SubtitleDownloadDialog.kt`
+- `app/src/main/kotlin/com/hushtv/tv/ui/player/PlayerOptionsMenu.kt` (SubtitlePane)
+- `app/src/main/kotlin/com/hushtv/tv/ui/screens/TVPlayerScreen.kt` (subtitle plumbing)
+- `app/src/main/kotlin/com/hushtv/tv/mobile/MobilePlayerScreen.kt` (subtitle plumbing)
+
+### Backlog after v1.33.0
+- **P2** Picture-in-Picture (TV + Mobile)
+- **P2** Xtream Catch-up / Archive
+- **P3** Re-evaluate Gemini AI Search
+
+---
+
 ## Deployment runbook
 
 ```bash

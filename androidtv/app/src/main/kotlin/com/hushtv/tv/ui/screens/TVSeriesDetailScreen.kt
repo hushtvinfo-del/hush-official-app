@@ -390,6 +390,14 @@ fun TVSeriesDetailScreen(
                                 )
                                 val name = ep.title.takeIf { it.isNotBlank() }
                                     ?: "$displayTitle S${selectedSeasonNum}E${ep.episode_num}"
+                                com.hushtv.tv.data.SubtitleSearchContext.set(
+                                    com.hushtv.tv.data.SubtitleSearchContext.Query(
+                                        title = displayTitle,
+                                        seasonNumber = selectedSeasonNum,
+                                        episodeNumber = ep.episode_num.takeIf { it > 0 },
+                                        kind = "episode",
+                                    ),
+                                )
                                 nav.navigate(
                                     "player/$playlistId/${Uri.encode(url)}/${Uri.encode(name)}/false"
                                 )

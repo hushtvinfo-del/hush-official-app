@@ -147,6 +147,17 @@ fun TVMovieDetailScreen(
         val p = playlist ?: return@click
         val ext = vodInfo?.movie_data?.container_extension ?: "mp4"
         val url = XtreamApi.movieUrl(p.host, p.username, p.password, streamId, ext)
+        // Stash search context so the player can offer OpenSubtitles
+        // downloads with the right title + year.
+        com.hushtv.tv.data.SubtitleSearchContext.set(
+            com.hushtv.tv.data.SubtitleSearchContext.Query(
+                title = displayTitle,
+                year = tmdbMovie?.release_date
+                    ?.take(4)?.toIntOrNull()
+                    ?: inner?.releasedate?.take(4)?.toIntOrNull(),
+                kind = "movie",
+            ),
+        )
         nav.navigate(
             "player/$playlistId/${Uri.encode(url)}/${Uri.encode(displayTitle)}/false"
         )

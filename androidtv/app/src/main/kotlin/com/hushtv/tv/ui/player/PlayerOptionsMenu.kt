@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
@@ -54,6 +55,10 @@ fun PlayerOptionsMenu(
     onShowInfo: () -> Unit,
     onDismiss: () -> Unit,
     initialPane: String? = null,
+    /** When non-null, the SUBTITLE pane shows a "Download from
+     *  OpenSubtitles" button. Detail screens that know movie/episode
+     *  metadata pass a callback; live TV passes null. */
+    onDownloadSubtitles: (() -> Unit)? = null,
 ) {
     var pane by remember {
         mutableStateOf(
@@ -116,12 +121,10 @@ fun PlayerOptionsMenu(
                             trackType = C.TRACK_TYPE_AUDIO,
                             onBack = { pane = Pane.MAIN }
                         )
-                        Pane.SUBTITLE -> TrackPicker(
-                            title = "Subtitles",
+                        Pane.SUBTITLE -> SubtitlePane(
                             player = player,
-                            trackType = C.TRACK_TYPE_TEXT,
                             onBack = { pane = Pane.MAIN },
-                            allowOff = true
+                            onDownload = onDownloadSubtitles,
                         )
                         Pane.ASPECT -> AspectPicker(aspectMode, onAspectChange, onBack = { pane = Pane.MAIN })
                         Pane.SPEED -> SpeedPicker(playbackSpeed, onPlaybackSpeedChange, onBack = { pane = Pane.MAIN })
@@ -165,6 +168,72 @@ private fun MainPane(
 
 private fun trimTrailingZero(v: Float): String =
     if (v == v.toInt().toFloat()) v.toInt().toString() else v.toString().trimEnd('0').trimEnd('.')
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun SubtitlePane(
+    player: ExoPlayer,
+    onBack: () -> Unit,
+    onDownload: (() -> Unit)?,
+) {
+    Column {
+        if (onDownload != null) {
+            // Download CTA pinned at the top of the SUBTITLE pane.
+            // Re-uses the same focusable styling as OptionRow so D-pad
+            // navigation lands here naturally before the track list.
+            var focused by remember { mutableStateOf(false) }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .background(
+                        if (focused) Color(0x3306B6D4) else Color(0x14FFFFFF),
+                        RoundedCornerShape(12.dp),
+                    )
+                    .border(
+                        if (focused) 2.dp else 1.dp,
+                        if (focused) Cyan else Color(0x33FFFFFF),
+                        RoundedCornerShape(12.dp),
+                    )
+                    .onFocusChanged { focused = it.isFocused }
+                    .focusable()
+                    .clickableWithEnter(onDownload)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+                Icon(
+                    Icons.Default.CloudDownload,
+                    null,
+                    tint = if (focused) Cyan else Color.White,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Download from OpenSubtitles",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "Search community-uploaded SRT subtitles",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                    )
+                }
+                Text("▸", color = TextSecondary, fontSize = 18.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        TrackPicker(
+            title = "Subtitles",
+            player = player,
+            trackType = C.TRACK_TYPE_TEXT,
+            onBack = onBack,
+            allowOff = true,
+        )
+    }
+}
 
 @Composable
 private fun OptionRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {

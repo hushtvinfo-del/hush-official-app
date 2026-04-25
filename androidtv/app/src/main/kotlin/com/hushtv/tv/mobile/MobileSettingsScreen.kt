@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
@@ -26,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.hushtv.tv.BuildConfig
-import com.hushtv.tv.data.AiEngineStore
 import com.hushtv.tv.data.LastProfileStore
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.ui.theme.Cyan
@@ -99,22 +97,6 @@ fun MobileSettingsScreen(nav: NavController, playlistId: String) {
             icon = Icons.Default.PersonAdd,
             title = "Switch / Add Profile",
             onClick = { nav.navigate("home") },
-        )
-
-        var aiEngine by remember { mutableStateOf(AiEngineStore.get(ctx)) }
-        SettingsItem(
-            icon = Icons.Default.Bolt,
-            title = "AI Subtitles engine",
-            subtitle = when (aiEngine) {
-                AiEngineStore.Engine.STANDARD -> "Standard — free, ~1 s lag"
-                AiEngineStore.Engine.REALTIME -> "Realtime ⚡ — paid, ~400 ms lag"
-            },
-            onClick = {
-                val next = if (aiEngine == AiEngineStore.Engine.STANDARD)
-                    AiEngineStore.Engine.REALTIME else AiEngineStore.Engine.STANDARD
-                AiEngineStore.set(ctx, next)
-                aiEngine = next
-            },
         )
         SettingsItem(
             icon = Icons.Default.Update,

@@ -189,6 +189,17 @@ fun MobileSeriesDetailScreen(
                             // hash it to an int so it fits WatchProgress's
                             // Int key, which is unique enough in practice.
                             val epIntId = ep.id.toIntOrNull() ?: ep.id.hashCode()
+                            // Stash search context so the player can offer
+                            // OpenSubtitles downloads with the right
+                            // series/season/episode metadata.
+                            com.hushtv.tv.data.SubtitleSearchContext.set(
+                                com.hushtv.tv.data.SubtitleSearchContext.Query(
+                                    title = seriesName,
+                                    seasonNumber = ep.season ?: currentSeason?.toIntOrNull(),
+                                    episodeNumber = ep.episode_num.takeIf { it > 0 },
+                                    kind = "episode",
+                                ),
+                            )
                             nav.navigate(
                                 mobilePlayerRoute(
                                     playlistId = playlistId,
