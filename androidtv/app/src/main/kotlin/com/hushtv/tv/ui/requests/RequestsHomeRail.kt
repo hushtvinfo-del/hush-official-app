@@ -84,6 +84,7 @@ fun RequestsHomeRail(
     // Long-press → confirm dialog state. Stays at the rail level so
     // the dialog overlays the entire home screen, not just the card.
     var hideTarget by remember { mutableStateOf<ContentRequestApi.Request?>(null) }
+    var snack by remember { mutableStateOf<RemovedRequestSnack?>(null) }
     // Bumping this re-triggers the filter step so a hidden request
     // disappears from the rail immediately after confirmation.
     var hideTick by remember { mutableStateOf(0) }
@@ -117,10 +118,27 @@ fun RequestsHomeRail(
             title = t.title,
             onConfirm = {
                 com.hushtv.tv.data.RequestHiddenStore.hide(ctx, t.id)
+                snack = RemovedRequestSnack(requestId = t.id, title = t.title)
                 hideTarget = null
                 hideTick += 1
             },
             onDismiss = { hideTarget = null },
+        )
+    }
+
+    // Snack-style toast that lets the user undo for ~3.5 s. Renders
+    // as a sibling so it floats above the rail row but doesn't push
+    // layout around.
+    if (snack != null) {
+        RemovedRequestToast(
+            removed = snack,
+            onUndo = {
+                snack?.let { com.hushtv.tv.data.RequestHiddenStore.unhide(ctx, it.requestId) }
+                snack = null
+                hideTick += 1
+            },
+            onAutoDismiss = { snack = null },
+            applyStatusBarPadding = !isTv,
         )
     }
 

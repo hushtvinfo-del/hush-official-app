@@ -86,6 +86,7 @@ fun MyRequestsList(
     var requests by remember { mutableStateOf<List<ContentRequestApi.Request>>(emptyList()) }
     var refreshTick by remember { mutableStateOf(0) }
     var hideTarget by remember { mutableStateOf<ContentRequestApi.Request?>(null) }
+    var snack by remember { mutableStateOf<RemovedRequestSnack?>(null) }
 
     LaunchedEffect(refreshTick) {
         if (UserContactStore.get(ctx) == null) {
@@ -171,11 +172,30 @@ fun MyRequestsList(
             title = ht.title,
             onConfirm = {
                 com.hushtv.tv.data.RequestHiddenStore.hide(ctx, ht.id)
+                snack = RemovedRequestSnack(requestId = ht.id, title = ht.title)
                 requests = requests.filterNot { it.id == ht.id }
                 RequestCache.put(requests)
                 hideTarget = null
             },
             onDismiss = { hideTarget = null },
+        )
+    }
+
+    // Top-anchored snack with UNDO. Re-inserts the request into the
+    // visible list locally if undone — the gateway never knew it was
+    // "hidden" client-side, so no API call is needed.
+    Box(Modifier.fillMaxWidth()) {
+        RemovedRequestToast(
+            removed = snack,
+            onUndo = {
+                snack?.let { s ->
+                    com.hushtv.tv.data.RequestHiddenStore.unhide(ctx, s.requestId)
+                    refreshTick += 1
+                }
+                snack = null
+            },
+            onAutoDismiss = { snack = null },
+            applyStatusBarPadding = true,
         )
     }
 }

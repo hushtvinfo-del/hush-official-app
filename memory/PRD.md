@@ -1,6 +1,40 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.41.1 — 2026-04-25 (versionCode 198)  ⬅ LATEST  (MANDATORY)
+## v1.41.2 — 2026-04-25 (versionCode 199)  ⬅ LATEST  (non-mandatory)
+
+**"Removed · UNDO" snackbar.** Three places now show a top-anchored
+toast for ~3.5 s after a long-press confirms a removal, with a
+focusable UNDO chip that re-inserts the request (calls
+`RequestHiddenStore.unhide` and bumps a refresh tick).
+
+### Files
+- NEW `ui/requests/RemovedRequestToast.kt` — the slide-down toast +
+  focusable UNDO chip; auto-dismisses via internal LaunchedEffect
+- `ui/requests/TVRequestsPage.kt` — wired snack state on TV;
+  `applyStatusBarPadding = false`
+- `ui/requests/RequestsHomeRail.kt` — wired on Mobile rail;
+  `applyStatusBarPadding = !isTv` so it dodges the status bar
+- `ui/requests/MyRequestsScreens.kt` — wired in MyRequestsList;
+  `applyStatusBarPadding = true`
+
+### UX details
+- Auto-dismiss after 3.5 s (delay-based, not interaction-based, so
+  the timer resets on each new removal).
+- Focus auto-jumps to the UNDO chip on TV so a user can hit OK
+  immediately to undo without re-targeting.
+- On Mobile, status-bar inset ensures the toast sits below the
+  notch / camera punch-out.
+- UNDO is purely client-side — no gateway round-trip needed since
+  the gateway never knew about the hide.
+
+### Build + deploy
+- `versionCode 198 → 199`, `versionName "1.41.1" → "1.41.2"`.
+- BUILD SUCCESSFUL. APK md5 `2f7198d0e146791b1d76e7a1f1588d5f`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Non-mandatory.
+
+---
+
+## v1.41.1 — 2026-04-25 (versionCode 198)
 
 **TV REQUESTS page — UX fixes after first install of v1.41.0.**
 User feedback after v1.41.0 surfaced four issues:

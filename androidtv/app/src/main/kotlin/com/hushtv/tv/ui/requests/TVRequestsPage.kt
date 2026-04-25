@@ -81,6 +81,7 @@ fun TVRequestsPage(
         mutableStateOf(requests.firstOrNull())
     }
     var hideTarget by remember { mutableStateOf<ContentRequestApi.Request?>(null) }
+    var snack by remember { mutableStateOf<RemovedRequestSnack?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         // Hero backdrop driven by the focused card's TMDB backdrop —
@@ -155,10 +156,27 @@ fun TVRequestsPage(
             title = ht.title,
             onConfirm = {
                 com.hushtv.tv.data.RequestHiddenStore.hide(ctx, ht.id)
+                snack = RemovedRequestSnack(requestId = ht.id, title = ht.title)
                 hideTarget = null
                 onRequestHidden()
             },
             onDismiss = { hideTarget = null },
+        )
+    }
+
+    // Snackbar overlay — top of screen, auto-dismisses in ~3.5 s.
+    // Undo restores the request and bumps the parent so the row
+    // reappears immediately.
+    Box(Modifier.fillMaxSize()) {
+        RemovedRequestToast(
+            removed = snack,
+            onUndo = {
+                snack?.let { com.hushtv.tv.data.RequestHiddenStore.unhide(ctx, it.requestId) }
+                snack = null
+                onRequestHidden()
+            },
+            onAutoDismiss = { snack = null },
+            applyStatusBarPadding = false,
         )
     }
 }
