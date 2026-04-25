@@ -192,6 +192,23 @@ fun MobileLiveHubScreen(
         epgVersion++    // refresh the NOW / UP NEXT panel
     }
 
+    // ── Bulk-prefetch EPG for every channel in the current category ──
+    // Previously only the selected channel got EPG, so rows further
+    // down the list showed no NOW caption until the user tapped them.
+    // Throttled to 6 concurrent requests to stay under typical Xtream
+    // provider rate limits. Cached by [EpgService] so re-entering the
+    // same category is free.
+    LaunchedEffect(channels, playlistId) {
+        val p = playlist ?: return@LaunchedEffect
+        if (channels.isEmpty()) return@LaunchedEffect
+        // Skip channels that are already cached (same TTL as single).
+        val ids = channels.map { it.streamId }
+        runCatching {
+            EpgService.fetchShortEpgBatch(p.host, p.username, p.password, ids)
+        }
+        epgVersion++    // trigger list recomposition so NOW captions appear
+    }
+
     // ── ExoPlayer for the preview pane ──
     val player = remember {
         ExoPlayer.Builder(ctx).build().apply {
@@ -889,18 +906,22 @@ private fun MobileLiveHubRow(
                 .background(Color(0xFF1F2937)),
             contentAlignment = Alignment.Center,
         ) {
+            // Initials fallback shown while loading and on network failure.
+            // AsyncImage used to silently render a blank gray box when
+            // the logo URL 404'd — now we always draw the fallback
+            // behind the image so at worst the user sees the channel
+            // initials, never an empty tile.
+            Text(
+                card.title.take(2).uppercase(),
+                color = Color(0xFF64748B),
+                fontSize = 13.sp, fontWeight = FontWeight.Black,
+            )
             if (!card.poster.isNullOrBlank()) {
                 AsyncImage(
                     model = card.poster,
                     contentDescription = card.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                )
-            } else {
-                Text(
-                    card.title.take(2).uppercase(),
-                    color = Color(0xFF64748B),
-                    fontSize = 13.sp, fontWeight = FontWeight.Black,
                 )
             }
         }
@@ -973,17 +994,16 @@ private fun RecentChannelChip(card: MediaCard, onClick: () -> Unit) {
                 .background(Color(0xFF1F2937)),
             contentAlignment = Alignment.Center,
         ) {
+            Text(
+                card.title.take(1).uppercase(),
+                color = Color(0xFF64748B),
+                fontSize = 10.sp, fontWeight = FontWeight.Black,
+            )
             if (!card.poster.isNullOrBlank()) {
                 AsyncImage(
                     model = card.poster, contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                )
-            } else {
-                Text(
-                    card.title.take(1).uppercase(),
-                    color = Color(0xFF64748B),
-                    fontSize = 10.sp, fontWeight = FontWeight.Black,
                 )
             }
         }

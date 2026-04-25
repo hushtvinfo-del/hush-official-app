@@ -5,7 +5,10 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -141,6 +144,37 @@ object EpgService {
             cache[streamId] = Entry(programs, System.currentTimeMillis())
             programs
         }
+    }
+
+    /**
+     * Bulk version of [fetchShortEpg] that pulls short-EPG for every
+     * [streamIds] in parallel with a max concurrency cap. Used by the
+     * Live TV list so NOW/NEXT captions are populated for every visible
+     * row instead of just the selected one.
+     *
+     * Per-channel results are cached (same TTL as single fetch) so the
+     * initial call is the only one that hits the network; subsequent
+     * scrolls through the same channel list are free.
+     *
+     * Xtream providers typically rate-limit to ~6 concurrent requests
+     * before 429'ing, so we cap at 6 in-flight to stay polite.
+     */
+    suspend fun fetchShortEpgBatch(
+        host: String, username: String, password: String, streamIds: List<Int>,
+        maxConcurrency: Int = 6,
+    ) = withContext(Dispatchers.IO) {
+        val semaphore = Semaphore(maxConcurrency)
+        val jobs = streamIds.map { id ->
+            async {
+                semaphore.acquire()
+                try {
+                    fetchShortEpg(host, username, password, id)
+                } finally {
+                    semaphore.release()
+                }
+            }
+        }
+        jobs.awaitAll()
     }
 
     private fun EpgEntryRaw.toProgram(): EpgProgram? {
