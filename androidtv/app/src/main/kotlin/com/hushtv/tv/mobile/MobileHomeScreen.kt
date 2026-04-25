@@ -157,17 +157,6 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
             )
         }
 
-        // ── My Requests rail (only shows when user has open or
-        //    unseen-update requests). Sits between the header and
-        //    the pager dots so the user always notices it. ──
-        com.hushtv.tv.ui.requests.RequestsHomeRail(
-            isTv = false,
-            onOpen = { req ->
-                nav.navigate("mrequestdetail/$playlistId/${req.id}")
-            },
-            onViewAll = { nav.navigate("mrequests/$playlistId") },
-        )
-
         // ── Page dots ──
         Row(
             Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -246,6 +235,18 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
                 "years_movies" -> YearsPageMobile(nav, playlistId, movieYears, titleBlock)
             }
         }
+
+        // ── My Requests rail (only renders when the user has open
+        //    or unseen-update requests). Sits BELOW the pager so it
+        //    never overlaps slider content; spacer above + own
+        //    bottom padding ensure it has its own air. ──
+        com.hushtv.tv.ui.requests.RequestsHomeRail(
+            isTv = false,
+            onOpen = { req ->
+                nav.navigate("mrequestdetail/$playlistId/${req.id}")
+            },
+            onViewAll = { nav.navigate("mrequests/$playlistId") },
+        )
     }
 }
 

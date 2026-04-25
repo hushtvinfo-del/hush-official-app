@@ -1,6 +1,53 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.39.3 — 2026-04-25 (versionCode 193)  ⬅ LATEST  (MANDATORY)
+## v1.40.0 — 2026-04-25 (versionCode 194)  ⬅ LATEST  (non-mandatory)
+
+**Cinematic Home rail redesign + repositioning.** User feedback:
+the rail sat between the header and the pager dots, visually
+overlapped the slider hero, and used emoji thumbnails that looked
+"ugly". Two changes:
+
+### 1. Position
+- Moved the rail from above-pager to **below-pager**. The pager
+  now sits in its natural slot directly below the header + dots.
+  Rail gets its own air at the bottom of the home Column with a
+  hairline divider above + 18 dp bottom padding (off the system
+  nav bar).
+- Hidden entirely when the user has zero open / unseen requests
+  — same as before, no impact on users who never use the feature.
+
+### 2. Card design (`BackdropRequestCard`)
+- **16:9 TMDB backdrop** as the card image (`w780`), cropped to
+  fill — same aspect ratio TMDB uses, looks like a Netflix tile.
+- Falls back to **TMDB poster** (`w500`) when the title has no
+  backdrop on TMDB. Falls back further to a status-tinted
+  gradient when neither is available (free-text request, very
+  obscure title).
+- **Bottom-up dark gradient overlay** so the title always reads
+  white-on-image without needing a flat scrim.
+- **Status badge** in the top-left, color-coded per status with
+  a translucent fill that matches the backdrop tone.
+- **Cyan unread dot** with a 2dp white border in the top-right
+  whenever the user has an unacknowledged admin update.
+- **Title + meta** anchored to the bottom-left: bold white title
+  (max 2 lines, ellipsis), then a 11sp meta line "Movie · 2024"
+  or "Series · 2019".
+
+### Files
+- `mobile/MobileHomeScreen.kt` — moved `RequestsHomeRail` from
+  position 2 (after header) to last child of the home Column
+- `ui/requests/RequestsHomeRail.kt` — full rewrite with the new
+  `BackdropRequestCard` composable, hairline divider, cleaner
+  section header
+
+### Build + deploy
+- `versionCode 193 → 194`, `versionName "1.39.3" → "1.40.0"`.
+- BUILD SUCCESSFUL. APK md5 `f86d885db22e72d44db8b5aaf575c1cd`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Non-mandatory.
+
+---
+
+## v1.39.3 — 2026-04-25 (versionCode 193)
 
 **Bug fix: "Already in your library" was routing to the wrong
 movie.** User reported: searching "Analyze That" in the request
