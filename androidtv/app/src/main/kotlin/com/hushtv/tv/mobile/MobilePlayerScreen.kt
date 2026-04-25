@@ -283,6 +283,15 @@ fun MobilePlayerScreen(
                 downloadedSrtLang = "en"
             } else {
                 autoLoadFailed = true
+                // Educate the user about the long-press shortcut to
+                // the manual language picker — most users won't
+                // discover it otherwise.
+                android.widget.Toast.makeText(
+                    ctx,
+                    "No English subtitles found for \"${q.title}\". " +
+                        "Long-press CC to try another language.",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
             }
         }
     }

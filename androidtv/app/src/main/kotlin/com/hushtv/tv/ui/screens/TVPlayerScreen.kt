@@ -267,7 +267,6 @@ fun TVPlayerScreen(
                             languages = listOf("en"),
                         )
                     }
-                    // Prefer trusted uploaders, then most-downloaded.
                     val best = hits.sortedWith(
                         compareByDescending<com.hushtv.tv.data.OpenSubtitlesApi.Hit> { it.fromTrusted }
                             .thenByDescending { it.downloadCount }
@@ -281,6 +280,15 @@ fun TVPlayerScreen(
                 downloadedSrtLang = "en"
             } else {
                 autoLoadFailed = true
+                // Educate the user about the manual picker on the TV.
+                // The Player Options menu is the only path on D-pad, so
+                // we mention it explicitly.
+                android.widget.Toast.makeText(
+                    ctx,
+                    "No English subtitles found for \"${q.title}\". " +
+                        "Open the menu → Subtitles to try another language.",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
             }
         }
     }
