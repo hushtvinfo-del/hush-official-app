@@ -65,24 +65,31 @@ fun MobileBrowseScreen(
     ) { mutableStateOf(-1) }
     var cardList by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
     var showCatPicker by remember { mutableStateOf(false) }
 
     // Load categories once.
     LaunchedEffect(playlistId, type) {
         if (playlist == null) { loading = false; return@LaunchedEffect }
-        val cats = runCatching {
+        // Surface errors instead of silently falling back to emptyList()
+        // so users can see "could not reach provider" rather than
+        // "Nothing here yet" — which is misleading.
+        val attempt = runCatching {
             withContext(Dispatchers.IO) {
                 XtreamApi.getCategories(playlist.host, playlist.username, playlist.password, type)
             }
-        }.getOrDefault(emptyList())
-        categories = cats
+        }
+        attempt.onSuccess { cats -> categories = cats; if (cats.isEmpty()) loadError =
+            "Provider returned no $type categories. Check your subscription with your reseller."
+        }
+        attempt.onFailure { e -> loadError = "Couldn't reach provider: ${e.message}" }
     }
 
     // Reload items whenever the category changes.
     LaunchedEffect(selectedCatId, categories, playlistId, type) {
         if (playlist == null) { loading = false; return@LaunchedEffect }
         loading = true
-        val data = runCatching {
+        val attempt = runCatching {
             withContext(Dispatchers.IO) {
                 if (selectedCatId.isBlank()) {
                     XtreamApi.getAllStreams(playlist.host, playlist.username, playlist.password, type)
@@ -90,17 +97,21 @@ fun MobileBrowseScreen(
                     XtreamApi.getStreamsForCategory(playlist.host, playlist.username, playlist.password, type, selectedCatId)
                 }
             }
-        }.getOrDefault(emptyList())
-        // Default sort (parity with TV `TVBrowseScreen`):
-        //   • Movies: most-recently ADDED first (Xtream `added` unix ts).
-        //   • Series: most-recently MODIFIED first (Xtream `last_modified`).
-        // Both fields are normalised into `MediaCard.addedTs` by
-        // `XtreamApi`. Items with a 0 timestamp (providers that don't
-        // expose the field) sink to the bottom in A-Z order.
-        cardList = data.sortedWith(
-            compareByDescending<com.hushtv.tv.data.MediaCard> { it.addedTs }
-                .thenBy { it.title.lowercase() }
-        )
+        }
+        attempt.onSuccess { data ->
+            // Default sort (parity with TV `TVBrowseScreen`):
+            //   • Movies: most-recently ADDED first (Xtream `added` unix ts).
+            //   • Series: most-recently MODIFIED first (Xtream `last_modified`).
+            // Both fields are normalised into `MediaCard.addedTs` by
+            // `XtreamApi`. Items with a 0 timestamp (providers that don't
+            // expose the field) sink to the bottom in A-Z order.
+            cardList = data.sortedWith(
+                compareByDescending<com.hushtv.tv.data.MediaCard> { it.addedTs }
+                    .thenBy { it.title.lowercase() }
+            )
+            if (data.isNotEmpty()) loadError = null
+        }
+        attempt.onFailure { e -> loadError = "Couldn't load $type: ${e.message}" }
         loading = false
     }
 
@@ -183,12 +194,29 @@ fun MobileBrowseScreen(
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Cyan)
                 }
-                cardList.isEmpty() -> Text(
-                    "Nothing here yet.",
-                    color = Color(0xFF94A3B8),
-                    fontSize = 14.sp,
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                cardList.isEmpty() -> Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        if (loadError != null) "⚠️  Couldn't load $type" else "Nothing here yet.",
+                        color = Color(0xFFF87171).takeIf { loadError != null }
+                            ?: Color(0xFF94A3B8),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (loadError != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            loadError ?: "",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 13.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                    }
+                }
                 isLive -> {
                     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
                     // When coming back from the player, auto-scroll so the
