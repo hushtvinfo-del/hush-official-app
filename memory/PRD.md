@@ -1,6 +1,77 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.41.2 — 2026-04-25 (versionCode 199)  ⬅ LATEST  (non-mandatory)
+## v1.42.0 — 2026-04-25 (versionCode 200)  ⬅ LATEST  (MANDATORY)
+
+**"For You" home hub — Mobile + TV.** User asked for a single
+default home page with Channel History + Continue Watching + My
+Requests stacked vertically with proper spacing and distinct card
+styles per section. Replaces the old Resume Live page entirely.
+
+### Mobile (`HomeHubPage`)
+- New `"hub"` PageDef inserted at index 0 of the home pager when
+  any of the three data sources has content
+- Drops `"resume_live"` and `"cw"` PageDefs; the data lives in the
+  hub now
+- LazyColumn-based, vertical scroll within the hub page
+- 3 sections, each with its own kicker label:
+  • **CHANNEL HISTORY** (last 5) — wide rectangular tiles with a
+    dark backdrop, channel logo centered (matches the user's
+    screenshot exactly)
+  • **CONTINUE WATCHING** — poster-led 180×108 cards with a
+    bottom progress strip and a circular cyan Play badge
+  • **MY REQUESTS** — re-uses the existing `RequestsHomeRail`
+    composable so polling / long-press / undo are shared
+- Removed the bottom-of-Column `RequestsHomeRail` since requests
+  are now in the hub
+
+### TV (`TVHomeHubPage`)
+- New `"hub"` page in `TVMainMenuScreen` pageOrder, replacing both
+  `"requests"` and `"cw"` standalone pages
+- Same 3 sections, all D-pad focusable, with focus-driven hero
+  backdrop layer behind the content (focused card's TMDB / Xtream
+  poster fills the screen; vertical gradient ensures rows stay
+  readable)
+- Per-section first-card `FocusRequester` so D-pad up/down between
+  sections lands on the first card in the next/prev section
+  rather than wandering
+- Up from CHANNEL HISTORY → top nav; Down from MY REQUESTS →
+  next page in pageOrder (Discovery → Movies → ...)
+- "FOR YOU" label in the page indicator
+- Long-press on a request card → confirm dialog → snack with
+  UNDO; long-press on a CW card → existing remove-prompt sheet
+
+### Files
+- `mobile/MobileHomeScreen.kt`:
+  - new `HomeHubPage` private composable + `HubChannelTile` +
+    `HubCwCard`
+  - drops `resume_live` and `cw` PageDefs / branches
+  - removes the bottom Column `RequestsHomeRail`
+- NEW `ui/requests/TVHomeHubPage.kt` — full TV hub page with the
+  three sections and shared backdrop driver
+- `ui/screens/TVMainMenuScreen.kt`:
+  - reads channel history via `RecentChannelStore.getAll`
+  - `hasHub` predicate, sticky `currentPage`, new pageOrder
+  - new `firstHubFocus` requester
+  - replaces old `requests` and `cw` AnimatedContent branches
+    with a single `hub` branch
+  - "FOR YOU" page-indicator label
+
+### Build + deploy
+- `versionCode 199 → 200`, `versionName "1.41.2" → "1.42.0"`.
+- BUILD SUCCESSFUL. APK md5 `c7ed848cc416347169e6556b5859b0a2`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Shipped as
+  **MANDATORY** so users get the new home immediately.
+
+### Notes
+- `TVRequestsPage` (v1.41.x) is now dead code but kept around in
+  case the user wants a dedicated requests page in the future. Not
+  imported by any active call site.
+- `ResumeLivePage` and `ContinueWatchingPage` (Mobile) are also
+  dead code now — could be removed in a cleanup pass next session.
+
+---
+
+## v1.41.2 — 2026-04-25 (versionCode 199)
 
 **"Removed · UNDO" snackbar.** Three places now show a top-anchored
 toast for ~3.5 s after a long-press confirms a removal, with a

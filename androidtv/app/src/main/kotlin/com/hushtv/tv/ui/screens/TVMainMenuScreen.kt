@@ -220,6 +220,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     // the first card of whichever page is currently showing.
     val firstCwFocus = remember { FocusRequester() }
     val firstRequestsFocus = remember { FocusRequester() }
+    val firstHubFocus = remember { FocusRequester() }
     val firstDiscoveryFocus = remember { FocusRequester() }
     val firstSsMoviesFocus = remember { FocusRequester() }
     val firstSsSeriesFocus = remember { FocusRequester() }
@@ -318,23 +319,29 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     }
     val hasRequests = requestsForPage.isNotEmpty()
 
+    // Channel history snapshot (last 5 entries with metadata).
+    val channelHistory = remember(continueHandle.entries, playlistId) {
+        com.hushtv.tv.data.RecentChannelStore.getAll(ctxLocal, playlistId)
+            .mapNotNull { id ->
+                com.hushtv.tv.data.RecentChannelStore.getMeta(ctxLocal, playlistId, id)
+                    ?.let { id to it }
+            }
+            .take(5)
+    }
+    val hasChannelHistory = channelHistory.isNotEmpty()
+    // Hub is the new combined "FOR YOU" page — visible whenever any
+    // of channel history / continue watching / requests has content.
+    val hasHub = hasChannelHistory || hasCw || hasRequests
+
     var currentPage by remember {
         // Sticky: initialised once on first composition and not reset
-        // when hasRequests / hasCw flip later. Prevents the user from
-        // being teleported back to REQUESTS after they navigated to
-        // DISCOVERY (or vice versa) when a fresh request fetch lands.
-        mutableStateOf(
-            when {
-                hasRequests -> "requests"
-                hasCw -> "cw"
-                else -> "discovery"
-            }
-        )
+        // when flags flip later. Prevents the user from being yanked
+        // back to the hub after they navigated to DISCOVERY.
+        mutableStateOf(if (hasHub) "hub" else "discovery")
     }
-    val pageOrder = remember(hasCw, hasRequests) {
+    val pageOrder = remember(hasHub) {
         buildList {
-            if (hasRequests) add("requests")
-            if (hasCw) add("cw")
+            if (hasHub) add("hub")
             add("discovery")
             add("ss_movies")
             add("ss_series")
@@ -530,34 +537,22 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 label = "home-pager",
             ) { page ->
                 when (page) {
-                    "requests" -> com.hushtv.tv.ui.requests.TVRequestsPage(
+                    "hub" -> com.hushtv.tv.ui.requests.TVHomeHubPage(
                         playlistId = playlistId,
                         nav = nav,
+                        channelHistory = channelHistory,
+                        cwEntries = continueEntries,
                         requests = requestsForPage,
-                        firstItemFocus = firstRequestsFocus,
-                        onUpFromRow = showNavAndFocus,
-                        onDownFromRow = {
-                            // Move to the next page in pageOrder.
-                            val idx = pageOrder.indexOf("requests")
+                        firstItemFocus = firstHubFocus,
+                        onUpFromTop = showNavAndFocus,
+                        onDownFromBottom = {
+                            val idx = pageOrder.indexOf("hub")
                             if (idx >= 0 && idx + 1 < pageOrder.size) {
                                 currentPage = pageOrder[idx + 1]
                             }
                         },
+                        onRemoveCw = { removePromptFor = it },
                         onRequestHidden = { hideTick += 1 },
-                    )
-                    "cw" -> CwPage(
-                        playlistId = playlistId,
-                        nav = nav,
-                        entries = continueEntries,
-                        heroEntry = heroEntry,
-                        firstCwFocus = firstCwFocus,
-                        showNavAndFocus = showNavAndFocus,
-                        onFocusedEntryChange = {
-                            heroEntry = it
-                            heroSection = "cw"
-                        },
-                        onLongPressRemove = { removePromptFor = it },
-                        onDownFromRow = { currentPage = "discovery" },
                     )
                     "ss_movies" -> SsPage(
                         playlistId = playlistId,
@@ -653,6 +648,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 kotlinx.coroutines.delay(320)
                 runCatching {
                     when (currentPage) {
+                        "hub" -> if (hasHub) firstHubFocus.requestFocus()
                         "requests" -> if (hasRequests) firstRequestsFocus.requestFocus()
                         "cw" -> if (hasCw) firstCwFocus.requestFocus()
                         "discovery" -> firstDiscoveryFocus.requestFocus()
@@ -689,6 +685,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 com.hushtv.tv.ui.screens.home.HomePage(
                     key = k,
                     label = when (k) {
+                        "hub" -> "FOR YOU"
                         "requests" -> "REQUESTS"
                         "cw" -> "WATCHING"
                         "discovery" -> "DISCOVER"
@@ -731,6 +728,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         ev.key == androidx.compose.ui.input.key.Key.DirectionDown
                     ) {
                         val target = when (navDownTarget) {
+                            "hub" -> firstHubFocus
                             "requests" -> firstRequestsFocus
                             "cw" -> firstCwFocus
                             "collections" -> firstCollectionsFocus

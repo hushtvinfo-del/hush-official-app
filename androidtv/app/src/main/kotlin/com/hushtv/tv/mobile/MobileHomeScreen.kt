@@ -118,11 +118,28 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
     }
     val hasResumeLive = resumeLiveSid > 0 && resumeLiveName.isNotBlank()
 
+    // ── Channel history (last 5, raw — hub deduplicates against
+    //    no current channel since "Resume Live" page was retired). ──
+    val channelHistory: List<Pair<Int, com.hushtv.tv.data.RecentChannelStore.Meta>> =
+        remember(cwVersion, playlistId) {
+            com.hushtv.tv.data.RecentChannelStore.getAll(ctx, playlistId)
+                .mapNotNull { id ->
+                    com.hushtv.tv.data.RecentChannelStore.getMeta(ctx, playlistId, id)
+                        ?.let { id to it }
+                }
+                .take(5)
+        }
+    // Hub shows when ANY of the 3 sections has content. The new home
+    // hub replaces the old resume_live + cw pages (and the bottom-
+    // anchored Requests rail) — single scrollable page with all
+    // three sections, matching the screenshot the user shared.
+    val hasChannelHistory = channelHistory.isNotEmpty()
+    val hasHub = hasChannelHistory || hasCw
+
     // ── Pages ──
     data class PageDef(val id: String, val kicker: String, val title: String, val accent: Color)
     val pages = buildList {
-        if (hasResumeLive) add(PageDef("resume_live", "LAST WATCHING", "Resume Live", Color(0xFFEF4444)))
-        if (hasCw) add(PageDef("cw", "PICK UP WHERE YOU LEFT OFF", "Continue Watching", Color(0xFFFACC15)))
+        if (hasHub) add(PageDef("hub", "WELCOME BACK", "For You", Cyan))
         add(PageDef("discovery", "CURATED FOR YOU", "Discover", Cyan))
         add(PageDef("ss_movies", "STREAMING SERVICES", "Movies", Color(0xFFEF4444)))
         add(PageDef("ss_series", "STREAMING SERVICES", "Series", Color(0xFF22D3EE)))
@@ -208,20 +225,13 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
             }
 
             when (def.id) {
-                "resume_live" -> ResumeLivePage(
+                "hub" -> HomeHubPage(
                     nav = nav,
                     playlistId = playlistId,
-                    streamId = resumeLiveSid,
-                    channelName = resumeLiveName,
-                    poster = resumeLivePoster.ifBlank { null },
+                    channelHistory = channelHistory,
+                    cwEntries = cwEntries,
                     titleBlock = titleBlock,
-                )
-                "cw" -> ContinueWatchingPage(
-                    nav = nav,
-                    playlistId = playlistId,
-                    entries = cwEntries,
-                    titleBlock = titleBlock,
-                    onRemove = { e ->
+                    onRemoveCw = { e ->
                         WatchProgressStore.clear(ctx, e.streamId, e.kind)
                         cwVersion++
                     },
@@ -235,18 +245,338 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
                 "years_movies" -> YearsPageMobile(nav, playlistId, movieYears, titleBlock)
             }
         }
+    }
+}
 
-        // ── My Requests rail (only renders when the user has open
-        //    or unseen-update requests). Sits BELOW the pager so it
-        //    never overlaps slider content; spacer above + own
-        //    bottom padding ensure it has its own air. ──
-        com.hushtv.tv.ui.requests.RequestsHomeRail(
-            isTv = false,
-            onOpen = { req ->
-                nav.navigate("mrequestdetail/$playlistId/${req.id}")
-            },
-            onViewAll = { nav.navigate("mrequests/$playlistId") },
+
+// ══════════════════════════════════════════════════════════════════
+//  PAGE: Home Hub  —  Channel History + Continue Watching + Requests
+//  on a single scrollable page. Replaces the old separate Resume Live
+//  and Continue Watching pages. Each section uses a distinct card
+//  style for visual variety:
+//    • Channel history → wide rectangular tiles with dark backdrop
+//      and a centered logo (matches the user's mobile screenshot)
+//    • Continue Watching → poster-style cards with a thin progress
+//      strip and a circular Play badge
+//    • My Requests → cinematic 16:9 backdrop cards (same look as
+//      the standalone home rail used in v1.40+ )
+// ══════════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HomeHubPage(
+    nav: NavController,
+    playlistId: String,
+    channelHistory: List<Pair<Int, com.hushtv.tv.data.RecentChannelStore.Meta>>,
+    cwEntries: List<WatchProgressStore.Entry>,
+    titleBlock: @Composable () -> Unit,
+    onRemoveCw: (WatchProgressStore.Entry) -> Unit,
+) {
+    val ctx = LocalContext.current
+    val playlist = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
+    var cwLongPressTarget by remember { mutableStateOf<WatchProgressStore.Entry?>(null) }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 0.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        item("title") { titleBlock() }
+
+        // ── CHANNEL HISTORY ────────────────────────────────────────
+        if (channelHistory.isNotEmpty()) {
+            item("ch_label") {
+                SectionLabel("CHANNEL HISTORY", "· last ${channelHistory.size}")
+            }
+            item("ch_row") {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(channelHistory, key = { "ch-${it.first}" }) { (sid, meta) ->
+                        HubChannelTile(
+                            name = meta.name,
+                            poster = meta.poster,
+                            onClick = {
+                                val p = playlist ?: return@HubChannelTile
+                                val url = XtreamApi.liveUrl(
+                                    p.host, p.username, p.password, sid,
+                                )
+                                nav.navigate(
+                                    mobilePlayerRoute(
+                                        playlistId = playlistId,
+                                        streamUrl = url,
+                                        channelName = meta.name,
+                                        isLive = true,
+                                    ),
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── CONTINUE WATCHING ──────────────────────────────────────
+        if (cwEntries.isNotEmpty()) {
+            item("cw_label") {
+                SectionLabel("CONTINUE WATCHING", "· ${cwEntries.size}")
+            }
+            item("cw_row") {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(cwEntries, key = { "cw-${it.kind}-${it.streamId}" }) { e ->
+                        HubCwCard(
+                            entry = e,
+                            onClick = {
+                                val p = playlist ?: return@HubCwCard
+                                val url = when (e.kind) {
+                                    "live" -> XtreamApi.liveUrl(p.host, p.username, p.password, e.streamId)
+                                    "series" -> XtreamApi.episodeUrl(p.host, p.username, p.password, e.streamId.toString(), null)
+                                    else -> XtreamApi.movieUrl(p.host, p.username, p.password, e.streamId, null)
+                                }
+                                val isLive = e.kind == "live"
+                                nav.navigate(
+                                    mobilePlayerRoute(
+                                        playlistId = playlistId,
+                                        streamUrl = url,
+                                        channelName = e.title,
+                                        isLive = isLive,
+                                        vodStreamId = if (isLive) null else e.streamId,
+                                        vodKind = if (isLive) null else e.kind,
+                                        vodPoster = if (isLive) null else e.poster,
+                                    ),
+                                )
+                            },
+                            onLongPress = { cwLongPressTarget = e },
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── MY REQUESTS ────────────────────────────────────────────
+        // Same composable used elsewhere — handles its own polling +
+        // long-press / undo flow. Hidden when the user has no open or
+        // recent requests.
+        item("req") {
+            com.hushtv.tv.ui.requests.RequestsHomeRail(
+                isTv = false,
+                onOpen = { req ->
+                    nav.navigate("mrequestdetail/$playlistId/${req.id}")
+                },
+                onViewAll = { nav.navigate("mrequests/$playlistId") },
+            )
+        }
+    }
+
+    // Long-press → "Remove from Continue Watching" sheet, same UX as
+    // the dedicated CW page used to have.
+    val target = cwLongPressTarget
+    if (target != null) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { cwLongPressTarget = null }) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF0B1220))
+                    .padding(16.dp),
+            ) {
+                Text(
+                    target.title,
+                    color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(14.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFEF4444))
+                        .clickable {
+                            onRemoveCw(target)
+                            cwLongPressTarget = null
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "Remove from Continue Watching",
+                        color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x14FFFFFF))
+                        .clickable { cwLongPressTarget = null }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("Cancel", color = Color.White, fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(label: String, suffix: String? = null) {
+    Row(
+        Modifier.padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label, color = Cyan, fontSize = 11.sp,
+            fontWeight = FontWeight.Black, letterSpacing = 2.sp,
         )
+        if (suffix != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                suffix, color = Color(0xFF64748B), fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+}
+
+/**
+ * Channel history tile — wider than the old `ChannelHistoryTile` so
+ * the logo has more breathing room. Matches the user-shared screenshot:
+ * dark inset rectangle, channel logo centered, label below.
+ */
+@Composable
+private fun HubChannelTile(
+    name: String,
+    poster: String?,
+    onClick: () -> Unit,
+) {
+    Column(
+        Modifier
+            .width(160.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF0A1220))
+            .border(1.dp, Color(0x2206B6D4), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 10f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF1F2937)),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Initials always rendered — image overlays on success
+            // so a slow load never leaves an empty box.
+            Text(
+                name.take(2).uppercase(),
+                color = Color(0xFF94A3B8),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+            )
+            if (!poster.isNullOrBlank()) {
+                AsyncImage(
+                    model = poster, contentDescription = name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            name, color = Color.White, fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * Continue Watching card — poster-led so it feels different from the
+ * channel-history rail above and the request rail below. Vertical
+ * gradient overlay keeps the title legible against any poster.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HubCwCard(
+    entry: WatchProgressStore.Entry,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit,
+) {
+    Box(
+        Modifier
+            .width(180.dp)
+            .height(108.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF0F172A))
+            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(14.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress),
+    ) {
+        if (!entry.poster.isNullOrBlank()) {
+            AsyncImage(
+                model = entry.poster, contentDescription = entry.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        // Gradient so the title row at the bottom is always readable.
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0f to Color(0x00000000),
+                    0.55f to Color(0x55000000),
+                    1f to Color(0xEE000000),
+                )
+            )
+        )
+        Box(
+            Modifier
+                .align(Alignment.Center)
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color(0xCC06B6D4)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.PlayArrow, null,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Text(
+                entry.title,
+                color = Color.White, fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            if (entry.durationMs > 0) {
+                Spacer(Modifier.height(4.dp))
+                val pct = (entry.positionMs.toFloat() /
+                    entry.durationMs.toFloat()).coerceIn(0f, 1f)
+                Box(
+                    Modifier.fillMaxWidth().height(2.dp)
+                        .background(Color(0x33FFFFFF), RoundedCornerShape(2.dp)),
+                ) {
+                    Box(
+                        Modifier.fillMaxWidth(pct).height(2.dp)
+                            .background(Cyan, RoundedCornerShape(2.dp)),
+                    )
+                }
+            }
+        }
     }
 }
 
