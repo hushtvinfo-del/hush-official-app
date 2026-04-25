@@ -1,8 +1,8 @@
 1<?xml version="1.0" encoding="utf-8"?>
 2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
 3    package="com.hushtv.tv.debug"
-4    android:versionCode="176"
-5    android:versionName="1.34.1-debug" >
+4    android:versionCode="177"
+5    android:versionName="1.34.2-debug" >
 6
 7    <uses-sdk
 8        android:minSdkVersion="24"
@@ -72,145 +72,144 @@
 39-->[androidx.core:core:1.13.1] /root/.gradle/caches/transforms-4/8e0a0bff2d388b6446750efdf4a5758f/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
 40        android:banner="@drawable/tv_banner"
 40-->/app/androidtv/app/src/main/AndroidManifest.xml:26:9-45
-41        android:debuggable="true"
-42        android:extractNativeLibs="false"
-43        android:icon="@mipmap/ic_launcher"
-43-->/app/androidtv/app/src/main/AndroidManifest.xml:27:9-43
-44        android:label="@string/app_name"
-44-->/app/androidtv/app/src/main/AndroidManifest.xml:28:9-41
-45        android:largeHeap="true"
-45-->/app/androidtv/app/src/main/AndroidManifest.xml:33:9-33
-46        android:networkSecurityConfig="@xml/network_security_config"
-46-->/app/androidtv/app/src/main/AndroidManifest.xml:30:9-69
-47        android:roundIcon="@mipmap/ic_launcher_round"
-47-->/app/androidtv/app/src/main/AndroidManifest.xml:29:9-54
-48        android:supportsRtl="true"
-48-->/app/androidtv/app/src/main/AndroidManifest.xml:32:9-35
-49        android:theme="@style/Theme.HushTV"
-49-->/app/androidtv/app/src/main/AndroidManifest.xml:34:9-44
-50        android:usesCleartextTraffic="true" >
-50-->/app/androidtv/app/src/main/AndroidManifest.xml:31:9-44
-51        <activity
-51-->/app/androidtv/app/src/main/AndroidManifest.xml:36:9-47:20
-52            android:name="com.hushtv.tv.MainActivity"
-52-->/app/androidtv/app/src/main/AndroidManifest.xml:37:13-41
-53            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
-53-->/app/androidtv/app/src/main/AndroidManifest.xml:38:13-113
-54            android:exported="true"
-54-->/app/androidtv/app/src/main/AndroidManifest.xml:39:13-36
-55            android:launchMode="singleTask"
-55-->/app/androidtv/app/src/main/AndroidManifest.xml:40:13-44
-56            android:theme="@style/Theme.HushTV.Splash" >
-56-->/app/androidtv/app/src/main/AndroidManifest.xml:41:13-55
-57            <intent-filter>
-57-->/app/androidtv/app/src/main/AndroidManifest.xml:42:13-46:29
-58                <action android:name="android.intent.action.MAIN" />
-58-->/app/androidtv/app/src/main/AndroidManifest.xml:43:17-69
-58-->/app/androidtv/app/src/main/AndroidManifest.xml:43:25-66
-59
-60                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-60-->/app/androidtv/app/src/main/AndroidManifest.xml:44:17-86
-60-->/app/androidtv/app/src/main/AndroidManifest.xml:44:27-83
-61                <category android:name="android.intent.category.LAUNCHER" />
-61-->/app/androidtv/app/src/main/AndroidManifest.xml:45:17-77
-61-->/app/androidtv/app/src/main/AndroidManifest.xml:45:27-74
-62            </intent-filter>
-63        </activity>
-64
-65        <!-- Required so the OS package installer can read the APK we download. -->
-66        <provider
-67            android:name="androidx.core.content.FileProvider"
-67-->/app/androidtv/app/src/main/AndroidManifest.xml:51:13-62
-68            android:authorities="com.hushtv.tv.debug.fileprovider"
-68-->/app/androidtv/app/src/main/AndroidManifest.xml:52:13-64
-69            android:exported="false"
-69-->/app/androidtv/app/src/main/AndroidManifest.xml:53:13-37
-70            android:grantUriPermissions="true" >
-70-->/app/androidtv/app/src/main/AndroidManifest.xml:54:13-47
-71            <meta-data
-71-->/app/androidtv/app/src/main/AndroidManifest.xml:55:13-57:54
-72                android:name="android.support.FILE_PROVIDER_PATHS"
-72-->/app/androidtv/app/src/main/AndroidManifest.xml:56:17-67
-73                android:resource="@xml/file_paths" />
-73-->/app/androidtv/app/src/main/AndroidManifest.xml:57:17-51
-74        </provider>
-75
-76        <!--
-77             Fires "Your show starts in 5 min" notifications scheduled via
-78             AlarmManager + EpgReminderScheduler.
-79        -->
-80        <receiver
-80-->/app/androidtv/app/src/main/AndroidManifest.xml:62:9-64:40
-81            android:name="com.hushtv.tv.notifications.ReminderReceiver"
-81-->/app/androidtv/app/src/main/AndroidManifest.xml:63:13-59
-82            android:exported="false" />
-82-->/app/androidtv/app/src/main/AndroidManifest.xml:64:13-37
-83
-84        <provider
-84-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
-85            android:name="androidx.startup.InitializationProvider"
-85-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
-86            android:authorities="com.hushtv.tv.debug.androidx-startup"
-86-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
-87            android:exported="false" >
-87-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
-88            <meta-data
-88-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
-89                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-89-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
-90                android:value="androidx.startup" />
-90-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
-91            <meta-data
-91-->[androidx.lifecycle:lifecycle-process:2.8.6] /root/.gradle/caches/transforms-4/be3bf2561d4c33f9b6eb7fb85e864c52/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:29:13-31:52
-92                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-92-->[androidx.lifecycle:lifecycle-process:2.8.6] /root/.gradle/caches/transforms-4/be3bf2561d4c33f9b6eb7fb85e864c52/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:30:17-78
-93                android:value="androidx.startup" />
-93-->[androidx.lifecycle:lifecycle-process:2.8.6] /root/.gradle/caches/transforms-4/be3bf2561d4c33f9b6eb7fb85e864c52/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:31:17-49
-94            <meta-data
-94-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
-95                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-95-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
-96                android:value="androidx.startup" />
-96-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
-97        </provider>
-98
-99        <receiver
-99-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
-100            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-100-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
-101            android:directBootAware="false"
-101-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
-102            android:enabled="true"
-102-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
-103            android:exported="true"
-103-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
-104            android:permission="android.permission.DUMP" >
-104-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
-105            <intent-filter>
-105-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
-106                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-106-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
-106-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
-107            </intent-filter>
-108            <intent-filter>
-108-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
-109                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-109-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
-109-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
-110            </intent-filter>
-111            <intent-filter>
-111-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
-112                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-112-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
-112-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
-113            </intent-filter>
-114            <intent-filter>
-114-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
-115                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-115-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
-115-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
-116            </intent-filter>
-117        </receiver>
-118    </application>
-119
-120</manifest>
+41        android:extractNativeLibs="false"
+42        android:icon="@mipmap/ic_launcher"
+42-->/app/androidtv/app/src/main/AndroidManifest.xml:27:9-43
+43        android:label="@string/app_name"
+43-->/app/androidtv/app/src/main/AndroidManifest.xml:28:9-41
+44        android:largeHeap="true"
+44-->/app/androidtv/app/src/main/AndroidManifest.xml:33:9-33
+45        android:networkSecurityConfig="@xml/network_security_config"
+45-->/app/androidtv/app/src/main/AndroidManifest.xml:30:9-69
+46        android:roundIcon="@mipmap/ic_launcher_round"
+46-->/app/androidtv/app/src/main/AndroidManifest.xml:29:9-54
+47        android:supportsRtl="true"
+47-->/app/androidtv/app/src/main/AndroidManifest.xml:32:9-35
+48        android:theme="@style/Theme.HushTV"
+48-->/app/androidtv/app/src/main/AndroidManifest.xml:34:9-44
+49        android:usesCleartextTraffic="true" >
+49-->/app/androidtv/app/src/main/AndroidManifest.xml:31:9-44
+50        <activity
+50-->/app/androidtv/app/src/main/AndroidManifest.xml:36:9-47:20
+51            android:name="com.hushtv.tv.MainActivity"
+51-->/app/androidtv/app/src/main/AndroidManifest.xml:37:13-41
+52            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+52-->/app/androidtv/app/src/main/AndroidManifest.xml:38:13-113
+53            android:exported="true"
+53-->/app/androidtv/app/src/main/AndroidManifest.xml:39:13-36
+54            android:launchMode="singleTask"
+54-->/app/androidtv/app/src/main/AndroidManifest.xml:40:13-44
+55            android:theme="@style/Theme.HushTV.Splash" >
+55-->/app/androidtv/app/src/main/AndroidManifest.xml:41:13-55
+56            <intent-filter>
+56-->/app/androidtv/app/src/main/AndroidManifest.xml:42:13-46:29
+57                <action android:name="android.intent.action.MAIN" />
+57-->/app/androidtv/app/src/main/AndroidManifest.xml:43:17-69
+57-->/app/androidtv/app/src/main/AndroidManifest.xml:43:25-66
+58
+59                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+59-->/app/androidtv/app/src/main/AndroidManifest.xml:44:17-86
+59-->/app/androidtv/app/src/main/AndroidManifest.xml:44:27-83
+60                <category android:name="android.intent.category.LAUNCHER" />
+60-->/app/androidtv/app/src/main/AndroidManifest.xml:45:17-77
+60-->/app/androidtv/app/src/main/AndroidManifest.xml:45:27-74
+61            </intent-filter>
+62        </activity>
+63
+64        <!-- Required so the OS package installer can read the APK we download. -->
+65        <provider
+66            android:name="androidx.core.content.FileProvider"
+66-->/app/androidtv/app/src/main/AndroidManifest.xml:51:13-62
+67            android:authorities="com.hushtv.tv.debug.fileprovider"
+67-->/app/androidtv/app/src/main/AndroidManifest.xml:52:13-64
+68            android:exported="false"
+68-->/app/androidtv/app/src/main/AndroidManifest.xml:53:13-37
+69            android:grantUriPermissions="true" >
+69-->/app/androidtv/app/src/main/AndroidManifest.xml:54:13-47
+70            <meta-data
+70-->/app/androidtv/app/src/main/AndroidManifest.xml:55:13-57:54
+71                android:name="android.support.FILE_PROVIDER_PATHS"
+71-->/app/androidtv/app/src/main/AndroidManifest.xml:56:17-67
+72                android:resource="@xml/file_paths" />
+72-->/app/androidtv/app/src/main/AndroidManifest.xml:57:17-51
+73        </provider>
+74
+75        <!--
+76             Fires "Your show starts in 5 min" notifications scheduled via
+77             AlarmManager + EpgReminderScheduler.
+78        -->
+79        <receiver
+79-->/app/androidtv/app/src/main/AndroidManifest.xml:62:9-64:40
+80            android:name="com.hushtv.tv.notifications.ReminderReceiver"
+80-->/app/androidtv/app/src/main/AndroidManifest.xml:63:13-59
+81            android:exported="false" />
+81-->/app/androidtv/app/src/main/AndroidManifest.xml:64:13-37
+82
+83        <provider
+83-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+84            android:name="androidx.startup.InitializationProvider"
+84-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+85            android:authorities="com.hushtv.tv.debug.androidx-startup"
+85-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+86            android:exported="false" >
+86-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+87            <meta-data
+87-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+88                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+88-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+89                android:value="androidx.startup" />
+89-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/192474c036ec43764acdf6f3e34ae042/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+90            <meta-data
+90-->[androidx.lifecycle:lifecycle-process:2.8.6] /root/.gradle/caches/transforms-4/be3bf2561d4c33f9b6eb7fb85e864c52/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:29:13-31:52
+91                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+91-->[androidx.lifecycle:lifecycle-process:2.8.6] /root/.gradle/caches/transforms-4/be3bf2561d4c33f9b6eb7fb85e864c52/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:30:17-78
+92                android:value="androidx.startup" />
+92-->[androidx.lifecycle:lifecycle-process:2.8.6] /root/.gradle/caches/transforms-4/be3bf2561d4c33f9b6eb7fb85e864c52/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:31:17-49
+93            <meta-data
+93-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+94                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+94-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+95                android:value="androidx.startup" />
+95-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+96        </provider>
+97
+98        <receiver
+98-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+99            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+99-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+100            android:directBootAware="false"
+100-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+101            android:enabled="true"
+101-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+102            android:exported="true"
+102-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+103            android:permission="android.permission.DUMP" >
+103-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+104            <intent-filter>
+104-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+105                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+105-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+105-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+106            </intent-filter>
+107            <intent-filter>
+107-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+108                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+108-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+108-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+109            </intent-filter>
+110            <intent-filter>
+110-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+111                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+111-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+111-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+112            </intent-filter>
+113            <intent-filter>
+113-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+114                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+114-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+114-->[androidx.profileinstaller:profileinstaller:1.3.1] /root/.gradle/caches/transforms-4/4e16cc280eaa0a1f5277c41379c36ea2/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+115            </intent-filter>
+116        </receiver>
+117    </application>
+118
+119</manifest>

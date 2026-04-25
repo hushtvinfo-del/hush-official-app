@@ -11,21 +11,49 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 176
-        versionName = "1.34.1"
+        versionCode = 177
+        versionName = "1.34.2"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
+    signingConfigs {
+        // Persistent signing identity stored in the project so the
+        // signature is identical across builds, container restarts,
+        // and machines. This is the same SHA-256 that signed every
+        // shipped HushTV build to date, so existing installs upgrade
+        // cleanly.
+        //
+        // We're sideloading via OTA, not the Play Store, so a "debug"
+        // keystore is fine — the only thing that matters is that the
+        // signature stays *stable* so Android allows updates and Play
+        // Protect's signature-trust heuristic eventually whitelists us.
+        create("hushtv") {
+            storeFile = rootProject.file("../keys/hushtv.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("hushtv")
         }
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // Override AGP's default. Disabling the debuggable flag is
+            // what stops Google Play Protect / Samsung Auto Blocker
+            // from popping the "App scan recommended" dialog on every
+            // OTA update. The build is otherwise identical (no R8, no
+            // resource shrinking, fast incremental compiles) but does
+            // not declare debuggable=true in the manifest.
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("hushtv")
         }
     }
 
