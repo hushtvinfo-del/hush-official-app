@@ -219,6 +219,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     // Focus requester for the first card in each page. Nav-Down lands on
     // the first card of whichever page is currently showing.
     val firstCwFocus = remember { FocusRequester() }
+    val firstRequestsFocus = remember { FocusRequester() }
     val firstDiscoveryFocus = remember { FocusRequester() }
     val firstSsMoviesFocus = remember { FocusRequester() }
     val firstSsSeriesFocus = remember { FocusRequester() }
@@ -254,11 +255,64 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val continueHandle = com.hushtv.tv.ui.screens.home.rememberContinueEntries(playlistId)
     val continueEntries = continueHandle.entries
     val hasCw = continueEntries.isNotEmpty()
-    var currentPage by remember(hasCw) {
-        mutableStateOf(if (hasCw) "cw" else "discovery")
+
+    // Outstanding-requests fetch — drives the dedicated REQUESTS
+    // page in the home pager. Refetched on each main-menu mount via
+    // RequestCache (which is also populated by the notification host
+    // and the My Requests list).
+    val ctxLocal = androidx.compose.ui.platform.LocalContext.current
+    var homeRequests by remember {
+        mutableStateOf(com.hushtv.tv.data.RequestCache.all())
     }
-    val pageOrder = remember(hasCw) {
+    LaunchedEffect(playlistId) {
+        if (com.hushtv.tv.data.UserContactStore.get(ctxLocal) == null) return@LaunchedEffect
+        if (com.hushtv.tv.data.RequestCache.all().isNotEmpty() &&
+            com.hushtv.tv.data.RequestCache.ageMs() < 60_000
+        ) {
+            homeRequests = com.hushtv.tv.data.RequestCache.all()
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(800)
+        runCatching {
+            val res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.hushtv.tv.data.ContentRequestApi.listRequests(ctxLocal, limit = 20)
+            }
+            if (res is com.hushtv.tv.data.ContentRequestApi.ListResult.Success) {
+                val visible = com.hushtv.tv.data.RequestHiddenStore
+                    .filterVisible(ctxLocal, res.requests)
+                com.hushtv.tv.data.RequestCache.put(visible)
+                homeRequests = visible
+            }
+        }
+    }
+    val requestsForPage = remember(homeRequests) {
+        homeRequests
+            .filter { r ->
+                val open = r.status == com.hushtv.tv.data.ContentRequestApi.Status.PENDING ||
+                    r.status == com.hushtv.tv.data.ContentRequestApi.Status.IN_PROGRESS
+                open || com.hushtv.tv.data.RequestSeenStore.isUnseen(ctxLocal, r)
+            }
+            .sortedByDescending { it.updatedDate.ifBlank { it.createdDate } }
+            .take(10)
+    }
+    val hasRequests = requestsForPage.isNotEmpty()
+
+    var currentPage by remember(hasCw, hasRequests) {
+        // First-load priority: requests > continue-watching > discovery.
+        // User feedback explicitly wanted requests as their own page
+        // when present. We do NOT auto-jump to "requests" if the page
+        // was already manually moved past it.
+        mutableStateOf(
+            when {
+                hasRequests -> "requests"
+                hasCw -> "cw"
+                else -> "discovery"
+            }
+        )
+    }
+    val pageOrder = remember(hasCw, hasRequests) {
         buildList {
+            if (hasRequests) add("requests")
             if (hasCw) add("cw")
             add("discovery")
             add("ss_movies")
@@ -447,6 +501,20 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 label = "home-pager",
             ) { page ->
                 when (page) {
+                    "requests" -> com.hushtv.tv.ui.requests.TVRequestsPage(
+                        playlistId = playlistId,
+                        nav = nav,
+                        requests = requestsForPage,
+                        firstItemFocus = firstRequestsFocus,
+                        onUpFromRow = { /* nothing above the row */ },
+                        onDownFromRow = {
+                            // Move to the next page in pageOrder.
+                            val idx = pageOrder.indexOf("requests")
+                            if (idx >= 0 && idx + 1 < pageOrder.size) {
+                                currentPage = pageOrder[idx + 1]
+                            }
+                        },
+                    )
                     "cw" -> CwPage(
                         playlistId = playlistId,
                         nav = nav,
@@ -555,6 +623,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 kotlinx.coroutines.delay(320)
                 runCatching {
                     when (currentPage) {
+                        "requests" -> if (hasRequests) firstRequestsFocus.requestFocus()
                         "cw" -> if (hasCw) firstCwFocus.requestFocus()
                         "discovery" -> firstDiscoveryFocus.requestFocus()
                         "collections" -> firstCollectionsFocus.requestFocus()
@@ -590,6 +659,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 com.hushtv.tv.ui.screens.home.HomePage(
                     key = k,
                     label = when (k) {
+                        "requests" -> "REQUESTS"
                         "cw" -> "WATCHING"
                         "discovery" -> "DISCOVER"
                         "collections" -> "COLLECT"
@@ -631,6 +701,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         ev.key == androidx.compose.ui.input.key.Key.DirectionDown
                     ) {
                         val target = when (navDownTarget) {
+                            "requests" -> firstRequestsFocus
                             "cw" -> firstCwFocus
                             "collections" -> firstCollectionsFocus
                             "ss_movies" -> firstSsMoviesFocus

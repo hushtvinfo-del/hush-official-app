@@ -1,6 +1,67 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.40.2 — 2026-04-25 (versionCode 196)  ⬅ LATEST  (non-mandatory)
+## v1.41.0 — 2026-04-25 (versionCode 197)  ⬅ LATEST  (MANDATORY)
+
+**TV: dedicated "REQUESTS" page in the home pager.** Restored TV
+Home rail visibility — but as its own page in the vertical pager,
+not a top overlay. Solves the v1.40.2 regression (whole rail
+removed) AND the v1.40.1 bug (overlay overlapped Discover and
+caused garbled header text).
+
+### Page architecture
+The TV home is a vertical pager of full-screen pages: Continue
+Watching, Discover, Movies, Series, Collections, Genres, Years.
+Channel Up / Channel Down (or D-pad up/down on the row) moves
+between pages. Each page has its own focus first-card target.
+
+NEW page added: **`requests`** — sits at the **top** of pageOrder
+when `requestsForPage.isNotEmpty()`, hidden entirely otherwise.
+First-load priority is `requests > cw > discovery`, so a user
+with open requests opens the app straight onto their requests
+page.
+
+### `TVRequestsPage` composable
+- Full-screen hero backdrop driven by the currently-focused
+  request's TMDB backdrop (or poster fallback). Vertical gradient
+  ensures the bottom row is always readable.
+- Bottom-anchored 16:9 card row: 320 × 180 px backdrop cards,
+  same `BackdropRequestCard` aesthetic as Mobile but bigger.
+- Status badge top-left (color-coded), unread cyan dot top-right.
+- Cards expose long-press → `RemoveRequestDialog` (same client-
+  side hide flow as Mobile).
+- Up arrow on row → top nav focus; Down arrow on row → next page
+  in pageOrder.
+
+### Files
+- NEW `ui/requests/TVRequestsPage.kt` — full-screen page composable
+  with hero + row + long-press
+- `ui/screens/TVMainMenuScreen.kt`:
+  - fetches outstanding-requests via `ContentRequestApi.listRequests`
+    + `RequestHiddenStore.filterVisible` + the same open/unseen
+    filter as the mobile rail
+  - injects `"requests"` into `pageOrder` when `hasRequests`
+  - sets `currentPage = "requests"` on first load when present
+  - adds `firstRequestsFocus` requester
+  - adds `"requests" -> TVRequestsPage(...)` AnimatedContent branch
+  - adds `"REQUESTS"` label to `HomePageIndicator`
+  - extends top-nav D-pad-down router to focus the requests row
+
+### Build + deploy
+- `versionCode 196 → 197`, `versionName "1.40.2" → "1.41.0"`.
+- BUILD SUCCESSFUL. APK md5 `971448430d1d0a49ecf4f5709ba389a5`,
+  17.5 MB, live on `https://hushtv.xyz/hushtv.apk`. Shipped as
+  **MANDATORY** so users get the restored TV rail on next launch.
+
+### Mobile (unchanged from v1.40.2)
+The Mobile home rail still sits below the pager in the home Column.
+That layout has been working since v1.40.0 and the user explicitly
+called out it's the right pattern — they want TV to match the
+Mobile model where requests have their own page / section, separate
+from the discovery flow.
+
+---
+
+## v1.40.2 — 2026-04-25 (versionCode 196)
 
 **TV main menu overlap fix + long-press to remove a request.**
 User reported on TV the rail was overlapping the top nav header
