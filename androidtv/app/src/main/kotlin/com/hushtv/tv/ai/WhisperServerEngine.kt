@@ -3,6 +3,7 @@ package com.hushtv.tv.ai
 import android.content.Context
 import android.util.Log
 import com.hushtv.tv.BuildConfig
+import com.hushtv.tv.data.AiEngineStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,42 +21,39 @@ import java.nio.ByteOrder
 import java.util.concurrent.TimeUnit
 
 /**
- * AI captions engine backed by our **GPU-hosted Whisper Base** service
- * at `wss://ai.hushtv.xyz/ws` (Tesla T4 + faster-whisper +
- * int8_float16) using a streaming WebSocket. Replaces the old Vosk
- * on-device engine — same public surface so player screens stay
- * unchanged:
+ * AI captions engine backed by our **GPU server** at `ai.hushtv.xyz`.
  *
+ * The user picks between two backends in Settings ([AiEngineStore]):
+ *   • STANDARD → wss://ai.hushtv.xyz/ws — free Whisper-Base, ~1 s lag
+ *   • REALTIME → wss://ai.hushtv.xyz/ws-realtime — AssemblyAI Universal
+ *     Streaming Multilingual, ~300-500 ms lag, auto-translates non-EN
+ *     to English. Costs ~$0.15/hour billed against the operator's AAI
+ *     account, not the end user.
+ *
+ * Public surface (unchanged from prior versions):
  *   • IDLE → READY (toggle on) → RUNNING (audio flowing) → READY → IDLE
- *   • [text] is the live English caption string. Empty string means
- *     "no speech detected yet" — the player overlay decides what to
- *     render in that case (placeholder, etc.).
+ *   • [text] is the live English caption string.
+ *   • [state] for player overlays.
  *
  * Architecture per playback session:
  *   PcmTapAudioProcessor.onPcm  →  toMono16k(...)  →  WebSocket.send(bytes)
  *                                                   ↓
- *                                       Server holds 3-s sliding window,
- *                                       runs Whisper every ~1 s, pushes
- *                                       JSON {"text","lang","ms"} back.
+ *                                       Server returns JSON
+ *                                       {"text","lang","ms","engine","final"}
  *                                                   ↓
  *                                            _text.value = response.text
- *
- * Source-language detection + English translation both happen on the
- * server. Client only ships PCM bytes.
- *
- * v1.32.1: switched from per-chunk HTTP POST to WebSocket streaming,
- * cutting perceived lag from ~3.2 s to ~1.2 s.
  */
 object WhisperServerEngine {
 
     private const val TAG = "WhisperSrv"
-    private const val WS_URL = "wss://ai.hushtv.xyz/ws"
+    private const val WS_STANDARD = "wss://ai.hushtv.xyz/ws"
+    private const val WS_REALTIME = "wss://ai.hushtv.xyz/ws-realtime"
     private const val SHARED_SECRET =
         "-LIAWe9fAxf_mnKiWXOqZtbQ2c3Tjn-FZP0IWSSvFDw"
 
-    /** Send mini frames as soon as they're ready. Anything from ~50 ms
-     *  to ~500 ms works; the server batches into a 3-s sliding window
-     *  internally. */
+    /** Mini-frame size we ship to the server. Anything from ~50-500 ms
+     *  works; AAI batches internally and our Whisper proxy keeps a
+     *  3-second sliding window. */
     private const val SEND_FRAME_MS = 200
     private const val SEND_FRAME_BYTES = 16_000 * 2 * SEND_FRAME_MS / 1000
 
@@ -65,11 +63,15 @@ object WhisperServerEngine {
     private val _state = MutableStateFlow(EngineState.IDLE)
     val state: StateFlow<EngineState> = _state.asStateFlow()
 
+    private val _activeEngine = MutableStateFlow(AiEngineStore.Engine.STANDARD)
+    /** Which backend the current session connected to. UI uses this for
+     *  the small "⚡ Realtime" badge next to captions. */
+    val activeEngine: StateFlow<AiEngineStore.Engine> = _activeEngine.asStateFlow()
+
     enum class EngineState { IDLE, PREPARING, READY, RUNNING, ERROR }
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            // Long-lived ws — disable read timeout (default 10 s would kill it).
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(20, TimeUnit.SECONDS)
             .connectTimeout(8, TimeUnit.SECONDS)
@@ -80,32 +82,59 @@ object WhisperServerEngine {
     @Volatile private var sourceRate: Int = 0
     @Volatile private var sourceChannels: Int = 0
 
-    /** Accumulator that lets us send neat 200-ms frames over the wire
-     *  even when the audio processor hands us oddly-sized buffers. */
+    /** Last partial (non-final) seen, for fallback display when a final
+     *  hasn't arrived yet — prevents the caption from going blank
+     *  during AAI's long mid-utterance gaps. */
+    @Volatile private var lastPartial: String = ""
+
     private val sendBuf = ByteBuffer
         .allocate(SEND_FRAME_BYTES * 4)
         .order(ByteOrder.LITTLE_ENDIAN)
 
-    /** Kept for source compatibility with the old Vosk engine. The
-     *  server-backed engine has nothing to "prepare" — it's stateless
-     *  per-request — so this is a no-op that just flips state to
-     *  READY. */
     suspend fun prepare(@Suppress("UNUSED_PARAMETER") ctx: Context) {
         if (_state.value == EngineState.IDLE || _state.value == EngineState.ERROR) {
             _state.value = EngineState.READY
         }
     }
 
-    fun start(@Suppress("UNUSED_PARAMETER") parentScope: CoroutineScope, sampleRate: Int, channels: Int) {
+    fun start(parentScope: CoroutineScope, sampleRate: Int, channels: Int, ctx: Context) {
         stop()
         sourceRate = sampleRate
         sourceChannels = channels
         _text.value = ""
+        lastPartial = ""
         synchronized(sendBuf) { sendBuf.clear() }
+
+        val engine = AiEngineStore.get(ctx)
+        _activeEngine.value = engine
+        val url = when (engine) {
+            AiEngineStore.Engine.REALTIME -> "$WS_REALTIME?token=$SHARED_SECRET"
+            AiEngineStore.Engine.STANDARD -> "$WS_STANDARD?token=$SHARED_SECRET"
+        }
         _state.value = EngineState.RUNNING
+        Log.i(TAG, "starting engine=$engine url=$url")
 
         val req = Request.Builder()
-            .url("$WS_URL?token=$SHARED_SECRET")
+            .url(url)
+            .header("User-Agent", "HushTV/${BuildConfig.VERSION_NAME}")
+            .build()
+        ws = httpClient.newWebSocket(req, Listener)
+    }
+
+    /** Source-compat overload: older callers don't have a Context handy. */
+    fun start(parentScope: CoroutineScope, sampleRate: Int, channels: Int) {
+        // Without a Context we can't read the engine pref, so fall back
+        // to STANDARD. The new player code always uses the 4-arg form.
+        stop()
+        sourceRate = sampleRate
+        sourceChannels = channels
+        _text.value = ""
+        lastPartial = ""
+        synchronized(sendBuf) { sendBuf.clear() }
+        _activeEngine.value = AiEngineStore.Engine.STANDARD
+        _state.value = EngineState.RUNNING
+        val req = Request.Builder()
+            .url("$WS_STANDARD?token=$SHARED_SECRET")
             .header("User-Agent", "HushTV/${BuildConfig.VERSION_NAME}")
             .build()
         ws = httpClient.newWebSocket(req, Listener)
@@ -119,10 +148,10 @@ object WhisperServerEngine {
         sourceRate = 0
         sourceChannels = 0
         _text.value = ""
+        lastPartial = ""
         synchronized(sendBuf) { sendBuf.clear() }
     }
 
-    /** Called from the audio processor thread — must NOT block. */
     fun onPcmFrame(pcm16le: ByteArray, length: Int) {
         val rate = sourceRate
         val ch = sourceChannels
@@ -131,9 +160,6 @@ object WhisperServerEngine {
         val resampled = PcmTapAudioProcessor.toMono16k(pcm16le, length, ch, rate)
         if (resampled.isEmpty()) return
 
-        // Pack shorts into the accumulator and flush whenever we have
-        // ≥ SEND_FRAME_BYTES queued up. Synchronised because audio
-        // processor + GC could race on stop().
         synchronized(sendBuf) {
             for (s in resampled) {
                 if (sendBuf.remaining() < 2) {
@@ -153,26 +179,42 @@ object WhisperServerEngine {
         sendBuf.flip()
         sendBuf.get(out)
         sendBuf.clear()
-        // OkHttp's send returns false when the outbound queue is full
-        // (e.g. backpressure from a slow network). We just drop the
-        // frame in that case rather than back up audio playback.
         runCatching { socket.send(out.toByteString()) }
     }
 
     private object Listener : WebSocketListener() {
         override fun onMessage(webSocket: WebSocket, text: String) {
-            // Payload: {"text":"…","lang":"…","ms":123}
+            // Server payload:
+            //   STANDARD: {"text":"…","lang":"…","ms":N,"engine":"whisper"}
+            //   REALTIME: {"text":"…","source_text":"…","lang":"…",
+            //              "final":bool,"engine":"assemblyai","ms":N}
             try {
                 val json = JSONObject(text)
                 val t = json.optString("text", "")
-                _text.value = t
+                val isFinal = json.optBoolean("final", true)
+
+                if (t.isEmpty()) {
+                    // Silence sentinel — clear the caption.
+                    _text.value = ""
+                    lastPartial = ""
+                    return
+                }
+
+                if (isFinal) {
+                    _text.value = t
+                    lastPartial = ""
+                } else {
+                    // Partial — show it as a live preview. When a final
+                    // arrives later it'll replace this string.
+                    lastPartial = t
+                    _text.value = t
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "bad json: $text", e)
             }
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-            // Server only sends text frames — log if we ever see binary.
             Log.w(TAG, "unexpected binary frame, ${bytes.size} bytes")
         }
 
@@ -183,9 +225,6 @@ object WhisperServerEngine {
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             Log.w(TAG, "ws failed: ${t.message} (http ${response?.code})")
-            // Keep the engine in RUNNING but stop emitting captions —
-            // matches the old "fail silent" behaviour. User can toggle
-            // off/on to rebuild a fresh socket.
         }
     }
 }

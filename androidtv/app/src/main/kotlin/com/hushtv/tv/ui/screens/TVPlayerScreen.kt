@@ -168,7 +168,7 @@ fun TVPlayerScreen(
                     val rate = pcmTap.tapSampleRate
                     val ch = pcmTap.tapChannelCount
                     if (rate > 0 && ch > 0) {
-                        WhisperServerEngine.start(captionScope, rate, ch)
+                        WhisperServerEngine.start(captionScope, rate, ch, ctx)
                         return@launch
                     }
                     kotlinx.coroutines.delay(200)

@@ -285,7 +285,7 @@ fun MobilePlayerScreen(
                     val rate = pcmTap.tapSampleRate
                     val ch = pcmTap.tapChannelCount
                     if (rate > 0 && ch > 0) {
-                        WhisperServerEngine.start(scope, rate, ch)
+                        WhisperServerEngine.start(scope, rate, ch, ctx)
                         return@launch
                     }
                     delay(200)

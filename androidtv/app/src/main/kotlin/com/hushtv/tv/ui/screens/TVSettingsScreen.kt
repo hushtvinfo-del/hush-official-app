@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.hushtv.tv.data.LayoutPrefsStore
+import com.hushtv.tv.data.AiEngineStore
 import com.hushtv.tv.data.PinStore
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
@@ -124,6 +126,33 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 subtitle = "Currently using $currentLayoutLabel — applies to Live TV, Movies, Series",
                 icon = { Icon(Icons.Default.Dashboard, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                 onClick = { showLayoutChooser = true },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "AI SUBTITLES",
+                color = TextSecondary, fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+            )
+            var aiEngine by remember { mutableStateOf(AiEngineStore.get(ctx)) }
+            SettingsCard(
+                title = when (aiEngine) {
+                    AiEngineStore.Engine.STANDARD -> "Standard AI — free"
+                    AiEngineStore.Engine.REALTIME -> "Realtime AI — premium ⚡"
+                },
+                subtitle = when (aiEngine) {
+                    AiEngineStore.Engine.STANDARD ->
+                        "Whisper Base on our T4 GPU, ~1 s lag. Press OK to switch to Realtime."
+                    AiEngineStore.Engine.REALTIME ->
+                        "AssemblyAI streaming + auto-translate, ~400 ms lag. Press OK to switch back."
+                },
+                icon = { Icon(Icons.Default.Bolt, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                onClick = {
+                    val next = if (aiEngine == AiEngineStore.Engine.STANDARD)
+                        AiEngineStore.Engine.REALTIME else AiEngineStore.Engine.STANDARD
+                    AiEngineStore.set(ctx, next)
+                    aiEngine = next
+                },
             )
 
             Spacer(Modifier.height(12.dp))
