@@ -2456,3 +2456,48 @@ sshpass -p '<password>' scp app/build/outputs/apk/debug/app-debug.apk \
 ```
 
 Users on HushTV 1.0.x auto-receive the update dialog ~3 s after launch.
+
+---
+
+## v1.32.0 — 2026-04-24 (versionCode 169)
+
+**Server-side AI Subtitles — full deploy.** APK: 24 MB (down from 113 MB).
+
+### GPU AI server (`ai.hushtv.xyz`, dedicated Tesla T4)
+- Dedicated server provisioned at `216.152.147.177` running:
+  - `faster-whisper` 1.0.3 + `ctranslate2` 4.7.1 (model: `base`, `int8_float16`)
+  - FastAPI + uvicorn behind nginx → `127.0.0.1:5066`
+  - systemd unit `hushtv-ai.service`, env at `/etc/hushtv-ai/config.env`
+  - Logs: `/var/log/hushtv-ai/service.log`
+- DNS: `ai.hushtv.xyz A 216.152.147.177` (Namecheap host field is just `ai`,
+  NOT the FQDN — full FQDN creates `ai.hushtv.xyz.hushtv.xyz`).
+- TLS: Let's Encrypt via `certbot --nginx -d ai.hushtv.xyz` (auto-renew
+  enabled), HTTP→HTTPS 301 redirect.
+- Endpoints:
+  - `GET  /health`     → `{"ok":true,"in_flight":N,"model":"base"}`
+  - `POST /transcribe` → Bearer auth (header `Authorization: Bearer <SECRET>`),
+    body = raw 16-bit LE PCM @ 16 kHz mono, 1.6 KB – 6 MB (~50 ms – 3 min),
+    response `{"text","lang","lang_prob","ms"}`. Translates any source
+    language to English (`task="translate"`).
+- Latency on T4: ~150–400 ms per 3-second chunk (well under the 25-second
+  client read timeout). Concurrency cap 300 (env `HUSHTV_AI_MAX_CONCURRENT`).
+- **CUDA gotcha**: ctranslate2 4.7+ needs `libcublas.so.12` + `libcudnn.so.9`.
+  Installed via the venv (`pip install nvidia-cublas-cu12 nvidia-cudnn-cu12==9.*`)
+  and exposed via `Environment=LD_LIBRARY_PATH=...` in the systemd unit.
+
+### Android client
+- `WhisperServerEngine.kt` POSTs 96 KB chunks (3 s of mono 16 kHz PCM) to
+  `https://ai.hushtv.xyz/transcribe` with the shared bearer token. Stateless
+  per-request; failures are silent (UI just stops refreshing).
+- Same public surface as the old Vosk engine, so no player-screen changes.
+- Verified end-to-end: TLS valid, `/health` 200, auth 401/403/400 paths
+  exercised, real Spanish + French TTS samples translated to English with
+  correct language detection.
+
+### Backlog after v1.32.0
+- **P2** Picture-in-Picture (TV + Mobile)
+- **P2** Xtream Catch-up / Archive (`tv_archive=1` → timeshift URL)
+- **P3** Re-evaluate Gemini AI Search
+- **P3** Monitor T4 GPU concurrency. Estimated ~300 concurrent Whisper-Base
+  users; plan for an L4 / RTX 4090 upgrade or a second server before that
+  ceiling is hit.
