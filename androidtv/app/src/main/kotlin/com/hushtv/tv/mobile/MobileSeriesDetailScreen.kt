@@ -270,14 +270,28 @@ fun MobileSeriesDetailScreen(
     // Request modal — full-screen scrim overlay, dismissed via the
     // sheet's own Cancel / Close buttons.
     if (showRequestModal) {
-        RequestContentSheet(
+        com.hushtv.tv.ui.requests.RequestContentSheet(
             presetType = "series",
             presetTitle = seriesName,
             presetSeason = currentSeason?.let { "Season $it" }.orEmpty(),
+            playlistId = playlistId,
             onDismiss = { showRequestModal = false },
             onViewMyRequests = {
                 showRequestModal = false
                 nav.navigate("mrequests/$playlistId")
+            },
+            onAlreadyAvailable = { entry ->
+                showRequestModal = false
+                if (entry.kind == "series") {
+                    nav.navigate(
+                        mobileSeriesRoute(
+                            playlistId = playlistId,
+                            seriesId = entry.seriesId.toString(),
+                            name = entry.title,
+                            poster = entry.poster,
+                        ),
+                    )
+                }
             },
         )
     }

@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -331,8 +332,20 @@ private fun RequestRow(
     unseen: Boolean,
     onClick: () -> Unit,
 ) {
+    val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
-    Column(
+    // Resolve TMDB metadata for this request — local cache first,
+    // then fall back to parsing the [TMDB ...] tag the app embeds in
+    // additional_info at submit time. Either way the user sees a
+    // proper poster on the row instead of a generic emoji.
+    val meta = remember(r.id, r.additionalInfo) {
+        com.hushtv.tv.data.RequestMetaStore.get(ctx, r.id)
+            ?: com.hushtv.tv.data.RequestMetaStore.parseTag(r.additionalInfo)
+    }
+    val cleanedAdditionalInfo = remember(r.additionalInfo) {
+        com.hushtv.tv.data.RequestMetaStore.stripTag(r.additionalInfo)
+    }
+    Row(
         Modifier
             .fillMaxWidth()
             .background(SurfaceNavy, RoundedCornerShape(14.dp))
@@ -348,78 +361,127 @@ private fun RequestRow(
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(16.dp),
+            .padding(14.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (r.type == "series") "📺" else "🎬",
-                fontSize = 18.sp,
-            )
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        r.title,
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = if (unseen) FontWeight.Black else FontWeight.SemiBold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (unseen) {
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            Modifier
-                                .background(Cyan, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                        ) {
-                            Text(
-                                "NEW",
-                                color = Color(0xFF05080F),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp,
-                            )
+        RequestPoster(meta = meta, type = r.type)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            r.title,
+                            color = TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = if (unseen) FontWeight.Black else FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (unseen) {
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                Modifier
+                                    .background(Cyan, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                            ) {
+                                Text(
+                                    "NEW",
+                                    color = Color(0xFF05080F),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 1.sp,
+                                )
+                            }
                         }
                     }
+                    if (meta?.releaseYear != null) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            meta.releaseYear.toString(),
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
+                Spacer(Modifier.width(10.dp))
+                StatusBadge(r.status)
             }
-            Spacer(Modifier.width(10.dp))
-            StatusBadge(r.status)
+            if (r.type == "series" && (!r.seasons.isNullOrBlank() || !r.episodes.isNullOrBlank())) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    buildString {
+                        if (!r.seasons.isNullOrBlank()) {
+                            append(r.seasons)
+                        }
+                        if (!r.episodes.isNullOrBlank()) {
+                            if (isNotEmpty()) append("  ·  ")
+                            append(r.episodes)
+                        }
+                    },
+                    color = TextSecondary, fontSize = 12.sp,
+                )
+            }
+            if (!r.adminResponse.isNullOrBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(Cyan.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                        .border(1.dp, Cyan.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                ) {
+                    Column {
+                        Text("Admin response", color = Cyan, fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text(r.adminResponse, color = TextPrimary, fontSize = 13.sp,
+                            lineHeight = 17.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            } else if (!cleanedAdditionalInfo.isNullOrBlank()) {
+                // Show user-provided notes if no admin response yet.
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    cleanedAdditionalInfo,
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        if (r.type == "series" && (!r.seasons.isNullOrBlank() || !r.episodes.isNullOrBlank())) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                buildString {
-                    if (!r.seasons.isNullOrBlank()) {
-                        append(r.seasons)
-                    }
-                    if (!r.episodes.isNullOrBlank()) {
-                        if (isNotEmpty()) append("  ·  ")
-                        append(r.episodes)
-                    }
-                },
-                color = TextSecondary, fontSize = 12.sp,
+    }
+}
+
+@Composable
+private fun RequestPoster(
+    meta: com.hushtv.tv.data.RequestMetaStore.Meta?,
+    type: String,
+) {
+    Box(
+        Modifier
+            .size(width = 60.dp, height = 90.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF0F172A)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val url = meta?.posterPath?.let {
+            com.hushtv.tv.data.TmdbService.img(it, "w185")
+        }
+        if (!url.isNullOrBlank()) {
+            coil.compose.AsyncImage(
+                model = url,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
             )
-        }
-        if (!r.adminResponse.isNullOrBlank()) {
-            Spacer(Modifier.height(10.dp))
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Cyan.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                    .border(1.dp, Cyan.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                    .padding(10.dp),
-            ) {
-                Column {
-                    Text("Admin response", color = Cyan, fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text(r.adminResponse, color = TextPrimary, fontSize = 13.sp,
-                        lineHeight = 17.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                }
-            }
+        } else {
+            Text(
+                if (type == "series") "📺" else "🎬",
+                fontSize = 24.sp,
+            )
         }
     }
 }

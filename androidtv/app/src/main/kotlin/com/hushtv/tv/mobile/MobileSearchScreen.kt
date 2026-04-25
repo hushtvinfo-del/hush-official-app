@@ -344,13 +344,46 @@ fun MobileSearchScreen(nav: NavController, playlistId: String) {
             series.isNotEmpty() && movies.isEmpty() -> "series"
             else -> "movie"
         }
-        RequestContentSheet(
+        com.hushtv.tv.ui.requests.RequestContentSheet(
             presetType = presetType,
             presetTitle = query.trim(),
+            playlistId = playlistId,
             onDismiss = { showRequestModal = false },
             onViewMyRequests = {
                 showRequestModal = false
                 nav.navigate("mrequests/$playlistId")
+            },
+            onAlreadyAvailable = { entry ->
+                showRequestModal = false
+                val p = PlaylistStore.find(ctx, playlistId)
+                if (p != null) {
+                    if (entry.kind == "series") {
+                        nav.navigate(
+                            mobileSeriesRoute(
+                                playlistId = playlistId,
+                                seriesId = entry.seriesId.toString(),
+                                name = entry.title,
+                                poster = entry.poster,
+                            ),
+                        )
+                    } else {
+                        val url = XtreamApi.movieUrl(
+                            p.host, p.username, p.password,
+                            entry.streamId, null,
+                        )
+                        nav.navigate(
+                            mobilePlayerRoute(
+                                playlistId = playlistId,
+                                streamUrl = url,
+                                channelName = entry.title,
+                                isLive = false,
+                                vodStreamId = entry.streamId,
+                                vodKind = "movie",
+                                vodPoster = entry.poster,
+                            ),
+                        )
+                    }
+                }
             },
         )
     }

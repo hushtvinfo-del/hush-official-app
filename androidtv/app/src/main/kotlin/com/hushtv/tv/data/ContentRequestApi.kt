@@ -71,6 +71,21 @@ object ContentRequestApi {
      *
      * For series-specific submissions, pass [seriesRequestType] +
      * optionally [seasons] / [episodes]. For movies, leave those null.
+     *
+     * If [tmdbMeta] is provided, the gateway gets:
+     *   • Standalone keys (`tmdb_id`, `tmdb_type`, `tmdb_year`,
+     *     `tmdb_poster_path`, `tmdb_backdrop_path`, `tmdb_overview`)
+     *     — these will be picked up by Base44 admin if the schema
+     *     supports them, otherwise silently dropped.
+     *   • A compact `[TMDB ...]` tag appended to additional_info so
+     *     even legacy admin views still see the metadata, AND so
+     *     the app can recover poster / id / year on a fresh install
+     *     where the SharedPreferences cache is empty.
+     *
+     * On success the caller is also responsible for stashing
+     * [tmdbMeta] into [RequestMetaStore] keyed by the returned
+     * request id — that's what powers the rich poster on My
+     * Requests rows.
      */
     fun submitRequest(
         ctx: Context,
@@ -81,9 +96,19 @@ object ContentRequestApi {
         seasons: String? = null,
         episodes: String? = null,
         priority: String = "medium",
+        tmdbMeta: RequestMetaStore.Meta? = null,
     ): SubmitResult {
         val contact = UserContactStore.get(ctx)
             ?: return SubmitResult.Error("Add your name and email first.")
+
+        // Build the additional_info payload — user notes plus an
+        // appended TMDB tag (only when we have TMDB metadata).
+        val infoText: String? = run {
+            val parts = mutableListOf<String>()
+            additionalInfo?.takeIf { it.isNotBlank() }?.let { parts += it }
+            tmdbMeta?.let { parts += RequestMetaStore.encodeTag(it) }
+            parts.takeIf { it.isNotEmpty() }?.joinToString("\n")
+        }
 
         val body = JSONObject().apply {
             put("action", "createContentRequest")
@@ -92,10 +117,20 @@ object ContentRequestApi {
             put("type", type)
             put("title", title)
             put("priority", priority)
-            if (!additionalInfo.isNullOrBlank()) put("additional_info", additionalInfo)
+            if (!infoText.isNullOrBlank()) put("additional_info", infoText)
             if (!seriesRequestType.isNullOrBlank()) put("series_request_type", seriesRequestType)
             if (!seasons.isNullOrBlank()) put("seasons", seasons)
             if (!episodes.isNullOrBlank()) put("episodes", episodes)
+            // TMDB metadata as standalone keys — silently ignored by
+            // gateways that don't recognise them.
+            if (tmdbMeta != null) {
+                put("tmdb_id", tmdbMeta.tmdbId)
+                put("tmdb_type", tmdbMeta.tmdbType)
+                tmdbMeta.releaseYear?.let { put("tmdb_year", it) }
+                tmdbMeta.posterPath?.let { put("tmdb_poster_path", it) }
+                tmdbMeta.backdropPath?.let { put("tmdb_backdrop_path", it) }
+                tmdbMeta.overview?.takeIf { it.isNotBlank() }?.let { put("tmdb_overview", it) }
+            }
         }
         return runCatching {
             val (code, text) = post(body.toString())

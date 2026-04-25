@@ -367,13 +367,26 @@ fun TVUnifiedSearchScreen(
     // sheet.
     if (showRequestModal) {
         val presetType = if (seriesHits.isNotEmpty() && moviesHits.isEmpty()) "series" else "movie"
-        RequestContentSheet(
+        com.hushtv.tv.ui.requests.RequestContentSheet(
             presetType = presetType,
             presetTitle = query.trim(),
+            playlistId = playlistId,
             onDismiss = { showRequestModal = false },
             onViewMyRequests = {
                 showRequestModal = false
                 nav.navigate("myrequests/$playlistId")
+            },
+            onAlreadyAvailable = { entry ->
+                showRequestModal = false
+                if (entry.kind == "series") {
+                    nav.navigate(
+                        "series/$playlistId/${entry.seriesId}/${Uri.encode(entry.title)}"
+                    )
+                } else {
+                    nav.navigate(
+                        "moviedetail/$playlistId/${entry.streamId}/${Uri.encode(entry.title)}"
+                    )
+                }
             },
         )
     }

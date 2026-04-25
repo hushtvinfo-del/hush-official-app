@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -211,6 +213,7 @@ private fun RequestSummaryCard(
     onClick: () -> Unit,
     isTv: Boolean,
 ) {
+    val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val cardWidth = if (isTv) 280.dp else 230.dp
     val (badgeBg, badgeFg) = when (req.status) {
@@ -220,7 +223,11 @@ private fun RequestSummaryCard(
         ContentRequestApi.Status.ADDED -> Color(0x3322C55E) to Color(0xFF34D399)
         ContentRequestApi.Status.NOT_FOUND -> Color(0x33EF4444) to Color(0xFFF87171)
     }
-    Column(
+    val meta = remember(req.id, req.additionalInfo) {
+        com.hushtv.tv.data.RequestMetaStore.get(ctx, req.id)
+            ?: com.hushtv.tv.data.RequestMetaStore.parseTag(req.additionalInfo)
+    }
+    androidx.compose.foundation.layout.Row(
         Modifier
             .width(cardWidth)
             .background(SurfaceNavy, RoundedCornerShape(14.dp))
@@ -236,36 +243,55 @@ private fun RequestSummaryCard(
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(14.dp),
+            .padding(10.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .background(badgeBg, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 6.dp, vertical = 3.dp),
-            ) {
-                Text(
-                    "${req.status.emoji} ${req.status.label}",
-                    color = badgeFg,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.5.sp,
-                )
+        // Poster — w185 is plenty for a 50x75 thumbnail
+        Box(
+            Modifier
+                .size(width = 50.dp, height = 75.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFF0F172A)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val url = meta?.posterPath?.let {
+                com.hushtv.tv.data.TmdbService.img(it, "w185")
             }
-            Spacer(Modifier.weight(1f))
-            if (unseen) {
-                Box(
-                    Modifier.size(8.dp).background(Cyan, CircleShape),
+            if (!url.isNullOrBlank()) {
+                coil.compose.AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    if (req.type == "series") "📺" else "🎬",
+                    fontSize = 22.sp,
                 )
             }
         }
-        Spacer(Modifier.size(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (req.type == "series") "📺" else "🎬",
-                fontSize = 14.sp,
-            )
-            Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .background(badgeBg, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                ) {
+                    Text(
+                        "${req.status.emoji} ${req.status.label}",
+                        color = badgeFg,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.3.sp,
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                if (unseen) {
+                    Box(Modifier.size(8.dp).background(Cyan, CircleShape))
+                }
+            }
+            Spacer(Modifier.size(6.dp))
             Text(
                 req.title,
                 color = TextPrimary,
@@ -273,19 +299,16 @@ private fun RequestSummaryCard(
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
             )
-        }
-        if (!req.adminResponse.isNullOrBlank()) {
-            Spacer(Modifier.size(6.dp))
-            Text(
-                req.adminResponse,
-                color = TextSecondary,
-                fontSize = 11.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 14.sp,
-            )
+            if (meta?.releaseYear != null) {
+                Spacer(Modifier.size(2.dp))
+                Text(
+                    meta.releaseYear.toString(),
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }

@@ -283,6 +283,32 @@ object TmdbService {
         }.getOrNull()
     }
 
+    /**
+     * Returns up to 20 movie hits ordered by TMDB popularity (most
+     * popular first). Used by the in-app "Request missing content"
+     * picker — gives the user a poster-grid to choose from instead
+     * of typing a free-text title.
+     *
+     * Empty list on network error / blank query — caller decides how
+     * to handle that (typically: render an inline "Couldn't search
+     * TMDB" message).
+     */
+    suspend fun searchMoviesList(query: String): List<TmdbSearchHit> =
+        withContext(Dispatchers.IO) {
+            val q = query.trim()
+            if (q.isBlank()) return@withContext emptyList()
+            val encoded = java.net.URLEncoder.encode(q, "UTF-8")
+            val url = "$BASE/search/movie?query=$encoded&include_adult=false&api_key=${ApiKeys.TMDB}"
+            runCatching {
+                val body = client.newCall(Request.Builder().url(url).build()).execute()
+                    .body?.string() ?: return@withContext emptyList()
+                moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)?.results
+                    ?.sortedByDescending { it.popularity }
+                    ?.take(20)
+                    ?: emptyList()
+            }.getOrDefault(emptyList())
+        }
+
     // ── SERIES ──────────────────────────────────────────────
 
     suspend fun getTv(tmdbId: Int): TmdbTv? = withContext(Dispatchers.IO) {
@@ -309,6 +335,26 @@ object TmdbService {
                 ?.maxByOrNull { it.popularity }?.id
         }.getOrNull()
     }
+
+    /**
+     * Like [searchMoviesList] but for series. Same popularity-ordered
+     * cap of 20 hits.
+     */
+    suspend fun searchTvList(query: String): List<TmdbSearchHit> =
+        withContext(Dispatchers.IO) {
+            val q = query.trim()
+            if (q.isBlank()) return@withContext emptyList()
+            val encoded = java.net.URLEncoder.encode(q, "UTF-8")
+            val url = "$BASE/search/tv?query=$encoded&include_adult=false&api_key=${ApiKeys.TMDB}"
+            runCatching {
+                val body = client.newCall(Request.Builder().url(url).build()).execute()
+                    .body?.string() ?: return@withContext emptyList()
+                moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)?.results
+                    ?.sortedByDescending { it.popularity }
+                    ?.take(20)
+                    ?: emptyList()
+            }.getOrDefault(emptyList())
+        }
 
     suspend fun getSeason(tvId: Int, seasonNumber: Int): TmdbSeasonDetail? = withContext(Dispatchers.IO) {
         val url = "$BASE/tv/$tvId/season/$seasonNumber?api_key=${ApiKeys.TMDB}"

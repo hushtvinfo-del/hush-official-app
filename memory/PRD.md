@@ -1,6 +1,110 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.38.0 — 2026-04-25 (versionCode 189)  ⬅ LATEST  (MANDATORY)
+## v1.39.0 — 2026-04-25 (versionCode 190)  ⬅ LATEST  (MANDATORY)
+
+**Smarter Request flow — TMDB-powered picker + library
+deduplication.** User wanted a Franchises-style search experience
+inside the request modal: type "Terminator" → see every Terminator
+movie with poster + year → pick the exact one. AND if the title is
+already in their Xtream library, the app routes them straight to
+the title instead of letting them submit a useless duplicate.
+
+### What's new
+- **TMDB picker phase** (`TmdbPickerPhase`) replaces the old free-
+  text "Title" input. Live-search debounced @ 350 ms, returns up to
+  20 hits ordered by TMDB popularity, each rendered as a 64×96
+  poster row with year + tap-to-action badge.
+- **Library deduplication** (`LibraryIndex`) — primes the index of
+  every movie + series in the user's Xtream catalog at modal open
+  using `TitleMatcher.normalize`. For every TMDB hit we check the
+  library and, if found, replace the "TAP TO REQUEST" badge with
+  "ALREADY IN YOUR LIBRARY · TAP TO WATCH" (green border). Tapping
+  it dismisses the modal and deep-links into the right detail
+  page (TV: `moviedetail/...` or `series/...`; Mobile: direct
+  player URL or `mseries/...`).
+- **Free-text fallback** — when TMDB returns zero hits (obscure
+  titles, typos), the user can still submit "{query}" as a typed
+  request via a "Request '{query}' anyway" button. The flow goes
+  through the same DETAILS phase for series + same submit.
+- **TMDB metadata round-trips** — `submitRequest` now sends
+  `tmdb_id`, `tmdb_type`, `tmdb_year`, `tmdb_poster_path`,
+  `tmdb_backdrop_path`, `tmdb_overview` to the gateway as
+  standalone keys (admin can read them when the schema supports
+  it; silently dropped otherwise) AND embeds a compact
+  `[TMDB id=X type=movie year=2024 poster=/abc.jpg]` tag in
+  `additional_info` so even a fresh install can recover the
+  metadata for poster display.
+- **Posters everywhere** — `RequestMetaStore` keyed by `request_id`
+  resolves TMDB metadata for:
+  • Home rail cards (50×75 thumb)
+  • My Requests row thumbs (60×90)
+  • Detail screen hero (100×150)
+  • Success phase (120×180 with green ✅ overlay)
+  All fall back gracefully to the type emoji when no poster.
+- **Series flow refinement** — for series, picking a TMDB hit
+  routes through the new `DETAILS` phase (scope = entire vs.
+  specific seasons / episodes) before submit. Movies submit
+  immediately on pick — minimal taps.
+
+### Files
+- NEW `data/LibraryIndex.kt` — in-memory library snapshot, keyed
+  by normalised title; tolerant 3-pass lookup (exact, year-
+  stripped, substring containment ≥5 chars)
+- NEW `data/RequestMetaStore.kt` — per-request TMDB metadata in
+  SharedPreferences + parseable `[TMDB ...]` tag encode/decode for
+  cross-device recovery
+- NEW `ui/requests/TmdbPickerPhase.kt` — debounced TMDB search,
+  poster grid, library badge, free-text fallback
+- `data/TmdbService.kt` — added `searchMoviesList()` /
+  `searchTvList()` returning 20 popularity-sorted hits each
+- `data/ContentRequestApi.kt` — `submitRequest` accepts
+  `tmdbMeta`, sends standalone keys + appends `[TMDB ...]` tag
+- `ui/requests/RequestContentSheet.kt` — full flow rewrite:
+  CONTACT → PICK (TMDB) → DETAILS (series only) → SUCCESS;
+  exposes `LibraryEntry` value class + `onAlreadyAvailable`
+  callback for caller-side library nav; success phase shows
+  picked TMDB poster
+- `ui/requests/MyRequestsScreens.kt` — row redesign with TMDB
+  poster + year + cleaned additional_info (TMDB tag stripped)
+- `ui/requests/RequestDetailScreen.kt` — hero now shows TMDB
+  poster + release year alongside the status; meta section
+  hides the `[TMDB ...]` tag from user-facing additional_info
+- `ui/requests/RequestsHomeRail.kt` — cards redesigned with
+  TMDB poster thumb
+- `mobile/MobileSearchScreen.kt`, `mobile/MobileSeriesDetailScreen.kt`,
+  `ui/screens/TVUnifiedSearchScreen.kt`,
+  `ui/screens/TVSeriesDetailScreen.kt` — all 4 RequestContentSheet
+  call sites pass `playlistId` and handle `onAlreadyAvailable` to
+  deep-link into the user's library
+
+### Build + deploy
+- `versionCode 189 → 190`, `versionName "1.38.0" → "1.39.0"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- APK md5 `9d32953beeba9390ef340f92b5c0e2f3`, 17.5 MB, live on
+  `https://hushtv.xyz/hushtv.apk`. Shipped as **MANDATORY** so
+  every user picks up the smarter picker + dedup.
+
+### Verified live
+- `https://api.themoviedb.org/3/search/movie?query=terminator`
+  returns 6 Terminator films with posters, popularity-sorted
+  (T2 first, T1 second, then Genisys / Rise of the Machines /
+  Salvation / Dark Fate). Exactly the franchise-style behaviour
+  the user requested.
+
+### Next backlog
+- **Tier 2 (waiting on user signal)**: filter chips, pull-to-
+  refresh, cancel request (needs Base44 admin code), empty-state
+  CTA
+- **Pending Base44 admin code** (the user mentioned sharing it
+  but the file/paste isn't in the thread): without it we can't
+  wire cancel / reply / re-rank from the gateway side
+- **P2** Picture-in-Picture (Mobile + TV)
+- **P2** Xtream Catch-up / Archive
+- **P3** OS-level push (FCM)
+
+---
+
+## v1.38.0 — 2026-04-25 (versionCode 189)
 
 **My Requests — Tier 1 advanced upgrade.** User asked for a much
 richer requests experience: home-screen visibility, tappable rows,

@@ -32,6 +32,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.hushtv.tv.data.ContentRequestApi
+import com.hushtv.tv.data.RequestMetaStore
 import com.hushtv.tv.data.UserContactStore
 import com.hushtv.tv.ui.screens.clickableWithEnter
 import com.hushtv.tv.ui.theme.Cyan
@@ -91,15 +93,17 @@ fun RequestContentSheet(
     presetTitle: String = "",
     presetSeason: String = "",
     presetEpisode: String = "",
+    playlistId: String = "",
     onDismiss: () -> Unit,
     onViewMyRequests: (() -> Unit)? = null,
+    onAlreadyAvailable: ((LibraryEntry) -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var phase by remember {
         mutableStateOf(
-            if (UserContactStore.get(ctx) == null) Phase.CONTACT else Phase.FORM
+            if (UserContactStore.get(ctx) == null) Phase.CONTACT else Phase.PICK
         )
     }
 
@@ -112,7 +116,10 @@ fun RequestContentSheet(
     var contactError by remember { mutableStateOf<String?>(null) }
 
     var type by remember { mutableStateOf(presetType.takeIf { it == "series" } ?: "movie") }
-    var title by remember { mutableStateOf(presetTitle) }
+    // The TMDB pick the user committed to. Null when they haven't
+    // chosen a TMDB candidate (or chose to free-text submit).
+    var pickedTmdb by remember { mutableStateOf<TmdbPick?>(null) }
+    var freeTextTitle by remember { mutableStateOf<String?>(null) }
     var seriesScope by remember {
         mutableStateOf(
             if (presetSeason.isNotBlank() || presetEpisode.isNotBlank())
@@ -126,6 +133,63 @@ fun RequestContentSheet(
     var submitError by remember { mutableStateOf<String?>(null) }
     var lastResult by remember { mutableStateOf<ContentRequestApi.SubmitResult.Success?>(null) }
 
+    /**
+     * Build the API submit call. Used by both the immediate-submit
+     * path (movies) and the explicit-submit path (series, where the
+     * user might pick scope + episodes first).
+     */
+    fun doSubmit(
+        finalType: String,
+        finalTitle: String,
+        finalTmdb: TmdbPick?,
+    ) {
+        if (finalTitle.isBlank()) {
+            submitError = "Please pick or type a title."
+            return
+        }
+        submitting = true
+        submitError = null
+        scope.launch {
+            val tmdbMeta = finalTmdb?.let {
+                RequestMetaStore.Meta(
+                    tmdbId = it.tmdbId,
+                    tmdbType = it.tmdbType,
+                    posterPath = it.posterPath,
+                    backdropPath = it.backdropPath,
+                    releaseYear = it.year,
+                    title = it.title,
+                    overview = it.overview,
+                )
+            }
+            val res = withContext(Dispatchers.IO) {
+                ContentRequestApi.submitRequest(
+                    ctx = ctx,
+                    type = finalType,
+                    title = finalTitle,
+                    additionalInfo = notes.trim().ifBlank { null },
+                    seriesRequestType = if (finalType == "series") seriesScope else null,
+                    seasons = if (finalType == "series" && seriesScope == "specific_episodes")
+                        seasons.trim().ifBlank { null } else null,
+                    episodes = if (finalType == "series" && seriesScope == "specific_episodes")
+                        episodes.trim().ifBlank { null } else null,
+                    tmdbMeta = tmdbMeta,
+                )
+            }
+            submitting = false
+            when (res) {
+                is ContentRequestApi.SubmitResult.Success -> {
+                    if (tmdbMeta != null) {
+                        RequestMetaStore.put(ctx, res.requestId, tmdbMeta)
+                    }
+                    lastResult = res
+                    phase = Phase.SUCCESS
+                }
+                is ContentRequestApi.SubmitResult.Error ->
+                    submitError = res.message
+            }
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -134,9 +198,6 @@ fun RequestContentSheet(
             usePlatformDefaultWidth = false,
         ),
     ) {
-        // Outer scrim — fills the dialog's window. Dialog already
-        // traps focus inside, so the D-pad can't reach the
-        // background screen anymore.
         Box(
             Modifier
                 .fillMaxSize()
@@ -170,62 +231,90 @@ fun RequestContentSheet(
                                 else -> {
                                     UserContactStore.set(ctx, n, e)
                                     contactError = null
-                                    phase = Phase.FORM
+                                    phase = Phase.PICK
                                 }
                             }
                         },
                         onCancel = onDismiss,
                     )
-                    Phase.FORM -> FormPhase(
-                        type = type, onType = { type = it },
-                        title = title, onTitle = { title = it },
-                        seriesScope = seriesScope, onSeriesScope = { seriesScope = it },
+                    Phase.PICK -> TmdbPickerPhase(
+                        type = type,
+                        presetQuery = presetTitle,
+                        playlistId = playlistId,
+                        onCancel = onDismiss,
+                        onChangeType = { type = it },
+                        onPicked = { pick ->
+                            pickedTmdb = pick
+                            freeTextTitle = null
+                            // Movies — submit immediately. Notes /
+                            // priority can be edited later from the
+                            // detail page or by re-requesting.
+                            // Series — show DETAILS phase to let the
+                            // user pick scope (entire vs. specific
+                            // episodes) before submitting.
+                            if (type == "series") {
+                                phase = Phase.DETAILS
+                            } else {
+                                doSubmit(
+                                    finalType = "movie",
+                                    finalTitle = pick.title,
+                                    finalTmdb = pick,
+                                )
+                            }
+                        },
+                        onAlreadyAvailable = { entry ->
+                            // Map LibraryIndex.Entry → exposed
+                            // LibraryEntry value class so callers
+                            // don't need to import data layer.
+                            onAlreadyAvailable?.invoke(
+                                LibraryEntry(
+                                    kind = entry.kind,
+                                    streamId = entry.streamId,
+                                    seriesId = entry.seriesId,
+                                    title = entry.title,
+                                    poster = entry.poster,
+                                ),
+                            )
+                            onDismiss()
+                        },
+                        onFreeTextSubmit = { typed ->
+                            pickedTmdb = null
+                            freeTextTitle = typed
+                            if (type == "series") {
+                                phase = Phase.DETAILS
+                            } else {
+                                doSubmit(
+                                    finalType = "movie",
+                                    finalTitle = typed,
+                                    finalTmdb = null,
+                                )
+                            }
+                        },
+                    )
+                    Phase.DETAILS -> DetailsPhase(
+                        chosenTitle = pickedTmdb?.title ?: freeTextTitle ?: "",
+                        chosenYear = pickedTmdb?.year,
+                        chosenPosterPath = pickedTmdb?.posterPath,
+                        seriesScope = seriesScope,
+                        onSeriesScope = { seriesScope = it },
                         seasons = seasons, onSeasons = { seasons = it },
                         episodes = episodes, onEpisodes = { episodes = it },
                         notes = notes, onNotes = { notes = it },
                         submitting = submitting,
                         error = submitError,
-                        onChangeContact = {
-                            contactError = null
-                            phase = Phase.CONTACT
-                        },
+                        onBack = { phase = Phase.PICK },
                         onCancel = onDismiss,
-                        onSubmit = submit@{
-                            val cleanTitle = title.trim()
-                            if (cleanTitle.isEmpty()) {
-                                submitError = "Please enter a title."
-                                return@submit
-                            }
-                            submitting = true
-                            submitError = null
-                            scope.launch {
-                                val res = withContext(Dispatchers.IO) {
-                                    ContentRequestApi.submitRequest(
-                                        ctx = ctx,
-                                        type = type,
-                                        title = cleanTitle,
-                                        additionalInfo = notes.trim().ifBlank { null },
-                                        seriesRequestType = if (type == "series") seriesScope else null,
-                                        seasons = if (type == "series" && seriesScope == "specific_episodes")
-                                            seasons.trim().ifBlank { null } else null,
-                                        episodes = if (type == "series" && seriesScope == "specific_episodes")
-                                            episodes.trim().ifBlank { null } else null,
-                                    )
-                                }
-                                submitting = false
-                                when (res) {
-                                    is ContentRequestApi.SubmitResult.Success -> {
-                                        lastResult = res
-                                        phase = Phase.SUCCESS
-                                    }
-                                    is ContentRequestApi.SubmitResult.Error ->
-                                        submitError = res.message
-                                }
-                            }
+                        onSubmit = {
+                            doSubmit(
+                                finalType = "series",
+                                finalTitle = pickedTmdb?.title ?: freeTextTitle ?: "",
+                                finalTmdb = pickedTmdb,
+                            )
                         },
                     )
                     Phase.SUCCESS -> SuccessPhase(
-                        title = title.trim().ifEmpty { "your title" },
+                        title = pickedTmdb?.title ?: freeTextTitle ?: "your title",
+                        posterPath = pickedTmdb?.posterPath,
                         onClose = onDismiss,
                         onViewMyRequests = onViewMyRequests,
                     )
@@ -235,7 +324,22 @@ fun RequestContentSheet(
     }
 }
 
-private enum class Phase { CONTACT, FORM, SUCCESS }
+private enum class Phase { CONTACT, PICK, DETAILS, SUCCESS }
+
+/**
+ * Public, slim copy of [com.hushtv.tv.data.LibraryIndex.Entry] so
+ * call sites of [RequestContentSheet] don't need to import the data
+ * layer. Used in the [RequestContentSheet.onAlreadyAvailable]
+ * callback so the screen owning the modal can navigate to the right
+ * library route (TV vs. Mobile have different routes).
+ */
+data class LibraryEntry(
+    val kind: String,
+    val streamId: Int,
+    val seriesId: Int,
+    val title: String,
+    val poster: String?,
+)
 
 
 // ─── Contact phase ──────────────────────────────────────────────────
@@ -274,18 +378,19 @@ private fun ContactPhase(
 }
 
 
-// ─── Form phase ─────────────────────────────────────────────────────
+// ─── Details phase (series only — pick scope, optional notes) ──────
 
 @Composable
-private fun FormPhase(
-    type: String, onType: (String) -> Unit,
-    title: String, onTitle: (String) -> Unit,
+private fun DetailsPhase(
+    chosenTitle: String,
+    chosenYear: Int?,
+    chosenPosterPath: String?,
     seriesScope: String, onSeriesScope: (String) -> Unit,
     seasons: String, onSeasons: (String) -> Unit,
     episodes: String, onEpisodes: (String) -> Unit,
     notes: String, onNotes: (String) -> Unit,
     submitting: Boolean, error: String?,
-    onChangeContact: () -> Unit, onCancel: () -> Unit, onSubmit: () -> Unit,
+    onBack: () -> Unit, onCancel: () -> Unit, onSubmit: () -> Unit,
 ) {
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -293,58 +398,55 @@ private fun FormPhase(
         runCatching { firstFocus.requestFocus() }
     }
 
-    Text("Request missing content", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text(
+        "Request a series",
+        color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+    )
     Spacer(Modifier.height(4.dp))
     Text(
-        "Tell us what to add and we'll get on it.",
-        color = TextSecondary, fontSize = 14.sp,
+        "What's missing from \"$chosenTitle\"${chosenYear?.let { " ($it)" } ?: ""}?",
+        color = TextSecondary, fontSize = 13.sp, lineHeight = 17.sp,
     )
 
-    Spacer(Modifier.height(20.dp))
-    Text("WHAT IS IT?", color = TextSecondary, fontSize = 11.sp,
-        fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-    Spacer(Modifier.height(8.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        TypeRadio(
-            "🎬", "Movie", type == "movie",
-            modifier = Modifier.weight(1f).focusRequester(firstFocus),
-        ) { onType("movie") }
-        TypeRadio("📺", "Series", type == "series", Modifier.weight(1f)) { onType("series") }
+    if (chosenPosterPath != null) {
+        Spacer(Modifier.height(14.dp))
+        ChosenTitleCard(
+            posterPath = chosenPosterPath,
+            title = chosenTitle,
+            year = chosenYear,
+        )
     }
 
-    Spacer(Modifier.height(20.dp))
-    LabeledField("Title", title, onTitle, KeyboardType.Text)
-
-    if (type == "series") {
-        Spacer(Modifier.height(20.dp))
-        Text("WHAT'S MISSING?", color = TextSecondary, fontSize = 11.sp,
-            fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-        Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(18.dp))
+    Text("WHAT'S MISSING?", color = TextSecondary, fontSize = 11.sp,
+        fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+    Spacer(Modifier.height(8.dp))
+    Box(Modifier.focusRequester(firstFocus)) {
         ScopeRow("Entire series", seriesScope == "entire_series") {
             onSeriesScope("entire_series")
         }
-        Spacer(Modifier.height(8.dp))
-        ScopeRow("Specific seasons / episodes", seriesScope == "specific_episodes") {
-            onSeriesScope("specific_episodes")
-        }
-        if (seriesScope == "specific_episodes") {
-            Spacer(Modifier.height(14.dp))
-            LabeledField("Seasons (e.g. \"Season 1, Season 3\")", seasons, onSeasons,
-                KeyboardType.Text)
-            Spacer(Modifier.height(10.dp))
-            LabeledField("Episodes (e.g. \"S1E5, S2E3-S2E7\")", episodes, onEpisodes,
-                KeyboardType.Text)
-        }
+    }
+    Spacer(Modifier.height(8.dp))
+    ScopeRow("Specific seasons / episodes", seriesScope == "specific_episodes") {
+        onSeriesScope("specific_episodes")
+    }
+    if (seriesScope == "specific_episodes") {
+        Spacer(Modifier.height(14.dp))
+        LabeledField("Seasons (e.g. \"Season 1, Season 3\")", seasons, onSeasons,
+            KeyboardType.Text)
+        Spacer(Modifier.height(10.dp))
+        LabeledField("Episodes (e.g. \"S1E5, S2E3-S2E7\")", episodes, onEpisodes,
+            KeyboardType.Text)
     }
 
-    Spacer(Modifier.height(20.dp))
+    Spacer(Modifier.height(18.dp))
     LabeledField(
         label = "Additional info (optional)",
         value = notes,
         onValue = onNotes,
         keyboardType = KeyboardType.Text,
         placeholder = "e.g. actor names, release year, network",
-        minHeight = 92.dp,
+        minHeight = 84.dp,
     )
 
     if (error != null) {
@@ -352,10 +454,10 @@ private fun FormPhase(
         Text(error, color = Color(0xFFEF4444), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 
-    Spacer(Modifier.height(22.dp))
+    Spacer(Modifier.height(20.dp))
     PrimaryButton(
         label = "Submit request",
-        enabled = title.isNotBlank() && !submitting,
+        enabled = !submitting,
         loading = submitting,
         onClick = onSubmit,
     )
@@ -364,8 +466,55 @@ private fun FormPhase(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        TextOnlyButton("Change contact info", onChangeContact)
+        TextOnlyButton("Back", onBack)
         TextOnlyButton("Cancel", onCancel)
+    }
+}
+
+@Composable
+private fun ChosenTitleCard(
+    posterPath: String,
+    title: String,
+    year: Int?,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(SurfaceElev, RoundedCornerShape(12.dp))
+            .border(1.dp, com.hushtv.tv.ui.theme.Cyan.copy(alpha = 0.4f),
+                RoundedCornerShape(12.dp))
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .width(48.dp)
+                .height(72.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFF0F172A)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val url = com.hushtv.tv.data.TmdbService.img(posterPath, "w154")
+            if (!url.isNullOrBlank()) {
+                coil.compose.AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title, color = TextPrimary, fontSize = 14.sp,
+                fontWeight = FontWeight.Bold, maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            if (year != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(year.toString(), color = TextSecondary, fontSize = 12.sp)
+            }
+        }
     }
 }
 
@@ -375,6 +524,7 @@ private fun FormPhase(
 @Composable
 private fun SuccessPhase(
     title: String,
+    posterPath: String?,
     onClose: () -> Unit,
     onViewMyRequests: (() -> Unit)?,
 ) {
@@ -390,9 +540,41 @@ private fun SuccessPhase(
             .padding(top = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text("✅", fontSize = 56.sp)
+        if (posterPath != null) {
+            // Show the picked poster — way more visceral than just
+            // a checkmark emoji and reassures the user we got the
+            // right title.
+            Box(
+                Modifier
+                    .width(120.dp)
+                    .height(180.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF0F172A)),
+                contentAlignment = Alignment.Center,
+            ) {
+                val url = com.hushtv.tv.data.TmdbService.img(posterPath, "w342")
+                if (!url.isNullOrBlank()) {
+                    coil.compose.AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                // ✅ overlay so the user instantly reads "submitted"
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color(0x6622C55E)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("✅", fontSize = 48.sp)
+                }
+            }
+        } else {
+            Text("✅", fontSize = 56.sp)
+        }
     }
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(14.dp))
     Text(
         "Request submitted!",
         color = TextPrimary,

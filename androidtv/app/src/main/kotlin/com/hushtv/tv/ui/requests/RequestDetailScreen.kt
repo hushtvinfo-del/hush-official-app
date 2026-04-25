@@ -309,42 +309,74 @@ private fun RequestDetailContent(
 
 @Composable
 private fun DetailHero(req: ContentRequestApi.Request) {
-    Column(
+    val ctx = LocalContext.current
+    val meta = remember(req.id, req.additionalInfo) {
+        com.hushtv.tv.data.RequestMetaStore.get(ctx, req.id)
+            ?: com.hushtv.tv.data.RequestMetaStore.parseTag(req.additionalInfo)
+    }
+    Row(
         Modifier
             .fillMaxWidth()
             .background(SurfaceNavy, RoundedCornerShape(16.dp))
             .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(16.dp))
             .padding(20.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (req.type == "series") "📺" else "🎬",
-                fontSize = 28.sp,
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (req.type == "series") "SERIES REQUEST" else "MOVIE REQUEST",
-                    color = Cyan,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 2.sp,
+        // Poster — TMDB metadata gives us a real image; otherwise
+        // fall back to a tinted box with the type emoji.
+        Box(
+            Modifier
+                .size(width = 100.dp, height = 150.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF0F172A)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val url = meta?.posterPath?.let {
+                com.hushtv.tv.data.TmdbService.img(it, "w342")
+            }
+            if (!url.isNullOrBlank()) {
+                coil.compose.AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
                 )
-                Spacer(Modifier.height(4.dp))
+            } else {
                 Text(
-                    req.title,
-                    color = TextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black,
-                    lineHeight = 26.sp,
+                    if (req.type == "series") "📺" else "🎬",
+                    fontSize = 36.sp,
                 )
             }
-            Spacer(Modifier.width(10.dp))
-            BigStatusBadge(req.status)
         }
-        if (!req.priority.isNullOrBlank() && req.priority != "medium") {
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (req.type == "series") "SERIES REQUEST" else "MOVIE REQUEST",
+                color = Cyan,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 2.sp,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                req.title,
+                color = TextPrimary,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black,
+                lineHeight = 26.sp,
+            )
+            if (meta?.releaseYear != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    meta.releaseYear.toString(),
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            BigStatusBadge(req.status)
+            if (!req.priority.isNullOrBlank() && req.priority != "medium") {
+                Spacer(Modifier.height(8.dp))
                 val (label, color) = when (req.priority) {
                     "high" -> "HIGH PRIORITY" to Color(0xFFEF4444)
                     "low" -> "LOW PRIORITY" to Color(0xFF94A3B8)
@@ -572,12 +604,15 @@ private fun RequestMetaSection(req: ContentRequestApi.Request) {
         if (!req.seasons.isNullOrBlank()) MetaRow("Seasons", req.seasons)
         if (!req.episodes.isNullOrBlank()) MetaRow("Episodes", req.episodes)
         if (!req.additionalInfo.isNullOrBlank()) {
-            Column {
-                Text("Additional info", color = TextSecondary, fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp)
-                Spacer(Modifier.height(4.dp))
-                Text(req.additionalInfo, color = TextPrimary, fontSize = 13.sp,
-                    lineHeight = 17.sp)
+            val cleaned = com.hushtv.tv.data.RequestMetaStore.stripTag(req.additionalInfo)
+            if (!cleaned.isNullOrBlank()) {
+                Column {
+                    Text("Additional info", color = TextSecondary, fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text(cleaned, color = TextPrimary, fontSize = 13.sp,
+                        lineHeight = 17.sp)
+                }
             }
         }
     }

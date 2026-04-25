@@ -436,14 +436,27 @@ fun TVSeriesDetailScreen(
 
     // Request modal — full-screen scrim overlay above the series page.
     if (showRequestModal) {
-        RequestContentSheet(
+        com.hushtv.tv.ui.requests.RequestContentSheet(
             presetType = "series",
             presetTitle = displayTitle,
             presetSeason = selectedSeasonNum?.let { "Season $it" }.orEmpty(),
+            playlistId = playlistId,
             onDismiss = { showRequestModal = false },
             onViewMyRequests = {
                 showRequestModal = false
                 nav.navigate("myrequests/$playlistId")
+            },
+            onAlreadyAvailable = { entry ->
+                showRequestModal = false
+                if (entry.kind == "series") {
+                    nav.navigate(
+                        "series/$playlistId/${entry.seriesId}/${Uri.encode(entry.title)}"
+                    )
+                } else {
+                    nav.navigate(
+                        "moviedetail/$playlistId/${entry.streamId}/${Uri.encode(entry.title)}"
+                    )
+                }
             },
         )
     }
