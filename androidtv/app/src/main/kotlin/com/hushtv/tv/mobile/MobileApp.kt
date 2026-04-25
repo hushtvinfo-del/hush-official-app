@@ -15,6 +15,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hushtv.tv.data.LastProfileStore
 import com.hushtv.tv.data.PlaylistStore
+import com.hushtv.tv.ui.requests.RequestNotificationHost
+import com.hushtv.tv.ui.requests.WatchTarget
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.update.UpdateDialog
 import com.hushtv.tv.update.UpdateManager
@@ -155,6 +157,53 @@ fun MobileApp() {
         }
 
         MobileUpdateCheckHost()
+
+        // In-app banner that polls the request gateway and lets the
+        // user one-tap into a movie/series that just got fulfilled.
+        // Reads the active playlist from LastProfileStore so we can
+        // resolve titles to streamIds without prop-drilling.
+        val requestPlaylistId = remember {
+            LastProfileStore.load(ctx)?.takeIf { PlaylistStore.find(ctx, it) != null }
+        }
+        RequestNotificationHost(
+            playlistId = requestPlaylistId,
+            onWatchNow = { target ->
+                val pid = requestPlaylistId ?: return@RequestNotificationHost
+                when (target) {
+                    is WatchTarget.Movie -> {
+                        val playlist = PlaylistStore.find(ctx, pid)
+                        if (playlist != null) {
+                            val url = com.hushtv.tv.data.XtreamApi.movieUrl(
+                                playlist.host, playlist.username, playlist.password,
+                                target.streamId, null,
+                            )
+                            nav.navigate(
+                                mobilePlayerRoute(
+                                    playlistId = pid,
+                                    streamUrl = url,
+                                    channelName = target.title,
+                                    isLive = false,
+                                    vodStreamId = target.streamId,
+                                    vodKind = "movie",
+                                    vodPoster = null,
+                                ),
+                            )
+                        } else {
+                            nav.navigate("mrequests")
+                        }
+                    }
+                    is WatchTarget.Series -> nav.navigate(
+                        mobileSeriesRoute(
+                            playlistId = pid,
+                            seriesId = target.seriesId.toString(),
+                            name = target.title,
+                            poster = target.poster,
+                        ),
+                    )
+                    WatchTarget.NotFound -> nav.navigate("mrequests")
+                }
+            },
+        )
     }
 }
 

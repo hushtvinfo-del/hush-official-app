@@ -25,6 +25,8 @@ import com.hushtv.tv.data.LastProfileStore
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.mobile.MobileApp
 import com.hushtv.tv.ui.HushSplashScreen
+import com.hushtv.tv.ui.requests.RequestNotificationHost
+import com.hushtv.tv.ui.requests.WatchTarget
 import com.hushtv.tv.ui.screens.TVAddAccountScreen
 import com.hushtv.tv.ui.screens.TVBrowseScreen
 import com.hushtv.tv.ui.screens.TVCollectionDetailScreen
@@ -223,6 +225,27 @@ private fun AppContent() {
     }
 
     UpdateCheckHost()
+
+    // In-app banner that polls the request gateway and lets the user
+    // one-tap into a movie/series that just got fulfilled.
+    val requestPlaylistId = remember {
+        LastProfileStore.load(ctx)?.takeIf { PlaylistStore.find(ctx, it) != null }
+    }
+    RequestNotificationHost(
+        playlistId = requestPlaylistId,
+        onWatchNow = { target ->
+            val pid = requestPlaylistId ?: return@RequestNotificationHost
+            when (target) {
+                is WatchTarget.Movie -> nav.navigate(
+                    "moviedetail/$pid/${target.streamId}/${Uri.encode(target.title)}"
+                )
+                is WatchTarget.Series -> nav.navigate(
+                    "series/$pid/${target.seriesId}/${Uri.encode(target.title)}"
+                )
+                WatchTarget.NotFound -> nav.navigate("myrequests")
+            }
+        },
+    )
 }
 
 /** Fetches /version.json after a small delay (so UI is already rendered) and

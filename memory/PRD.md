@@ -1,6 +1,70 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.37.0 — 2026-04-25 (versionCode 186)  ⬅ LATEST
+## v1.37.1 — 2026-04-25 (versionCode 187)  ⬅ LATEST
+
+**"Your request is in!" notification banner.** Closes the loop on the
+v1.37.0 request feature: when the admin marks a user's request as
+`added` or `already_available`, a slide-down banner greets them on
+their next app launch with a one-tap "Watch now" deep-link straight
+into the title's detail page.
+
+### Behaviour
+- Polls the gateway at most every 30 minutes per device (throttled
+  via `RequestNotificationStore.lastPollMs`). Background dispatcher,
+  silent network call, fully fire-and-forget.
+- Skipped entirely for users who have never submitted a request (no
+  contact email → nothing to query).
+- Banner shows newly-fulfilled requests only — every request id is
+  marked `seen` the moment we render it, so even if the user
+  dismisses without tapping, we never re-show the same one.
+- "Watch now" resolves the request title against the user's Xtream
+  movie/series catalog using `TitleMatcher.normalize` for tolerant
+  matching (handles punctuation, case, and word-prefix variants).
+  Falls back to opening My Requests if the resolver finds nothing
+  in the library — e.g. the user's profile lost access since the
+  request was made.
+
+### Files
+- NEW `data/RequestNotificationStore.kt` — SharedPreferences for
+  `last_poll_ms` + `seen_added_ids`.
+- NEW `ui/requests/RequestNotificationHost.kt` — Compose host with
+  the slide-down banner UI, the polling LaunchedEffect, and the
+  Xtream title resolver. D-pad-focusable for TV.
+- `mobile/MobileApp.kt` — wires the host inside the `Surface`,
+  reading the active playlist from `LastProfileStore`.
+- `MainActivity.kt` — same wiring inside the TV `AppContent`.
+
+### Build + deploy
+- `versionCode 186 → 187`, `versionName "1.37.0" → "1.37.1"`.
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL (warnings only).
+- APK md5 `72a0bfc0526837ff7b9d69579e0e1a26`, 17.5 MB, live on
+  `https://hushtv.xyz/hushtv.apk`. Shipped as **non-mandatory** —
+  the v1.37.0 update was already mandatory and the banner is a
+  delight enhancement, not a critical fix.
+
+### Testing notes
+- API was end-to-end smoke-tested in v1.37.0 (request id
+  `69ece614d72261e63259b77c` created + read). The poller uses the
+  same `getContentRequests` action, so the network path is already
+  proven.
+- The banner only renders when at least one request flips to
+  `added` or `already_available` AND hasn't been acknowledged yet.
+  To verify on-device: submit a request, ask the admin to mark it
+  added on the dashboard, then cold-launch the app. Banner should
+  appear within ~2-3 s.
+
+### Backlog after v1.37.1
+- **P2** Picture-in-Picture (TV + Mobile)
+- **P2** Xtream Catch-up / Archive (`tv_archive=1` → timeshift URL)
+- **P2** "Re-request" / status-detail dialog on My Requests rows
+- **P3** OS-level push notification (Firebase Cloud Messaging) so
+  users learn about fulfilled requests even when they're not
+  actively using the app
+- **P3** Re-evaluate Gemini AI Search
+
+---
+
+## v1.37.0 — 2026-04-25 (versionCode 186)
 
 **Request Missing Content** — full feature shipped. Users who can't find
 a movie or a specific episode can submit a request straight from the
