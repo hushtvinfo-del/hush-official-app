@@ -1,5 +1,44 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.1 — 2026-04-26 (versionCode 201)  ⬅ LATEST  (MANDATORY)
+
+**TV Home Hub fix.** v1.42.0 shipped the unified "For You" hub for both
+Mobile and TV, but on TV the hub rendered empty because the TV player
+never recorded zaps in `RecentChannelStore` and the hub state didn't
+refresh on resume. Mobile worked — the TV write path was simply
+missing.
+
+### Fixes
+- `TVPlayerScreen.kt`
+  - `playChannel(...)` (zap helper) now calls
+    `RecentChannelStore.pushFront(...)` and `setMeta(...)` on every
+    channel change. Mirrors `MobilePlayerScreen.goChannel(...)`.
+  - New `LaunchedEffect(playlistId)` that records the *initial*
+    channel (when the player launches direct-to-stream from a
+    Channel History card / Last-Channel resume / Live grid). Looks
+    up the streamId via `NavState.liveChannels` first (gives us
+    title + poster); falls back to parsing the URL's last path
+    segment when there's no NavState match.
+- `TVMainMenuScreen.kt`
+  - New `resumeTick` counter (bumped on `Lifecycle.Event.ON_RESUME`)
+    keys both the request refetch `LaunchedEffect` and the
+    `channelHistory` snapshot, so exiting the player makes the new
+    zap appear in the hub immediately — no app restart needed.
+  - One-shot `LaunchedEffect(hasHub)` auto-promotes the user from
+    Discovery to "hub" the first time `hasHub` flips to true. This
+    handles the cold-launch path where caches are empty for the
+    first ~800 ms (RequestCache miss, RecentChannelStore not yet
+    read), so users no longer end up parked on Discovery with no
+    way to see their hub.
+
+### Build + deploy
+- `versionCode 200 → 201`, `versionName "1.42.0" → "1.42.1"`.
+- `./gradlew assembleDebug` → 17.7 MB APK.
+- Deployed to `66.163.113.147:/var/www/hushtv/HushTV.apk` and
+  `version.json` (mandatory) with the changelog reflecting the
+  fix.
+
+
 ## v1.42.0 — 2026-04-25 (versionCode 200)  ⬅ LATEST  (MANDATORY)
 
 **"For You" home hub — Mobile + TV.** User asked for a single

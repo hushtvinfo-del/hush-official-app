@@ -269,7 +269,21 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     // applied — long-press → "Remove" hides via RequestHiddenStore
     // and signals here so the row vanishes immediately.
     var hideTick by remember { mutableStateOf(0) }
-    LaunchedEffect(playlistId, hideTick) {
+    // Resume-tick: bumped every time the activity returns to the
+    // foreground (e.g. user backs out of the player). Drives BOTH
+    // the request refetch and the channel-history snapshot below so
+    // anything mutated while a sub-screen was in front becomes
+    // visible immediately.
+    var resumeTick by remember(playlistId) { mutableStateOf(0) }
+    val hubLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(hubLifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) resumeTick += 1
+        }
+        hubLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { hubLifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(playlistId, hideTick, resumeTick) {
         if (com.hushtv.tv.data.UserContactStore.get(ctxLocal) == null) return@LaunchedEffect
         // Re-apply the hidden filter to the existing cache snapshot.
         homeRequests = com.hushtv.tv.data.RequestHiddenStore
@@ -320,7 +334,13 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val hasRequests = requestsForPage.isNotEmpty()
 
     // Channel history snapshot (last 5 entries with metadata).
-    val channelHistory = remember(continueHandle.entries, playlistId) {
+    // Refreshed every time the screen comes back to the foreground (e.g.
+    // after the user exits the player) so newly-zapped channels appear
+    // without requiring an app restart. continueHandle.entries already
+    // covers VOD progress; resumeTick (declared above) adds a separate
+    // tick for the RecentChannelStore which is only mutated by the
+    // live player.
+    val channelHistory = remember(continueHandle.entries, playlistId, resumeTick) {
         com.hushtv.tv.data.RecentChannelStore.getAll(ctxLocal, playlistId)
             .mapNotNull { id ->
                 com.hushtv.tv.data.RecentChannelStore.getMeta(ctxLocal, playlistId, id)
@@ -338,6 +358,23 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // when flags flip later. Prevents the user from being yanked
         // back to the hub after they navigated to DISCOVERY.
         mutableStateOf(if (hasHub) "hub" else "discovery")
+    }
+    // One-shot auto-promotion to "hub":
+    // hasHub may be false on first composition (caches not yet warm —
+    // RequestCache empty + RecentChannelStore not yet read on cold
+    // launch) and become true a few hundred ms later when the request
+    // fetch completes. Without this, the user sees Discovery with no
+    // way to find their Hub. This LaunchedEffect waits for hasHub to
+    // flip to true exactly once and, if the user is still parked on
+    // the initial Discovery landing page, swaps them to the Hub.
+    var hubAutoSwitchedOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(hasHub) {
+        if (hasHub && !hubAutoSwitchedOnce && currentPage == "discovery") {
+            currentPage = "hub"
+            hubAutoSwitchedOnce = true
+        } else if (hasHub) {
+            hubAutoSwitchedOnce = true
+        }
     }
     val pageOrder = remember(hasHub) {
         buildList {

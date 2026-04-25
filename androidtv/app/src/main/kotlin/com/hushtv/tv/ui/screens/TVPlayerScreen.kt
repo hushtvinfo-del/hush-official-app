@@ -318,6 +318,40 @@ fun TVPlayerScreen(
         }
     }
 
+    // Record the *initial* live channel into the RecentChannelStore MRU
+    // so Channel History on the Home Hub picks it up. Subsequent zaps
+    // are recorded by playChannel() above. We try in order:
+    //   1. Match the streamUrl against NavState.liveChannels (preferred —
+    //      gives us title + poster directly).
+    //   2. Parse the streamId out of the URL's last path segment.
+    LaunchedEffect(playlistId) {
+        if (!isLive || playlistId.isBlank()) return@LaunchedEffect
+        val byUrl = NavState.liveChannels.firstOrNull { mc ->
+            runCatching {
+                val p = PlaylistStore.find(ctx, playlistId) ?: return@runCatching false
+                XtreamApi.liveUrl(p.host, p.username, p.password, mc.streamId) == currentUrl
+            }.getOrDefault(false)
+        }
+        if (byUrl != null) {
+            com.hushtv.tv.data.RecentChannelStore.pushFront(ctx, playlistId, byUrl.streamId)
+            com.hushtv.tv.data.RecentChannelStore.setMeta(
+                ctx, playlistId, byUrl.streamId, byUrl.title, byUrl.poster,
+            )
+            return@LaunchedEffect
+        }
+        val streamIdHint = runCatching {
+            android.net.Uri.parse(currentUrl).lastPathSegment
+                ?.substringBeforeLast('.')
+                ?.toIntOrNull()
+        }.getOrNull()
+        if (streamIdHint != null && streamIdHint > 0) {
+            com.hushtv.tv.data.RecentChannelStore.pushFront(ctx, playlistId, streamIdHint)
+            com.hushtv.tv.data.RecentChannelStore.setMeta(
+                ctx, playlistId, streamIdHint, currentName, null,
+            )
+        }
+    }
+
     // ─── Zap helper ────────────────────────────────────────────────────────
     var zapLabel by remember { mutableStateOf<String?>(null) }
     var zapTick by remember { mutableStateOf(0) }
@@ -332,6 +366,13 @@ fun TVPlayerScreen(
         player.setMediaItem(MediaItem.fromUri(url))
         player.prepare()
         player.playWhenReady = true
+        // Record this zap in the per-profile MRU so the Home Hub
+        // "Channel History" rail can surface it on the next visit. Mobile
+        // does the same in MobilePlayerScreen.goChannel().
+        com.hushtv.tv.data.RecentChannelStore.pushFront(ctx, playlistId, ch.streamId)
+        com.hushtv.tv.data.RecentChannelStore.setMeta(
+            ctx, playlistId, ch.streamId, ch.title, ch.poster,
+        )
         zapLabel = zapText ?: "CH ${number.toString().padStart(3, '0')}  ${ch.title}"
         zapTick++
     }
