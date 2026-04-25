@@ -606,7 +606,7 @@ fun TVPlayerScreen(
                 controlsTick++
                 when (e.key) {
                     // Channel up / down via arrow keys, CH+/CH-, and media next/prev
-                    Key.DirectionUp, Key.ChannelUp, Key.MediaNext -> {
+                    Key.ChannelUp, Key.MediaNext -> {
                         if (isLive) {
                             val next = NavState.nextChannel()
                             playChannel(next, NavState.currentChannelIndex + 1)
@@ -615,13 +615,45 @@ fun TVPlayerScreen(
                             player.volume = (player.volume + 0.1f).coerceAtMost(1f); true
                         }
                     }
-                    Key.DirectionDown, Key.ChannelDown, Key.MediaPrevious -> {
+                    Key.ChannelDown, Key.MediaPrevious -> {
                         if (isLive) {
                             val prev = NavState.prevChannel()
                             playChannel(prev, NavState.currentChannelIndex + 1)
                             true
                         } else {
                             player.volume = (player.volume - 0.1f).coerceAtLeast(0f); true
+                        }
+                    }
+                    Key.DirectionUp -> {
+                        if (isLive) {
+                            val next = NavState.nextChannel()
+                            playChannel(next, NavState.currentChannelIndex + 1)
+                            true
+                        } else if (!showControls) {
+                            // OSD hidden: DirectionUp = volume up.
+                            player.volume = (player.volume + 0.1f).coerceAtMost(1f); true
+                        } else {
+                            // OSD visible: DON'T consume — let Compose focus
+                            // traversal walk up from the bottom button row to
+                            // the scrubber (`focusProperties { up = scrubberFocus }`).
+                            // Consuming this here is what was causing the
+                            // "stuck on bottom controls, can't reach the
+                            // timeline" regression on VOD.
+                            false
+                        }
+                    }
+                    Key.DirectionDown -> {
+                        if (isLive) {
+                            val prev = NavState.prevChannel()
+                            playChannel(prev, NavState.currentChannelIndex + 1)
+                            true
+                        } else if (!showControls) {
+                            // OSD hidden: DirectionDown = volume down.
+                            player.volume = (player.volume - 0.1f).coerceAtLeast(0f); true
+                        } else {
+                            // OSD visible: let focus traversal handle it
+                            // (e.g. from scrubber down to button row).
+                            false
                         }
                     }
                     // Play / pause OR info toggle

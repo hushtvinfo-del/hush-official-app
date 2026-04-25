@@ -1,5 +1,31 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.2 — 2026-04-26 (versionCode 202)  ⬅ LATEST  (MANDATORY)
+
+**VOD player focus regression fix.** Users could no longer D-pad UP
+from the bottom OSD button row to reach the timeline scrubber — focus
+was stuck on the bottom controls. Caused by the root `Box.onKeyEvent`
+unconditionally consuming `Key.DirectionUp` for VOD (treating it as
+volume up), which preempted Compose's focus traversal that would
+otherwise route UP from the button row to the scrubber via the row's
+`focusProperties { up = scrubberFocus }`.
+
+### Fix
+- `TVPlayerScreen.kt` root `onKeyEvent`:
+  - Split `Key.DirectionUp` out from `Key.ChannelUp` / `Key.MediaNext`.
+  - On VOD, DirectionUp / DirectionDown now only adjust volume when
+    the OSD is hidden (`!showControls`). When the OSD is visible the
+    handler returns `false` so Compose's focus system handles the
+    key — exactly as before the regression.
+  - Dedicated `Key.ChannelUp` / `Key.ChannelDown` / `Key.MediaNext` /
+    `Key.MediaPrevious` keep their old behavior (volume on VOD,
+    channel zap on Live) regardless of OSD state.
+
+### Build + deploy
+- `versionCode 201 → 202`, `versionName "1.42.1" → "1.42.2"`.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.1 — 2026-04-26 (versionCode 201)  ⬅ LATEST  (MANDATORY)
 
 **TV Home Hub fix.** v1.42.0 shipped the unified "For You" hub for both
