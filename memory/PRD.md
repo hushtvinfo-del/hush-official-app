@@ -1,5 +1,33 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.8 — 2026-04-26 (versionCode 208)  ⬅ LATEST  (MANDATORY)
+
+**Sidebar layout — Movies/Series LEFT navigation reverted to
+leftmost-only escape.** The v1.42.4 "intercept LEFT on every card"
+change made it impossible to walk left within a row in the Movies/
+Series grid: pressing LEFT from any column popped the user back to
+the sidebar instantly. User wanted top-bar-layout parity:
+LEFT walks across columns until you hit column 0, then escapes.
+
+### Fix
+- `TVBrowseScreen.kt`
+  - Removed the `interceptLeft` parameter from `CompactPoster`.
+  - `onPreviewKeyEvent` now consumes LEFT only when `isLeftmost`
+    (`idx % cols == 0`), exactly like top-bar layout.
+  - Non-leftmost cards return `false` from the LEFT branch so
+    Compose's default focus traversal walks one card left within
+    the row.
+  - `onLeftEdge` (deferred via `sidebarEscapeTick`) still routes
+    to the selected sidebar item, just only fires from the left
+    column now.
+  - Live TV channel rows are full-width single-column lists, so
+    they were already leftmost-only and weren't affected.
+
+### Build + deploy
+- `versionCode 207 → 208`, `versionName "1.42.7" → "1.42.8"`.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.7 — 2026-04-26 (versionCode 207)  ⬅ LATEST  (MANDATORY)
 
 **Settings page made scrollable.** User reported "there is no

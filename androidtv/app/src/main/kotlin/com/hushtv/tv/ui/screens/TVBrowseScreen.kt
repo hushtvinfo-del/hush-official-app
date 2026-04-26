@@ -538,16 +538,20 @@ fun TVBrowseScreen(
                                                 ),
                                             onFocus = { focusedIdx = idx },
                                             onLeftEdge = {
-                                                // Defer to a LaunchedEffect
-                                                // (sidebarEscapeTick) so we
+                                                // Only the leftmost
+                                                // column escapes to the
+                                                // sidebar; other columns
+                                                // walk LEFT inside the row
+                                                // exactly like top-bar
+                                                // layout. Defers to a
+                                                // LaunchedEffect so we
                                                 // don't requestFocus()
-                                                // synchronously inside the
-                                                // keydown handler.
+                                                // synchronously inside
+                                                // the keydown handler.
                                                 if (useSidebar) {
                                                     sidebarEscapeTick += 1
                                                 }
                                             },
-                                            interceptLeft = useSidebar,
                                             isLeftmost = idx % cols == 0,
                                             onClick = { onCardClick(item) },
                                             onLongPressFavorite = {
