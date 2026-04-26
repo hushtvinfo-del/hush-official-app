@@ -1039,9 +1039,17 @@ private fun LiveDropdownButton(
             .padding(horizontal = 14.dp)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            .focusProperties {
-                down = downTarget
-                right = rightTarget
+            // Safe DOWN/RIGHT traversal — both targets reach into the
+            // currently-loaded channel list (`firstChannelFocus`) which
+            // may be empty during a category switch. See
+            // CategorySidebar.kt for the same fix pattern.
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (ev.key) {
+                    Key.DirectionDown -> runCatching { downTarget.requestFocus() }.isSuccess
+                    Key.DirectionRight -> runCatching { rightTarget.requestFocus() }.isSuccess
+                    else -> false
+                }
             }
             .focusable()
             .clickableWithEnter(onToggle),
@@ -1119,7 +1127,6 @@ private fun LiveInlineSearch(
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
-                    .focusProperties { down = downTarget }
                     .onFocusChanged { focused = it.isFocused }
                     .onPreviewKeyEvent { ev ->
                         if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
@@ -1145,7 +1152,12 @@ private fun LiveInlineSearch(
                     .clip(RoundedCornerShape(11.dp))
                     .background(Color(0x22FFFFFF))
                     .focusable()
-                    .focusProperties { down = downTarget }
+                    // Safe DOWN — see CategorySidebar.kt for rationale.
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
+                            runCatching { downTarget.requestFocus() }.isSuccess
+                        } else false
+                    }
                     .clickableWithEnter { onChange("") },
                 contentAlignment = Alignment.Center,
             ) {
@@ -1183,7 +1195,12 @@ private fun GuideButton(
             .padding(horizontal = 18.dp)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            .focusProperties { down = downTarget }
+            // Safe DOWN — see CategorySidebar.kt for rationale.
+            .onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
+                    runCatching { downTarget.requestFocus() }.isSuccess
+                } else false
+            }
             .focusable()
             .clickableWithEnter(onClick),
     ) {

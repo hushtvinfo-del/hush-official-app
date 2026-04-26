@@ -307,10 +307,6 @@ private fun CollectionsSearchBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
-                    // Declarative: D-pad DOWN from this field → grid.
-                    // Works even when the TextField would otherwise
-                    // trap focus internally.
-                    .focusProperties { down = downTarget }
                     .onFocusChanged { focused = it.isFocused }
                     .onPreviewKeyEvent { ev ->
                         if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -340,9 +336,12 @@ private fun CollectionsSearchBar(
                     .clip(RoundedCornerShape(11.dp))
                     .background(Color(0x22FFFFFF))
                     .focusable()
-                    // Same DOWN routing so the clear button also
-                    // returns to the grid instead of trapping focus.
-                    .focusProperties { down = downTarget }
+                    // Safe DOWN — see CategorySidebar.kt for rationale.
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
+                            runCatching { downTarget.requestFocus() }.isSuccess
+                        } else false
+                    }
                     .clickableWithEnter { onChange("") },
                 contentAlignment = Alignment.Center,
             ) {

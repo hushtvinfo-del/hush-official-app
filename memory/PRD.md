@@ -1,5 +1,52 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.10 — 2026-04-26 (versionCode 210)  ⬅ LATEST  (MANDATORY)
+
+**Proactive crash sweep.** After fixing the
+`CategorySidebar.SidebarRow` declarative-focusProperties crash in
+v1.42.9, audited every other `Modifier.focusProperties { … = X }`
+call site across the TV codebase to make sure no other latent
+crashes of the same shape were lurking.
+
+### Audit table
+
+| File:Line | Element | Verdict |
+|-----------|---------|---------|
+| `TVPlayerScreen` 1031, 1198 | scrubber↔play/pause | SAFE — both targets in same `if (showControls)` block |
+| `TVBrowseScreen` 536 | top-row card UP | SAFE — wrapped in `if (upTarget != null)`; `upTarget = dropdownFocus` always-attached in top-bar mode |
+| `TVLiveBrowseScreen` 1715 | top-row channel UP | SAFE — same shape |
+| `TVBrowseScreen` 870 | BROWSE dropdown DOWN | **UNSAFE — fixed** |
+| `TVBrowseScreen` 1102 | section-search DOWN | redundant — removed (already had safe runCatching path) |
+| `TVBrowseScreen` 1132 | search-clear "X" DOWN | **UNSAFE — fixed** |
+| `TVLiveBrowseScreen` 1042 | BROWSE dropdown DOWN/RIGHT | **UNSAFE — fixed** |
+| `TVLiveBrowseScreen` 1122 | channel-search DOWN | redundant — removed |
+| `TVLiveBrowseScreen` 1148 | search-clear "X" DOWN | **UNSAFE — fixed** |
+| `TVLiveBrowseScreen` 1186 | FULL GUIDE button DOWN | **UNSAFE — fixed** |
+| `TVUnifiedSearchScreen` 803 | unified-search DOWN | redundant — removed |
+| `TVUnifiedSearchScreen` 829 | search-clear "X" DOWN | **UNSAFE — fixed** |
+| `TVCollectionsBrowseScreen` 313 | franchise-search DOWN | redundant — removed |
+| `TVCollectionsBrowseScreen` 345 | search-clear "X" DOWN | **UNSAFE — fixed** |
+
+### Pattern applied
+Every UNSAFE site replaced declarative
+`Modifier.focusProperties { down = downTarget }` with imperative
+`Modifier.onPreviewKeyEvent { ev -> if (KeyDown && DirectionDown)
+runCatching { downTarget.requestFocus() }.isSuccess else false }`.
+Behavior identical when target is attached; safe no-op (returns
+`false` so default 2D focus search takes over) when it isn't,
+instead of throwing `IllegalStateException`.
+
+### Files modified
+- `TVBrowseScreen.kt` — BROWSE dropdown + search-clear X
+- `TVLiveBrowseScreen.kt` — BROWSE dropdown + search-clear X + FULL GUIDE
+- `TVUnifiedSearchScreen.kt` — search-clear X
+- `TVCollectionsBrowseScreen.kt` — search-clear X
+
+### Build + deploy
+- `versionCode 209 → 210`, `versionName "1.42.9" → "1.42.10"`.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.9 — 2026-04-26 (versionCode 209)  ⬅ LATEST  (MANDATORY)
 
 **Real fix for the FocusRequester crash + clearer diagnostics

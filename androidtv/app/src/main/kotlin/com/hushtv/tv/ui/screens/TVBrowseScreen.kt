@@ -867,8 +867,16 @@ private fun CategoryDropdownButton(
             .padding(horizontal = 14.dp)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            .focusProperties {
-                down = downTarget
+            // Safe DOWN traversal — `downTarget` is the first grid card,
+            // which may be unattached during empty/loading states. Going
+            // declarative (`focusProperties { down = downTarget }`)
+            // crashes Compose's focus search on those frames; using
+            // onPreviewKeyEvent + runCatching falls back gracefully.
+            .onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
+                    val ok = runCatching { downTarget.requestFocus() }.isSuccess
+                    ok
+                } else false
             }
             .focusable()
             .clickableWithEnter(onToggle),
@@ -1099,7 +1107,6 @@ private fun InlineSearchBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
-                    .focusProperties { down = downTarget }
                     .onFocusChanged { focused = it.isFocused }
                     .onPreviewKeyEvent { ev ->
                         if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -1129,7 +1136,12 @@ private fun InlineSearchBar(
                     .clip(RoundedCornerShape(11.dp))
                     .background(Color(0x22FFFFFF))
                     .focusable()
-                    .focusProperties { down = downTarget }
+                    // Safe DOWN — see CategorySidebar.kt for rationale.
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
+                            runCatching { downTarget.requestFocus() }.isSuccess
+                        } else false
+                    }
                     .clickableWithEnter { onChange("") },
                 contentAlignment = Alignment.Center,
             ) {
