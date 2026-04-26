@@ -402,6 +402,10 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     val onPlay: (Int) -> Unit = sel@{ idx ->
         val p = playlist ?: return@sel
         val ch = filteredChannels.getOrNull(idx) ?: return@sel
+        com.hushtv.tv.data.EventLog.log(
+            "live-browse",
+            "onPlay → ${ch.title} streamId=${ch.streamId}",
+        )
         NavState.liveChannels = filteredChannels
         NavState.rememberPlayback(idx)
         NavState.browsePlaylistId = playlistId

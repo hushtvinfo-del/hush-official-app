@@ -1,5 +1,61 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.15 — 2026-04-26 (versionCode 215)  ⬅ LATEST  (MANDATORY)
+
+**Live freeze diagnostics — capture the freeze, not just the crash.**
+User noted that the existing crash reporter only catches hard
+process crashes via `Thread.UncaughtExceptionHandler`, not the
+"channel froze" cases where the JVM is fine but the player is
+wedged in `STATE_BUFFERING` with no incoming data. Added a
+purpose-built monitor for that.
+
+### New code
+- `data/EventLog.kt`
+  - 60-entry ring buffer of `[HH:mm:ss.SSS] tag: message` lines.
+  - Cheap, thread-safe, snapshot-able.
+- `data/PlaybackFreezeMonitor.kt`
+  - Attaches to an `ExoPlayer` via `Player.Listener`.
+  - Tracks how long the player has been in `STATE_BUFFERING` while
+    `playWhenReady = true`. Triggers a freeze report at the 6 s
+    mark.
+  - Also triggers on `onPlayerError(...)`.
+  - At-most-one report per attach() lifetime — channel-zapping
+    detaches the old monitor and attaches a fresh one, so the
+    user can resume getting reports after recovery.
+  - Report payload includes:
+    * Player state (state, pwr, position, buffered duration)
+    * Stream URL + isLive + channel name
+    * Network type (Wi-Fi / Ethernet / Cellular / VPN), down/up
+      bandwidth Kbps, "validated" capability
+    * Last 60 in-app `EventLog` events
+    * Stack trace dump for ALL threads (top 20 frames each)
+    * Last `PlaybackException` if any
+  - Posts to the same `/crash/submit/<secret>` endpoint as
+    crashes, tagged `"kind":"freeze"`.
+- `HushTVApp.onCreate` logs an event line on app launch.
+- `TVLiveBrowseScreen.onPlay` logs the channel zap.
+
+### Wiring
+- `TVPlayerScreen.kt` and `MobilePlayerScreen.kt` each attach a
+  `PlaybackFreezeMonitor` via a `DisposableEffect(player, url)` —
+  detaches when the user leaves the player or the URL changes.
+
+### Server
+- `/opt/hushtv-crash/app.py` dashboard now shows a colored chip
+  per report distinguishing `crash` (red) from `freeze` (blue).
+  Service restarted.
+
+### TV Diagnostics screen
+- The "no crashes logged" state now also shows the live in-app
+  EventLog snapshot in monospace, so the user can read what's
+  happening in the background without sending a report.
+
+### Build + deploy
+- `versionCode 214 → 215`, `versionName "1.42.14" → "1.42.15"`.
+- Mandatory.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.14 — 2026-04-26 (versionCode 214)  ⬅ LATEST  (MANDATORY)
 
 **REAL fix for the Fire Stick / first-channel-freezes-1-min-in bug.**

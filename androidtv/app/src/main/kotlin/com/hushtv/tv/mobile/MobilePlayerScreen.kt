@@ -151,6 +151,17 @@ fun MobilePlayerScreen(
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
 
+    // ─── Freeze monitor ─────────────────────────────────────────────
+    DisposableEffect(player, currentStreamUrl) {
+        val mon = com.hushtv.tv.data.PlaybackFreezeMonitor.attach(
+            ctx, player,
+            streamUrl = currentStreamUrl,
+            isLive = isLive,
+            channelName = currentTitle,
+        )
+        onDispose { mon.detach() }
+    }
+
     // ── OpenSubtitles plumbing ──────────────────────────────────────
     val subtitleQuery = remember {
         // Detail screens that know rich metadata (movies → year,

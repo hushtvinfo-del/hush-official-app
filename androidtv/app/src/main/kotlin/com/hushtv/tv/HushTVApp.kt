@@ -24,6 +24,10 @@ class HushTVApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         installCrashHandler()
+        com.hushtv.tv.data.EventLog.log(
+            "app",
+            "onCreate v${BuildConfig.VERSION_NAME}#${BuildConfig.VERSION_CODE}",
+        )
         // Enable HTTP disk cache for Xtream JSON calls.
         XtreamApi.enableDiskCache(this)
         // If a crash was captured during the last session, POST it to

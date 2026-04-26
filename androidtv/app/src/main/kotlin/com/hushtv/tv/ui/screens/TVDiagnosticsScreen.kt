@@ -161,9 +161,25 @@ fun TVDiagnosticsScreen(nav: NavController) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Keep using the app. If it ever force-closes, a report will be sent to our server automatically — come back here to share it manually if you want.",
+                    "Crashes AND channel-freezes (player stalled for >6 s) are reported to the server automatically. Come back here to share manually if you want.",
                     color = TextSecondary,
                     fontSize = 14.sp,
+                )
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    "─── recent in-app events ───",
+                    color = Cyan,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    com.hushtv.tv.data.EventLog.snapshot()
+                        .ifBlank { "(no events yet)" },
+                    color = Color(0xFFB0BEC5),
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
                 )
             }
         } else {

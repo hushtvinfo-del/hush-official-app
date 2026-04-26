@@ -118,6 +118,20 @@ fun TVPlayerScreen(
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
 
+    // ─── Freeze monitor ─────────────────────────────────────────────
+    // Reports buffer stalls / player errors that AREN'T crashes (the
+    // process is fine, just the player is wedged). Posts the same
+    // diagnostic payload as the crash reporter, tagged kind=freeze.
+    DisposableEffect(player, currentUrl) {
+        val mon = com.hushtv.tv.data.PlaybackFreezeMonitor.attach(
+            ctx, player,
+            streamUrl = currentUrl,
+            isLive = isLive,
+            channelName = currentName,
+        )
+        onDispose { mon.detach() }
+    }
+
     // ── OpenSubtitles plumbing ──────────────────────────────────────
     // The detail screen stashes the title / season / episode in
     // [SubtitleSearchContext] right before navigating here. We consume
