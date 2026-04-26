@@ -292,6 +292,48 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     }
     DisposableEffect(Unit) { onDispose { previewPlayer.release() } }
 
+    // ─── Lifecycle-aware preview kill switch ────────────────────────────
+    // Fire Stick freeze hunt: navigating to fullscreen calls
+    // previewPlayer.stop(), but a `LaunchedEffect` mid-delay(600) can
+    // still fire AFTER the stop — restarting the preview while the
+    // fullscreen player is running. Two concurrent IPTV streams on a
+    // Fire Stick choke the foreground buffer over 1–2 min → freeze.
+    //
+    // Same applies when the user backgrounds the app.
+    //
+    // Fix: an `isResumed` flag, flipped via a LifecycleEventObserver,
+    // is added to the preview LaunchedEffect's key set. Any pause
+    // (nav-to-fullscreen, app background, screen off) immediately:
+    //   • re-keys the LaunchedEffect → cancels the in-flight delay
+    //   • the cancelled coroutine returns early via the !isResumed
+    //     guard before it can call setMediaItem/prepare/play
+    //   • belt-and-braces: also stop()/clearMediaItems() the player
+    //     in the observer so even a race-in-flight setMediaItem call
+    //     finds nothing to play.
+    var isResumed by remember { mutableStateOf(true) }
+    val previewLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(previewLifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+            when (ev) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    isResumed = false
+                    runCatching {
+                        previewPlayer.playWhenReady = false
+                        previewPlayer.stop()
+                        previewPlayer.clearMediaItems()
+                    }
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    isResumed = true
+                    runCatching { previewPlayer.playWhenReady = true }
+                }
+                else -> Unit
+            }
+        }
+        previewLifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { previewLifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
     // ── Reminder dialog state — non-null = dialog is open for this channel.
     //    Long-pressing OK on a channel row sets this; the dialog clears it
     //    on dismiss. ──
@@ -321,21 +363,30 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     }
 
     // Debounced preview: starts ~600 ms after the user settles on a channel,
-    // but ONLY while their focus is inside the channels pane.
-    LaunchedEffect(focusedChannelIdx, filteredChannels, channelsPaneFocused, playlist) {
-        if (!channelsPaneFocused) {
-            previewPlayer.pause()
+    // but ONLY while their focus is inside the channels pane AND the
+    // screen is in the RESUMED lifecycle state. The `isResumed` key bails
+    // immediately if the user just navigated to fullscreen or backgrounded
+    // the app — preventing the in-flight delay() from restarting the
+    // preview after `previewPlayer.stop()` was called.
+    LaunchedEffect(focusedChannelIdx, filteredChannels, channelsPaneFocused, playlist, isResumed) {
+        if (!isResumed || !channelsPaneFocused) {
+            runCatching { previewPlayer.pause() }
             return@LaunchedEffect
         }
         val p = playlist ?: return@LaunchedEffect
         val ch = filteredChannels.getOrNull(focusedChannelIdx) ?: run {
-            previewPlayer.stop(); return@LaunchedEffect
+            runCatching { previewPlayer.stop() }; return@LaunchedEffect
         }
         delay(600)
+        // Re-check after the delay — a navigate-away may have flipped
+        // isResumed while we were waiting.
+        if (!isResumed || !channelsPaneFocused) return@LaunchedEffect
         val url = XtreamApi.liveUrl(p.host, p.username, p.password, ch.streamId)
-        previewPlayer.setMediaItem(MediaItem.fromUri(url))
-        previewPlayer.prepare()
-        previewPlayer.play()
+        runCatching {
+            previewPlayer.setMediaItem(MediaItem.fromUri(url))
+            previewPlayer.prepare()
+            previewPlayer.play()
+        }
     }
 
     // Pre-fetch the EPG for the channel under focus (short EPG → now + next).
@@ -351,7 +402,16 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         NavState.liveChannels = filteredChannels
         NavState.rememberPlayback(idx)
         NavState.browsePlaylistId = playlistId
-        previewPlayer.stop()
+        // Hard-stop the preview BEFORE navigating. The lifecycle observer
+        // above will also fire ON_PAUSE when the nav transition begins
+        // and call stop() + clearMediaItems(), but doing it here too
+        // ensures the foreground player isn't briefly competing for
+        // bandwidth/decoder during the navigation animation.
+        runCatching {
+            previewPlayer.playWhenReady = false
+            previewPlayer.stop()
+            previewPlayer.clearMediaItems()
+        }
         val url = XtreamApi.liveUrl(p.host, p.username, p.password, ch.streamId)
         nav.navigate("player/${p.id}/${Uri.encode(url)}/${Uri.encode(ch.title)}/true")
     }

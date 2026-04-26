@@ -1,5 +1,63 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.13 — 2026-04-26 (versionCode 213)  ⬅ LATEST  (MANDATORY)
+
+**Fire Stick freeze fix.** Multiple Fire Stick users reported their
+live channel freezing about 1–2 minutes after launching the app
+and tuning to a channel; switching channels resolved it.
+
+### Root cause analysis
+`TVLiveBrowseScreen.kt` runs a debounced `previewPlayer` for the
+mini live preview shown while browsing channels. v1.42.5 turned
+on its audio (`volume = 0f → 1f`) so users can hear the channel
+they're hovering on.
+
+When the user opens a channel fullscreen via `onPlay()`:
+1. `previewPlayer.stop()` is called (correctly).
+2. `nav.navigate("player/...")` pushes `TVPlayerScreen`.
+3. **However:** Compose Navigation keeps `TVLiveBrowseScreen` in
+   the back stack — its `LaunchedEffect`s aren't cancelled. If a
+   focus change fired right before the user pressed OK, the
+   debounce coroutine is mid-`delay(600)`. After `stop()` +
+   `navigate`, the coroutine resumes ~200–600 ms later and calls
+   `setMediaItem(...) → prepare() → play()` — restarting the
+   preview while the fullscreen player is also running.
+4. Two concurrent IPTV streams compete for Wi-Fi bandwidth +
+   hardware decoder slots on a Fire Stick (low-RAM, single
+   hardware decoder). Foreground buffer drains gradually until
+   it hits zero ~1–2 min in → freeze. Switching channels
+   recreates the player and masks the issue.
+
+### Fix
+- `TVLiveBrowseScreen.kt`
+  - New lifecycle observer (`LifecycleEventObserver`) flips an
+    `isResumed: Boolean` state on `ON_PAUSE` / `ON_RESUME`.
+  - On pause: also calls
+    `previewPlayer.playWhenReady = false; .stop(); .clearMediaItems()`.
+  - `isResumed` is added to the preview `LaunchedEffect`'s key
+    set — any state change re-keys → cancels in-flight coroutine.
+    Both before-`delay` and after-`delay` guards check
+    `!isResumed` and bail without touching the player.
+  - `onPlay()` also calls `playWhenReady = false; stop();
+    clearMediaItems()` for an extra layer of belt-and-braces.
+
+### Side benefit
+Same fix prevents the preview from continuing to consume battery
+and bandwidth when the user backgrounds the app from the channel
+list.
+
+### Build + deploy
+- `versionCode 212 → 213`, `versionName "1.42.12" → "1.42.13"`.
+- Mandatory.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+### Cleanup
+While editing, also removed a 45-line orphaned duplicate of
+`GuideRow` that had been left at the end of the file by an
+earlier session (lines 2287-2331). File now ends cleanly at the
+proper closing `}`.
+
+
 ## v1.42.12 — 2026-04-26 (versionCode 212)  ⬅ LATEST  (optional)
 
 **Build-time audit: `auditFocusProperties` Gradle task.** Future
