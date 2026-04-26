@@ -218,10 +218,14 @@ private fun AppContent() {
 
     // Optional: auto-resume the last-watched live channel on top of the menu
     // for the active profile. BACK from the player lands on the menu.
+    // Gated behind AutoResumeStore — disabled by default since v1.42.16
+    // (per user request: cold-launching straight into a stream made
+    // diagnostic + UX work harder).
     var resumeAttempted by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (resumeAttempted) return@LaunchedEffect
         resumeAttempted = true
+        if (!com.hushtv.tv.data.AutoResumeStore.isEnabled(ctx)) return@LaunchedEffect
         val last = LastChannelStore.load(ctx) ?: return@LaunchedEffect
         val activeProfileId = LastProfileStore.load(ctx)
         // Only auto-resume if the channel belongs to the profile we just

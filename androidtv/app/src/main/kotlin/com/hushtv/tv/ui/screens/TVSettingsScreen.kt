@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Report
@@ -57,6 +58,11 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
     var hasPin by remember { mutableStateOf(PinStore.hasPin(ctx)) }
     var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
     var lockedIds by remember { mutableStateOf(PinStore.lockedCategoryIds(ctx)) }
+
+    // Auto-resume last channel on launch — opt-in toggle.
+    var autoResume by remember {
+        mutableStateOf(com.hushtv.tv.data.AutoResumeStore.isEnabled(ctx))
+    }
 
     var showPinDialog by remember { mutableStateOf(false) }
     var pinAction by remember { mutableStateOf<() -> Unit>({}) }
@@ -154,6 +160,26 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                     subtitle = "See the status of your missing-content requests",
                     icon = { Icon(Icons.Default.Inbox, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                     onClick = { nav.navigate("myrequests/$playlistId") },
+                )
+            }
+            item {
+                SettingsCard(
+                    title = "Auto-resume last channel on launch",
+                    subtitle = if (autoResume)
+                        "ON — app will jump straight into your last live channel"
+                    else
+                        "OFF — app opens to the home menu",
+                    icon = {
+                        Icon(
+                            Icons.Default.PlayCircle, null,
+                            tint = if (autoResume) Cyan else TextSecondary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    },
+                    onClick = {
+                        autoResume = !autoResume
+                        com.hushtv.tv.data.AutoResumeStore.setEnabled(ctx, autoResume)
+                    },
                 )
             }
 

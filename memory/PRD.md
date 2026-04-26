@@ -1,5 +1,39 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.16 — 2026-04-26 (versionCode 216)  ⬅ LATEST  (optional)
+
+**Auto-resume last channel — opt-in toggle.** Per user request,
+disabled by default while we hunt the freeze. App now opens to
+the home menu on launch; users can turn auto-resume back on in
+Settings.
+
+### Changes
+- New `data/AutoResumeStore.kt`
+  - SharedPreferences-backed `isEnabled() / setEnabled()`.
+  - Default `false` (was unconditionally on before).
+- `MainActivity.kt`
+  - The `LaunchedEffect` that auto-navigates to
+    `player/{playlistId}/{streamUrl}/{name}/true` now bails early
+    when `AutoResumeStore.isEnabled(ctx)` returns false.
+- `TVSettingsScreen.kt`
+  - New row under MY CONTENT: "Auto-resume last channel on
+    launch", with an ON/OFF subtitle and the `PlayCircle` icon.
+    Tapping toggles the pref + updates the icon tint.
+
+### Why
+Cold-launching straight into a stream made the freeze
+diagnostics in v1.42.15 messier — every freeze report would also
+include a flurry of cold-start telemetry events from the
+auto-resume path. With the resume disabled, freezes that
+reproduce after the user MANUALLY tunes a channel give cleaner
+data on what's actually competing with the stream.
+
+### Build + deploy
+- `versionCode 215 → 216`, `versionName "1.42.15" → "1.42.16"`.
+- Marked **non-mandatory** (pure preference change).
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.15 — 2026-04-26 (versionCode 215)  ⬅ LATEST  (MANDATORY)
 
 **Live freeze diagnostics — capture the freeze, not just the crash.**
