@@ -60,8 +60,18 @@ class PlaybackFreezeMonitor private constructor(
     @Volatile private var lastError: PlaybackException? = null
     @Volatile private var detached = false
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val checkInterval = 1500L
-    private val freezeThresholdMs = 6_000L
+    private val checkInterval = 1000L
+    // Drop from 6 s → 3 s. Real Fire Stick / Shield freezes always
+    // outlast 3 s; user-perceived "instant freeze" is typically already
+    // 2-3 s of stall by the time they notice.
+    private val freezeThresholdMs = 3_000L
+
+    // Frozen-position detection — sometimes the player stays in
+    // STATE_READY but stops advancing (decoder OK, network dead).
+    // Track last-observed position and emit a report if it hasn't moved
+    // for `freezeThresholdMs` while the user wants playback.
+    private var lastPosMs = 0L
+    private var lastPosCheckMs = System.currentTimeMillis()
 
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
@@ -106,13 +116,40 @@ class PlaybackFreezeMonitor private constructor(
     private val ticker = object : Runnable {
         override fun run() {
             if (detached) return
+            val now = System.currentTimeMillis()
+            // 1. Buffering-stall detection.
             val since = bufferingSinceMs.get()
             if (since != 0L && player.playWhenReady) {
-                val stuckMs = System.currentTimeMillis() - since
+                val stuckMs = now - since
                 if (stuckMs > freezeThresholdMs) {
                     scheduleReport(reason = "BufferingStall:${stuckMs}ms")
                     bufferingSinceMs.set(0L)
                 }
+            }
+            // 2. Frozen-position detection — player says READY + pwr=true,
+            //    but currentPosition isn't advancing. Live streams can
+            //    legitimately not advance during ad breaks or DVR pauses,
+            //    but >3 s with no movement on a live IPTV feed is a
+            //    network-side freeze.
+            if (player.playbackState == Player.STATE_READY &&
+                player.playWhenReady &&
+                bufferingSinceMs.get() == 0L
+            ) {
+                val pos = player.currentPosition
+                if (pos != lastPosMs) {
+                    lastPosMs = pos
+                    lastPosCheckMs = now
+                } else if (now - lastPosCheckMs > freezeThresholdMs) {
+                    scheduleReport(
+                        reason = "FrozenPosition:pos=${pos}ms idleMs=${now - lastPosCheckMs}",
+                    )
+                    // Reset so we don't keep re-firing every tick.
+                    lastPosCheckMs = now
+                }
+            } else {
+                // Not playing → reset position tracker.
+                lastPosMs = player.currentPosition
+                lastPosCheckMs = now
             }
             handler.postDelayed(this, checkInterval)
         }
@@ -143,17 +180,25 @@ class PlaybackFreezeMonitor private constructor(
         val device = "${Build.MANUFACTURER}-${Build.MODEL}-$deviceId"
             .replace(' ', '-').take(60)
 
-        // Player state snapshot.
-        val state = when (player.playbackState) {
-            Player.STATE_IDLE -> "IDLE"
-            Player.STATE_BUFFERING -> "BUFFERING"
-            Player.STATE_READY -> "READY"
-            Player.STATE_ENDED -> "ENDED"
-            else -> "?"
-        }
-        val pwr = player.playWhenReady
-        val pos = player.currentPosition
-        val buffered = player.totalBufferedDuration
+        // Player state snapshot (read on main thread for safety).
+        val ms = runOnMain {
+            mapOf(
+                "state" to when (player.playbackState) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "?"
+                },
+                "pwr" to player.playWhenReady,
+                "pos" to player.currentPosition,
+                "buffered" to player.totalBufferedDuration,
+            )
+        } ?: emptyMap()
+        val state = ms["state"] ?: "?"
+        val pwr = ms["pwr"] ?: false
+        val pos = ms["pos"] ?: 0L
+        val buffered = ms["buffered"] ?: 0L
         val now = System.currentTimeMillis()
         val sessionMs = now - attachedAt
         val errCode = lastError?.errorCodeName ?: "—"
@@ -205,9 +250,39 @@ class PlaybackFreezeMonitor private constructor(
 
     fun detach() {
         if (detached) return
+        // If we're detaching mid-stall (user channel-zapped to recover
+        // from a freeze BEFORE the threshold hit), still flush a
+        // "best-effort" report so the data isn't lost. This catches the
+        // "I waited 2 s, freezed, channel-flipped" case which the
+        // pre-tightening monitor missed entirely.
+        val now = System.currentTimeMillis()
+        val since = bufferingSinceMs.get()
+        if (since != 0L && (now - since) > 1_500L) {
+            scheduleReport(
+                reason = "DetachWhileBuffering:${now - since}ms",
+            )
+        }
         detached = true
         runCatching { player.removeListener(listener) }
         handler.removeCallbacks(ticker)
+        EventLog.log("freeze-monitor", "detached")
+    }
+
+    /** Read a value off the player on the Main thread (it doesn't like
+     *  being touched from background threads). Blocks the caller for at
+     *  most ~50 ms. Returns null on timeout. */
+    private fun <T : Any> runOnMain(block: () -> T): T? {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            return block()
+        }
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var box: T? = null
+        handler.post {
+            box = runCatching(block).getOrNull()
+            latch.countDown()
+        }
+        latch.await(50, java.util.concurrent.TimeUnit.MILLISECONDS)
+        return box
     }
 
     companion object {

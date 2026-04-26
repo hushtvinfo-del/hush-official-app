@@ -1,5 +1,43 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.17 — 2026-04-26 (versionCode 217)  ⬅ LATEST  (MANDATORY)
+
+**Tightened the freeze monitor.** v1.42.15 shipped the monitor but
+the user updated to it only ~2.5 min before reporting two freezes.
+Reviewing the original implementation surfaced three gaps that
+would have missed real freezes anyway, so tightening up before
+the next test:
+
+### Changes — `PlaybackFreezeMonitor.kt`
+1. **Threshold 6 s → 3 s.** Real Fire Stick / Shield freezes
+   always outlast 3 s; the user's "channel froze" perception is
+   typically already 2-3 s of stall by the time they notice.
+   Tick interval also dropped 1.5 s → 1 s for tighter resolution.
+2. **New: frozen-position detection.** Player can be
+   `STATE_READY + playWhenReady=true + currentPosition not
+   advancing`, i.e. the audio/video pipeline is alive but no new
+   frames are coming in. The ticker now also checks for
+   non-advancing position over the same 3 s window.
+3. **Detach-while-buffering flush.** `detach()` is called when
+   the player is released (channel zap, screen back, etc.). If
+   we're detaching mid-stall (>1.5 s buffering not yet at the
+   3 s threshold), we now still post a "best-effort" report
+   tagged `DetachWhileBuffering:Xms` before tearing down. This
+   captures freezes the user resolved with channel-flip before
+   we'd have fired the normal report.
+4. **Main-thread reads.** Player state reads in `buildPayload`
+   now go through a `runOnMain { … }` helper backed by a
+   `CountDownLatch`. Calling `player.currentPosition` from the
+   freeze upload thread occasionally hit a "wrong thread"
+   IllegalStateException; the helper is a 50 ms-bounded sync
+   trip onto Main.
+
+### Build + deploy
+- `versionCode 216 → 217`, `versionName "1.42.16" → "1.42.17"`.
+- Mandatory.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.16 — 2026-04-26 (versionCode 216)  ⬅ LATEST  (optional)
 
 **Auto-resume last channel — opt-in toggle.** Per user request,
