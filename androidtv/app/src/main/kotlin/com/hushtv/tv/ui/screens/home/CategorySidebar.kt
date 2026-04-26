@@ -75,6 +75,7 @@ fun CategorySidebar(
     onEnter: (SidebarItem) -> Unit,
     topRowUpTarget: FocusRequester? = null,
     rightTarget: FocusRequester? = null,
+    selectedItemFocus: FocusRequester? = null,
     width: androidx.compose.ui.unit.Dp = 240.dp,
 ) {
     val listState = rememberLazyListState()
@@ -141,10 +142,25 @@ fun CategorySidebar(
                 val item = items[idx]
                 val isSelected = item.id == selectedId
                 val isFirst = idx == 0
+                // Compose the focus modifier:
+                //   • Always tag the FIRST row with `firstItemFocus`
+                //     (initial focus + fallback escape target).
+                //   • Additionally tag the SELECTED row with
+                //     `selectedItemFocus` so an external LEFT-escape from
+                //     the grid lands on the user's current category, not
+                //     wherever the first row happens to be.
+                val combinedFocusMod = remember(isFirst, isSelected) {
+                    var m: Modifier = Modifier
+                    if (isFirst) m = m.focusRequester(firstItemFocus)
+                    if (isSelected && selectedItemFocus != null) {
+                        m = m.focusRequester(selectedItemFocus)
+                    }
+                    m
+                }
                 SidebarRow(
                     label = item.label,
                     selected = isSelected,
-                    focusMod = if (isFirst) Modifier.focusRequester(firstItemFocus) else Modifier,
+                    focusMod = combinedFocusMod,
                     topRowUpTarget = if (isFirst) topRowUpTarget else null,
                     rightTarget = rightTarget,
                     onFocus = { onFocus(item) },

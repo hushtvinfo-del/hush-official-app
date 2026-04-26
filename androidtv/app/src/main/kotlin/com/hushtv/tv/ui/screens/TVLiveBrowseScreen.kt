@@ -369,6 +369,10 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     }
     val useSidebar = currentLayoutMode == com.hushtv.tv.data.LayoutPrefsStore.MODE_SIDEBAR
     val sidebarFirstItemFocus = remember { FocusRequester() }
+    // Focus target for the CURRENTLY-SELECTED sidebar row. LEFT-escape
+    // from any channel row lands here so the user returns to the
+    // category they were already browsing, not the top of the list.
+    val sidebarSelectedItemFocus = remember { FocusRequester() }
     val sidebarItems = remember(uiCategories) {
         uiCategories.map {
             com.hushtv.tv.ui.screens.home.SidebarItem(
@@ -398,6 +402,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                 selectedId = uiCategories.getOrNull(selectedCatIndex)?.category_id,
                 title = "Live TV",
                 firstItemFocus = sidebarFirstItemFocus,
+                selectedItemFocus = sidebarSelectedItemFocus,
                 onFocus = { /* no preview-on-focus; ENTER commits */ },
                 onEnter = { item ->
                     val idx = uiCategories.indexOfFirst { it.category_id == item.id }
@@ -432,7 +437,16 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     onFocusChange = { focusedChannelIdx = it },
                     initialFocusIndex = focusedChannelIdx,
                     firstChannelFocus = firstChannelFocus,
-                    onLeftEdge = { runCatching { sidebarFirstItemFocus.requestFocus() } },
+                    onLeftEdge = {
+                        // LEFT from any channel row escapes to the
+                        // currently-selected category in the sidebar.
+                        // Falls back to the first item if the selected
+                        // row isn't currently composed in the LazyColumn.
+                        runCatching { sidebarSelectedItemFocus.requestFocus() }
+                            .onFailure {
+                                runCatching { sidebarFirstItemFocus.requestFocus() }
+                            }
+                    },
                     onPlay = onPlay,
                     onLongPress = { idx -> reminderChannel = filteredChannels.getOrNull(idx) },
                     emptyReason = if (channels.isEmpty() && !loadingChans)

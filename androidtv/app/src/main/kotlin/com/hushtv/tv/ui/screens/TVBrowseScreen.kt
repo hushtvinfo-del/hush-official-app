@@ -385,6 +385,10 @@ fun TVBrowseScreen(
     }
     val useSidebar = currentLayoutMode == com.hushtv.tv.data.LayoutPrefsStore.MODE_SIDEBAR
     val sidebarFirstItemFocus = remember { FocusRequester() }
+    // Focus target for the CURRENTLY-SELECTED sidebar row. Used by the
+    // grid's LEFT-escape so the user lands back on the category they
+    // came from, instead of being thrown to the top of the sidebar.
+    val sidebarSelectedItemFocus = remember { FocusRequester() }
     val browseSidebarItems = remember(allCategories, type) {
         buildList {
             add(com.hushtv.tv.ui.screens.home.SidebarItem(CAT_FAV, "Favorites"))
@@ -522,10 +526,20 @@ fun TVBrowseScreen(
                                                 ),
                                             onFocus = { focusedIdx = idx },
                                             onLeftEdge = {
+                                                // In sidebar mode, LEFT from
+                                                // ANY card escapes the grid
+                                                // and lands on the currently-
+                                                // selected category. Falls
+                                                // back to the first sidebar
+                                                // item if the selected one
+                                                // isn't currently composed.
                                                 if (useSidebar) runCatching {
-                                                    sidebarFirstItemFocus.requestFocus()
+                                                    sidebarSelectedItemFocus.requestFocus()
+                                                }.onFailure {
+                                                    runCatching { sidebarFirstItemFocus.requestFocus() }
                                                 }
                                             },
+                                            interceptLeft = useSidebar,
                                             isLeftmost = idx % cols == 0,
                                             onClick = { onCardClick(item) },
                                             onLongPressFavorite = {
@@ -561,6 +575,7 @@ fun TVBrowseScreen(
                     selectedId = selectedCatId,
                     title = title,
                     firstItemFocus = sidebarFirstItemFocus,
+                    selectedItemFocus = sidebarSelectedItemFocus,
                     onFocus = { /* no preview-on-focus; ENTER commits */ },
                     onEnter = { item ->
                         selectedCatId = item.id
@@ -1603,6 +1618,7 @@ private fun CompactPoster(
     onFocus: () -> Unit,
     onLeftEdge: () -> Unit,
     isLeftmost: Boolean,
+    interceptLeft: Boolean = false,
     onClick: () -> Unit,
     onLongPressFavorite: () -> Unit,
 ) {
@@ -1619,10 +1635,18 @@ private fun CompactPoster(
     Column(
         modifier = focusMod
             .onPreviewKeyEvent { ev ->
-                // 1) Leftmost LEFT → bubble to sidebar
-                if (isLeftmost && ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                    onLeftEdge()
-                    return@onPreviewKeyEvent true
+                // 1) LEFT escape →
+                //   • In sidebar mode, ANY card escapes to the sidebar
+                //     immediately so users never feel "stuck" walking
+                //     left through the row to reach their categories.
+                //   • In top-bar mode (no sidebar to escape to), keep
+                //     the old leftmost-only behavior so internal LEFT
+                //     navigation still works within the grid.
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                    if (interceptLeft || isLeftmost) {
+                        onLeftEdge()
+                        return@onPreviewKeyEvent true
+                    }
                 }
                 // 2) Long-press OK / ENTER / DPAD_CENTER → toggle favorite
                 val isEnterKey = ev.key == Key.Enter ||

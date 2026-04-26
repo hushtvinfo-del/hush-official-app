@@ -1,5 +1,45 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.4 — 2026-04-26 (versionCode 204)  ⬅ LATEST  (MANDATORY)
+
+**Sidebar-layout LEFT-escape fix.** User reported that in the left
+sidebar layout (Live TV / Movies / Series), pressing LEFT from a
+focused card/channel didn't reach the sidebar — they had to D-pad UP
+to the top nav and back down. Two root causes:
+
+1. In `TVBrowseScreen` (Movies/Series), only `isLeftmost` cards
+   (column 0) escaped the grid via `onLeftEdge`; cards in other
+   columns just walked left within the row.
+2. Both browse screens called `sidebarFirstItemFocus.requestFocus()`
+   on escape, so LEFT always landed on the top sidebar item
+   ("Favorites" / first category) — never the user's current
+   category.
+
+### Fixes
+- `ui/screens/home/CategorySidebar.kt`
+  - New optional `selectedItemFocus: FocusRequester?` param. The
+    matching row (`item.id == selectedId`) carries it in addition
+    to `firstItemFocus` on row 0, so the parent can request focus
+    on whichever category is currently active.
+- `TVBrowseScreen.kt` (Movies / Series)
+  - New `sidebarSelectedItemFocus` requester wired into
+    `CategorySidebar`.
+  - `CompactPoster` got an `interceptLeft: Boolean` param. In
+    sidebar mode every card consumes LEFT and triggers
+    `onLeftEdge`, which calls `sidebarSelectedItemFocus.requestFocus()`
+    with a fallback to `sidebarFirstItemFocus`. In top-bar mode the
+    old leftmost-only behavior is preserved so LEFT still walks
+    inside the row when there's no sidebar to escape to.
+- `TVLiveBrowseScreen.kt`
+  - Same `sidebarSelectedItemFocus` plumbing. Channel rows already
+    consumed LEFT; they now route to the selected sidebar item
+    instead of the first.
+
+### Build + deploy
+- `versionCode 203 → 204`, `versionName "1.42.3" → "1.42.4"`.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.3 — 2026-04-26 (versionCode 203)  ⬅ LATEST  (MANDATORY)
 
 **TV "For You" Home hub removed.** User reported the unified hub
