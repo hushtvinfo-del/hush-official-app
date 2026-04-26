@@ -1,5 +1,54 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.19 — 2026-04-26 (versionCode 219)  ⬅ LATEST  (MANDATORY)
+
+**Hardware decoder fix + on-screen verification.**
+
+User asked "are we actually using hardware decoders?" — caught a
+mistake in v1.42.18:
+
+```kotlin
+setExtensionRendererMode(EXTENSION_RENDERER_MODE_PREFER)
+```
+
+…actually tells ExoPlayer to PREFER the bundled software extension
+decoders (AV1 sw, FLAC sw, OPUS sw, etc.) OVER the platform's
+MediaCodec hardware decoders. The opposite of what we want.
+
+### Fix
+- `data/PlayerBuilder.kt`
+  - Changed to `EXTENSION_RENDERER_MODE_ON` — platform MediaCodec
+    first (hardware-first by Android decoder ordering),
+    extensions used only as fallback for codecs the device
+    can't do in hardware.
+  - `setEnableDecoderFallback(true)` retained.
+
+### New runtime verification
+- Added a static `AnalyticsListener` (`DecoderInspector`) inside
+  `PlayerBuilder` that catches every
+  `onVideoDecoderInitialized` / `onAudioDecoderInitialized`
+  callback and writes a line to `EventLog`:
+  ```
+  [00:01:23.456] decoder: video → c2.qti.h264.decoder  (HARDWARE)
+  ```
+  Verdict is derived from the decoder name's prefix — `c2.android.*`
+  / `OMX.google.*` / `*ffmpeg*` / `.sw` are software; everything else
+  (vendor namespaces — `c2.qti.*`, `OMX.MTK.*`, `OMX.Nvidia.*`,
+  `OMX.amlogic.*`, etc.) is hardware.
+- New helper `PlayerBuilder.lastDecoderLines()` returns the last
+  video + audio lines for display.
+- `TVDiagnosticsScreen.kt` now shows them in a green panel above
+  the in-app event log so the user can verify on-screen
+  immediately after watching any channel.
+- All future freeze reports automatically include the decoder
+  lines because they live in the same `EventLog` snapshot.
+
+### Build + deploy
+- `versionCode 218 → 219`, `versionName "1.42.18" → "1.42.19"`.
+- Mandatory.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.18 — 2026-04-26 (versionCode 218)  ⬅ LATEST  (MANDATORY)
 
 **REAL fix for the channel freezes — root cause confirmed via server data.**

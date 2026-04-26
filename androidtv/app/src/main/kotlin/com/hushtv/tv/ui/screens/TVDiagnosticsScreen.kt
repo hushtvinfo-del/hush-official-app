@@ -123,6 +123,38 @@ fun TVDiagnosticsScreen(nav: NavController) {
 
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
 
+        // ── Decoder status (live, updated as you play streams) ──────
+        val decoderLines = remember(version) {
+            com.hushtv.tv.data.PlayerBuilder.lastDecoderLines()
+        }
+        if (decoderLines.isNotBlank()) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 48.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0x1422C55E))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Column {
+                    Text(
+                        "DECODER (last seen)",
+                        color = Color(0xFF22C55E),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.6.sp,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        decoderLines,
+                        color = Color.White,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+
         // ── Upload status banner ─────────────────────────────────────
         if (uploadState != null) {
             val (bg, fg, msg) = when (uploadState) {

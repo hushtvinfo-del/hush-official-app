@@ -66,7 +66,17 @@ object PlayerBuilder {
             .build()
 
         val renderers = DefaultRenderersFactory(ctx).apply {
-            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            // Use the platform's MediaCodec decoder list (hardware-first
+            // on every Android TV / Fire TV / Shield I'm aware of). The
+            // EXTENSION_RENDERER_MODE_ON flag lets us fall back to the
+            // bundled software AV1 / FLAC / etc. decoders only when the
+            // device can't do it in hardware.
+            //
+            // ⚠ Do NOT use EXTENSION_RENDERER_MODE_PREFER — that picks
+            // the SOFTWARE extension decoders over the platform's
+            // hardware MediaCodec, which is the opposite of what we
+            // want for IPTV streams.
+            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             setEnableDecoderFallback(true)
         }
 
@@ -90,8 +100,74 @@ object PlayerBuilder {
             .setRenderersFactory(renderers)
             .setMediaSourceFactory(msFactory)
             .build()
-            .apply { setWakeMode(C.WAKE_MODE_NETWORK) }
+            .apply {
+                setWakeMode(C.WAKE_MODE_NETWORK)
+                // Log the decoder ExoPlayer ends up picking — gives us
+                // ground-truth visibility into "are we running on
+                // hardware?" without guessing. The decoder name + an
+                // is-hardware verdict appears in EventLog and so in
+                // any future freeze report. The Diagnostics screen
+                // also surfaces the most recent EventLog snapshot.
+                addAnalyticsListener(DecoderInspector)
+            }
     }
+
+    /**
+     * Static AnalyticsListener that logs every video/audio decoder
+     * ExoPlayer initialises. Decoder names follow Android's MediaCodec
+     * naming convention:
+     *   • `c2.android.*` / `OMX.google.*`  → SOFTWARE
+     *   • `c2.qti.*`, `c2.mtk.*`, `OMX.Nvidia.*`, `OMX.MTK.*`,
+     *     `OMX.qcom.*`, `OMX.exynos.*`, `OMX.Intel.*`, `OMX.amlogic.*`
+     *     etc.                              → HARDWARE
+     * (The Codec2 prefix `c2.android.*` covers both Google's reference
+     * software codecs and AOSP's; both are software.)
+     */
+    private val DecoderInspector = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+        override fun onVideoDecoderInitialized(
+            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            val kind = if (isLikelyHardware(decoderName)) "HARDWARE" else "SOFTWARE"
+            EventLog.log("decoder", "video → $decoderName  ($kind)")
+        }
+        override fun onAudioDecoderInitialized(
+            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            val kind = if (isLikelyHardware(decoderName)) "HARDWARE" else "SOFTWARE"
+            EventLog.log("decoder", "audio → $decoderName  ($kind)")
+        }
+    }
+
+    private fun isLikelyHardware(name: String): Boolean {
+        val n = name.lowercase()
+        // Anything Google / AOSP / FFmpeg ships is software.
+        if (n.startsWith("c2.android.") ||
+            n.startsWith("omx.google.") ||
+            n.contains("ffmpeg") ||
+            n.contains(".sw.") ||
+            n.endsWith(".sw")
+        ) return false
+        // Vendor namespaces are nearly always hardware-backed.
+        return n.startsWith("c2.") ||
+            n.startsWith("omx.") ||
+            n.startsWith("media3.")
+    }
+
+    /** Snapshot the most recent decoder lines logged for the
+     *  Diagnostics screen header. Empty string if nothing's played
+     *  yet this session. */
+    fun lastDecoderLines(): String =
+        EventLog.snapshot().lineSequence()
+            .filter { it.contains(": video → ") || it.contains(": audio → ") }
+            .toList()
+            .takeLast(2)
+            .joinToString("\n")
 
     /**
      * Wire automatic reconnect on transient IO errors. Call ONCE per
