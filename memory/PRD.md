@@ -1,5 +1,32 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.7 — 2026-04-26 (versionCode 207)  ⬅ LATEST  (MANDATORY)
+
+**Settings page made scrollable.** User reported "there is no
+DIAGNOSTICS section" — the items were actually there in code, but
+the outer composable was a non-scrollable `Column`. With the new
+"MY CONTENT" section added in v1.42.6, DIAGNOSTICS / PARENTAL
+CONTROLS / locked-categories were pushed below the screen edge with
+no way to scroll to them.
+
+### Fix
+- `TVSettingsScreen.kt`
+  - Replaced the outer `Column(verticalArrangement = spacedBy)` and
+    the trailing `LazyColumn(categories)` with a single top-level
+    `LazyColumn`. Every section header + card is now an `item { … }`
+    block, and the `LockRow`s for locked categories are appended
+    via `items(categories) { … }` at the end of the same list.
+  - Trailing `Spacer(40.dp)` so the last item has breathing room
+    against the bottom edge.
+  - All section ordering preserved: PROFILE → LAYOUT → MY CONTENT
+    → DIAGNOSTICS (Speed test, View / send crash log) → PARENTAL
+    CONTROLS → LOCKED CATEGORIES.
+
+### Build + deploy
+- `versionCode 206 → 207`, `versionName "1.42.6" → "1.42.7"`.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.6 — 2026-04-26 (versionCode 206)  ⬅ LATEST  (MANDATORY)
 
 **Live TV LEFT-escape crash fix + Settings layout reorg.**

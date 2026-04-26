@@ -91,144 +91,166 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
             Text("Parental Controls", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
         }
 
-        Column(
-            Modifier.padding(horizontal = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 48.dp, vertical = 0.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // ── PROFILE section ───────────────────────────────────
-            Text(
-                "PROFILE",
-                color = TextSecondary, fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
-            )
-            SettingsCard(
-                title = "Switch Profile",
-                subtitle = playlist?.name?.let { "Signed in as $it — switch to another" }
-                    ?: "Pick a different profile",
-                icon = { Icon(Icons.Default.Person, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
-                onClick = { nav.navigate("home") },
-            )
-            SettingsCard(
-                title = "Add Another Profile",
-                subtitle = "Sign in with a different Xtream account",
-                icon = { Icon(Icons.Default.PersonAdd, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
-                onClick = { nav.navigate("add") },
-            )
-
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "LAYOUT",
-                color = TextSecondary, fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
-            )
-            SettingsCard(
-                title = "Change Layout",
-                subtitle = "Currently using $currentLayoutLabel — applies to Live TV, Movies, Series",
-                icon = { Icon(Icons.Default.Dashboard, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
-                onClick = { showLayoutChooser = true },
-            )
-
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "MY CONTENT",
-                color = TextSecondary, fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
-            )
-            SettingsCard(
-                title = "My content requests",
-                subtitle = "See the status of your missing-content requests",
-                icon = { Icon(Icons.Default.Inbox, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
-                onClick = { nav.navigate("myrequests/$playlistId") },
-            )
-
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "DIAGNOSTICS",
-                color = TextSecondary, fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
-            )
-            SettingsCard(
-                title = "Speed test",
-                subtitle = "Check your network against the streaming tiers",
-                icon = { Icon(Icons.Default.Speed, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
-                onClick = { nav.navigate("speedtest") },
-            )
-            SettingsCard(
-                title = "View / send crash log",
-                subtitle = "Share a crash report if the app force-closes",
-                icon = { Icon(Icons.Default.Report, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
-                onClick = { nav.navigate("diag") },
-            )
-
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "PARENTAL CONTROLS",
-                color = TextSecondary, fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
-            )
-
-            // PIN section
-            SettingsCard(
-                title = if (hasPin) "Change PIN" else "Set a 4-digit PIN",
-                subtitle = if (hasPin) "You can change your PIN anytime"
-                           else "Required before you can lock categories",
-                icon = { Icon(Icons.Default.Lock, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
-                onClick = {
-                    if (hasPin) {
-                        // Verify old → set new
-                        pinAction = {
-                            // After verify, ask for new
-                            showPinDialog = false
-                            // Trigger set-new flow
-                            pinAction = { showPinDialog = false; hasPin = true }
-                            showPinDialog = true
-                        }
-                    } else {
-                        pinAction = {
-                            showPinDialog = false
-                            hasPin = true
-                        }
-                    }
-                    showPinDialog = true
-                }
-            )
-
-            if (hasPin) {
+            // ── PROFILE ─────────────────────────────────────────────
+            item {
+                Text(
+                    "PROFILE",
+                    color = TextSecondary, fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+                )
+            }
+            item {
                 SettingsCard(
-                    title = "Remove PIN",
-                    subtitle = "Disable parental controls entirely",
-                    icon = { Icon(Icons.Default.LockOpen, null, tint = Color(0xFFFCA5A5), modifier = Modifier.size(24.dp)) },
+                    title = "Switch Profile",
+                    subtitle = playlist?.name?.let { "Signed in as $it — switch to another" }
+                        ?: "Pick a different profile",
+                    icon = { Icon(Icons.Default.Person, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                    onClick = { nav.navigate("home") },
+                )
+            }
+            item {
+                SettingsCard(
+                    title = "Add Another Profile",
+                    subtitle = "Sign in with a different Xtream account",
+                    icon = { Icon(Icons.Default.PersonAdd, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                    onClick = { nav.navigate("add") },
+                )
+            }
+
+            // ── LAYOUT ──────────────────────────────────────────────
+            item { Spacer(Modifier.height(12.dp)) }
+            item {
+                Text(
+                    "LAYOUT",
+                    color = TextSecondary, fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+                )
+            }
+            item {
+                SettingsCard(
+                    title = "Change Layout",
+                    subtitle = "Currently using $currentLayoutLabel — applies to Live TV, Movies, Series",
+                    icon = { Icon(Icons.Default.Dashboard, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                    onClick = { showLayoutChooser = true },
+                )
+            }
+
+            // ── MY CONTENT ──────────────────────────────────────────
+            item { Spacer(Modifier.height(12.dp)) }
+            item {
+                Text(
+                    "MY CONTENT",
+                    color = TextSecondary, fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+                )
+            }
+            item {
+                SettingsCard(
+                    title = "My content requests",
+                    subtitle = "See the status of your missing-content requests",
+                    icon = { Icon(Icons.Default.Inbox, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                    onClick = { nav.navigate("myrequests/$playlistId") },
+                )
+            }
+
+            // ── DIAGNOSTICS ─────────────────────────────────────────
+            item { Spacer(Modifier.height(12.dp)) }
+            item {
+                Text(
+                    "DIAGNOSTICS",
+                    color = TextSecondary, fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+                )
+            }
+            item {
+                SettingsCard(
+                    title = "Speed test",
+                    subtitle = "Check your network against the streaming tiers",
+                    icon = { Icon(Icons.Default.Speed, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                    onClick = { nav.navigate("speedtest") },
+                )
+            }
+            item {
+                SettingsCard(
+                    title = "View / send crash log",
+                    subtitle = "Share a crash report if the app force-closes",
+                    icon = { Icon(Icons.Default.Report, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                    onClick = { nav.navigate("diag") },
+                )
+            }
+
+            // ── PARENTAL CONTROLS ───────────────────────────────────
+            item { Spacer(Modifier.height(12.dp)) }
+            item {
+                Text(
+                    "PARENTAL CONTROLS",
+                    color = TextSecondary, fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+                )
+            }
+            item {
+                SettingsCard(
+                    title = if (hasPin) "Change PIN" else "Set a 4-digit PIN",
+                    subtitle = if (hasPin) "You can change your PIN anytime"
+                               else "Required before you can lock categories",
+                    icon = { Icon(Icons.Default.Lock, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                     onClick = {
-                        pinAction = {
-                            PinStore.clearPin(ctx)
-                            hasPin = false
-                            lockedIds = emptySet()
-                            showPinDialog = false
+                        if (hasPin) {
+                            pinAction = {
+                                showPinDialog = false
+                                pinAction = { showPinDialog = false; hasPin = true }
+                                showPinDialog = true
+                            }
+                        } else {
+                            pinAction = {
+                                showPinDialog = false
+                                hasPin = true
+                            }
                         }
                         showPinDialog = true
-                    }
+                    },
                 )
             }
+            if (hasPin) {
+                item {
+                    SettingsCard(
+                        title = "Remove PIN",
+                        subtitle = "Disable parental controls entirely",
+                        icon = { Icon(Icons.Default.LockOpen, null, tint = Color(0xFFFCA5A5), modifier = Modifier.size(24.dp)) },
+                        onClick = {
+                            pinAction = {
+                                PinStore.clearPin(ctx)
+                                hasPin = false
+                                lockedIds = emptySet()
+                                showPinDialog = false
+                            }
+                            showPinDialog = true
+                        },
+                    )
+                }
+            }
 
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "LOCKED CATEGORIES",
-                color = TextSecondary, fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp
-            )
-            if (!hasPin) {
+            // ── LOCKED CATEGORIES ───────────────────────────────────
+            item { Spacer(Modifier.height(12.dp)) }
+            item {
                 Text(
-                    "Set a PIN first to start locking categories",
-                    color = TextSecondary, fontSize = 14.sp
+                    "LOCKED CATEGORIES",
+                    color = TextSecondary, fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
                 )
             }
-        }
-
-        // Categories list
-        LazyColumn(
-            contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
+            if (!hasPin) {
+                item {
+                    Text(
+                        "Set a PIN first to start locking categories",
+                        color = TextSecondary, fontSize = 14.sp,
+                    )
+                }
+            }
             items(categories, key = { it.category_id }) { cat ->
                 LockRow(
                     name = cat.category_name,
@@ -238,9 +260,11 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                         if (!hasPin) return@LockRow
                         PinStore.toggleLock(ctx, cat.category_id)
                         lockedIds = PinStore.lockedCategoryIds(ctx)
-                    }
+                    },
                 )
             }
+            // Trailing space so the last item isn't flush with the bottom edge
+            item { Spacer(Modifier.height(40.dp)) }
         }
     }
 
