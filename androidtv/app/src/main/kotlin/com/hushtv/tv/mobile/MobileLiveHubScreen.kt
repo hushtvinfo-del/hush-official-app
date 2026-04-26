@@ -212,6 +212,8 @@ fun MobileLiveHubScreen(
     // ── ExoPlayer for the preview pane ──
     val player = remember {
         ExoPlayer.Builder(ctx).build().apply {
+            // Wi-Fi power-save mitigation — see TVPlayerScreen.kt for context.
+            setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
             playWhenReady = true
         }
     }

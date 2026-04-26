@@ -281,6 +281,9 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     // ─── Mini preview player ─────────────────────────────────────────────
     val previewPlayer = remember {
         ExoPlayer.Builder(ctx).build().apply {
+            // Hold a partial WakeLock + WifiLock during preview playback —
+            // same Wi-Fi power-save mitigation as the fullscreen player.
+            setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
             // Audio ON by default so users can hear the channel they're
             // hovering on. Stops automatically when focus leaves the
             // channels pane (LaunchedEffect below pauses on

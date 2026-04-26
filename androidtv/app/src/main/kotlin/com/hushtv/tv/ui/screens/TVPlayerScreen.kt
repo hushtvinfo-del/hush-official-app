@@ -96,6 +96,11 @@ fun TVPlayerScreen(
 
     val player = remember {
         ExoPlayer.Builder(ctx).build().apply {
+            // Hold a partial WakeLock + WifiLock during playback. Prevents
+            // Android Wi-Fi power save (especially aggressive on Fire Stick)
+            // from throttling our IPTV stream after ~1 minute of no user
+            // input — the "channel freezes 1 min in" bug.
+            setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
             setMediaItem(MediaItem.fromUri(currentUrl))
             prepare()
             // Subtitles default OFF on every new playback session.

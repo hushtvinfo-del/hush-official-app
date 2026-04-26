@@ -6,6 +6,12 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Streaming wake locks: lets ExoPlayer.setWakeMode(WAKE_MODE_NETWORK)
+         hold a partial WakeLock + WifiLock during playback, preventing
+         Android Wi-Fi power save from throttling our IPTV streams after
+         ~1 minute of no user input (the "channel freezes 1 min in"
+         bug reported on Fire Stick). -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- EPG reminders: post notification (Android 13+) + schedule alarm (Android 12+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />

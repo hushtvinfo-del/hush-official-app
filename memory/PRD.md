@@ -1,5 +1,66 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.14 — 2026-04-26 (versionCode 214)  ⬅ LATEST  (MANDATORY)
+
+**REAL fix for the Fire Stick / first-channel-freezes-1-min-in bug.**
+
+User reported v1.42.13's preview-player kill switch did NOT fix the
+freeze — channel still froze ~1 minute in on the first channel
+after a fresh app launch. The "exactly 1 minute" timing reframed
+the diagnosis: this is a TIMER-driven event, not gradual buffer
+starvation from a competing player.
+
+### Root cause (this time, verified via reading manifest + ExoPlayer setup)
+1. `AndroidManifest.xml` had no `WAKE_LOCK` permission.
+2. None of our 4 ExoPlayer instances called
+   `setWakeMode(C.WAKE_MODE_NETWORK)`.
+
+Without those, ExoPlayer holds **no** partial wake lock or WifiLock
+during playback. The screen stays on (user is watching), but
+Android's Wi-Fi radio is allowed to enter power-save mode after a
+period of no app-CPU activity. On Fire Sticks specifically the
+power-save grace period is ~1 minute, after which Wi-Fi packets
+get batched / throttled / coalesced. The stream's incoming
+bandwidth collapses → buffer drains → freeze. Switching channels
+opens a new HTTP/socket → temporarily restores throughput,
+masking the issue.
+
+This is a textbook Android streaming bug, and one that's
+particularly punishing on Fire Stick + IPTV because:
+- Fire OS has more aggressive Wi-Fi power management than stock AOSP
+- IPTV streams run for long uninterrupted periods (no chunked
+  user interaction to keep the radio active)
+- Cold-start = no socket already warm from earlier sessions
+
+### Fix
+- `AndroidManifest.xml`
+  - Added `<uses-permission android:name="android.permission.WAKE_LOCK" />`.
+- All 4 ExoPlayer instances now call
+  `setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)` in
+  the builder block:
+  - `TVPlayerScreen.kt` (fullscreen TV player)
+  - `TVLiveBrowseScreen.kt` (preview player)
+  - `MobilePlayerScreen.kt` (fullscreen mobile player)
+  - `MobileLiveHubScreen.kt` (mobile live preview)
+
+`WAKE_MODE_NETWORK` makes ExoPlayer internally acquire a partial
+`WakeLock` plus a `WifiLock` for the duration of playback (auto-
+released on stop/release). Doc:
+https://developer.android.com/reference/androidx/media3/common/C#WAKE_MODE_NETWORK
+
+### Why v1.42.13's fix didn't help
+The preview-player kill switch was a real bug-fix (preview could
+restart after navigating to fullscreen), but it wasn't the cause
+of the user-reported freeze. Wi-Fi power save would have hit even
+with zero competing players. v1.42.13's hardening stays — it
+prevents another, distinct class of resource competition.
+
+### Build + deploy
+- `versionCode 213 → 214`, `versionName "1.42.13" → "1.42.14"`.
+- Mandatory.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.13 — 2026-04-26 (versionCode 213)  ⬅ LATEST  (MANDATORY)
 
 **Fire Stick freeze fix.** Multiple Fire Stick users reported their
