@@ -1,0 +1,80 @@
+{
+  "app_context": {
+    "platform": "TV (Android TV / Fire TV / Google TV)",
+    "framework": "Kotlin / Jetpack Compose",
+    "interaction": "10-foot UI, D-pad navigation only",
+    "brand_colors": {
+      "primary": "#06B6D4",
+      "background": "#05080F",
+      "text_main": "#FFFFFF",
+      "text_secondary": "#9CA3AF"
+    },
+    "testing_guidelines": "All interactive elements (cards, tabs, nav items) MUST include a data-testid attribute based on role (e.g., data-testid='continue-watching-card-0')."
+  },
+  "design_directions": [
+    {
+      "direction_id": 1,
+      "concept_name": "The Cinematic Stage (Netflix-Style Pushing Rails)",
+      "pitch": "A highly immersive, backdrop-led experience where the bottom 40% holds dynamic rails that 'push' up into the focal slot, eliminating awkward deep vertical scrolling and UI overlap.",
+      "wireframe_ascii": "[Top Nav: Hub \u2022 Discovery \u2022 Movies]\n+-------------------------------------------------+\n|                                                 |\n|  [Dynamic Cinematic Backdrop from focused card] |\n|                                                 |\n|  [Title of Focused Item]                        |\n|  Subtitle / Progress / Status                   |\n|  [Hold OK to Remove] (appears only on focus)    |\n+-------------------------------------------------+\nContinue Watching >\n[  Poster  ] [  Poster  ] [  Poster  ] [  Poster  ]\n\n(Off-screen: Channel History rail pushes up when Down is pressed)",
+      "card_specs": {
+        "channel_history": "16:9 ratio (240x135dp). Solid near-black card (#111827). Center-aligned channel logo. Title hidden unless focused.",
+        "continue_watching": "2:3 Poster ratio (180x270dp). TMDB Poster image. 4dp high progress strip at the absolute bottom (#06B6D4). Circular play badge overlay on focus.",
+        "my_requests": "16:9 ratio (240x135dp). TMDB Backdrop. Dark gradient overlay at bottom for title. Status pill anchored top-right."
+      },
+      "focus_treatment": "Card scales to 1.1x. Thick 4dp solid Cyan border (#06B6D4). Ambient cyan drop-shadow glow. Unfocused sibling cards dim to 60% opacity to ensure the focused card pops from 3 meters away.",
+      "color_typography": "Text relies heavily on white (#FFFFFF) for focused metadata in the hero area. Cyan is used exclusively for the focused border, progress bars, and active navigation. Typography uses condensed bold weights for Hero titles to fit long movie names.",
+      "empty_states": {
+        "individual": "If a rail has 0 items, it simply doesn't render. The user only sees populated rails.",
+        "global": "If all 3 are empty, the entire screen becomes an onboarding hero: 'Welcome to HushTV. Discover Live Channels and VODs from the Top Nav to build your Hub.' - accompanied by a generic cinematic abstract backdrop."
+      },
+      "trade_offs": {
+        "pros": "Extremely cinematic and premium. Solves vertical scroll overlap by only showing one interactive rail at a time. Backdrop feels natively 'TV'.",
+        "cons": "Hides 2 of the 3 data sources off-screen initially. Lower information density."
+      }
+    },
+    {
+      "direction_id": 2,
+      "concept_name": "The Command Dashboard (Bento Grid Layout)",
+      "pitch": "A zero-scroll, high-density bento box that fits everything on one 1920x1080 canvas, treating the TV like a mission control center.",
+      "wireframe_ascii": "[Top Nav: Hub \u2022 Discovery \u2022 Movies]\n+-------------------------+-----------------------+\n| Continue Watching       | Channel History       |\n| +-------+ +-------+     | +----+ +----+ +----+  |\n| |       | |       |     | | CH | | CH | | CH |  |\n| | Poster| | Poster|     | +----+ +----+ +----+  |\n| |  80%  | |  10%  |     +-----------------------+\n| +-------+ +-------+     | My Requests           |\n| [Hold OK to remove]     | [! PENDING] Title 1   |\n|                         | [V ADDED  ] Title 2   |\n+-------------------------+-----------------------+",
+      "card_specs": {
+        "channel_history": "1:1 Square tiles (120x120dp). Minimalist. Logo perfectly centered on #111827 background.",
+        "continue_watching": "2:3 Poster ratio (200x300dp). Standard poster. Embedded cyan progress bar.",
+        "my_requests": "List-item style, NOT heavy backdrop cards. 320x60dp rows. Solid background. Colored status pill on the left, title text on the right. Reduces visual clutter."
+      },
+      "focus_treatment": "No borders. Instead, pure background color inversion. When focused, the card's background or title-area injects solid Cyan (#06B6D4), and the text/logo flips to Near Black (#05080F). Unmistakable contrast from 10 feet away. Slight 1.05x scale.",
+      "color_typography": "Monochromatic dark gray interface where Cyan acts purely as a 'laser pointer' for the D-pad location. Requests use strict utilitarian colors for pills (Amber, Green, Blue, Red).",
+      "empty_states": {
+        "individual": "Grid cells remain rigid. An empty cell displays a ghosted icon and text inside its bento box (e.g., 'No recent channels').",
+        "global": "The bento grid becomes a tutorial: cell 1 suggests tuning into Live TV, cell 2 explains VOD, cell 3 explains the Request system."
+      },
+      "trade_offs": {
+        "pros": "Zero vertical scrolling. User sees all 3 categories instantly. Solves the 'Requests backdrop visual weight' complaint completely by converting them to list items.",
+        "cons": "Can feel slightly utilitarian or 'IT dashboard' rather than a relaxed, cinematic streaming vibe. Truncates long titles aggressively."
+      }
+    },
+    {
+      "direction_id": 3,
+      "concept_name": "The Focused Deck (Pill-Tabbed Sections)",
+      "pitch": "A clean, layered approach using horizontal tabs to separate categories completely, giving each data source its own uncrowded 'deck' of massive cards.",
+      "wireframe_ascii": "[Top Nav: Hub \u2022 Discovery \u2022 Movies]\n\n   ( History )   [ Continue Watching ]   ( Requests )\n\n+-------------------------------------------------+\n|                                                 |\n|  +--------+   +--------+   +--------+           |\n|  | Poster |   | Poster |   | Poster |           |\n|  | ------ |   | -      |   | ---    |           |\n|  +--------+   +--------+   +--------+           |\n|     Title 1      Title 2      Title 3           |\n|  [Hold OK to remove]                            |\n+-------------------------------------------------+",
+      "card_specs": {
+        "channel_history": "16:9 Landscape cards (320x180dp). Frosted glass background over app background, sharp logos.",
+        "continue_watching": "16:9 Landscape cards (320x180dp) using the VOD Backdrop (not poster) to keep geometry uniform across the tab. Bottom progress bar.",
+        "my_requests": "16:9 Landscape cards (320x180dp). VOD Backdrop. Corner status badge."
+      },
+      "focus_treatment": "Card lifts aggressively via 24dp drop-shadow. 3dp stark White (#FFFFFF) border (Cyan is reserved for the active Tab indicator above). 1.08x scale. Sibling items do not dim, keeping the deck bright.",
+      "color_typography": "Tabs use unselected text as #9CA3AF, selected tab gets a Cyan (#06B6D4) pill background with #05080F text. Uniform geometric sizing makes it feel heavily structured and 'Apple TV' like.",
+      "empty_states": {
+        "individual": "If a user clicks an empty tab, the 16:9 card row is replaced by a single, centered, beautifully illustrated 'Empty Box' icon and friendly prompt.",
+        "global": "The 3 tabs still exist, but all 3 show their respective empty-state illustrations."
+      },
+      "trade_offs": {
+        "pros": "Completely eliminates vertical overlapping and visual competition between sections. Enforces total geometric consistency (everything is 16:9). Highly legible.",
+        "cons": "Adds navigational friction. Requires the user to D-pad UP to the tabs, Left/Right to change category, and Down into the cards. Not 'glanceable' all at once."
+      }
+    }
+  ],
+  "instructions_to_main_agent": "Use this JSON as the source of truth for the Hub TV UI redesign. Wait for the user to select one of the three directions (1: Cinematic Stage, 2: Command Dashboard, or 3: Focused Deck) before generating Jetpack Compose code. Ensure you heavily utilize Compose's FocusRequester, Modifier.focusable(), and proper interaction sources to achieve the listed focus treatments. Implement hold-to-remove using Modifier.pointerInput or combinedClickable. Output MUST apply proper TV overscan margins (typically 58dp horizontal, 27dp vertical)."
+}
