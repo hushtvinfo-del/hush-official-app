@@ -534,6 +534,12 @@ fun TVBrowseScreen(
                                                 else Modifier)
                                                 .then(
                                                     if (isTopRow && upTarget != null)
+                                                        // SAFE-FOCUS-PROPERTIES: upTarget
+                                                        // is dropdownFocus, attached to
+                                                        // the always-rendered top BROWSE
+                                                        // dropdown in top-bar mode (only
+                                                        // mode where this branch fires —
+                                                        // upTarget is null in sidebar mode).
                                                         Modifier.focusProperties { up = upTarget }
                                                     else Modifier
                                                 ),

@@ -1,5 +1,47 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.12 — 2026-04-26 (versionCode 212)  ⬅ LATEST  (optional)
+
+**Build-time audit: `auditFocusProperties` Gradle task.** Future
+regressions of the FocusRequester crash class are now structurally
+impossible to ship.
+
+### How it works
+- New Gradle task in `app/build.gradle.kts` walks every `.kt` file
+  under `src/main/kotlin` looking for `\.focusProperties\s*\{`.
+- For each match, scans upward through the contiguous comment
+  block immediately above. If it finds the marker
+  `// SAFE-FOCUS-PROPERTIES: <reason>` the call is allowed.
+  Otherwise the build fails with:
+  ```
+  Unsafe Modifier.focusProperties usage detected:
+    • app/src/.../File.kt:NN  ->  .focusProperties { … }
+  Fix one of:
+    (a) Switch to Modifier.safeFocusTraversal(onDown = …, …)
+    (b) Add // SAFE-FOCUS-PROPERTIES: <one-line reason> above the call
+  ```
+- Hooked into every `compile*Kotlin` task via:
+  ```kotlin
+  tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
+      .configureEach { dependsOn("auditFocusProperties") }
+  ```
+- Verified by injecting a deliberate violation into a fresh file —
+  build correctly failed with the file:line of the offender.
+
+### Marker comments added to the 4 known-safe sites
+- `TVPlayerScreen.kt` — scrubber ↔ Play/Pause (siblings inside
+  `if (showControls)`)
+- `TVPlayerScreen.kt` — Row containing scrubber's button siblings
+- `TVBrowseScreen.kt` — top-row card UP (only fires in top-bar mode
+  where `dropdownFocus` is always attached)
+- `TVLiveBrowseScreen.kt` — top-row channel UP (same shape)
+
+### Build + deploy
+- `versionCode 211 → 212`, `versionName "1.42.11" → "1.42.12"`.
+- Marked **non-mandatory** (zero user-visible change).
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.11 — 2026-04-26 (versionCode 211)  ⬅ LATEST  (optional)
 
 **Refactor: `Modifier.safeFocusTraversal` helper.** All 8 imperative

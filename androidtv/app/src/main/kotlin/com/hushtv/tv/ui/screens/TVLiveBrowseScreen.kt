@@ -1692,6 +1692,10 @@ private fun ChannelsPane(
                                 .focusRequester(reqFor(idx))
                                 .let {
                                     if (topRowUpTarget != null)
+                                        // SAFE-FOCUS-PROPERTIES: topRowUpTarget is
+                                        // dropdownFocus (top BROWSE button) in top-bar
+                                        // mode, always attached. In sidebar mode it's
+                                        // null and this branch is skipped.
                                         it.focusProperties { up = topRowUpTarget } else it
                                 }
                         } else {

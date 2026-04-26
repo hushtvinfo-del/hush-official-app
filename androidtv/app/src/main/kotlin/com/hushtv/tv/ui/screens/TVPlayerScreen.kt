@@ -1028,6 +1028,10 @@ fun TVPlayerScreen(
                                 // primary control first. Compose's 2D
                                 // search can then walk LEFT/RIGHT through
                                 // the button row.
+                                // SAFE-FOCUS-PROPERTIES: scrubber and Play/Pause
+                                // are siblings in the same `if (showControls)`
+                                // block — when scrubber is focusable, playPauseFocus
+                                // is also attached.
                                 .focusProperties { down = playPauseFocus }
                                 .focusable()
                                 .onPreviewKeyEvent { ev ->
@@ -1195,6 +1199,10 @@ fun TVPlayerScreen(
                             Modifier
                                 .fillMaxWidth()
                                 .focusGroup()
+                                // SAFE-FOCUS-PROPERTIES: button row and scrubber
+                                // are siblings in the same `if (showControls)`
+                                // block — scrubberFocus always attached when this
+                                // row is composed.
                                 .focusProperties { up = scrubberFocus },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
