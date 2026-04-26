@@ -130,7 +130,7 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
 
             Spacer(Modifier.height(12.dp))
             Text(
-                "DIAGNOSTICS",
+                "MY CONTENT",
                 color = TextSecondary, fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
             )
@@ -140,6 +140,13 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 icon = { Icon(Icons.Default.Inbox, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                 onClick = { nav.navigate("myrequests/$playlistId") },
             )
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "DIAGNOSTICS",
+                color = TextSecondary, fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+            )
             SettingsCard(
                 title = "Speed test",
                 subtitle = "Check your network against the streaming tiers",
@@ -147,8 +154,8 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 onClick = { nav.navigate("speedtest") },
             )
             SettingsCard(
-                title = "View crash log",
-                subtitle = "Share a crash report if the app ever force-closes",
+                title = "View / send crash log",
+                subtitle = "Share a crash report if the app force-closes",
                 icon = { Icon(Icons.Default.Report, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                 onClick = { nav.navigate("diag") },
             )

@@ -378,6 +378,19 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     // from any channel row lands here so the user returns to the
     // category they were already browsing, not the top of the list.
     val sidebarSelectedItemFocus = remember { FocusRequester() }
+    // Tick bumped by LEFT-escape from a channel row. We DEFER the
+    // actual requestFocus() to a LaunchedEffect so it runs OUTSIDE
+    // the key-event handler — focusing a node mid-keydown was
+    // crashing on some devices.
+    var sidebarEscapeTick by remember { mutableStateOf(0) }
+    LaunchedEffect(sidebarEscapeTick) {
+        if (sidebarEscapeTick == 0) return@LaunchedEffect
+        kotlinx.coroutines.delay(16) // let the current frame settle
+        runCatching { sidebarSelectedItemFocus.requestFocus() }
+            .onFailure {
+                runCatching { sidebarFirstItemFocus.requestFocus() }
+            }
+    }
     val sidebarItems = remember(uiCategories) {
         uiCategories.map {
             com.hushtv.tv.ui.screens.home.SidebarItem(
@@ -443,14 +456,11 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                     initialFocusIndex = focusedChannelIdx,
                     firstChannelFocus = firstChannelFocus,
                     onLeftEdge = {
-                        // LEFT from any channel row escapes to the
-                        // currently-selected category in the sidebar.
-                        // Falls back to the first item if the selected
-                        // row isn't currently composed in the LazyColumn.
-                        runCatching { sidebarSelectedItemFocus.requestFocus() }
-                            .onFailure {
-                                runCatching { sidebarFirstItemFocus.requestFocus() }
-                            }
+                        // Defer the focus call out of the keydown
+                        // handler — calling requestFocus() synchronously
+                        // here was crashing on some devices when the
+                        // sidebar LazyColumn item was mid-recomposition.
+                        sidebarEscapeTick += 1
                     },
                     onPlay = onPlay,
                     onLongPress = { idx -> reminderChannel = filteredChannels.getOrNull(idx) },

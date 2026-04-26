@@ -142,14 +142,13 @@ fun CategorySidebar(
                 val item = items[idx]
                 val isSelected = item.id == selectedId
                 val isFirst = idx == 0
-                // Compose the focus modifier:
-                //   • Always tag the FIRST row with `firstItemFocus`
-                //     (initial focus + fallback escape target).
-                //   • Additionally tag the SELECTED row with
-                //     `selectedItemFocus` so an external LEFT-escape from
-                //     the grid lands on the user's current category, not
-                //     wherever the first row happens to be.
-                val combinedFocusMod = remember(isFirst, isSelected) {
+                // Focus modifier — attaches the first/selected requesters.
+                // Built INLINE (no remember) because the keys are simple
+                // booleans and the cost of recomposing the chain on flip
+                // is trivial; using `remember` here previously kept stale
+                // references in the focus tree and caused crashes on
+                // selection change.
+                val combinedFocusMod = run {
                     var m: Modifier = Modifier
                     if (isFirst) m = m.focusRequester(firstItemFocus)
                     if (isSelected && selectedItemFocus != null) {

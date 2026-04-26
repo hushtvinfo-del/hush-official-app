@@ -389,6 +389,18 @@ fun TVBrowseScreen(
     // grid's LEFT-escape so the user lands back on the category they
     // came from, instead of being thrown to the top of the sidebar.
     val sidebarSelectedItemFocus = remember { FocusRequester() }
+    // Tick bumped on LEFT-escape — drives a deferred focus request via
+    // the LaunchedEffect below so we don't requestFocus() synchronously
+    // inside a keydown handler (crash-prone on some devices).
+    var sidebarEscapeTick by remember { mutableStateOf(0) }
+    LaunchedEffect(sidebarEscapeTick) {
+        if (sidebarEscapeTick == 0) return@LaunchedEffect
+        kotlinx.coroutines.delay(16)
+        runCatching { sidebarSelectedItemFocus.requestFocus() }
+            .onFailure {
+                runCatching { sidebarFirstItemFocus.requestFocus() }
+            }
+    }
     val browseSidebarItems = remember(allCategories, type) {
         buildList {
             add(com.hushtv.tv.ui.screens.home.SidebarItem(CAT_FAV, "Favorites"))
@@ -526,17 +538,13 @@ fun TVBrowseScreen(
                                                 ),
                                             onFocus = { focusedIdx = idx },
                                             onLeftEdge = {
-                                                // In sidebar mode, LEFT from
-                                                // ANY card escapes the grid
-                                                // and lands on the currently-
-                                                // selected category. Falls
-                                                // back to the first sidebar
-                                                // item if the selected one
-                                                // isn't currently composed.
-                                                if (useSidebar) runCatching {
-                                                    sidebarSelectedItemFocus.requestFocus()
-                                                }.onFailure {
-                                                    runCatching { sidebarFirstItemFocus.requestFocus() }
+                                                // Defer to a LaunchedEffect
+                                                // (sidebarEscapeTick) so we
+                                                // don't requestFocus()
+                                                // synchronously inside the
+                                                // keydown handler.
+                                                if (useSidebar) {
+                                                    sidebarEscapeTick += 1
                                                 }
                                             },
                                             interceptLeft = useSidebar,

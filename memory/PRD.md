@@ -1,5 +1,51 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.6 — 2026-04-26 (versionCode 206)  ⬅ LATEST  (MANDATORY)
+
+**Live TV LEFT-escape crash fix + Settings layout reorg.**
+
+User reported the app crashing whenever they were in Live TV channels
+pane and pressed LEFT to return to the category sidebar. Also, the
+Settings screen incorrectly grouped "My content requests" under the
+DIAGNOSTICS section.
+
+### Crash fix
+- `TVLiveBrowseScreen.kt` and `TVBrowseScreen.kt`
+  - The previous `onLeftEdge` handler called `requestFocus()`
+    SYNCHRONOUSLY inside the keydown event handler. On some
+    devices, requesting focus on a `FocusRequester` whose target
+    `Modifier.focusRequester(...)` was attached to a LazyColumn
+    item that was mid-recomposition / mid-measurement caused a
+    crash that `runCatching` couldn't always swallow.
+  - Replaced with a deferred pattern: `onLeftEdge` simply
+    increments an integer `sidebarEscapeTick`; a `LaunchedEffect`
+    keyed on that tick performs the actual `requestFocus()` after
+    a 16 ms delay (one frame), letting the current event/recompose
+    finish first. Falls back from `selectedItemFocus` to
+    `firstItemFocus` if the selected row's focusable isn't yet
+    composed.
+- `CategorySidebar.kt`
+  - Replaced the `remember(isFirst, isSelected) { Modifier.… }`
+    block with an inline `run { … }` block. `remember`-ing a
+    Modifier whose `focusRequester(...)` reference flips between
+    rows on selection change was leaving stale focus references
+    in the tree. Inline construction is recomputed each
+    recomposition (cheap) and avoids the stale-reference path.
+
+### Settings reorg
+- `TVSettingsScreen.kt`
+  - "My content requests" moved into a new "MY CONTENT" section
+    above DIAGNOSTICS.
+  - "DIAGNOSTICS" section now correctly contains only the
+    diagnostic actions: Speed test + View / Send crash log.
+  - Renamed "View crash log" → "View / send crash log" so users
+    discover they can share the report from there.
+
+### Build + deploy
+- `versionCode 205 → 206`, `versionName "1.42.5" → "1.42.6"`.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.5 — 2026-04-26 (versionCode 205)  ⬅ LATEST  (MANDATORY)
 
 **Live TV preview audio enabled.** User pointed out that the
