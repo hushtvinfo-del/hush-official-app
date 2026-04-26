@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>HushTV TV Hub — Direction 1: Cinematic Stage</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #05080F; color: #fff; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+  .stage {
+    width: 1920px; height: 1080px; position: relative; background: #05080F;
+  }
+  .backdrop {
+    position: absolute; inset: 0;
+    background: linear-gradient(0deg, rgba(5,8,15,0.98) 0%, rgba(5,8,15,0.55) 38%, rgba(5,8,15,0.15) 70%),
+                url('https://image.tmdb.org/t/p/original/yPyfeBHCmRKdLrQUKFuzmsApRmU.jpg') center/cover;
+  }
+  .topnav {
+    position: absolute; top: 0; left: 0; right: 0; height: 72px; padding: 0 58px;
+    display: flex; align-items: center; gap: 40px; z-index: 10;
+    background: linear-gradient(180deg, rgba(5,8,15,0.95) 0%, rgba(5,8,15,0) 100%);
+  }
+  .brand { font-weight: 900; font-size: 22px; letter-spacing: -0.5px; color: #fff; }
+  .brand .dot { color: #06B6D4; }
+  .nav { display: flex; gap: 28px; margin-left: 28px; }
+  .nav a { color: #94A3B8; font-size: 14px; font-weight: 600; text-decoration: none; padding: 8px 14px; border-radius: 999px; }
+  .nav a.active { color: #fff; background: rgba(6,182,212,0.15); }
+  .stage-meta {
+    position: absolute; left: 96px; top: 220px; max-width: 760px;
+  }
+  .kicker { color: #06B6D4; font-size: 12px; letter-spacing: 3px; font-weight: 900; margin-bottom: 14px; }
+  .stage-title { font-size: 78px; font-weight: 900; letter-spacing: -2.5px; line-height: 0.95; margin-bottom: 18px; }
+  .stage-sub { font-size: 18px; color: #cbd5e1; max-width: 620px; line-height: 1.5; margin-bottom: 22px; }
+  .progress-meta { display: flex; gap: 14px; align-items: center; color: #94a3b8; font-size: 13px; font-weight: 600; }
+  .progress-bar { width: 240px; height: 4px; background: rgba(255,255,255,0.18); border-radius: 4px; overflow: hidden; }
+  .progress-bar div { height: 100%; width: 64%; background: #06B6D4; }
+  .hold-hint { margin-top: 18px; font-size: 11px; color: #64748b; letter-spacing: 1.5px; font-weight: 700; }
+
+  .rail-section {
+    position: absolute; left: 96px; bottom: 64px; right: 96px;
+  }
+  .rail-tabs { display: flex; gap: 30px; margin-bottom: 24px; align-items: center; }
+  .rail-tab { color: #475569; font-size: 13px; font-weight: 800; letter-spacing: 2px; padding: 4px 0; }
+  .rail-tab.active { color: #fff; border-bottom: 2px solid #06B6D4; padding-bottom: 6px; }
+  .rail-tab .count { color: #06B6D4; margin-left: 6px; }
+
+  .rail { display: flex; gap: 22px; }
+  .poster {
+    width: 200px; height: 300px; border-radius: 12px;
+    background-size: cover; background-position: center;
+    position: relative; flex-shrink: 0; overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.04);
+    transition: transform .2s;
+  }
+  .poster.focused {
+    transform: scale(1.08); border: 4px solid #06B6D4;
+    box-shadow: 0 0 0 0px rgba(6,182,212,0.0), 0 22px 60px rgba(6,182,212,0.45), 0 0 80px rgba(6,182,212,0.35);
+  }
+  .poster.dimmed { opacity: 0.45; filter: saturate(0.85); }
+  .poster .progress-strip {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,0.2);
+  }
+  .poster .progress-strip > div { height: 100%; background: #06B6D4; }
+  .poster .play-badge {
+    position: absolute; top: 50%; left: 50%; width: 56px; height: 56px; transform: translate(-50%, -50%);
+    background: rgba(6,182,212,0.92); border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .poster .play-badge svg { width: 22px; height: 22px; fill: #05080F; }
+  .poster .title { position: absolute; left: 12px; right: 12px; bottom: 14px; font-size: 13px; font-weight: 800; line-height: 1.2; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
+  .poster .grad { position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 50%); }
+
+  .pageind { position: absolute; right: 36px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
+  .pageind span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.18); }
+  .pageind span.active { width: 6px; height: 22px; background: #06B6D4; border-radius: 4px; }
+
+  .label-tag { position: absolute; bottom: 36px; left: 96px; font-size: 11px; color: #475569; letter-spacing: 3px; font-weight: 800; }
+  .legend { position: absolute; right: 96px; bottom: 28px; font-size: 11px; color: #475569; letter-spacing: 2px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="backdrop"></div>
+
+  <div class="topnav">
+    <div class="brand">hush<span class="dot">.</span>tv</div>
+    <div class="nav">
+      <a class="active">For You</a>
+      <a>Live TV</a>
+      <a>Movies</a>
+      <a>Series</a>
+      <a>Search</a>
+    </div>
+  </div>
+
+  <div class="stage-meta">
+    <div class="kicker">CONTINUE WATCHING</div>
+    <div class="stage-title">Dune: Part&nbsp;Two</div>
+    <div class="stage-sub">Paul Atreides unites with the Fremen as he wages a war of revenge against the conspirators who destroyed his family.</div>
+    <div class="progress-meta">
+      <div class="progress-bar"><div></div></div>
+      <span>1h 42m left</span><span>•</span><span>2024 · 2h 46m</span>
+    </div>
+    <div class="hold-hint">↓ DOWN FOR NEXT RAIL · HOLD OK TO REMOVE</div>
+  </div>
+
+  <div class="rail-section">
+    <div class="rail-tabs">
+      <div class="rail-tab">CHANNEL HISTORY <span class="count">5</span></div>
+      <div class="rail-tab active">CONTINUE WATCHING <span class="count">8</span></div>
+      <div class="rail-tab">MY REQUESTS <span class="count">3</span></div>
+    </div>
+    <div class="rail">
+      <div class="poster focused" style="background-image:url('https://image.tmdb.org/t/p/w500/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg')">
+        <div class="grad"></div><div class="play-badge"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+        <div class="progress-strip"><div style="width:64%"></div></div>
+        <div class="title">Dune: Part Two</div>
+      </div>
+      <div class="poster dimmed" style="background-image:url('https://image.tmdb.org/t/p/w500/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg')">
+        <div class="grad"></div><div class="progress-strip"><div style="width:22%"></div></div>
+        <div class="title">The Batman</div>
+      </div>
+      <div class="poster dimmed" style="background-image:url('https://image.tmdb.org/t/p/w500/qNBAXBIQlnOThrVvA6mA2B5ggV6.jpg')">
+        <div class="grad"></div><div class="progress-strip"><div style="width:78%"></div></div>
+        <div class="title">Top Gun: Maverick</div>
+      </div>
+      <div class="poster dimmed" style="background-image:url('https://image.tmdb.org/t/p/w500/ggFHVNu6YYI5L9pCfOacjizRGt.jpg')">
+        <div class="grad"></div><div class="progress-strip"><div style="width:42%"></div></div>
+        <div class="title">Spider-Man: Across the Spider-Verse</div>
+      </div>
+      <div class="poster dimmed" style="background-image:url('https://image.tmdb.org/t/p/w500/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg')">
+        <div class="grad"></div><div class="progress-strip"><div style="width:11%"></div></div>
+        <div class="title">Deadpool &amp; Wolverine</div>
+      </div>
+      <div class="poster dimmed" style="background-image:url('https://image.tmdb.org/t/p/w500/9PFonBhy4cQy7Jz20NpMygczOkv.jpg')">
+        <div class="grad"></div><div class="progress-strip"><div style="width:88%"></div></div>
+        <div class="title">Wicked</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pageind">
+    <span class="active"></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <div class="label-tag">DIRECTION 1 · CINEMATIC STAGE</div>
+  <div class="legend">↑ TAB SWITCH · ←→ BROWSE CARDS · OK PLAY</div>
+</div>
+</body>
+</html>

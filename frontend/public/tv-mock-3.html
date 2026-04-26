@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>HushTV TV Hub — Direction 3: Focused Deck</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #05080F; color: #fff; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+  .stage { width: 1920px; height: 1080px; position: relative;
+    background:
+      radial-gradient(70% 50% at 50% 22%, rgba(6,182,212,0.08) 0%, rgba(6,182,212,0) 60%),
+      #05080F;
+  }
+  .topnav {
+    position: absolute; top: 0; left: 0; right: 0; height: 72px; padding: 0 58px;
+    display: flex; align-items: center; gap: 40px; z-index: 10;
+  }
+  .brand { font-weight: 900; font-size: 22px; letter-spacing: -0.5px; }
+  .brand .dot { color: #06B6D4; }
+  .nav { display: flex; gap: 28px; margin-left: 28px; }
+  .nav a { color: #94A3B8; font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 999px; }
+  .nav a.active { color: #fff; background: rgba(6,182,212,0.15); }
+
+  .pills {
+    position: absolute; top: 130px; left: 58px; right: 58px;
+    display: flex; gap: 18px; align-items: center; justify-content: flex-start;
+  }
+  .pill {
+    padding: 14px 28px; border-radius: 999px; font-size: 14px; font-weight: 800; letter-spacing: 1.5px;
+    color: #94A3B8; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pill.active { background: #06B6D4; color: #05080F; border-color: #06B6D4; box-shadow: 0 8px 24px rgba(6,182,212,0.4); }
+  .pill .badge { background: rgba(255,255,255,0.18); color: #fff; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 900; }
+  .pill.active .badge { background: rgba(5,8,15,0.4); color: #05080F; }
+
+  .deck-title-row { position: absolute; top: 218px; left: 58px; right: 58px;
+    display: flex; align-items: baseline; justify-content: space-between; }
+  .deck-title { font-size: 38px; font-weight: 900; letter-spacing: -1px; }
+  .deck-sub { font-size: 14px; color: #64748b; font-weight: 700; letter-spacing: 1px; }
+
+  .deck { position: absolute; top: 290px; left: 58px; right: 58px; display: flex; gap: 28px; flex-wrap: wrap; }
+  .card {
+    width: 380px; height: 220px; border-radius: 16px; overflow: hidden; position: relative; flex-shrink: 0;
+    background-size: cover; background-position: center;
+    border: 2px solid rgba(255,255,255,0.06);
+    transform: translateY(0);
+    transition: transform .2s, box-shadow .2s;
+  }
+  .card.focused {
+    transform: translateY(-12px) scale(1.06);
+    border: 3px solid #fff;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.7), 0 0 0 6px rgba(6,182,212,0.18);
+  }
+  .card .grad { position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.05) 55%); }
+  .card .meta { position: absolute; left: 18px; right: 18px; bottom: 16px; }
+  .card .ttl { font-size: 18px; font-weight: 800; line-height: 1.15; margin-bottom: 8px; }
+  .card .sub { font-size: 11px; font-weight: 700; color: #cbd5e1; letter-spacing: 1px; }
+  .card .progress { position: absolute; left: 18px; right: 18px; bottom: 6px; height: 3px; background: rgba(255,255,255,0.18); border-radius: 3px; overflow: hidden; }
+  .card .progress > div { height: 100%; background: #06B6D4; }
+  .card .corner-pill {
+    position: absolute; top: 14px; right: 14px; padding: 6px 12px; border-radius: 999px;
+    font-size: 11px; font-weight: 900; letter-spacing: 1.2px;
+  }
+  .corner-pill.pending { background: #f59e0b; color: #05080F; }
+  .corner-pill.added { background: #22c55e; color: #05080F; }
+  .corner-pill.progress { background: #60a5fa; color: #05080F; }
+
+  .hold-hint { position: absolute; bottom: 64px; right: 58px; font-size: 11px; color: #475569; letter-spacing: 2px; font-weight: 800; }
+
+  .pageind { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
+  .pageind span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.18); }
+  .pageind span.active { width: 6px; height: 22px; background: #06B6D4; border-radius: 4px; }
+
+  .label-tag { position: absolute; bottom: 24px; left: 58px; font-size: 11px; color: #334155; letter-spacing: 3px; font-weight: 800; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="topnav">
+    <div class="brand">hush<span class="dot">.</span>tv</div>
+    <div class="nav">
+      <a class="active">For You</a>
+      <a>Live TV</a>
+      <a>Movies</a>
+      <a>Series</a>
+      <a>Search</a>
+    </div>
+  </div>
+
+  <div class="pills">
+    <div class="pill">Channel History <span class="badge">5</span></div>
+    <div class="pill active">Continue Watching <span class="badge">8</span></div>
+    <div class="pill">My Requests <span class="badge">3</span></div>
+  </div>
+
+  <div class="deck-title-row">
+    <div class="deck-title">Pick up where you left off</div>
+    <div class="deck-sub">8 IN PROGRESS · HOLD OK TO REMOVE</div>
+  </div>
+
+  <div class="deck">
+    <div class="card focused" style="background-image:url('https://image.tmdb.org/t/p/w780/87FYUv3NDuLu7H3enjUuv8gp02D.jpg')">
+      <div class="grad"></div>
+      <div class="meta">
+        <div class="ttl">Dune: Part Two</div>
+        <div class="sub">2024 · 2H 46M · 1H 42M LEFT</div>
+      </div>
+      <div class="progress"><div style="width:64%"></div></div>
+    </div>
+    <div class="card" style="background-image:url('https://image.tmdb.org/t/p/w780/b0PlSFdDwbyK0cf5RxwDpaOJQvQ.jpg')">
+      <div class="grad"></div>
+      <div class="meta">
+        <div class="ttl">The Batman</div>
+        <div class="sub">2022 · 2H 56M · 2H 18M LEFT</div>
+      </div>
+      <div class="progress"><div style="width:22%"></div></div>
+    </div>
+    <div class="card" style="background-image:url('https://image.tmdb.org/t/p/w780/odJ4hx6g6vBt4lBWKFD1tI8WS4x.jpg')">
+      <div class="grad"></div>
+      <div class="meta">
+        <div class="ttl">Top Gun: Maverick</div>
+        <div class="sub">2022 · 2H 11M · 28M LEFT</div>
+      </div>
+      <div class="progress"><div style="width:78%"></div></div>
+    </div>
+    <div class="card" style="background-image:url('https://image.tmdb.org/t/p/w780/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg')">
+      <div class="grad"></div>
+      <div class="meta">
+        <div class="ttl">Across the Spider-Verse</div>
+        <div class="sub">2023 · 2H 20M · 1H 21M LEFT</div>
+      </div>
+      <div class="progress"><div style="width:42%"></div></div>
+    </div>
+    <div class="card" style="background-image:url('https://image.tmdb.org/t/p/w780/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg')">
+      <div class="grad"></div>
+      <div class="meta">
+        <div class="ttl">Deadpool &amp; Wolverine</div>
+        <div class="sub">2024 · 2H 8M · 1H 54M LEFT</div>
+      </div>
+      <div class="progress"><div style="width:11%"></div></div>
+    </div>
+    <div class="card" style="background-image:url('https://image.tmdb.org/t/p/w780/uKb22E0nlzr914bA9KyA5CVCOlV.jpg')">
+      <div class="grad"></div>
+      <div class="meta">
+        <div class="ttl">Wicked</div>
+        <div class="sub">2024 · 2H 40M · 19M LEFT</div>
+      </div>
+      <div class="progress"><div style="width:88%"></div></div>
+    </div>
+  </div>
+
+  <div class="hold-hint">↑ TABS · ←→ BROWSE · OK PLAY · HOLD OK REMOVE</div>
+
+  <div class="pageind">
+    <span class="active"></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <div class="label-tag">DIRECTION 3 · FOCUSED DECK</div>
+</div>
+</body>
+</html>
