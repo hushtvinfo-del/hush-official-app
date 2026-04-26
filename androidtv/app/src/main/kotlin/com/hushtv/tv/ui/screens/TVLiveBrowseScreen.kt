@@ -280,7 +280,12 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     // ─── Mini preview player ─────────────────────────────────────────────
     val previewPlayer = remember {
         ExoPlayer.Builder(ctx).build().apply {
-            volume = 0f  // muted — audio only starts in fullscreen
+            // Audio ON by default so users can hear the channel they're
+            // hovering on. Stops automatically when focus leaves the
+            // channels pane (LaunchedEffect below pauses on
+            // !channelsPaneFocused) and on opening fullscreen
+            // (previewPlayer.stop() in onPlay).
+            volume = 1f
             playWhenReady = true
         }
     }

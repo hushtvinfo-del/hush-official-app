@@ -1,5 +1,24 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.5 — 2026-04-26 (versionCode 205)  ⬅ LATEST  (MANDATORY)
+
+**Live TV preview audio enabled.** User pointed out that the
+in-progress live preview shows video but no sound while scrolling
+channels. Cable-box behavior is to hear the audio too.
+
+### Fix
+- `TVLiveBrowseScreen.kt`
+  - `previewPlayer.volume = 0f` → `1f`. The existing
+    `LaunchedEffect(focusedChannelIdx, channelsPaneFocused, ...)` and
+    `previewPlayer.stop()` in `onPlay` already handle the
+    "stop when leaving the channels pane / opening fullscreen"
+    cases, so flipping the initial volume is a one-line change.
+
+### Build + deploy
+- `versionCode 204 → 205`, `versionName "1.42.4" → "1.42.5"`.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.4 — 2026-04-26 (versionCode 204)  ⬅ LATEST  (MANDATORY)
 
 **Sidebar-layout LEFT-escape fix.** User reported that in the left

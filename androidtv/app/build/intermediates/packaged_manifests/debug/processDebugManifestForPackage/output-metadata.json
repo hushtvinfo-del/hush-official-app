@@ -11,8 +11,8 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 204,
-      "versionName": "1.42.4-debug",
+      "versionCode": 205,
+      "versionName": "1.42.5-debug",
       "outputFile": "AndroidManifest.xml"
     }
   ],
