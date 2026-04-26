@@ -134,9 +134,7 @@ fun MobilePlayerScreen(
 
     // Player.
     val player = remember {
-        ExoPlayer.Builder(ctx).build().apply {
-            // Wi-Fi power-save mitigation — see TVPlayerScreen.kt for context.
-            setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
+        com.hushtv.tv.data.PlayerBuilder.build(ctx).apply {
             setMediaItem(MediaItem.fromUri(currentStreamUrl))
             prepare()
             // Subtitles default OFF on every new playback session.
@@ -151,6 +149,11 @@ fun MobilePlayerScreen(
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
 
+    // Auto-reconnect on transient IO errors — see TVPlayerScreen.kt.
+    DisposableEffect(player, currentTitle) {
+        com.hushtv.tv.data.PlayerBuilder.attachAutoReconnect(player, currentTitle)
+        onDispose { }
+    }
     // ─── Freeze monitor ─────────────────────────────────────────────
     DisposableEffect(player, currentStreamUrl) {
         val mon = com.hushtv.tv.data.PlaybackFreezeMonitor.attach(

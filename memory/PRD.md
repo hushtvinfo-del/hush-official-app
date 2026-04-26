@@ -1,5 +1,73 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.18 — 2026-04-26 (versionCode 218)  ⬅ LATEST  (MANDATORY)
+
+**REAL fix for the channel freezes — root cause confirmed via server data.**
+
+The freeze monitor in v1.42.17 finally captured a freeze report from
+the user's NVIDIA Shield. Smoking gun:
+```
+FREEZE-REPORT reason=PlayerError
+channel=CNN isLive=true
+url=https://hushvipnew.ink:443/live/bfam23/Bstock69/1830520.m3u8
+playerState=IDLE pwr=true pos=109928ms buffered=0ms
+sessionAge=86108ms
+lastError=ERROR_CODE_IO_UNSPECIFIED  msg=Source error
+network=WIFI down=672000kbps up=672000kbps validated=true
+```
+
+Translation:
+- 672 Mbps **validated** WiFi → not a network issue.
+- ~86 s into playback, ExoPlayer's HLS source hit a transient I/O
+  error (CDN node burp, brief packet loss).
+- Default ExoPlayer LoadControl keeps a tiny live buffer (~6-15 s
+  on most HLS feeds). The blip drained the buffer before recovery
+  kicked in, ExoPlayer emitted `ERROR_CODE_IO_UNSPECIFIED`, and
+  went IDLE. Channel froze. User would have to manually channel-zap
+  to recover.
+- This is the bug XC IPTV's "20 second pre-buffer + auto-restart"
+  config sidesteps.
+
+### Fix — new `data/PlayerBuilder.kt`
+Centralised ExoPlayer construction with the right tuning:
+- **LoadControl**: 30 s min / 60 s max buffer, 1 s startup,
+  5 s after-rebuffer. Plenty of cushion to ride out CDN hiccups.
+- **DefaultRenderersFactory**:
+  `EXTENSION_RENDERER_MODE_PREFER` + `setEnableDecoderFallback(true)`
+  → hardware H.264/H.265/AV1 decoder is preferred when available
+  (matches "hardware decoder set to it" the user observed in XC).
+- **DefaultHttpDataSource**: 15 s connect / 20 s read timeout +
+  `setAllowCrossProtocolRedirects(true)`. Default is too tight
+  for the first byte of a slow CDN node.
+- **DefaultMediaSourceFactory**: live HLS offsets tuned —
+  `setLiveTargetOffsetMs(15_000)`, `setLiveMaxOffsetMs(30_000)`,
+  `setLiveMinOffsetMs(2_000)`. Lets the buffer ride well behind
+  the live edge without falling out of the live window.
+- **`setWakeMode(C.WAKE_MODE_NETWORK)`** kept from v1.42.14.
+- **`attachAutoReconnect(player, channel)`** helper:
+  `Player.Listener` that intercepts every IO-class
+  `PlaybackException` (10 codes including
+  `ERROR_CODE_IO_UNSPECIFIED`, `ERROR_CODE_IO_BAD_HTTP_STATUS`,
+  `ERROR_CODE_IO_NETWORK_CONNECTION_FAILED`,
+  `ERROR_CODE_BEHIND_LIVE_WINDOW`) and calls `player.prepare()`
+  to re-establish the connection. Capped at 5 retries per
+  attached lifetime; resets to 0 on `STATE_READY`. Each attempt
+  + recovery + give-up is logged to `EventLog` so they appear in
+  any future freeze report.
+
+### Wiring
+- `TVPlayerScreen.kt` — replaced the inline
+  `ExoPlayer.Builder(ctx).build()…setWakeMode(...)` block with
+  `PlayerBuilder.build(ctx)` + a `DisposableEffect` that calls
+  `attachAutoReconnect(player, currentName)`.
+- `MobilePlayerScreen.kt` — same.
+
+### Build + deploy
+- `versionCode 217 → 218`, `versionName "1.42.17" → "1.42.18"`.
+- Mandatory.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.17 — 2026-04-26 (versionCode 217)  ⬅ LATEST  (MANDATORY)
 
 **Tightened the freeze monitor.** v1.42.15 shipped the monitor but

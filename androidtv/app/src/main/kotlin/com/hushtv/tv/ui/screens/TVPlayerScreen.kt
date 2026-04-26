@@ -95,12 +95,7 @@ fun TVPlayerScreen(
     var currentNumber by remember { mutableStateOf(if (NavState.currentChannelIndex >= 0) NavState.currentChannelIndex + 1 else 0) }
 
     val player = remember {
-        ExoPlayer.Builder(ctx).build().apply {
-            // Hold a partial WakeLock + WifiLock during playback. Prevents
-            // Android Wi-Fi power save (especially aggressive on Fire Stick)
-            // from throttling our IPTV stream after ~1 minute of no user
-            // input — the "channel freezes 1 min in" bug.
-            setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
+        com.hushtv.tv.data.PlayerBuilder.build(ctx).apply {
             setMediaItem(MediaItem.fromUri(currentUrl))
             prepare()
             // Subtitles default OFF on every new playback session.
@@ -117,6 +112,15 @@ fun TVPlayerScreen(
         }
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
+
+    // Auto-reconnect on transient IO errors — see PlayerBuilder.kt for
+    // why this exists. Without this, a single CDN hiccup on a live
+    // HLS stream emits ERROR_CODE_IO_UNSPECIFIED and the channel is
+    // stuck IDLE until the user manually channel-zaps.
+    DisposableEffect(player, currentName) {
+        com.hushtv.tv.data.PlayerBuilder.attachAutoReconnect(player, currentName)
+        onDispose { /* listener GCs with the player */ }
+    }
 
     // ─── Freeze monitor ─────────────────────────────────────────────
     // Reports buffer stalls / player errors that AREN'T crashes (the
