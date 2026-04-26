@@ -1,5 +1,66 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.9 — 2026-04-26 (versionCode 209)  ⬅ LATEST  (MANDATORY)
+
+**Real fix for the FocusRequester crash + clearer diagnostics
+upload UX.**
+
+### Root cause confirmed via crash server
+Pulled crash reports from `https://hushtv.xyz/crash/` (versions
+1.42.4 → 1.42.7) — every crash matches:
+```
+java.lang.IllegalStateException: FocusRequester is not initialized
+  at FocusRequester.findFocusTargetNode
+  at FocusOwnerImpl.focusSearch-ULY8qGw
+  at AndroidComposeView$keyInputModifier$1.invoke
+  at KeyInputNode.onKeyEvent
+  at FocusOwnerImpl.dispatchKeyEvent
+```
+
+This is Compose's geometric focus search calling
+`findFocusTargetNode(X)` on a `FocusRequester X` declared in
+`Modifier.focusProperties { right = X }`, but where X has not
+been attached via `Modifier.focusRequester(X)` to any composable
+in the current tree.
+
+The culprit was `CategorySidebar.SidebarRow`, which had:
+```kotlin
+.focusProperties {
+    if (rightTarget != null) right = rightTarget
+}
+```
+`rightTarget` is `firstChannelFocus` (live TV) or `firstGridFocus`
+(movies/series). Both are attached to the FIRST item in the
+respective LazyColumn / LazyVerticalGrid — but during a category
+switch the channel list / grid is briefly empty before the new
+items are emitted, and during empty categories the requester is
+never attached. Pressing RIGHT in that window crashed the app.
+
+### Fix
+- `CategorySidebar.kt`
+  - Removed the declarative
+    `focusProperties { right = …; up = … }` block.
+  - Added an `onPreviewKeyEvent` that intercepts RIGHT and UP and
+    calls `requestFocus()` wrapped in `runCatching { … }.isSuccess`.
+    If the target requester isn't yet attached, the call is a
+    no-op and we let Compose's default 2D focus search handle the
+    direction (or do nothing) instead of crashing.
+  - Removed the now-unused `focusProperties` import.
+- `TVDiagnosticsScreen.kt` + `MobileDiagnosticsScreen.kt`
+  - Replaced the ambiguous yellow "Already sent — nothing new to
+    upload." banner with a clear green
+    "Already on the server — uploaded automatically when the app
+    started. Nothing new to send." Crashes ARE being delivered to
+    the server (verified — multiple crash reports from this user
+    captured today, latest at 00:43 UTC v1.42.7-debug); the
+    background uploader does the work silently on app launch and
+    the "Send now" button just couldn't tell the difference.
+
+### Build + deploy
+- `versionCode 208 → 209`, `versionName "1.42.8" → "1.42.9"`.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.8 — 2026-04-26 (versionCode 208)  ⬅ LATEST  (MANDATORY)
 
 **Sidebar layout — Movies/Series LEFT navigation reverted to

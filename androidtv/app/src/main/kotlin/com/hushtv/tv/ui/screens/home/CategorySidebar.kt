@@ -30,10 +30,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -204,9 +208,38 @@ private fun SidebarRow(
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
-            .focusProperties {
-                if (topRowUpTarget != null) up = topRowUpTarget
-                if (rightTarget != null) right = rightTarget
+            // ── Safe directional handling ────────────────────────────
+            // Earlier this row used a declarative
+            //   `focusProperties { right = rightTarget; up = topRowUpTarget }`
+            // BUT Compose's geometric focus search calls
+            // `findFocusTargetNode(rightTarget)` synchronously during
+            // dispatchKeyEvent, and if the target requester isn't attached
+            // (e.g. the channel/grid list is empty or mid-recomposition
+            // during a category switch) the call throws
+            //   IllegalStateException: FocusRequester is not initialized
+            // and crashes the app. Switching to an imperative
+            // onPreviewKeyEvent + runCatching path handles every edge
+            // case gracefully — if the target isn't ready we simply
+            // let Compose's default 2D focus search take over.
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (ev.key) {
+                    Key.DirectionRight -> {
+                        if (rightTarget != null) {
+                            val ok = runCatching { rightTarget.requestFocus() }.isSuccess
+                            // Consume only on success; otherwise let
+                            // default 2D search find a fallback.
+                            ok
+                        } else false
+                    }
+                    Key.DirectionUp -> {
+                        if (topRowUpTarget != null) {
+                            val ok = runCatching { topRowUpTarget.requestFocus() }.isSuccess
+                            ok
+                        } else false
+                    }
+                    else -> false
+                }
             }
             .focusable()
             .clickableWithEnter(onEnter)

@@ -130,8 +130,8 @@ fun MobileDiagnosticsScreen(nav: NavController) {
                 "sending" -> Triple(Color(0x1406B6D4), Cyan, "Uploading to server…")
                 "sent" -> Triple(Color(0x1422C55E), Color(0xFF22C55E),
                     "Sent to server. We'll take it from here.")
-                "nothing" -> Triple(Color(0x14FACC15), Color(0xFFFACC15),
-                    "Already sent — nothing new to upload.")
+                "nothing" -> Triple(Color(0x1422C55E), Color(0xFF22C55E),
+                    "Already on the server — uploaded automatically when the app started. Nothing new to send.")
                 "failed" -> Triple(Color(0x14EF4444), Color(0xFFEF4444),
                     "Upload failed. Check internet and try again.")
                 else -> Triple(Color.Transparent, Color.White, "")
