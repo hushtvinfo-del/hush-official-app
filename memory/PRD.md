@@ -1,5 +1,53 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.11 — 2026-04-26 (versionCode 211)  ⬅ LATEST  (optional)
+
+**Refactor: `Modifier.safeFocusTraversal` helper.** All 8 imperative
+`onPreviewKeyEvent { … runCatching { target.requestFocus() } … }`
+blocks added in v1.42.9 + v1.42.10 collapsed into a single
+one-liner.
+
+### New file
+- `ui/util/SafeFocusTraversal.kt`
+  ```kotlin
+  fun Modifier.safeFocusTraversal(
+      onUp: FocusRequester? = null,
+      onDown: FocusRequester? = null,
+      onLeft: FocusRequester? = null,
+      onRight: FocusRequester? = null,
+  ): Modifier = …
+  ```
+  Wraps the runCatching pattern under one name. Returns `false` from
+  the keydown handler when the target is unattached so Compose's
+  default 2D focus search takes over instead of crashing.
+
+### Migrated call sites (8)
+- `CategorySidebar.SidebarRow` — `safeFocusTraversal(onUp, onRight)`
+- `TVBrowseScreen.BrowseDropdown` — `safeFocusTraversal(onDown)`
+- `TVBrowseScreen` search-clear X — `safeFocusTraversal(onDown)`
+- `TVLiveBrowseScreen.BrowseDropdown` — `safeFocusTraversal(onDown, onRight)`
+- `TVLiveBrowseScreen` search-clear X — `safeFocusTraversal(onDown)`
+- `TVLiveBrowseScreen.GuideButton` — `safeFocusTraversal(onDown)`
+- `TVUnifiedSearchScreen` search-clear X — `safeFocusTraversal(onDown)`
+- `TVCollectionsBrowseScreen` search-clear X — `safeFocusTraversal(onDown)`
+
+Search fields kept their explicit `onPreviewKeyEvent` blocks because
+they also have to consume the DOWN key against the BasicTextField's
+own internal focus traversal (which `safeFocusTraversal` does
+correctly, but the explicit form is nicer with the existing
+runCatching block already in place — left untouched).
+
+### Behavior
+Functionally identical to v1.42.10 — code is just tidier and harder
+to regress.
+
+### Build + deploy
+- `versionCode 210 → 211`, `versionName "1.42.10" → "1.42.11"`.
+- Marked **non-mandatory** since it's a pure refactor with the
+  same on-screen behavior as 1.42.10.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.10 — 2026-04-26 (versionCode 210)  ⬅ LATEST  (MANDATORY)
 
 **Proactive crash sweep.** After fixing the

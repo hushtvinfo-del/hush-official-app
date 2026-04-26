@@ -33,17 +33,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hushtv.tv.ui.screens.clickableWithEnter
 import com.hushtv.tv.ui.theme.Cyan
+import com.hushtv.tv.ui.util.safeFocusTraversal
 import com.hushtv.tv.ui.theme.Inter
 
 /**
@@ -208,39 +204,13 @@ private fun SidebarRow(
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
-            // ── Safe directional handling ────────────────────────────
-            // Earlier this row used a declarative
-            //   `focusProperties { right = rightTarget; up = topRowUpTarget }`
-            // BUT Compose's geometric focus search calls
-            // `findFocusTargetNode(rightTarget)` synchronously during
-            // dispatchKeyEvent, and if the target requester isn't attached
-            // (e.g. the channel/grid list is empty or mid-recomposition
-            // during a category switch) the call throws
-            //   IllegalStateException: FocusRequester is not initialized
-            // and crashes the app. Switching to an imperative
-            // onPreviewKeyEvent + runCatching path handles every edge
-            // case gracefully — if the target isn't ready we simply
-            // let Compose's default 2D focus search take over.
-            .onPreviewKeyEvent { ev ->
-                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (ev.key) {
-                    Key.DirectionRight -> {
-                        if (rightTarget != null) {
-                            val ok = runCatching { rightTarget.requestFocus() }.isSuccess
-                            // Consume only on success; otherwise let
-                            // default 2D search find a fallback.
-                            ok
-                        } else false
-                    }
-                    Key.DirectionUp -> {
-                        if (topRowUpTarget != null) {
-                            val ok = runCatching { topRowUpTarget.requestFocus() }.isSuccess
-                            ok
-                        } else false
-                    }
-                    else -> false
-                }
-            }
+            // Safe RIGHT/UP traversal. See SafeFocusTraversal.kt for the
+            // long version of why we don't use the declarative
+            // `focusProperties { right = … }` form here — TL;DR:
+            // `rightTarget` is the first channel/grid item, which can
+            // be unattached during empty/loading states and was crashing
+            // the app via `findFocusTargetNode`.
+            .safeFocusTraversal(onUp = topRowUpTarget, onRight = rightTarget)
             .focusable()
             .clickableWithEnter(onEnter)
             .padding(horizontal = 12.dp),

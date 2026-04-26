@@ -78,6 +78,7 @@ import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamCategory
 import com.hushtv.tv.ui.HushTVLogo
 import com.hushtv.tv.ui.theme.Cyan
+import com.hushtv.tv.ui.util.safeFocusTraversal
 import com.hushtv.tv.ui.theme.Inter
 import com.hushtv.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
@@ -1039,18 +1040,7 @@ private fun LiveDropdownButton(
             .padding(horizontal = 14.dp)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            // Safe DOWN/RIGHT traversal — both targets reach into the
-            // currently-loaded channel list (`firstChannelFocus`) which
-            // may be empty during a category switch. See
-            // CategorySidebar.kt for the same fix pattern.
-            .onPreviewKeyEvent { ev ->
-                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (ev.key) {
-                    Key.DirectionDown -> runCatching { downTarget.requestFocus() }.isSuccess
-                    Key.DirectionRight -> runCatching { rightTarget.requestFocus() }.isSuccess
-                    else -> false
-                }
-            }
+            .safeFocusTraversal(onDown = downTarget, onRight = rightTarget)
             .focusable()
             .clickableWithEnter(onToggle),
     ) {
@@ -1152,12 +1142,7 @@ private fun LiveInlineSearch(
                     .clip(RoundedCornerShape(11.dp))
                     .background(Color(0x22FFFFFF))
                     .focusable()
-                    // Safe DOWN — see CategorySidebar.kt for rationale.
-                    .onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
-                            runCatching { downTarget.requestFocus() }.isSuccess
-                        } else false
-                    }
+                    .safeFocusTraversal(onDown = downTarget)
                     .clickableWithEnter { onChange("") },
                 contentAlignment = Alignment.Center,
             ) {
@@ -1195,12 +1180,7 @@ private fun GuideButton(
             .padding(horizontal = 18.dp)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            // Safe DOWN — see CategorySidebar.kt for rationale.
-            .onPreviewKeyEvent { ev ->
-                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
-                    runCatching { downTarget.requestFocus() }.isSuccess
-                } else false
-            }
+            .safeFocusTraversal(onDown = downTarget)
             .focusable()
             .clickableWithEnter(onClick),
     ) {

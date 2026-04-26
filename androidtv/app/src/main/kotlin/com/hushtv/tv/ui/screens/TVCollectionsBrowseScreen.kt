@@ -76,6 +76,7 @@ import com.hushtv.tv.ui.screens.home.TopNavTab
 import com.hushtv.tv.ui.screens.home.rememberMovieCollections
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
+import com.hushtv.tv.ui.util.safeFocusTraversal
 import com.hushtv.tv.ui.theme.Inter
 import com.hushtv.tv.ui.theme.SurfaceNavy
 import com.hushtv.tv.ui.theme.TextMuted
@@ -336,12 +337,7 @@ private fun CollectionsSearchBar(
                     .clip(RoundedCornerShape(11.dp))
                     .background(Color(0x22FFFFFF))
                     .focusable()
-                    // Safe DOWN — see CategorySidebar.kt for rationale.
-                    .onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
-                            runCatching { downTarget.requestFocus() }.isSuccess
-                        } else false
-                    }
+                    .safeFocusTraversal(onDown = downTarget)
                     .clickableWithEnter { onChange("") },
                 contentAlignment = Alignment.Center,
             ) {
