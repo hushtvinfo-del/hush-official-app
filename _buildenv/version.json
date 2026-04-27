@@ -1,10 +1,10 @@
 {
-  "versionCode": 226,
-  "versionName": "1.42.26",
+  "versionCode": 227,
+  "versionName": "1.42.27",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "TV Requests page redesigned — cinematic billboard header (backdrop + focused title + status) on top, full-width horizontal rail of big 320×180 backdrop cards below. No more squished 3-col grid; D-pad RIGHT scrolls through every request."
+    "Requests page now pins your recently-updated cards to the front of the rail — whichever titles had a status change or admin reply since your last visit show up first, so the cinematic billboard highlights what's new without you having to scroll."
   ]
 }

@@ -133,22 +133,34 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
 
-    // Acknowledge: every time the visible list changes, mark each
-    // currently-displayed request as "seen" so the top-nav pulse dot
-    // turns off and unread badges on individual rows clear. This
-    // matches the "viewing the inbox = read" behaviour of email apps.
+    // On every non-empty list update: (1) capture the "unseen" IDs
+    // ONCE per visit BEFORE we mark anything read, so we can pin
+    // those cards to the top of the rail. (2) Then mark the whole
+    // visible list as seen so the top-nav pulse dot + per-row unread
+    // badges clear. Order matters — read-before-write.
+    var pinnedIds by remember { mutableStateOf<Set<String>?>(null) }
     LaunchedEffect(allRequests) {
-        if (allRequests.isNotEmpty()) {
-            com.hushtv.tv.data.RequestSeenStore.markSeen(ctx, allRequests)
+        if (allRequests.isEmpty()) return@LaunchedEffect
+        if (pinnedIds == null) {
+            pinnedIds = com.hushtv.tv.data.RequestSeenStore
+                .filterUnseen(ctx, allRequests)
+                .map { it.id }
+                .toSet()
         }
+        com.hushtv.tv.data.RequestSeenStore.markSeen(ctx, allRequests)
     }
 
-    // Filtering by status group.
+    // Filtering by status group. Pinned (recently-updated-since-last-
+    // visit) IDs always land first, preserving their update order.
     var filter by remember { mutableStateOf(Filter.ALL) }
-    val filtered = remember(allRequests, filter) {
-        allRequests
+    val filtered = remember(allRequests, filter, pinnedIds) {
+        val byUpdate = allRequests
             .filter { filter.matches(it.status) }
             .sortedByDescending { it.updatedDate.ifBlank { it.createdDate } }
+        val pinned = pinnedIds.orEmpty()
+        if (pinned.isEmpty()) byUpdate
+        else byUpdate.filter { pinned.contains(it.id) } +
+             byUpdate.filterNot { pinned.contains(it.id) }
     }
 
     // Long-press → confirm dialog state.

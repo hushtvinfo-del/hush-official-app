@@ -1,5 +1,53 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.27 — 2026-04-27 (versionCode 227)  ⬅ LATEST  (optional)
+
+**Requests rail — pin recently-updated cards to the front.** When
+the admin flips a request to IN_PROGRESS / ADDED / etc., or edits
+the admin response note, the affected card now jumps to the head
+of the horizontal rail the next time the user opens the Requests
+page. Pairs with the existing cyan "NEW" pulse dot on the top-nav
+tab — the dot tells you *something* changed, the rail order tells
+you *what* changed at a glance, and the cinematic billboard above
+(which is auto-driven by the first/focused card) shows its
+backdrop + status + admin reply without any scrolling.
+
+### How it works — `TVRequestsScreen.kt`
+- Collapsed the old `markSeen` LaunchedEffect into a single
+  `LaunchedEffect(allRequests)` that does **read-before-write**:
+  1. `pinnedIds` (a `Set<String>`) is captured ONCE per visit via
+     `RequestSeenStore.filterUnseen(ctx, allRequests).map { it.id }.toSet()`.
+     Guarded by `if (pinnedIds == null)` so it stays stable for
+     the whole visit even though `allRequests` can re-key multiple
+     times (RequestCache hits, ON_RESUME tick, user pulls refresh).
+  2. `RequestSeenStore.markSeen(ctx, allRequests)` runs right
+     after. If we'd run markSeen first (as the old code did),
+     filterUnseen would return empty and the pin list would
+     silently be empty.
+- `filtered` derivation now takes `pinnedIds` as a third
+  `remember` key and splits the update-ordered list into
+  `head = pinned ∪ items` + `tail = items - pinned` before
+  concatenation. Update-desc order is preserved within each
+  bucket so the most-recently-updated pinned card is still first.
+- No visual change on the card itself — the hero billboard
+  already visually communicates "this one just changed" by
+  painting the first card's backdrop + status chip + admin
+  response blurb. Keeping the cards themselves identical avoids
+  flashy unread-badge noise once the user has landed on the
+  page.
+- ~25 lines added, zero code paths removed. No new
+  SharedPreferences keys, no new stores — reuses the existing
+  `RequestSeenStore.signatureFor(status, adminResponse)`
+  fingerprint from v1.42.0.
+
+### Build + deploy
+- `versionCode 226 → 227`, `versionName "1.42.26" → "1.42.27"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `86b477285485be3fab4a13ee51e519ba`, 17.69 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.26 — 2026-04-27 (versionCode 226)  ⬅ LATEST  (optional)
 
 **TV Requests page — full rebuild. Horizontal rail, no squish.**
