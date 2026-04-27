@@ -111,8 +111,15 @@ fun TVSeriesDetailScreen(
         scope.launch {
             withContext(Dispatchers.IO) {
                 runCatching {
-                    val info = XtreamApi.getSeriesInfo(p.host, p.username, p.password, seriesId)
-                    xtreamEpisodesBySeason = info.episodes ?: emptyMap()
+                    // Use the disambiguating resolver so search-flow
+                    // entries (which sometimes pick a stale duplicate
+                    // series_id) automatically retry against other
+                    // entries with the same normalised title.
+                    val resolved = XtreamApi.resolveSeriesInfo(
+                        p.host, p.username, p.password,
+                        seriesId, seriesName,
+                    )
+                    xtreamEpisodesBySeason = resolved.info.episodes ?: emptyMap()
                 }
                 val tvId = TmdbService.searchTv(seriesName)
                 if (tvId != null) {

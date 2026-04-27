@@ -208,19 +208,11 @@ fun TopNavBar(
 
             Spacer(Modifier.weight(1f))
 
-            // ── Layout hint chip ───────────────────────────────────
-            // Subtle discoverability cue for the Sidebar / Top-Bar
-            // layout mode. Focusable; ENTER opens the layout chooser.
-            if (layoutHint != null && onLayoutHintClick != null) {
-                LayoutHintChip(label = layoutHint, onClick = onLayoutHintClick)
-                Spacer(Modifier.width(10.dp))
-            }
-
-            // ── Subscription expiry badge ──────────────────────────
-            if (daysLeft != null) {
-                ExpiryBadge(daysLeft = daysLeft)
-                Spacer(Modifier.width(14.dp))
-            }
+            // Layout-hint chip and subscription expiry badge were
+            // intentionally removed from the top bar — together they
+            // made the right edge feel cluttered. Settings is still
+            // reachable via the gear icon. Both pieces of info live
+            // on the dedicated Settings screen.
 
             // ── Settings gear ──────────────────────────────────────
             SettingsIconButton(onClick = onSettings)

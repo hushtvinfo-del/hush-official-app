@@ -199,6 +199,84 @@ object XtreamApi {
         return adapter.fromJson(repairAndParse(body)) ?: XtreamSeriesInfo()
     }
 
+    /**
+     * Disambiguating wrapper around [getSeriesInfo].
+     *
+     * Why this exists: many Xtream providers carry the SAME show
+     * under multiple categories (e.g. "TV Shows / Reality" AND
+     * "Top Shows") with a different `series_id` per category. Some
+     * of those duplicate IDs are stale — `get_series_info` returns
+     * an empty `episodes` map for them — while at least one is the
+     * canonical entry that has all the episodes loaded.
+     *
+     * The Series-tab browse path (one category at a time) tends to
+     * land users on the canonical id. The Search path
+     * (`get_all_streams`) walks every category, sometimes picking a
+     * stale id, and the user sees an empty episode list — even
+     * though the show IS in their library.
+     *
+     * This helper:
+     *  1. Tries the user-supplied [seriesId] first (fastest path).
+     *  2. If episodes come back empty, fetches the full series list,
+     *     finds every candidate whose normalised title matches
+     *     [seriesName], skips the one we already tried, and tries
+     *     `get_series_info` for each until one returns non-empty
+     *     episodes (max [maxAttempts] extra fetches to keep the UI
+     *     responsive).
+     *  3. Falls back to whatever the original call returned (still
+     *     possibly empty) so callers see consistent shape.
+     *
+     * Returns the [XtreamSeriesInfo] AND the resolved id so the
+     * caller can use the resolved id for episode URL construction
+     * (episode urls are keyed by episode_id, not series_id, so this
+     * is informational — the URL builder doesn't care).
+     */
+    data class ResolvedSeries(
+        val seriesId: String,
+        val info: XtreamSeriesInfo,
+    )
+
+    suspend fun resolveSeriesInfo(
+        host: String,
+        username: String,
+        password: String,
+        seriesId: String,
+        seriesName: String,
+        maxAttempts: Int = 5,
+    ): ResolvedSeries {
+        val first = getSeriesInfo(host, username, password, seriesId)
+        if (!first.episodes.isNullOrEmpty()) return ResolvedSeries(seriesId, first)
+
+        // Empty episodes — try other duplicate entries with the same
+        // normalised title.
+        val needle = com.hushtv.tv.data.TitleMatcher.normalize(seriesName)
+        if (needle.isBlank()) return ResolvedSeries(seriesId, first)
+
+        val all = runCatching {
+            getAllStreams(host, username, password, "series")
+        }.getOrDefault(emptyList())
+
+        val candidates = all
+            .asSequence()
+            .filter { it.kind == "series" }
+            .filter { it.seriesId > 0 && it.seriesId.toString() != seriesId }
+            .filter { com.hushtv.tv.data.TitleMatcher.normalize(it.title) == needle }
+            .map { it.seriesId.toString() }
+            .distinct()
+            .take(maxAttempts)
+            .toList()
+
+        for (candidate in candidates) {
+            val info = runCatching {
+                getSeriesInfo(host, username, password, candidate)
+            }.getOrNull()
+            if (info != null && !info.episodes.isNullOrEmpty()) {
+                return ResolvedSeries(candidate, info)
+            }
+        }
+        return ResolvedSeries(seriesId, first)
+    }
+
     // URL builders — mirror TVBrowse.jsx + standard Xtream
     fun liveUrl(host: String, user: String, pass: String, streamId: Int): String {
         val h = if (host.startsWith("http")) host else "http://$host"

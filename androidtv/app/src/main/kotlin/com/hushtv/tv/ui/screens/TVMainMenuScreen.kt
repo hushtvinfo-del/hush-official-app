@@ -766,46 +766,9 @@ private fun Sidebar(
 
         Spacer(Modifier.weight(1f))
 
-        // Expiry pill (only when expanded). Subtle — no background, just
-        // quiet text in the corner.
-        AnimatedVisibility(
-            visible = expanded && expiryStr != null,
-            enter = fadeIn(tween(120)),
-            exit = fadeOut(tween(120)),
-        ) {
-            expiryStr?.let { exp ->
-                Column(Modifier.padding(start = 18.dp, end = 12.dp, bottom = 8.dp)) {
-                    Text(
-                        "EXPIRES",
-                        color = TextDim,
-                        fontSize = 9.sp,
-                        fontFamily = Inter,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        exp,
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        fontFamily = Inter,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    daysLeft?.let { d ->
-                        when {
-                            d in 0..7 -> {
-                                Spacer(Modifier.height(4.dp))
-                                Badge(text = "${d}d left", bg = Amber, fg = Color.Black)
-                            }
-                            d < 0 -> {
-                                Spacer(Modifier.height(4.dp))
-                                Badge(text = "Expired", bg = Red, fg = Color.White)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // Subscription expiry pill removed from the sidebar — felt
+        // crowded next to the Profile entry. Expiry info is still
+        // visible on the Settings → Subscription screen.
 
         // Divider above Profile — very subtle.
         Box(

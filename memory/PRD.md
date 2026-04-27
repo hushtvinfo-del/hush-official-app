@@ -1,5 +1,83 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.34 — 2026-04-27 (versionCode 234)  ⬅ LATEST  (optional)
+
+**Two changes**: a P0 series-detail fix the user flagged as
+URGENT, and a cosmetic cleanup of the top-bar/sidebar chrome.
+
+### 🔴 P0 fix — Search → series shows REQUEST rows instead of playable episodes
+User reported: searching a series and opening it from search
+showed all episodes as TMDB REQUEST rows, even though the same
+series opened via the Series tab shows playable rows. Both flows
+hit the same `TVSeriesDetailScreen` / `MobileSeriesDetailScreen`
+with the same code path — so the difference had to be the
+`seriesId` value passed in.
+
+**Root cause**: many Xtream providers index the same show under
+multiple categories (e.g. "TV Shows / Reality" AND "Top Shows")
+with a *different* `series_id` per category. Some of those
+duplicate IDs are stale — the provider's
+`get_series_info?series_id={id}` API returns an empty `episodes`
+map for them — while exactly one is canonical and has all the
+episodes loaded. The Series-tab browse path tends to land on the
+canonical id (the user navigates a single category at a time).
+The Search path uses `get_all_streams` and walks every category,
+sometimes picking a stale id.
+
+When v1.42.31 added the TMDB-only fallback rows, the empty
+`episodes` map (which previously rendered as "no Episodes
+section") suddenly rendered as TMDB REQUEST rows — making the
+underlying mismatch visible to the user.
+
+**Fix**: new `XtreamApi.resolveSeriesInfo()` wrapper:
+
+```kotlin
+data class ResolvedSeries(val seriesId: String, val info: XtreamSeriesInfo)
+
+suspend fun resolveSeriesInfo(
+    host, username, password, seriesId, seriesName,
+    maxAttempts: Int = 5,
+): ResolvedSeries
+```
+
+Tries the user-supplied `seriesId` first (fastest path). If
+episodes come back empty, fetches the full series list, finds
+every candidate whose `TitleMatcher.normalize(title)` matches
+the screen's series name, skips the one already tried, and
+calls `getSeriesInfo` for each candidate until one returns
+non-empty episodes. Capped at 5 extra fetches so the worst-case
+UI cost is bounded.
+
+Both `TVSeriesDetailScreen` and `MobileSeriesDetailScreen` now
+call `resolveSeriesInfo(...)` instead of `getSeriesInfo(...)`.
+Search-flow entries auto-correct themselves to a working id;
+Series-tab entries pay zero extra cost (their first call already
+returns episodes, so the loop short-circuits).
+
+### 🟡 Cosmetic — Top-bar + sidebar cleanup
+User said the right edge of the top nav and the bottom of the
+sidebar felt "way too busy and packed".
+
+- `TopNavBar.kt`: removed the `LayoutHintChip` ("TOP BAR" /
+  "SIDEBAR" mode pill) and `ExpiryBadge` ("Xd left"). Settings
+  gear stays. The function still accepts the old `daysLeft` and
+  `layoutHint` params so callers don't have to change — they're
+  just ignored now.
+- `TVMainMenuScreen.kt` sidebar: removed the entire EXPIRES pill
+  block (label, formatted date, amber/red countdown badge) that
+  sat between the Spacer and the Profile divider. Sidebar now
+  ends cleanly with Profile.
+- Subscription info still surfaces on Settings → Subscription, so
+  no functional regression.
+
+### Build + deploy
+- `versionCode 233 → 234`, `versionName "1.42.33" → "1.42.34"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `4806594e069c22ab5f788ff11ea9dcbc`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.33 — 2026-04-27 (versionCode 233)  ⬅ LATEST  (optional)
 
 **Mobile series detail parity** — ports v1.42.31's TMDB fallback,

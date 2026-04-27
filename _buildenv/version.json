@@ -1,10 +1,11 @@
 {
-  "versionCode": 233,
-  "versionName": "1.42.33",
+  "versionCode": 234,
+  "versionName": "1.42.34",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Mobile series detail now matches TV: TMDB-only episode rows for seasons your provider hasn't indexed, one-tap pre-filled episode requests, and RPDB rating-baked backdrops on the hero (IMDb / Rotten Tomatoes / Metacritic / TMDB scores)."
+    "URGENT FIX: searching a series and opening it now correctly resolves to the right Xtream entry — episodes show as playable rows again instead of as REQUEST rows. Auto-walks duplicate series_id entries until it finds the one with episodes loaded.",
+    "Cleaner top bar: removed the layout-hint chip and expiry badge from the right side. Sidebar expiry pill removed too. Subscription info is still on Settings → Subscription."
   ]
 }

@@ -99,7 +99,17 @@ fun MobileSeriesDetailScreen(
         if (playlist == null) { loading = false; return@LaunchedEffect }
         val info = runCatching {
             withContext(Dispatchers.IO) {
-                XtreamApi.getSeriesInfo(playlist.host, playlist.username, playlist.password, seriesId)
+                // Disambiguating resolver: when search-flow lands on
+                // a stale duplicate series_id (some Xtream providers
+                // index the same show under multiple categories with
+                // a different id per category, and only one of those
+                // ids has episodes loaded), this auto-retries against
+                // other entries with the same normalised title until
+                // one returns episodes.
+                XtreamApi.resolveSeriesInfo(
+                    playlist.host, playlist.username, playlist.password,
+                    seriesId, seriesName,
+                ).info
             }
         }.getOrNull()
         val eps = info?.episodes.orEmpty()
