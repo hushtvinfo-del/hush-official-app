@@ -1205,14 +1205,17 @@ private fun VodSidebar(
             )
         }
 
-        // Inline search box (shown when CAT_SEARCH is active)
-        if (isSearchActive) {
-            SearchBox(
-                value = searchQuery,
-                onChange = onSearchChange,
-                placeholder = "Search titles…",
-            )
-        }
+        // Always-visible search box at the top of the sidebar — lets
+        // users narrow down within the current category (e.g. type
+        // "Gold Rush" while All is selected to find every Gold Rush
+        // entry the provider has). Was previously only rendered when
+        // the dedicated Search sidebar entry was active, which the
+        // user couldn't discover.
+        SearchBox(
+            value = searchQuery,
+            onChange = onSearchChange,
+            placeholder = "Search ${title.lowercase()}…",
+        )
 
         if (loading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

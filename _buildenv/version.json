@@ -1,10 +1,11 @@
 {
-  "versionCode": 239,
-  "versionName": "1.42.39",
+  "versionCode": 241,
+  "versionName": "1.42.41",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "FIXED: search → series now resolves the canonical series_id BEFORE navigating, so the series detail screen receives the same id Series-tab uses. Added timeouts to prevent any one slow Xtream call from hanging the whole resolver."
+    "Added an always-visible search box at the top of the Movies and Series sidebars — type to narrow within the current category.",
+    "Series resolver now scores candidates by title quality so bare 'Gold Rush' wins over sub-franchises like 'Gold Rush: White Water'. Tries best-tier candidates first; only walks down to lower tiers if the top tier returns empty."
   ]
 }

@@ -1,5 +1,48 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.41 — 2026-04-27 (versionCode 241)  ⬅ LATEST  (optional)
+
+**Two changes**: always-visible search bar in Movies/Series, +
+score-based candidate selection in the series resolver.
+
+### 1. Always-visible search bar in Movies + Series sidebars
+User asked for an in-place search inside the Series and Movies
+sections. The functionality already existed (a `SearchBox` in
+`SidebarFooter`) but was gated behind clicking the "Search"
+sidebar entry. `TVBrowseScreen.kt` — removed the
+`if (isSearchActive)` gate; SearchBox now always visible at the
+top of the sidebar, with a placeholder that adapts to the
+current screen ("Search movies…" / "Search series…").
+
+### 2. Score-based candidate selection in the resolver
+User confirmed v1.42.40 fixed Breaking Bad but Gold Rush still
+broken. Insight: Gold Rush has sub-franchises ("Gold Rush:
+White Water", "Gold Rush: Parker's Trail", etc.). User shared
+the canonical id directly: `4058537`. v1.42.38's token-
+subsequence matcher matched ALL siblings as candidates, then
+the parallel `awaitAll` race let sub-franchises win first.
+
+Fix — `XtreamApi.resolveSeriesInfo()` now SCORES candidates:
+
+| Score | Shape                                  | Example                          |
+|-------|----------------------------------------|----------------------------------|
+| 100   | Exact normalised match                 | "Gold Rush"                      |
+| 70    | Library tokens START with needle       | "Gold Rush S01", "Gold Rush 2010"|
+| 50    | Token-subsequence elsewhere in title   | "[USA] Gold Rush HD"             |
+| 30    | isStrongMatch (containment + year gate)| "Gold Rush: White Water"         |
+| 0     | No match                                | (excluded)                       |
+
+Walks score tiers high → low. For each tier, fan out all that
+tier's candidates in parallel (8s per-call timeout), take first
+non-empty winner. Only walks down to next tier if entire tier
+empty. Guarantees the actual main show wins over sub-franchises.
+
+### Build + deploy
+- `versionCode 240 → 241`, `versionName "1.42.40" → "1.42.41"`.
+- Non-mandatory. APK md5 `3af2e3b235031563ca4503bf90c74830`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.39 — 2026-04-27 (versionCode 239)  ⬅ LATEST  (optional)
 
 **Round 5 of the Search → series episodes fix.**

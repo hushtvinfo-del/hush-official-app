@@ -325,43 +325,86 @@ object XtreamApi {
             return false
         }
 
-        val candidateIds = seriesIndex
-            .asSequence()
-            .filter { entry ->
-                entry.normalized == needleNorm ||
-                    com.hushtv.tv.data.TitleMatcher.isStrongMatch(
-                        tmdbTitle = seriesName,
-                        tmdbYear = null,
-                        libTitle = entry.raw,
-                        libYear = entry.year,
-                    ) ||
-                    tokenSubsequence(entry.normalized)
+        // Score each candidate — HIGHER is better:
+        //   • 100 = exact normalised match (bare-titled entry)
+        //   • 70  = title starts with the needle's tokens followed by
+        //          additional tokens (e.g. "Gold Rush S01" — same
+        //          show, just a per-season entry)
+        //   • 50  = needle appears as a token subsequence somewhere
+        //          inside the library title (e.g. "[USA] Gold Rush HD")
+        //   • 30  = passes isStrongMatch's containment-with-year-gate
+        //          but didn't qualify for the higher tiers (e.g.
+        //          "Gold Rush: White Water" — a SUB-FRANCHISE, NOT
+        //          the same show)
+        // We FAN OUT all candidates of the BEST TIER ONLY. Only if
+        // the best tier returns no winner do we try the next tier.
+        // This prevents sub-franchises ("Gold Rush: White Water")
+        // from winning the race against the actual main "Gold Rush"
+        // when both happen to have episodes loaded.
+        fun scoreCandidate(entry: com.hushtv.tv.data.TitleMatcher.LibraryEntry<MediaCard>): Int {
+            if (entry.normalized == needleNorm) return 100
+            val libTokens = entry.normalized.split(' ').filter { it.isNotBlank() }
+            if (libTokens.size > needleTokens.size &&
+                (0 until needleTokens.size).all { libTokens[it] == needleTokens[it] }) {
+                return 70  // prefix match — same show, different entry
             }
-            .map { it.payload.seriesId.toString() }
-            .filter { it != seriesId }
-            .distinct()
-            .take(maxAttempts)
-            .toList()
+            if (tokenSubsequence(entry.normalized)) return 50
+            if (com.hushtv.tv.data.TitleMatcher.isStrongMatch(
+                    tmdbTitle = seriesName,
+                    tmdbYear = null,
+                    libTitle = entry.raw,
+                    libYear = entry.year,
+                )
+            ) return 30
+            return 0
+        }
 
-        if (candidateIds.isEmpty()) {
+        val scored = seriesIndex
+            .mapNotNull { entry ->
+                val s = scoreCandidate(entry)
+                if (s > 0 && entry.payload.seriesId.toString() != seriesId) {
+                    Triple(s, entry.payload.seriesId.toString(), entry.raw)
+                } else null
+            }
+            .distinctBy { it.second }
+            .sortedByDescending { it.first }
+
+        if (scored.isEmpty()) {
             return@coroutineScope ResolvedSeries(seriesId, first)
         }
 
-        // Parallel fan-out — first non-empty result wins.
-        val deferreds = candidateIds.map { candidate ->
-            async {
-                val info = runCatching {
-                    getSeriesInfo(host, username, password, candidate)
-                }.getOrNull()
-                candidate to info
+        // Walk score tiers from highest to lowest. For each tier,
+        // fan out all its candidates in parallel and take the first
+        // one that returns non-empty episodes. If the entire tier
+        // returns empty, move down to the next.
+        val tieredCandidates = scored
+            .groupBy { it.first }
+            .toSortedMap(compareByDescending { it })
+
+        for ((_, tierEntries) in tieredCandidates) {
+            val tierIds = tierEntries
+                .map { it.second }
+                .take(maxAttempts)
+            if (tierIds.isEmpty()) continue
+            val deferreds = tierIds.map { candidate ->
+                async {
+                    val info = runCatching {
+                        kotlinx.coroutines.withTimeoutOrNull(8_000) {
+                            getSeriesInfo(host, username, password, candidate)
+                        }
+                    }.getOrNull()
+                    candidate to info
+                }
+            }
+            val results = deferreds.awaitAll()
+            val winner = results.firstOrNull { (_, info) ->
+                info != null && !info.episodes.isNullOrEmpty()
+            }
+            if (winner != null) {
+                return@coroutineScope ResolvedSeries(winner.first, winner.second!!)
             }
         }
-        val results = deferreds.awaitAll()
-        val winner = results.firstOrNull { (_, info) ->
-            info != null && !info.episodes.isNullOrEmpty()
-        }
-        winner?.let { ResolvedSeries(it.first, it.second!!) }
-            ?: ResolvedSeries(seriesId, first)
+        return@coroutineScope ResolvedSeries(seriesId, first)
     }
 
     // URL builders — mirror TVBrowse.jsx + standard Xtream
