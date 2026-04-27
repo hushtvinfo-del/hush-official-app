@@ -72,6 +72,7 @@ import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.RequestCache
 import com.hushtv.tv.data.RequestSeenStore
+import com.hushtv.tv.data.RpdbService
 import com.hushtv.tv.data.TitleMatcher
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.ui.screens.clickableWithEnter
@@ -549,6 +550,15 @@ private fun HeroPane(
         if (meta == null) {
             meta = RequestPosterResolver.resolveOrFetch(ctx, req)
         }
+        // After the TMDB poster/overview is in place, kick off a
+        // one-shot external_ids fetch so the RPDB rating-baked
+        // poster can take over from the plain TMDB poster. Cached
+        // for life after the first successful call, so this only
+        // costs one extra HTTP round-trip per request.
+        val enriched = RequestPosterResolver.ensureImdbId(ctx, req)
+        if (enriched != null && enriched.imdbId != meta?.imdbId) {
+            meta = enriched
+        }
     }
 
     if (compact) {
@@ -580,24 +590,12 @@ private fun HeroPaneTall(
                 .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(18.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            val url = meta?.posterPath?.let {
-                com.hushtv.tv.data.TmdbService.img(it, "w500")
-            }
-            if (!url.isNullOrBlank()) {
-                coil.compose.AsyncImage(
-                    model = url,
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)),
-                )
-            } else {
-                Icon(
-                    if (req.type == "series") Icons.Outlined.LiveTv else Icons.Outlined.Movie,
-                    null,
-                    tint = Color(0xFF334155),
-                    modifier = Modifier.size(64.dp),
-                )
-            }
+            RatingAwarePoster(
+                meta = meta,
+                type = req.type,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)),
+                tmdbSize = "w500",
+            )
         }
 
         Spacer(Modifier.height(16.dp))
@@ -650,24 +648,12 @@ private fun HeroPaneCompact(
                 .background(Color(0xFF0A0F1A)),
             contentAlignment = Alignment.Center,
         ) {
-            val url = meta?.posterPath?.let {
-                com.hushtv.tv.data.TmdbService.img(it, "w342")
-            }
-            if (!url.isNullOrBlank()) {
-                coil.compose.AsyncImage(
-                    model = url,
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
-                )
-            } else {
-                Icon(
-                    if (req.type == "series") Icons.Outlined.LiveTv else Icons.Outlined.Movie,
-                    null,
-                    tint = Color(0xFF334155),
-                    modifier = Modifier.size(36.dp),
-                )
-            }
+            RatingAwarePoster(
+                meta = meta,
+                type = req.type,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
+                tmdbSize = "w342",
+            )
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
@@ -697,6 +683,53 @@ private fun HeroPaneCompact(
             HeroPriorityTag(req.priority)
             HeroSynopsis(meta?.overview, maxLines = 3)
         }
+    }
+}
+
+/**
+ * Poster variant that prefers RPDB's rating-baked image (IMDb /
+ * Rotten Tomatoes / Metacritic / TMDB scores rendered into the
+ * bottom strip of the poster) when we have an imdb_id, else falls
+ * back to the plain TMDB poster, else to the type icon.
+ *
+ * Coil's listener fires onError when the RPDB image 404s (e.g.
+ * subscription expired, a title RPDB doesn't have) — we swap to
+ * the TMDB URL automatically in that case so users never see a
+ * broken image.
+ */
+@Composable
+private fun RatingAwarePoster(
+    meta: com.hushtv.tv.data.RequestMetaStore.Meta?,
+    type: String,
+    modifier: Modifier,
+    tmdbSize: String,
+) {
+    val tmdbUrl = meta?.posterPath?.let {
+        com.hushtv.tv.data.TmdbService.img(it, tmdbSize)
+    }
+    val rpdbUrl = RpdbService.posterUrl(meta?.imdbId)
+
+    // Local swap state — flips to TMDB if RPDB fails to load.
+    var useTmdb by remember(meta?.imdbId, meta?.posterPath) {
+        mutableStateOf(rpdbUrl.isNullOrBlank())
+    }
+    val chosen = if (useTmdb || rpdbUrl.isNullOrBlank()) tmdbUrl else rpdbUrl
+
+    if (!chosen.isNullOrBlank()) {
+        coil.compose.AsyncImage(
+            model = chosen,
+            contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = modifier,
+            onError = { useTmdb = true },
+        )
+    } else {
+        Icon(
+            if (type == "series") Icons.Outlined.LiveTv else Icons.Outlined.Movie,
+            null,
+            tint = Color(0xFF334155),
+            modifier = Modifier.size(48.dp),
+        )
     }
 }
 

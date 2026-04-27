@@ -101,10 +101,54 @@ object RequestPosterResolver {
                 releaseYear = year ?: cached?.releaseYear,
                 title = displayTitle.ifBlank { cached?.title ?: title },
                 overview = top.overview.ifBlank { null },
+                // Preserve any imdb_id we'd already resolved. The
+                // separate ensureImdbId() path is what populates it
+                // on first detail-screen visit.
+                imdbId = cached?.imdbId,
             )
             RequestMetaStore.put(ctx, request.id, meta)
             meta
         }.getOrNull() ?: cached
+    }
+
+    /**
+     * One-shot enrichment that hits TMDB's `/movie/{id}` or `/tv/{id}`
+     * endpoint to pull `external_ids.imdb_id`, then persists it into
+     * the cached [RequestMetaStore.Meta]. Needed for RPDB's rating
+     * poster (IMDb / Metacritic / Rotten Tomatoes / TMDB scores baked
+     * into the poster image) which is keyed by IMDb id.
+     *
+     * Short-circuits when the cached meta already has `imdbId`, when
+     * `tmdbId <= 0`, or when a concurrent fetch is already in flight
+     * for this request id. Safe to call on every recomposition of a
+     * detail screen.
+     */
+    suspend fun ensureImdbId(
+        ctx: Context,
+        request: ContentRequestApi.Request,
+    ): RequestMetaStore.Meta? = withContext(Dispatchers.IO) {
+        val current = RequestMetaStore.get(ctx, request.id) ?: return@withContext null
+        if (!current.imdbId.isNullOrBlank()) return@withContext current
+        if (current.tmdbId <= 0) return@withContext current
+
+        val key = "imdb-${request.id}"
+        val canFire = requestMutex.withLock {
+            if (inFlight.contains(key)) false else { inFlight.add(key); true }
+        }
+        if (!canFire) return@withContext current
+
+        val imdb = runCatching {
+            if (current.tmdbType == "tv") {
+                TmdbService.getTv(current.tmdbId)?.external_ids?.imdb_id
+            } else {
+                TmdbService.getMovie(current.tmdbId)?.external_ids?.imdb_id
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+
+        if (imdb == null) return@withContext current
+        val enriched = current.copy(imdbId = imdb)
+        RequestMetaStore.put(ctx, request.id, enriched)
+        enriched
     }
 
     private fun parseYear(date: String?): Int? {

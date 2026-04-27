@@ -1,5 +1,69 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.30 — 2026-04-27 (versionCode 230)  ⬅ LATEST  (optional)
+
+**RPDB rating-baked poster on Request Details.** User asked for
+IMDb / Rotten Tomatoes / Metacritic ratings on the detail hero —
+we already have an `RpdbService` + paid API key from the rest of
+the app, so we wired it in here too. The RPDB poster image has
+those four scores (IMDb / RT / Metacritic / TMDB) and certification
+rendered into a strip across the bottom of the artwork itself —
+no separate chip row needed.
+
+### Schema
+- `RequestMetaStore.Meta` got a new `imdbId: String?` field. New
+  SharedPreferences key `${requestId}_imdb_id`. All three
+  constructors (`resolveOrFetch`, `RequestContentSheet` submit
+  flow, `parseTag`) updated to pass it.
+
+### Lazy enrichment — `ensureImdbId()`
+RPDB is keyed by IMDb id, but our existing TMDB search response
+only returns the TMDB id — the IMDb id lives behind
+`/movie/{id}?append_to_response=external_ids`. Adding that detail
+call to `resolveOrFetch` would multiply rail-scroll TMDB load
+roughly 2×. Instead, added a separate
+`RequestPosterResolver.ensureImdbId(ctx, request)`:
+- Short-circuits if cached `imdbId` is already populated, or
+  `tmdbId <= 0`, or another fetch is in flight (same de-dupe
+  mutex as the main resolver).
+- Hits `TmdbService.getMovie(tmdbId)` or `getTv(tmdbId)`,
+  extracts `external_ids.imdb_id`, persists it via
+  `RequestMetaStore.put` with the rest of the cached fields
+  preserved.
+- Called from the detail screen's `HeroPane` `LaunchedEffect`,
+  so it only fires when the user actually opens a detail page —
+  never from the rail itself, keeping list-render cheap.
+
+### UI — `RatingAwarePoster`
+Replaces the inline `AsyncImage` block in both `HeroPaneTall`
+(TV) and `HeroPaneCompact` (Mobile):
+- Resolves URL precedence: RPDB poster (when imdbId present) →
+  plain TMDB poster (when posterPath present) → typed icon
+  fallback.
+- Coil `onError` listener flips a local `useTmdb` state to
+  `true` if the RPDB image 404s (e.g. RPDB has no record for that
+  IMDb id, or the API key's daily quota is hit). The same
+  `AsyncImage` re-renders with the TMDB URL — user never sees a
+  broken image.
+- `remember` keys on `(meta.imdbId, meta.posterPath)` so the
+  fallback state resets when the user navigates between requests.
+
+### Why this is the right answer
+Originally I'd suggested a custom chip row showing TMDB
+`vote_average + runtime + certification`, but that would have
+shown only ONE score (TMDB's own). RPDB gives all four major
+sources at once and they're already part of the user's content
+budget — no extra integration, no extra design work, no extra
+ongoing cost.
+
+### Build + deploy
+- `versionCode 229 → 230`, `versionName "1.42.29" → "1.42.30"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `b3d0ea1240f4957b312380182da9f5d0`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.29 — 2026-04-27 (versionCode 229)  ⬅ LATEST  (optional)
 
 **TMDB synopsis on Request Details.** When a user opens a request

@@ -27,6 +27,7 @@ object RequestMetaStore {
         val releaseYear: Int?,       // 2024
         val title: String,           // canonical TMDB title
         val overview: String?,       // first paragraph (max ~600 chars)
+        val imdbId: String?,         // "tt1234567" — powers RPDB rating posters
     )
 
     fun put(ctx: Context, requestId: String, meta: Meta) {
@@ -39,6 +40,7 @@ object RequestMetaStore {
             if (meta.releaseYear != null) putInt("${requestId}_year", meta.releaseYear)
             putString("${requestId}_title", meta.title)
             putString("${requestId}_overview", meta.overview ?: "")
+            putString("${requestId}_imdb_id", meta.imdbId ?: "")
             apply()
         }
     }
@@ -56,6 +58,7 @@ object RequestMetaStore {
             releaseYear = sp.getInt("${requestId}_year", 0).takeIf { it > 0 },
             title = sp.getString("${requestId}_title", "") ?: "",
             overview = sp.getString("${requestId}_overview", null)?.takeIf { it.isNotBlank() },
+            imdbId = sp.getString("${requestId}_imdb_id", null)?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -86,6 +89,7 @@ object RequestMetaStore {
             releaseYear = pairs["year"]?.toIntOrNull(),
             title = "",
             overview = null,
+            imdbId = null,
         )
     }
 

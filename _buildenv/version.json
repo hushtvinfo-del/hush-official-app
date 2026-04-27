@@ -1,10 +1,10 @@
 {
-  "versionCode": 229,
-  "versionName": "1.42.29",
+  "versionCode": 230,
+  "versionName": "1.42.30",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Request details now shows a TMDB synopsis under the status chip so you can tell what the movie/series actually is at a glance. Older cached requests backfill their synopsis the first time you open their detail page."
+    "Request details hero poster now uses RPDB's rating-baked variant — IMDb, Rotten Tomatoes, Metacritic and TMDB scores are printed right on the poster strip. Old requests lazy-enrich with the IMDb id the first time you open their detail page."
   ]
 }
