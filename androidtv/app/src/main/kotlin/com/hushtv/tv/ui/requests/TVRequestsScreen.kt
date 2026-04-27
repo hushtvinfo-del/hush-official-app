@@ -139,6 +139,16 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
 
+    // Acknowledge: every time the visible list changes, mark each
+    // currently-displayed request as "seen" so the top-nav pulse dot
+    // turns off and unread badges on individual rows clear. This
+    // matches the "viewing the inbox = read" behaviour of email apps.
+    LaunchedEffect(allRequests) {
+        if (allRequests.isNotEmpty()) {
+            com.hushtv.tv.data.RequestSeenStore.markSeen(ctx, allRequests)
+        }
+    }
+
     // Filtering by status group.
     var filter by remember { mutableStateOf(Filter.ALL) }
     val filtered = remember(allRequests, filter) {

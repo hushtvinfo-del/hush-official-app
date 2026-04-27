@@ -2,7 +2,9 @@ package com.hushtv.tv.ui.screens.home
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -56,6 +58,12 @@ data class TopNavTab(
     val label: String,
     val icon: ImageVector,
     val route: String?,
+    /**
+     * When true, render a pulsing cyan "✨ NEW" indicator dot beside
+     * the tab label. Used by the Requests tab to surface unread
+     * status changes without forcing the user to open the page.
+     */
+    val showBadge: Boolean = false,
 )
 
 /**
@@ -228,6 +236,30 @@ private fun TopNavTabView(
                 fontFamily = Inter,
                 letterSpacing = 0.3.sp,
             )
+            // ── Unread/"new" pulse dot ──
+            // Tabs that surface server-side state (e.g. Requests) opt
+            // in via `tab.showBadge`. The dot pulses in opacity so
+            // it's eye-catching without being noisy. Hidden once the
+            // user opens the page (caller flips `showBadge = false`).
+            if (tab.showBadge) {
+                Spacer(Modifier.width(6.dp))
+                val pulse = rememberInfiniteTransition(label = "nav-badge")
+                val alpha by pulse.animateFloat(
+                    initialValue = 0.45f,
+                    targetValue = 1f,
+                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                        animation = tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+                    ),
+                    label = "nav-badge-alpha",
+                )
+                Box(
+                    Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(Cyan.copy(alpha = alpha)),
+                )
+            }
         }
         // Underline — 5 dp gap below the text, width scales with label.
         Spacer(Modifier.height(5.dp))

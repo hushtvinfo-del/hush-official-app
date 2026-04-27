@@ -1,5 +1,41 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.21 — 2026-04-26 (versionCode 221)  ⬅ LATEST  (optional)
+
+**"NEW" pulse dot on the Requests top-nav tab.** When the admin
+side updates one of your requests (status change, response added,
+etc.) a small pulsing cyan dot appears next to the tab label. Dot
+clears the moment the user opens the Requests page.
+
+### Changes
+- `ui/screens/home/TopNavBar.kt`
+  - `data class TopNavTab` got a new optional `showBadge: Boolean`
+    field (default `false`).
+  - `TopNavTabView` renders a 7 dp circular dot beside the label
+    when the tab opts in. Pulses opacity 0.45 ↔ 1.0 every 900 ms
+    via `rememberInfiniteTransition` + `animateFloat` so it's
+    eye-catching without being noisy.
+- `ui/screens/TVMainMenuScreen.kt`
+  - New reactive `requestsBadge` state, recomputed on every
+    `Lifecycle.Event.ON_RESUME` via a `LifecycleEventObserver`.
+  - Computed by checking
+    `RequestSeenStore.filterUnseen(ctx, RequestCache.all())` — i.e.
+    the dot lights up if any cached request's
+    `(status, adminResponse)` signature has changed since the
+    user last looked.
+  - `tabs` `remember` now keys on `requestsBadge` so the tab
+    refreshes when the flag flips.
+- `ui/requests/TVRequestsScreen.kt`
+  - Added `LaunchedEffect(allRequests) { RequestSeenStore.markSeen(...) }`
+    so opening the page clears the dot immediately. Uses the
+    "viewing the inbox = read" pattern.
+
+### Build + deploy
+- `versionCode 220 → 221`, `versionName "1.42.20" → "1.42.21"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.20 — 2026-04-26 (versionCode 220)  ⬅ LATEST  (optional)
 
 **TV: standalone "Requests" destination.** Per user request, made

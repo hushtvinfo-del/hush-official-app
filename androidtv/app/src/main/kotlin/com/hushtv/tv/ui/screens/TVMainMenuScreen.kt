@@ -205,13 +205,39 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         }
     }
 
-    val tabs = remember {
+    // ── Requests-tab "NEW" pulse-dot ──
+    // Reactive state: any cached request whose current
+    // (status, adminResponse) signature differs from the last
+    // signature acknowledged by the user. Refreshed:
+    //   • when this screen first composes
+    //   • on every Lifecycle.Event.ON_RESUME (e.g. user came back
+    //     from the Requests page and any markSeen() calls there
+    //     should silence the dot immediately)
+    //   • when the app's RequestNotificationHost picks up a fresh
+    //     server-side change (RequestCache is what that pipeline
+    //     also writes to, so reading from it suffices)
+    val ctxForBadge = androidx.compose.ui.platform.LocalContext.current
+    var badgeTick by remember { mutableStateOf(0) }
+    val badgeLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(badgeLifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) badgeTick += 1
+        }
+        badgeLifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { badgeLifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+    val requestsBadge = remember(badgeTick) {
+        val cached = com.hushtv.tv.data.RequestCache.all()
+        com.hushtv.tv.data.RequestSeenStore.filterUnseen(ctxForBadge, cached).isNotEmpty()
+    }
+
+    val tabs = remember(requestsBadge) {
         listOf(
             com.hushtv.tv.ui.screens.home.TopNavTab("home",     "Home",     Icons.Default.Home,       null),
             com.hushtv.tv.ui.screens.home.TopNavTab("live",     "Live TV",  Icons.Default.Tv,         "browse/$playlistId/live"),
             com.hushtv.tv.ui.screens.home.TopNavTab("movies",   "Movies",   Icons.Default.Movie,      "browse/$playlistId/movie"),
             com.hushtv.tv.ui.screens.home.TopNavTab("series",   "Series",   Icons.Outlined.Slideshow, "browse/$playlistId/series"),
-            com.hushtv.tv.ui.screens.home.TopNavTab("requests", "Requests", Icons.Default.Inbox,      "requests/$playlistId"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("requests", "Requests", Icons.Default.Inbox,      "requests/$playlistId", showBadge = requestsBadge),
             com.hushtv.tv.ui.screens.home.TopNavTab("search",   "Search",   Icons.Default.Search,     "search/$playlistId"),
         )
     }
