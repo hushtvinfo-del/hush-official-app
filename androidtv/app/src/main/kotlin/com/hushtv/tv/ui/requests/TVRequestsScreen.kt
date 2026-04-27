@@ -192,10 +192,10 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
         HeroBillboard(focusedReq = focusedReq)
 
         // ────────────────────────────────────────────────────────────────
-        // 2. FOREGROUND CONTENT — split layout so everything fits in one
-        //    1080p frame. LEFT pane holds the identity/details/actions
-        //    column, RIGHT pane holds the poster grid at full height.
-        //    No more vertical scrolling / cards cut off at the bottom.
+        // 2. FOREGROUND CONTENT — single column, horizontal card rail.
+        //    Everything fits in one 1080p frame with no overlap:
+        //      Back/Refresh → eyebrow → title → status → actions →
+        //      filters → horizontal card rail (below the buttons).
         // ────────────────────────────────────────────────────────────────
         Column(
             Modifier
@@ -221,98 +221,103 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
 
-            // Split body — LEFT details + RIGHT grid.
-            Row(Modifier.fillMaxSize()) {
-                // ─────── LEFT pane (details + actions + filters) ───────
-                Column(
-                    Modifier
-                        .width(640.dp)
-                        .fillMaxHeight()
-                        .padding(end = 36.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column {
-                        Text(
-                            "MY REQUESTS",
-                            color = Cyan,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 3.5.sp,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            focusedReq?.title?.ifBlank { "Request your missing content" }
-                                ?: "Request your missing content",
-                            color = Color.White,
-                            fontSize = 40.sp,
-                            fontWeight = FontWeight.Black,
-                            lineHeight = 44.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        FocusedRequestSummary(req = focusedReq, total = allRequests.size)
-                        Spacer(Modifier.height(18.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            PillButton(
-                                icon = Icons.Default.Add,
-                                label = "New request",
-                                primary = true,
-                                focusRequester = newRequestFocus,
-                                onClick = { showSheet = true },
-                            )
-                            if (focusedReq != null) {
-                                PillButton(
-                                    icon = Icons.Default.Inbox,
-                                    label = "Open details",
-                                    primary = false,
-                                    onClick = {
-                                        val r = focusedReq ?: return@PillButton
-                                        nav.navigate("requestdetail/$playlistId/${r.id}")
-                                    },
-                                )
-                            }
-                        }
-                    }
+            // Eyebrow + title (single line, truncate if long)
+            Text(
+                "MY REQUESTS",
+                color = Cyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.5.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                focusedReq?.title?.ifBlank { "Request your missing content" }
+                    ?: "Request your missing content",
+                color = Color.White,
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Black,
+                lineHeight = 40.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(0.65f),
+            )
+            Spacer(Modifier.height(10.dp))
+            FocusedRequestSummary(req = focusedReq, total = allRequests.size)
 
-                    // Filter chips pinned to the bottom of the left pane so
-                    // they're always visible and horizontally aligned with
-                    // the first row of the grid on the right.
-                    FilterChipRow(
-                        current = filter,
-                        counts = countsByFilter(allRequests),
-                        onSelect = { filter = it },
+            Spacer(Modifier.height(18.dp))
+
+            // Action buttons
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                PillButton(
+                    icon = Icons.Default.Add,
+                    label = "New request",
+                    primary = true,
+                    focusRequester = newRequestFocus,
+                    onClick = { showSheet = true },
+                )
+                if (focusedReq != null) {
+                    PillButton(
+                        icon = Icons.Default.Inbox,
+                        label = "Open details",
+                        primary = false,
+                        onClick = {
+                            val r = focusedReq ?: return@PillButton
+                            nav.navigate("requestdetail/$playlistId/${r.id}")
+                        },
                     )
                 }
+            }
 
-                // ─────── RIGHT pane (grid) ───────
-                Box(Modifier.fillMaxSize()) {
-                    when {
-                        loading -> Box(
-                            Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(color = Cyan, strokeWidth = 3.dp)
+            Spacer(Modifier.height(20.dp))
+
+            FilterChipRow(
+                current = filter,
+                counts = countsByFilter(allRequests),
+                onSelect = { filter = it },
+            )
+
+            Spacer(Modifier.height(18.dp))
+
+            // ── Horizontal card rail, BELOW all header content ──
+            // Fixed card size (320×180 dp, 16:9) so items stay
+            // proportioned and never collapse into skinny slivers
+            // when the list only has one entry. LazyRow → D-pad
+            // RIGHT scrolls through many cards without ever needing
+            // a vertical grid.
+            Box(Modifier.fillMaxWidth().height(200.dp)) {
+                when {
+                    loading -> Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        CircularProgressIndicator(color = Cyan, strokeWidth = 3.dp)
+                    }
+                    filtered.isEmpty() && allRequests.isEmpty() -> EmptyStateInline(
+                        onCreate = { showSheet = true },
+                    )
+                    filtered.isEmpty() -> Text(
+                        "Nothing in this filter — try another tab.",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 14.sp,
+                    )
+                    else -> LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(end = 40.dp),
+                    ) {
+                        itemsIndexed(filtered, key = { _, r -> r.id }) { idx, r ->
+                            BackdropPosterCard(
+                                req = r,
+                                focusMod = if (idx == 0)
+                                    Modifier.focusRequester(firstCardFocus) else Modifier,
+                                onFocus = { focusedReq = r },
+                                onClick = {
+                                    nav.navigate("requestdetail/$playlistId/${r.id}")
+                                },
+                                onLongPress = { pendingRemoval = r },
+                            )
                         }
-                        filtered.isEmpty() && allRequests.isEmpty() -> EmptyState(
-                            onCreate = { showSheet = true },
-                        )
-                        filtered.isEmpty() -> Text(
-                            "Nothing in this filter — try another tab.",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 14.sp,
-                        )
-                        else -> RequestPosterGrid(
-                            items = filtered,
-                            firstCardFocus = firstCardFocus,
-                            onFocus = { focusedReq = it },
-                            onClick = { r ->
-                                nav.navigate("requestdetail/$playlistId/${r.id}")
-                            },
-                            onLongPress = { r -> pendingRemoval = r },
-                        )
                     }
                 }
             }
@@ -681,8 +686,8 @@ private fun BackdropPosterCard(
 
     Box(
         focusMod
-            .fillMaxWidth()
-            .height(210.dp)
+            .width(320.dp)
+            .height(180.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xFF0F172A))
             .border(
@@ -795,6 +800,43 @@ private fun shortDate(iso: String): String {
 }
 
 /* ───────────────────────── Empty state ───────────────────────── */
+
+@Composable
+private fun EmptyStateInline(onCreate: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        Box(
+            Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(Color(0x22FFFFFF)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.Inbox, null,
+                tint = Cyan,
+                modifier = Modifier.size(32.dp),
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                "No requests yet",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "When a movie or series isn't in our library, hit the + New Request button above to ask for it.",
+                color = Color(0xFF94A3B8),
+                fontSize = 13.sp,
+            )
+        }
+    }
+}
 
 @Composable
 private fun EmptyState(onCreate: () -> Unit) {
