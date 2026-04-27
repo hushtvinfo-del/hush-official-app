@@ -1,5 +1,115 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.28 — 2026-04-27 (versionCode 228)  ⬅ LATEST  (optional)
+
+**Request Details screen — fit-in-one-frame rebuild + modern icons.**
+User rejected the old screen (screenshots showed the body scrolling
+off the bottom and the Back chip disappearing above the fold when
+focus reached Refresh). Plus the emoji icons (⏳ 🔄 ✅ ❌ 🎬 📺) read
+"kids app" on a TV.
+
+### TV layout — now fits 1920×1080 with no scroll
+Replaced the `LazyColumn` body with a fixed 2-column layout:
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│ [← Back]  Request details                    [↻ Refresh]      │  Top bar
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│ ┌──────────┐     STATUS                                       │
+│ │          │     ● ════════ ○ ════════ ○                     │
+│ │  320×480 │     Pending  In Progress  Added                  │
+│ │  poster  │                                                  │
+│ │  (2:3)   │     [ NOTE FROM HUSHTV — cyan accent card ]     │
+│ │          │                                                  │
+│ └──────────┘     DETAILS                                      │
+│ MOVIE REQUEST    ⏱ Submitted    Apr 27, 2026 · 4:06 PM        │
+│ Analyze That     ↻ Updated      Apr 27, 2026 · 4:10 PM        │
+│ 2002                                                          │
+│ [PENDING]        [▶ Watch now]  (when ADDED / AVAILABLE)      │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+```
+
+- Top bar is always on-screen — Refresh relocated here as an icon
+  pill (was a big blue slab below the fold). D-pad UP from any
+  content now always reaches Back/Refresh — no scroll trap.
+- Left pane (fixed 320 dp): poster + type eyebrow + title + year +
+  status chip + priority tag. Poster uses `aspectRatio(2f / 3f)`
+  with `ContentScale.Crop` so TMDB artwork always fills the card
+  cleanly.
+- Right pane (flex): status pipeline + (optional) admin note +
+  details meta + (optional) primary CTA. Meta has an internal
+  `verticalScroll` if a user's request really has a novel-length
+  additional-info field — without ever pushing the top bar or the
+  poster off-screen.
+
+### Icon modernisation — zero emoji
+Every inline emoji replaced with `androidx.compose.material.icons.outlined.*`:
+
+| Old            | New                                  |
+|----------------|--------------------------------------|
+| ⏳ Pending     | `Icons.Outlined.HourglassTop`        |
+| 🔄 In Progress | `Icons.Outlined.Autorenew`           |
+| ✅ Added       | `Icons.Outlined.CheckCircle` / Check |
+| 📚 Already     | `Icons.Outlined.LibraryAddCheck`     |
+| ❌ Not Found   | `Icons.Outlined.ErrorOutline`        |
+| 🎬 Movie       | `Icons.Outlined.Movie`               |
+| 📺 Series      | `Icons.Outlined.LiveTv`              |
+| ▶ Watch        | `Icons.Outlined.PlayArrow`           |
+| ↻ Refresh      | `Icons.Outlined.Refresh`             |
+| 🔁 Re-request  | `Icons.Outlined.Replay`              |
+| ←  Back        | `Icons.AutoMirrored.Outlined.ArrowBack` |
+| ⏱ Timestamp   | `Icons.Outlined.Schedule`            |
+
+All icons rendered at 12–20 dp, tinted by their accent (status
+color on the chip / pipeline nodes; cyan for the type eyebrow;
+`TextSecondary` for meta row icons). No more bright blue slabs —
+every card now uses `Color(0x08FFFFFF)` background + `Color(0x14FFFFFF)`
+border, which reads as glassy dark-mode surfaces instead of the
+saturated "kids app" navy of the old design.
+
+### Status pipeline — sleeker progress bar
+Was: three big colored circles with filled-emoji icons inside.
+Now: 36 dp circle nodes with outlined icons, connected by 3 dp
+cyan bars between completed steps (slate bars before the current
+step). Current step fills at 16 % tint of its accent; completed
+steps fill solid cyan with a dark check inside. Feels like a
+modern delivery-tracker (Linear / Vercel) rather than a toy.
+
+### Mobile — same design language, compact hero
+Mobile LazyColumn keeps its scroll-friendly flow (phone screens
+actually benefit from scrolling), but:
+- New `HeroPaneCompact` variant: 96 × 144 dp poster on the left,
+  title/year/status stacked to the right in a single card. Old
+  full-width tall poster would have eaten the entire phone
+  viewport.
+- Same icon + surface system as TV.
+- Refresh moved into the top bar as a round 36 dp icon button
+  (mirrors the TV Back chip placement).
+
+### Build + deploy
+- `versionCode 227 → 228`, `versionName "1.42.27" → "1.42.28"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `c239eba5f53fe2bb01397a8531c29cd1`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+### Process note for next agent
+User reiterated: **"Whenever you make a new page or section you
+need to make sure you test it to make sure everything fits
+properly in the section page without needing the scroll and if it
+does the navigation needs to be able to scroll back up."**
+Translation for future work:
+1. For TV screens, budget the 1080 dp viewport and lay out so
+   all interactive elements fit in one frame at default focus.
+2. If a screen must scroll, keep the top bar / Back button
+   **fixed** (outside the scrolling container), so D-pad UP from
+   a bottom element can always return to Back.
+3. Verify on the physical device after each new TV screen, not
+   just a compile-clean build.
+
+
 ## v1.42.27 — 2026-04-27 (versionCode 227)  ⬅ LATEST  (optional)
 
 **Requests rail — pin recently-updated cards to the front.** When
