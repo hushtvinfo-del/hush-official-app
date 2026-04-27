@@ -1,5 +1,46 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.25 — 2026-04-27 (versionCode 225)  ⬅ LATEST  (optional)
+
+**TV Requests page — proper split layout.** User reported the
+request-card grid was getting cut off at the bottom of the screen.
+
+### Root cause
+`TVRequestsScreen` was a single `Column` stacking vertically:
+top row, 34 dp spacer, eyebrow, 8 dp spacer, 56 sp billboard
+title, 14 dp spacer, status blurb, 22 dp spacer, action pills,
+28 dp spacer, filter chips, 20 dp spacer, 168-dp-tall card grid.
+That vertical budget alone was ~800 dp on a 1080 canvas; with
+36 dp top/bottom `padding` (72 dp) + ~100 dp of top header space
+the first grid row landed near the screen edge and the second
+row was cut off.
+
+### Fix — split layout
+Rebuilt the foreground content as a `Row`:
+- **LEFT pane (640 dp wide)**: eyebrow, 40 sp title (down from
+  56 sp), status blurb, action pills stacked at the top;
+  filter chips pinned to the BOTTOM via
+  `verticalArrangement = Arrangement.SpaceBetween`. Left pane
+  padded `end = 36.dp` for breathing room.
+- **RIGHT pane (fills the rest, ~1170 dp)**: holds just the grid.
+  Grid column count dropped 5 → 3 (fits the narrower pane
+  comfortably), card height raised 168 dp → 210 dp to make up
+  for the narrower cards. Two full rows of 3 cards fit in the
+  ~900 dp vertical budget with no cut-offs.
+
+### Everything's visible in one screen now
+- Header (Back / Refresh chips)
+- Eyebrow + title + status + actions on the left
+- Filter chips on the left (pinned bottom)
+- 6 poster cards on the right (2 rows × 3 columns)
+- The "NEW" pulse dot on the top-nav tab.
+
+### Build + deploy
+- `versionCode 224 → 225`, `versionName "1.42.24" → "1.42.25"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.24 — 2026-04-27 (versionCode 224)  ⬅ LATEST  (optional)
 
 **Mobile home Hub — fits all 3 sections on one screen.** User

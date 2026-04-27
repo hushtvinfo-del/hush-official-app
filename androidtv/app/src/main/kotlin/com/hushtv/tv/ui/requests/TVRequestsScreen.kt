@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -191,12 +192,15 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
         HeroBillboard(focusedReq = focusedReq)
 
         // ────────────────────────────────────────────────────────────────
-        // 2. FOREGROUND CONTENT — back chip, title, actions, filter, grid
+        // 2. FOREGROUND CONTENT — split layout so everything fits in one
+        //    1080p frame. LEFT pane holds the identity/details/actions
+        //    column, RIGHT pane holds the poster grid at full height.
+        //    No more vertical scrolling / cards cut off at the bottom.
         // ────────────────────────────────────────────────────────────────
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 56.dp, vertical = 36.dp),
+                .padding(horizontal = 56.dp, vertical = 28.dp),
         ) {
             // Top row: back chip + REFRESH
             Row(
@@ -217,94 +221,100 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
                 )
             }
 
-            Spacer(Modifier.height(34.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // Eyebrow + huge billboard title
-            Text(
-                "MY REQUESTS",
-                color = Cyan,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 4.sp,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                focusedReq?.title?.ifBlank { "Request your missing content" }
-                    ?: "Request your missing content",
-                color = Color.White,
-                fontSize = 56.sp,
-                fontWeight = FontWeight.Black,
-                lineHeight = 60.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(0.62f),
-            )
-            Spacer(Modifier.height(14.dp))
-            // Sub: status pill + admin response (one line) for the
-            // currently focused card. Empty placeholder when no requests.
-            FocusedRequestSummary(req = focusedReq, total = allRequests.size)
+            // Split body — LEFT details + RIGHT grid.
+            Row(Modifier.fillMaxSize()) {
+                // ─────── LEFT pane (details + actions + filters) ───────
+                Column(
+                    Modifier
+                        .width(640.dp)
+                        .fillMaxHeight()
+                        .padding(end = 36.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        Text(
+                            "MY REQUESTS",
+                            color = Cyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 3.5.sp,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            focusedReq?.title?.ifBlank { "Request your missing content" }
+                                ?: "Request your missing content",
+                            color = Color.White,
+                            fontSize = 40.sp,
+                            fontWeight = FontWeight.Black,
+                            lineHeight = 44.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        FocusedRequestSummary(req = focusedReq, total = allRequests.size)
+                        Spacer(Modifier.height(18.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            PillButton(
+                                icon = Icons.Default.Add,
+                                label = "New request",
+                                primary = true,
+                                focusRequester = newRequestFocus,
+                                onClick = { showSheet = true },
+                            )
+                            if (focusedReq != null) {
+                                PillButton(
+                                    icon = Icons.Default.Inbox,
+                                    label = "Open details",
+                                    primary = false,
+                                    onClick = {
+                                        val r = focusedReq ?: return@PillButton
+                                        nav.navigate("requestdetail/$playlistId/${r.id}")
+                                    },
+                                )
+                            }
+                        }
+                    }
 
-            Spacer(Modifier.height(22.dp))
-
-            // ─── Action buttons ──
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                PillButton(
-                    icon = Icons.Default.Add,
-                    label = "New request",
-                    primary = true,
-                    focusRequester = newRequestFocus,
-                    onClick = { showSheet = true },
-                )
-                if (focusedReq != null) {
-                    PillButton(
-                        icon = Icons.Default.Inbox,
-                        label = "Open details",
-                        primary = false,
-                        onClick = {
-                            val r = focusedReq ?: return@PillButton
-                            nav.navigate("requestdetail/$playlistId/${r.id}")
-                        },
+                    // Filter chips pinned to the bottom of the left pane so
+                    // they're always visible and horizontally aligned with
+                    // the first row of the grid on the right.
+                    FilterChipRow(
+                        current = filter,
+                        counts = countsByFilter(allRequests),
+                        onSelect = { filter = it },
                     )
                 }
-            }
 
-            Spacer(Modifier.height(28.dp))
-
-            // ─── Filter chips ──
-            FilterChipRow(
-                current = filter,
-                counts = countsByFilter(allRequests),
-                onSelect = { filter = it },
-            )
-
-            Spacer(Modifier.height(20.dp))
-
-            // ─── Grid / empty state / loading ──
-            when {
-                loading -> Box(
-                    Modifier.fillMaxWidth().heightIn(min = 280.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = Cyan, strokeWidth = 3.dp)
+                // ─────── RIGHT pane (grid) ───────
+                Box(Modifier.fillMaxSize()) {
+                    when {
+                        loading -> Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(color = Cyan, strokeWidth = 3.dp)
+                        }
+                        filtered.isEmpty() && allRequests.isEmpty() -> EmptyState(
+                            onCreate = { showSheet = true },
+                        )
+                        filtered.isEmpty() -> Text(
+                            "Nothing in this filter — try another tab.",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 14.sp,
+                        )
+                        else -> RequestPosterGrid(
+                            items = filtered,
+                            firstCardFocus = firstCardFocus,
+                            onFocus = { focusedReq = it },
+                            onClick = { r ->
+                                nav.navigate("requestdetail/$playlistId/${r.id}")
+                            },
+                            onLongPress = { r -> pendingRemoval = r },
+                        )
+                    }
                 }
-                filtered.isEmpty() && allRequests.isEmpty() -> EmptyState(
-                    onCreate = { showSheet = true },
-                )
-                filtered.isEmpty() -> Text(
-                    "Nothing in this filter — try another tab.",
-                    color = Color(0xFF94A3B8),
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
-                else -> RequestPosterGrid(
-                    items = filtered,
-                    firstCardFocus = firstCardFocus,
-                    onFocus = { focusedReq = it },
-                    onClick = { r ->
-                        nav.navigate("requestdetail/$playlistId/${r.id}")
-                    },
-                    onLongPress = { r -> pendingRemoval = r },
-                )
             }
         }
     }
@@ -622,10 +632,10 @@ private fun RequestPosterGrid(
     onLongPress: (ContentRequestApi.Request) -> Unit,
 ) {
     LazyVerticalGrid(
-        columns = GridCells.Fixed(5),
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        contentPadding = PaddingValues(top = 4.dp, bottom = 60.dp),
+        columns = GridCells.Fixed(3),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(bottom = 28.dp),
     ) {
         itemsIndexed(items, key = { _, r -> r.id }) { idx, r ->
             BackdropPosterCard(
@@ -672,7 +682,7 @@ private fun BackdropPosterCard(
     Box(
         focusMod
             .fillMaxWidth()
-            .height(168.dp)
+            .height(210.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xFF0F172A))
             .border(

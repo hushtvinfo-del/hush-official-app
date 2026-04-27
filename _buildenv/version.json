@@ -1,10 +1,10 @@
 {
-  "versionCode": 224,
-  "versionName": "1.42.24",
+  "versionCode": 225,
+  "versionName": "1.42.25",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Mobile home Hub now fits all 3 sections (Channel History · Continue Watching · My Requests) on one screen — no more scrolling. Tighter title, smaller cards everywhere, less breathing room between sections."
+    "TV Requests page is now a proper split layout — details and actions live on the left column, poster grid fills the right half. Cards are no longer cut off at the bottom."
   ]
 }
