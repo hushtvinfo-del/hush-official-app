@@ -1,5 +1,34 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.43 — 2026-04-27 (versionCode 243)  ⬅ LATEST  (optional)
+
+**Inline search in Movies + Series toolbar (top-bar layout)**.
+v1.42.41 added the SearchBox to the sidebar's footer, but the
+user is on the top-bar layout — no sidebar visible. The
+sidebar fix didn't apply.
+
+`TVBrowseScreen.CategoryToolbar` now renders an inline
+`InlineSearchField` between the BROWSE dropdown and the title
+cluster:
+
+- 36 dp pill-shaped Material-style field with a search icon, a
+  close-icon clear button (visible when the field has text),
+  cyan focus ring, and a placeholder that adapts to the screen
+  ("Search series…" / "Search movies…").
+- Hooked up to the existing `searchQuery` state, so it shares
+  the same `displayedItems` filter pipeline as the sidebar
+  SearchBox. Typing live-narrows the active category's grid;
+  clearing restores the full grid.
+- Single source of truth (the same `searchQuery` state powers
+  both placements), so layout-mode switches are seamless and
+  testing is simple.
+
+### Build + deploy
+- `versionCode 242 → 243`, `versionName "1.42.42" → "1.42.43"`.
+- Non-mandatory. APK md5 `507d094aa23ecb7db87b63b78fbf4586`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.42 — 2026-04-27 (versionCode 242)  ⬅ LATEST  (optional)
 
 **🎯 ROOT CAUSE FOUND** for the Gold Rush "no episodes" bug.

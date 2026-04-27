@@ -1,10 +1,10 @@
 {
-  "versionCode": 242,
-  "versionName": "1.42.42",
+  "versionCode": 243,
+  "versionName": "1.42.43",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "FIXED: Gold Rush (and any series whose provider serializes episodes as a JSON array because it has S00 specials) now loads seasons + episodes correctly. Added a permissive parser that handles both the standard object shape and the array shape some Xtream providers return."
+    "Movies and Series now have a search field built into the top toolbar (next to the BROWSE dropdown). Type to live-filter the current category — works in both top-bar and sidebar layouts."
   ]
 }

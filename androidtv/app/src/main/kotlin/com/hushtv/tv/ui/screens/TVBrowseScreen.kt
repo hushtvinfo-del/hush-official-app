@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -627,6 +628,9 @@ fun TVBrowseScreen(
                     onDropdownToggle = { dropdownExpanded = !dropdownExpanded },
                     dropdownFocus = dropdownFocus,
                     downTarget = firstGridFocus,
+                    searchQuery = searchQuery,
+                    onSearchChange = { searchQuery = it },
+                    searchPlaceholder = "Search ${title.lowercase()}…",
                 )
 
                 // Divider line under toolbar.
@@ -764,6 +768,9 @@ private fun CategoryToolbar(
     onDropdownToggle: () -> Unit,
     dropdownFocus: FocusRequester,
     downTarget: FocusRequester,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    searchPlaceholder: String,
 ) {
     Row(
         Modifier
@@ -786,6 +793,19 @@ private fun CategoryToolbar(
             onToggle = onDropdownToggle,
             focusRequester = dropdownFocus,
             downTarget = downTarget,
+        )
+
+        Spacer(Modifier.width(16.dp))
+
+        // ── MIDDLE: Inline search box. Filters the current category's
+        // grid live as the user types. Always rendered (even on
+        // top-bar layout) since the user may want to narrow within
+        // a 26k-item "All" view without leaving the page.
+        InlineSearchField(
+            value = searchQuery,
+            onChange = onSearchChange,
+            placeholder = searchPlaceholder,
+            modifier = Modifier.weight(1f, fill = false).widthIn(min = 240.dp, max = 360.dp),
         )
 
         // Flex spacer pushes the title cluster to the right.
@@ -819,10 +839,91 @@ private fun CategoryToolbar(
             )
         }
     }
+}
 
-    // NOTE: the dropdown panel is rendered at the ROOT Box level (see
-    // callsite) so it can overlay the whole screen. Was inside a Column
-    // previously which let the grid below bleed through the panel.
+/**
+ * Compact pill-shaped search field for the top-bar toolbar. Smaller
+ * than the sidebar SearchBox but uses the same focus/typing flow.
+ * Stays out of the way until the user navigates focus into it.
+ */
+@Composable
+private fun InlineSearchField(
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(999.dp)
+    Row(
+        modifier
+            .height(36.dp)
+            .clip(shape)
+            .background(
+                if (focused) Color(0x18FFFFFF) else Color(0x0DFFFFFF),
+                shape,
+            )
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Cyan else Color(0x1FFFFFFF),
+                shape = shape,
+            )
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            androidx.compose.material.icons.Icons.Default.Search,
+            null,
+            tint = if (focused) Cyan else Color(0xFF94A3B8),
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        androidx.compose.foundation.text.BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(
+                color = Color.White,
+                fontSize = 13.sp,
+                fontFamily = Inter,
+                fontWeight = FontWeight.Medium,
+            ),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(Cyan),
+            modifier = Modifier
+                .weight(1f)
+                .onFocusChanged { focused = it.isFocused },
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(
+                            placeholder,
+                            color = Color(0xFF64748B),
+                            fontSize = 13.sp,
+                            fontFamily = Inter,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+        if (value.isNotEmpty()) {
+            Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .clickable { onChange("") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    androidx.compose.material.icons.Icons.Default.Close,
+                    null,
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+        }
+    }
 }
 
 /** Pill-style dropdown trigger — current category + chevron. */
