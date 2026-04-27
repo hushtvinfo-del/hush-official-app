@@ -198,6 +198,12 @@ private fun AppContent() {
                 bs.arguments?.getString("playlistId") ?: "",
             )
         }
+        composable("requests/{playlistId}") { bs ->
+            com.hushtv.tv.ui.requests.TVRequestsScreen(
+                nav,
+                bs.arguments?.getString("playlistId") ?: "",
+            )
+        }
         composable("requestdetail/{playlistId}/{requestId}") { bs ->
             com.hushtv.tv.ui.requests.TVRequestDetailScreen(
                 nav = nav,

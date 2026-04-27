@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -206,11 +207,12 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
 
     val tabs = remember {
         listOf(
-            com.hushtv.tv.ui.screens.home.TopNavTab("home",   "Home",    Icons.Default.Home,       null),
-            com.hushtv.tv.ui.screens.home.TopNavTab("live",   "Live TV", Icons.Default.Tv,         "browse/$playlistId/live"),
-            com.hushtv.tv.ui.screens.home.TopNavTab("movies", "Movies",  Icons.Default.Movie,      "browse/$playlistId/movie"),
-            com.hushtv.tv.ui.screens.home.TopNavTab("series", "Series",  Icons.Outlined.Slideshow, "browse/$playlistId/series"),
-            com.hushtv.tv.ui.screens.home.TopNavTab("search", "Search",  Icons.Default.Search,     "search/$playlistId"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("home",     "Home",     Icons.Default.Home,       null),
+            com.hushtv.tv.ui.screens.home.TopNavTab("live",     "Live TV",  Icons.Default.Tv,         "browse/$playlistId/live"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("movies",   "Movies",   Icons.Default.Movie,      "browse/$playlistId/movie"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("series",   "Series",   Icons.Outlined.Slideshow, "browse/$playlistId/series"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("requests", "Requests", Icons.Default.Inbox,      "requests/$playlistId"),
+            com.hushtv.tv.ui.screens.home.TopNavTab("search",   "Search",   Icons.Default.Search,     "search/$playlistId"),
         )
     }
 

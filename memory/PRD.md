@@ -1,5 +1,69 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.20 — 2026-04-26 (versionCode 220)  ⬅ LATEST  (optional)
+
+**TV: standalone "Requests" destination.** Per user request, made
+Requests its own top-nav tab + full-screen page with proper
+cinematic styling. The old in-pager `TVRequestsPage` is gone for
+this surface (it remains used by the home hub which is currently
+disabled).
+
+### New file: `ui/requests/TVRequestsScreen.kt`
+A 1920×1080 full-screen layout with three foreground bands stacked
+on a cinematic backdrop:
+1. **Hero billboard** — full-bleed TMDB backdrop of the focused
+   card, doubly-tinted with a horizontal + vertical gradient so
+   foreground text always passes contrast regardless of how busy
+   the source image is. Eyebrow, focused-card title (56 sp Black),
+   status pill + admin-response blurb.
+2. **Action row** — primary cyan "+ New request" + secondary
+   "Open details" pill buttons. White-border focus ring +
+   subtle 1.04× scale.
+3. **Filter chips** — All / Pending / In Progress / Ready /
+   Other, each with live count.
+4. **5-column poster grid** — 168 dp tall 16:9 backdrop cards with
+   TMDB image, status chip top-right, title + type/date
+   bottom-left. Focused card pops with 3 dp cyan border + 1.06×
+   scale; siblings stay un-dimmed (no "Netflix-dim" — was too
+   aggressive in earlier iterations).
+5. **Empty state** — circular icon, friendly copy, primary CTA.
+
+### Behaviour
+- Auto-fetches on mount AND on every `Lifecycle.Event.ON_RESUME`
+  via a `LifecycleEventObserver`, so admin status changes appear
+  the moment the user returns from the player or notification.
+- Long-press DPAD_CENTER on any card → `RemoveRequestDialog`
+  (existing) → `RequestHiddenStore.hide(...)` → list updates →
+  `RemovedRequestToast` (existing snackbar) auto-displays for
+  3.5 s with UNDO focus-grabbed.
+- Short-press → `requestdetail/{playlistId}/{id}` (existing).
+- "+ New request" button → `RequestContentSheet` (existing) which
+  drives the TMDB-aware request submission flow.
+- `LaunchedEffect(filtered.size)` lands focus on the first card
+  on entry, or on the New-Request button when empty — user always
+  has somewhere to go.
+
+### Routing
+- New route `requests/{playlistId}` in `MainActivity.kt`.
+- New "Requests" tab between Series and Search in
+  `TVMainMenuScreen.tabs` (Inbox icon).
+
+### Build environment recovery
+- Container had been recycled — `/opt/android-sdk` and
+  `/opt/aapt2-wrapper` were both missing. Reinstalled
+  `openjdk-17-jdk-headless`, downloaded Android cmdline-tools,
+  installed `platform-tools` + `platforms;android-34` +
+  `build-tools;34.0.0` via sdkmanager, recreated the
+  `/opt/aapt2-wrapper/aapt2` QEMU wrapper script (needs
+  `qemu-user-static` + `libc6:amd64 libstdc++6:amd64 zlib1g:amd64`
+  for the x86_64 binary to run on the arm64 host).
+
+### Build + deploy
+- `versionCode 219 → 220`, `versionName "1.42.19" → "1.42.20"`.
+- Marked **non-mandatory** (additive feature).
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+
 ## v1.42.19 — 2026-04-26 (versionCode 219)  ⬅ LATEST  (MANDATORY)
 
 **Hardware decoder fix + on-screen verification.**
