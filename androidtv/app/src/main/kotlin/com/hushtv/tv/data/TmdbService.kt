@@ -112,6 +112,7 @@ data class TmdbSearchHit(
     val popularity: Double = 0.0,
     val backdrop_path: String? = null,
     val poster_path: String? = null,
+    val overview: String = "",
 )
 
 @JsonClass(generateAdapter = true)

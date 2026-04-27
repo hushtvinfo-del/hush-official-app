@@ -625,6 +625,7 @@ private fun HeroPaneTall(
         Spacer(Modifier.height(12.dp))
         StatusChip(req.status)
         HeroPriorityTag(req.priority)
+        HeroSynopsis(meta?.overview, maxLines = 5)
     }
 }
 
@@ -694,6 +695,7 @@ private fun HeroPaneCompact(
             Spacer(Modifier.height(10.dp))
             StatusChip(req.status)
             HeroPriorityTag(req.priority)
+            HeroSynopsis(meta?.overview, maxLines = 3)
         }
     }
 }
@@ -741,6 +743,27 @@ private fun HeroPriorityTag(priority: String?) {
             letterSpacing = 1.2.sp,
         )
     }
+}
+
+/**
+ * TMDB synopsis block — 3-to-5 line clamped paragraph under the
+ * status chip. Only renders when we have text; gracefully absent
+ * for fresh requests where the resolver hasn't finished yet or
+ * when TMDB has no overview for the title.
+ */
+@Composable
+private fun HeroSynopsis(overview: String?, maxLines: Int) {
+    val cleaned = overview?.trim().orEmpty()
+    if (cleaned.isBlank()) return
+    Spacer(Modifier.height(12.dp))
+    Text(
+        cleaned,
+        color = TextSecondary,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 

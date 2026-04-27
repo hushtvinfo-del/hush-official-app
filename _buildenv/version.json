@@ -1,10 +1,10 @@
 {
-  "versionCode": 228,
-  "versionName": "1.42.28",
+  "versionCode": 229,
+  "versionName": "1.42.29",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Request details screen rebuilt — fits in one frame on TV (no more scrolling off the bottom), all emoji icons swapped for clean Material outlined icons, poster now a proper 2:3 cinematic portrait on TV, Refresh moved into the top bar so Back is always reachable."
+    "Request details now shows a TMDB synopsis under the status chip so you can tell what the movie/series actually is at a glance. Older cached requests backfill their synopsis the first time you open their detail page."
   ]
 }

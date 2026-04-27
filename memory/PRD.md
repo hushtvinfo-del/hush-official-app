@@ -1,5 +1,59 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.29 — 2026-04-27 (versionCode 229)  ⬅ LATEST  (optional)
+
+**TMDB synopsis on Request Details.** When a user opens a request
+(especially one that flipped to "Added" or "Already Available"),
+the detail hero now shows a 3–5 line synopsis under the status
+chip so they can instantly answer "is this the right title I
+asked for?". Previously there was no content description anywhere
+on the screen.
+
+### Schema wiring
+- `TmdbSearchHit` gained `overview: String = ""` — TMDB already
+  returns this in every `/search/movie` + `/search/tv` response,
+  we just weren't parsing it.
+- `RequestPosterResolver.resolveOrFetch` now persists the overview
+  into `RequestMetaStore.Meta` on every new search, using
+  `.ifBlank { null }` so empty strings don't masquerade as real
+  content.
+
+### Backfill logic — old caches auto-upgrade
+Fresh requests submitted after v1.42.29 get the overview straight
+from the submit flow. For older requests whose cached `Meta` was
+created under v1.42.28 or earlier (where `overview` was always
+null), `resolveOrFetch` now has an "enrichment" branch:
+- If the cached meta exists but `overview.isNullOrBlank()`, we
+  treat it as partially-filled and fall through to the TMDB
+  title-search step instead of short-circuiting.
+- When the TMDB hit arrives, we build a new `Meta` that keeps any
+  previously-cached poster / backdrop / year (defensively) and
+  overwrites only the overview. This means an old request whose
+  poster is already pretty won't regress to null-poster just
+  because the new TMDB hit happens to have a different poster id.
+- De-dupe mutex still applies, so a cold Home Hub with 5 cards
+  doesn't fire 5 identical enrichment fetches.
+
+### UI — new `HeroSynopsis` composable
+Rendered both:
+- On TV (`HeroPaneTall`) — 5-line max under the status chip,
+  13 sp / 18 sp line-height, `TextSecondary` (#94A3B8). Fits
+  comfortably in the left 320 dp pane without pushing the
+  priority tag off-screen.
+- On Mobile (`HeroPaneCompact`) — 3-line max (phone is narrower,
+  so the same text wraps further), `TextOverflow.Ellipsis`.
+
+Returns immediately if `overview` is null/blank so there's no
+empty gap while the async resolver is still fetching.
+
+### Build + deploy
+- `versionCode 228 → 229`, `versionName "1.42.28" → "1.42.29"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `210dad2e4e4c6311335a2a28a366254a`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.28 — 2026-04-27 (versionCode 228)  ⬅ LATEST  (optional)
 
 **Request Details screen — fit-in-one-frame rebuild + modern icons.**

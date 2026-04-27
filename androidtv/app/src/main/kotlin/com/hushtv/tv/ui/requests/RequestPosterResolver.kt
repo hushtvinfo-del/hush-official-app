@@ -45,14 +45,27 @@ object RequestPosterResolver {
         ctx: Context,
         request: ContentRequestApi.Request,
     ): RequestMetaStore.Meta? = withContext(Dispatchers.IO) {
-        // 1. Local cache.
-        RequestMetaStore.get(ctx, request.id)?.let { return@withContext it }
+        // 1. Local cache. If the cached meta already has an overview,
+        //    we're done — skip any network call. Older caches (before
+        //    v1.42.29) didn't persist the overview field even though
+        //    the rest of the metadata was fine. In that case we fall
+        //    through to the TMDB search below to backfill it, same
+        //    way as we do for a completely empty cache.
+        val cached = RequestMetaStore.get(ctx, request.id)
+        if (cached != null && !cached.overview.isNullOrBlank()) {
+            return@withContext cached
+        }
 
         // 2. Inline tag in the gateway-stored `additional_info`.
-        RequestMetaStore.parseTag(request.additionalInfo)?.let { meta ->
-            // Persist so future renders skip parsing.
-            RequestMetaStore.put(ctx, request.id, meta)
-            return@withContext meta
+        //    Only honoured when there's nothing cached at all — if
+        //    we already have a richer cached entry (poster, year,
+        //    title), keep it and fall through to TMDB to enrich the
+        //    overview.
+        if (cached == null) {
+            RequestMetaStore.parseTag(request.additionalInfo)?.let { meta ->
+                RequestMetaStore.put(ctx, request.id, meta)
+                if (!meta.overview.isNullOrBlank()) return@withContext meta
+            }
         }
 
         // 3. Best-effort TMDB title-search retrofit. Only fire once
@@ -62,10 +75,10 @@ object RequestPosterResolver {
         val canFire = requestMutex.withLock {
             if (inFlight.contains(key)) false else { inFlight.add(key); true }
         }
-        if (!canFire) return@withContext null
+        if (!canFire) return@withContext cached
 
         val title = request.title.trim()
-        if (title.isBlank()) return@withContext null
+        if (title.isBlank()) return@withContext cached
 
         runCatching {
             val hits = if (request.type == "series") {
@@ -73,21 +86,25 @@ object RequestPosterResolver {
             } else {
                 TmdbService.searchMoviesList(title)
             }
-            val top = hits.firstOrNull() ?: return@runCatching null
+            val top = hits.firstOrNull() ?: return@runCatching cached
             val displayTitle = top.title ?: top.name ?: title
             val year = parseYear(top.release_date) ?: parseYear(top.first_air_date)
             val meta = RequestMetaStore.Meta(
                 tmdbId = top.id,
                 tmdbType = if (request.type == "series") "tv" else "movie",
-                posterPath = top.poster_path,
-                backdropPath = top.backdrop_path,
-                releaseYear = year,
-                title = displayTitle,
-                overview = null,
+                // Keep any previously-cached image paths if the new
+                // search returned nulls for them — we don't want to
+                // regress an existing poster just to backfill the
+                // overview.
+                posterPath = top.poster_path ?: cached?.posterPath,
+                backdropPath = top.backdrop_path ?: cached?.backdropPath,
+                releaseYear = year ?: cached?.releaseYear,
+                title = displayTitle.ifBlank { cached?.title ?: title },
+                overview = top.overview.ifBlank { null },
             )
             RequestMetaStore.put(ctx, request.id, meta)
             meta
-        }.getOrNull()
+        }.getOrNull() ?: cached
     }
 
     private fun parseYear(date: String?): Int? {
