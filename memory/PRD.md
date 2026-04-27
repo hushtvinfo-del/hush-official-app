@@ -1,5 +1,41 @@
 # HushTV Android TV — Product Requirements Document
 
+## DEPLOY FIX — 2026-04-27  ⚠ CRITICAL POSTMORTEM
+
+**All updates from v1.42.8 through v1.42.22 were silently going to
+the wrong filename and never reaching the OTA updater.**
+
+### Root cause
+- The in-app OTA updater (and `version.json`'s `apkUrl`) point to
+  `https://hushtv.xyz/hushtv.apk` (lowercase).
+- All `scp` commands in this session targeted
+  `/var/www/hushtv/HushTV.apk` (uppercase) — verified on the
+  server: lowercase `hushtv.apk` was last modified Apr 25 22:59
+  (size 17,659,837 bytes = v1.42.7 / v1.42.8 era), uppercase
+  `HushTV.apk` had been updating fine.
+- The user reported issues that I'd already "fixed" because
+  their device was still running the old code. Nginx logs
+  confirm: their device's IP polled `/version.json` repeatedly
+  but never fetched `/HushTV.apk`. The only `/hushtv.apk` fetch
+  in the rotated logs was on Apr 23.
+
+### Fix
+- Server: replaced `/var/www/hushtv/hushtv.apk` (regular file)
+  with a symlink:
+  ```
+  hushtv.apk → HushTV.apk
+  ```
+  Future `scp HushTV.apk root@…:/var/www/hushtv/HushTV.apk`
+  commands will be visible at BOTH URLs automatically.
+- Bumped version.json `releasedAt` and changelog so the OTA
+  updater treats it as new and re-prompts users.
+
+### Going forward
+- Updated handoff summary so future agents deploy via the
+  symlink-resolved path; the existing `scp ... HushTV.apk`
+  command is still correct.
+
+
 ## v1.42.22 — 2026-04-27 (versionCode 222)  ⬅ LATEST  (MANDATORY)
 
 **Two fixes for the Request-modal screen.**
