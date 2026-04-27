@@ -142,23 +142,27 @@ fun TmdbPickerPhase(
         searchJob = scope.launch {
             delay(350)
             loading = true
-            val raw = withContext(Dispatchers.IO) {
-                if (type == "series") TmdbService.searchTvList(q)
-                else TmdbService.searchMoviesList(q)
+            // Both the TMDB HTTP call AND the library-membership decoration
+            // run inside Dispatchers.IO. The decoration loop calls
+            // LibraryIndex.findBest(...) which on a fully-primed library
+            // is an O(n) substring search across thousands of VOD titles.
+            // Running that on Main blocked the keystroke pipeline long
+            // enough to ANR / crash the app on every other letter on
+            // larger libraries — moving it off-Main fixes the freeze
+            // user reported during in-modal search.
+            val decorated = withContext(Dispatchers.IO) {
+                val raw = if (type == "series") TmdbService.searchTvList(q)
+                          else TmdbService.searchMoviesList(q)
+                raw.map { hit ->
+                    val title = hit.title ?: hit.name ?: ""
+                    val libKind = if (type == "series") "series" else "movie"
+                    val year = parseYear(hit.release_date)
+                        ?: parseYear(hit.first_air_date)
+                    val libHit = LibraryIndex.findBest(title, libKind, year)
+                    TmdbHitWithLibrary(hit = hit, libraryEntry = libHit)
+                }
             }
-            // Decorate each hit with library-membership so the UI
-            // knows which ones to show "ALREADY AVAILABLE" on. Year-
-            // aware so a 1991 remake doesn't false-match a 2024
-            // original (or vice versa) — keeps the Already-Available
-            // promise honest.
-            hits = raw.map { hit ->
-                val title = hit.title ?: hit.name ?: ""
-                val libKind = if (type == "series") "series" else "movie"
-                val year = parseYear(hit.release_date)
-                    ?: parseYear(hit.first_air_date)
-                val libHit = LibraryIndex.findBest(title, libKind, year)
-                TmdbHitWithLibrary(hit = hit, libraryEntry = libHit)
-            }
+            hits = decorated
             lastSearchedQuery = q
             loading = false
         }
@@ -170,118 +174,147 @@ fun TmdbPickerPhase(
         runCatching { firstFocus.requestFocus() }
     }
 
-    Column(Modifier.fillMaxWidth()) {
-        Text("Request missing content", color = TextPrimary,
-            fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Type the name and pick the right title from TMDB. " +
-                "Already-available titles route you straight into your library.",
-            color = TextSecondary, fontSize = 13.sp, lineHeight = 17.sp,
-        )
-
-        Spacer(Modifier.height(18.dp))
-        TypeRadioRow(type = type, onChangeType = onChangeType)
-
-        Spacer(Modifier.height(18.dp))
-        SearchField(
-            value = query,
-            onValueChange = { query = it },
-            focusRequester = firstFocus,
-            placeholder = if (type == "series") "Search TMDB for a series…"
-            else "Search TMDB for a movie…",
-        )
-
-        Spacer(Modifier.height(14.dp))
-        when {
-            loading -> Box(
-                Modifier.fillMaxWidth().heightIn(min = 240.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator(color = Cyan)
-            }
-            query.trim().length < 2 -> Box(
-                Modifier.fillMaxWidth().heightIn(min = 240.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "Start typing — at least 2 characters.",
-                    color = TextSecondary,
-                    fontSize = 13.sp,
-                )
-            }
-            hits.isEmpty() -> EmptyTmdbState(
-                query = query.trim(),
-                onFreeTextSubmit = onFreeTextSubmit,
+    Row(Modifier.fillMaxSize()) {
+        // ─── LEFT PANE: header + search + type pills + cancel ───
+        Column(
+            Modifier
+                .width(440.dp)
+                .fillMaxSize()
+                .padding(end = 32.dp),
+        ) {
+            Text(
+                "REQUEST MISSING CONTENT",
+                color = Cyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.sp,
             )
-            else -> LazyColumn(
-                Modifier.fillMaxWidth().heightIn(max = 460.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(hits, key = { it.hit.id }) { wrapped ->
-                    TmdbHitRow(
-                        wrapped = wrapped,
-                        onPick = onClick@{
-                            val title = wrapped.hit.title ?: wrapped.hit.name ?: ""
-                            val year = parseYear(wrapped.hit.release_date)
-                                ?: parseYear(wrapped.hit.first_air_date)
-                            val pick = TmdbPick(
-                                tmdbId = wrapped.hit.id,
-                                tmdbType = if (type == "series") "tv" else "movie",
-                                title = title,
-                                year = year,
-                                posterPath = wrapped.hit.poster_path,
-                                backdropPath = wrapped.hit.backdrop_path,
-                                overview = null,
-                                library = wrapped.libraryEntry,
-                            )
-                            if (wrapped.libraryEntry != null) {
-                                // Bullet-proof confirm: refetch the
-                                // candidate's `vod_info` and verify the
-                                // provider's tmdb_id matches the picked
-                                // TMDB id BEFORE routing the user. If the
-                                // provider doesn't expose tmdb_id, we
-                                // trust the strict-match library entry.
-                                // If the provider exposes a DIFFERENT
-                                // tmdb_id, treat as not-in-library and
-                                // submit the request instead — better to
-                                // file a duplicate request than send the
-                                // user to the wrong movie.
-                                scope.launch {
-                                    val playlist = withContext(Dispatchers.IO) {
-                                        com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
-                                    }
-                                    val confirmed = if (playlist != null) {
-                                        val resolved = withContext(Dispatchers.IO) {
-                                            com.hushtv.tv.data.TmdbIdResolver
-                                                .resolveTmdbId(playlist, wrapped.libraryEntry)
-                                        }
-                                        // resolved == null → provider has
-                                        // no tmdb_id, trust strict match.
-                                        // resolved == hit.id → match.
-                                        // resolved != hit.id → mismatch.
-                                        resolved == null || resolved == wrapped.hit.id
-                                    } else true
-                                    if (confirmed) {
-                                        onAlreadyAvailable(wrapped.libraryEntry)
-                                    } else {
-                                        // Fall through to the request
-                                        // submit path with the picked
-                                        // TMDB metadata.
-                                        onPicked(pick)
-                                    }
-                                }
-                            } else {
-                                onPicked(pick)
-                            }
-                        },
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Search for any movie or series",
+                color = TextPrimary,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Black,
+                lineHeight = 34.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Pick a real TMDB title and we'll add it for you. " +
+                    "Already-available titles route you straight into your library.",
+                color = TextSecondary,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            )
+
+            Spacer(Modifier.height(22.dp))
+            TypeRadioRow(type = type, onChangeType = onChangeType)
+
+            Spacer(Modifier.height(18.dp))
+            SearchField(
+                value = query,
+                onValueChange = { query = it },
+                focusRequester = firstFocus,
+                placeholder = if (type == "series") "Type a series name…"
+                else "Type a movie name…",
+            )
+
+            Spacer(Modifier.height(14.dp))
+            // Status hint just below the search field — keeps the
+            // user oriented while they're typing.
+            val hint = when {
+                query.trim().length < 2 -> "Type at least 2 characters."
+                loading -> "Searching TMDB…"
+                hits.isEmpty() && lastSearchedQuery.isNotBlank() ->
+                    "No matches yet. Keep typing or hit \"Submit anyway\" on the right."
+                else -> "${hits.size} result${if (hits.size == 1) "" else "s"}."
+            }
+            Text(
+                hint,
+                color = TextSecondary,
+                fontSize = 12.sp,
+            )
+
+            Spacer(Modifier.weight(1f))
+            SecondaryButtonInline(label = "Cancel", onClick = onCancel)
+        }
+
+        // ─── RIGHT PANE: result grid / loading / empty / type-prompt ───
+        Box(Modifier.fillMaxSize().padding(start = 4.dp)) {
+            when {
+                query.trim().length < 2 -> Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        "Start typing on the left",
+                        color = TextSecondary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
                     )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Results from TMDB will appear here.",
+                        color = Color(0xFF64748B),
+                        fontSize = 13.sp,
+                    )
+                }
+                loading -> Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator(color = Cyan) }
+                hits.isEmpty() -> EmptyTmdbState(
+                    query = query.trim(),
+                    onFreeTextSubmit = onFreeTextSubmit,
+                )
+                else -> LazyColumn(
+                    Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(hits, key = { it.hit.id }) { wrapped ->
+                        TmdbHitRow(
+                            wrapped = wrapped,
+                            onPick = onClick@{
+                                val title = wrapped.hit.title ?: wrapped.hit.name ?: ""
+                                val year = parseYear(wrapped.hit.release_date)
+                                    ?: parseYear(wrapped.hit.first_air_date)
+                                val pick = TmdbPick(
+                                    tmdbId = wrapped.hit.id,
+                                    tmdbType = if (type == "series") "tv" else "movie",
+                                    title = title,
+                                    year = year,
+                                    posterPath = wrapped.hit.poster_path,
+                                    backdropPath = wrapped.hit.backdrop_path,
+                                    overview = null,
+                                    library = wrapped.libraryEntry,
+                                )
+                                if (wrapped.libraryEntry != null) {
+                                    scope.launch {
+                                        val playlist = withContext(Dispatchers.IO) {
+                                            com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
+                                        }
+                                        val confirmed = if (playlist != null) {
+                                            val resolved = withContext(Dispatchers.IO) {
+                                                com.hushtv.tv.data.TmdbIdResolver
+                                                    .resolveTmdbId(playlist, wrapped.libraryEntry)
+                                            }
+                                            resolved == null || resolved == wrapped.hit.id
+                                        } else true
+                                        if (confirmed) {
+                                            onAlreadyAvailable(wrapped.libraryEntry)
+                                        } else {
+                                            onPicked(pick)
+                                        }
+                                    }
+                                } else {
+                                    onPicked(pick)
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
-
-        Spacer(Modifier.height(16.dp))
-        SecondaryButtonInline(label = "Cancel", onClick = onCancel)
     }
 }
 

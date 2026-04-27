@@ -1,5 +1,77 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.22 — 2026-04-27 (versionCode 222)  ⬅ LATEST  (MANDATORY)
+
+**Two fixes for the Request-modal screen.**
+
+### 1. Crash/ANR while typing in TMDB search
+User reported the app stalling and crashing partway through typing
+in the search field, with no crash report appearing.
+
+**Root cause** (verified by reading
+`TmdbPickerPhase.kt:LaunchedEffect(query, type, libraryReady)`):
+
+```kotlin
+val raw = withContext(Dispatchers.IO) { TmdbService.searchMoviesList(q) }
+hits = raw.map { hit ->
+    …
+    val libHit = LibraryIndex.findBest(title, libKind, year)  // ← Main!
+    TmdbHitWithLibrary(hit, libHit)
+}
+```
+
+`withContext(Dispatchers.IO)` only wrapped the HTTP call. The
+following `raw.map { … LibraryIndex.findBest(...) }` ran on the
+**Main** thread. `LibraryIndex.findBest` is a substring-match
+across the user's full library — on a Shield with a few thousand
+VOD titles, that's millions of comparisons per keystroke on the
+UI thread → BasicTextField becomes unresponsive → ANR → crash.
+ANRs don't trigger `Thread.UncaughtExceptionHandler`, so the
+crash reporter never logged it (which is why the user saw no
+report).
+
+**Fix**: Moved the entire decoration loop INSIDE the
+`withContext(Dispatchers.IO) { … }` block alongside the HTTP
+call. Search now runs entirely off-Main; the keystroke pipeline
+stays smooth no matter how big the library is.
+
+### 2. Modal didn't fit the TV screen
+User said it looked tiny and unresponsive. Was constrained by:
+```
+.widthIn(max = 600.dp).fillMaxWidth(0.94f).heightIn(max = 720.dp)
+```
+
+**Fix** — full-screen modern split layout:
+- Body now `Modifier.fillMaxSize().padding(56.dp, 36.dp)`.
+- `TmdbPickerPhase` redesigned as a `Row` with two panes:
+  * **Left** (440 dp): "REQUEST MISSING CONTENT" eyebrow,
+    big 30 sp Black title, supporting paragraph, type pills,
+    search field, status hint that updates live ("Searching
+    TMDB…", "12 results", "Type at least 2 characters."),
+    Cancel button at the bottom.
+  * **Right**: scrolling result list (no more 460 dp height
+    cap — uses the full ~700 dp tall right pane). Different
+    states (typing-prompt / loading / empty / results)
+    swap in place.
+- Background switched from `0xEE000000` (mostly black) to
+  `0xF205080F` (the brand near-black) for visual consistency
+  with the rest of the app.
+
+### Build + deploy
+- `versionCode 221 → 222`, `versionName "1.42.21" → "1.42.22"`.
+- Mandatory.
+- Deployed to `66.163.113.147:/var/www/hushtv/`.
+
+### Crash-reporter clarification
+Crash reporter IS working — verified via server. 5 fresh reports
+came in today (FREEZE reports from rapid channel zapping). The
+search-stall didn't appear because it was an ANR, not a JVM
+crash. ANRs don't fire `Thread.UncaughtExceptionHandler`. Future
+work could intercept these via the system's `ANRWatchDog` lib
+or `Looper.getMainLooper().setMessageLogging(...)` — out of
+scope for now since the underlying cause is fixed.
+
+
 ## v1.42.21 — 2026-04-26 (versionCode 221)  ⬅ LATEST  (optional)
 
 **"NEW" pulse dot on the Requests top-nav tab.** When the admin

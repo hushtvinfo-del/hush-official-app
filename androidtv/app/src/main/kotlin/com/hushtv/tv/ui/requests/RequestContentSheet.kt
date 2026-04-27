@@ -201,18 +201,18 @@ fun RequestContentSheet(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color(0xEE000000)),
+                .background(Color(0xF205080F)),
         ) {
+            // Full-screen content frame with generous TV safe-area
+            // margins — fills the whole canvas instead of being a tiny
+            // 600 dp dialog floating in the middle. All phases get the
+            // entire ~1820 dp width, so the TMDB picker can lay out
+            // its search field on the left and a scrolling result
+            // grid on the right with no visual cramping.
             Column(
                 Modifier
-                    .align(Alignment.Center)
-                    .widthIn(max = 600.dp)
-                    .fillMaxWidth(0.94f)
-                    .heightIn(max = 720.dp)
-                    .background(SurfaceNavy, RoundedCornerShape(20.dp))
-                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 28.dp, vertical = 26.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .fillMaxSize()
+                    .padding(horizontal = 56.dp, vertical = 36.dp),
             ) {
                 when (phase) {
                     Phase.CONTACT -> ContactPhase(
