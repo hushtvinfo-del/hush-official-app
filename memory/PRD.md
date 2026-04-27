@@ -1,5 +1,57 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.39 — 2026-04-27 (versionCode 239)  ⬅ LATEST  (optional)
+
+**Round 5 of the Search → series episodes fix.**
+
+The previous rounds all happened INSIDE the series detail screen
+via a `LaunchedEffect`-wrapped resolver. Two problems with that:
+1. If the resolver had any subtle bug or hung on awaitAll, the
+   user saw an empty screen with no clue what went wrong.
+2. State is set after the screen renders, so even on success
+   there's a flash of empty before episodes appear.
+
+This round moves the resolution to the click handler itself —
+search now resolves to the canonical id BEFORE navigating, so
+by the time the series detail screen mounts it already has a
+working id (the same shape Series-tab navigation has always
+delivered).
+
+### Changes
+**TV — `TVUnifiedSearchScreen.kt`**:
+- New `resolvingSeriesNav` state + `rememberCoroutineScope`.
+- Series PosterCard's `onClick` now launches a coroutine, calls
+  `XtreamApi.resolveSeriesInfo(host, ..., mc.seriesId, mc.title)`,
+  uses the resolved id (or falls back to the original on
+  resolver error) when calling `nav.navigate("series/...")`.
+- The flag debounces double-clicks during resolution.
+
+**Mobile — `MobileSearchScreen.kt`**:
+- `onCard()` series branch now wraps navigation in
+  `CoroutineScope(Dispatchers.IO).launch { ... withContext(Main) {
+  nav.navigate(...) } }` to call `resolveSeriesInfo` first.
+
+**Resolver hardening — `XtreamApi.resolveSeriesInfo()`**:
+- Added `withTimeoutOrNull(6_000)` around each per-category fetch.
+  A single slow / hanging endpoint can no longer block the whole
+  `awaitAll`. Most providers respond in < 1s so this is purely
+  defensive.
+
+### Why this was the right move
+The user repeatedly insisted "use the EXACT same code as Series-tab".
+Series-tab passes a canonical `seriesId` straight into the screen.
+By resolving in the click handler, search now does the same — the
+detail screen receives an already-correct id. The screen behavior
+is now identical regardless of entry point.
+
+### Build + deploy
+- `versionCode 238 → 239`, `versionName "1.42.38" → "1.42.39"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `028ee0dffa9296f0d545812bf85b7504`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.38 — 2026-04-27 (versionCode 238)  ⬅ LATEST  (optional)
 
 **Round 4 fix for the "Search → series → no episodes" bug.**

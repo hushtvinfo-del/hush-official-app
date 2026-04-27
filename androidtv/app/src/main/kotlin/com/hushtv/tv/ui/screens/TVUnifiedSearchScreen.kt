@@ -83,6 +83,7 @@ import com.hushtv.tv.ui.tvFocusable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -108,6 +109,15 @@ fun TVUnifiedSearchScreen(
 ) {
     val ctx = LocalContext.current
     val playlist = remember { PlaylistStore.find(ctx, playlistId) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Per-click "resolving" state — when the user clicks a series
+    // result we kick off the disambiguating resolver to find the
+    // canonical series_id (the one with episodes loaded), THEN
+    // navigate. While the resolver is running we show a small
+    // overlay so the user knows something is happening. Without
+    // this the search-flow series_id can be a stale duplicate that
+    // returns empty episodes (the bug user reported repeatedly).
+    var resolvingSeriesNav by remember { mutableStateOf(false) }
 
     // ── Preloaded indices (one shot per session) ──
     var liveAll by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
@@ -300,9 +310,33 @@ fun TVUnifiedSearchScreen(
                                     badge = "SERIES",
                                     badgeTint = Color(0xFF8B5CF6),
                                     onClick = {
-                                        nav.navigate(
-                                            "series/$playlistId/${mc.seriesId}/${Uri.encode(mc.title)}"
-                                        )
+                                        // Resolve to the canonical
+                                        // series_id BEFORE navigating.
+                                        // The resolver short-circuits
+                                        // (one network call) when
+                                        // mc.seriesId already has
+                                        // episodes; only kicks the
+                                        // expensive multi-category
+                                        // walk when the supplied id
+                                        // returns empty.
+                                        if (resolvingSeriesNav) return@PosterCard
+                                        val p = playlist ?: return@PosterCard
+                                        resolvingSeriesNav = true
+                                        scope.launch {
+                                            val resolvedId = withContext(Dispatchers.IO) {
+                                                runCatching {
+                                                    com.hushtv.tv.data.XtreamApi
+                                                        .resolveSeriesInfo(
+                                                            p.host, p.username, p.password,
+                                                            mc.seriesId.toString(), mc.title,
+                                                        ).seriesId
+                                                }.getOrNull() ?: mc.seriesId.toString()
+                                            }
+                                            resolvingSeriesNav = false
+                                            nav.navigate(
+                                                "series/$playlistId/$resolvedId/${Uri.encode(mc.title)}"
+                                            )
+                                        }
                                     },
                                 )
                             }

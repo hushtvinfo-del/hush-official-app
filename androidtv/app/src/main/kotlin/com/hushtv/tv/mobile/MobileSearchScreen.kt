@@ -44,6 +44,7 @@ import com.hushtv.tv.ui.requests.RequestContentSheet
 import com.hushtv.tv.ui.theme.Cyan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -413,14 +414,31 @@ private fun onCard(card: MediaCard, playlistId: String, nav: NavController) {
             )
         }
         "series" -> {
-            nav.navigate(
-                mobileSeriesRoute(
-                    playlistId = playlistId,
-                    seriesId = card.seriesId.toString(),
-                    name = card.title,
-                    poster = card.poster,
-                ),
-            )
+            // Resolve to canonical series_id BEFORE navigating —
+            // mirrors the TV search fix. mc.seriesId from
+            // get_all_streams may be a stale duplicate; the resolver
+            // walks per-category lists in parallel and returns the
+            // canonical id that has episodes loaded. Uses a
+            // top-level coroutine since onCard isn't a composable
+            // and can't grab rememberCoroutineScope.
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                val resolvedId = runCatching {
+                    XtreamApi.resolveSeriesInfo(
+                        p.host, p.username, p.password,
+                        card.seriesId.toString(), card.title,
+                    ).seriesId
+                }.getOrNull() ?: card.seriesId.toString()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    nav.navigate(
+                        mobileSeriesRoute(
+                            playlistId = playlistId,
+                            seriesId = resolvedId,
+                            name = card.title,
+                            poster = card.poster,
+                        ),
+                    )
+                }
+            }
         }
     }
 }

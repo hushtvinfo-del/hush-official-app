@@ -277,10 +277,15 @@ object XtreamApi {
             if (cats.isEmpty()) emptyList()
             else cats.map { cat ->
                 async {
+                    // Per-category fetches get a 6-second cap so a
+                    // single slow / hanging endpoint can't block the
+                    // whole resolver. Most providers respond in < 1s.
                     runCatching {
-                        getStreamsForCategory(
-                            host, username, password, "series", cat.category_id,
-                        )
+                        kotlinx.coroutines.withTimeoutOrNull(6_000) {
+                            getStreamsForCategory(
+                                host, username, password, "series", cat.category_id,
+                            )
+                        }.orEmpty()
                     }.getOrDefault(emptyList())
                 }
             }.awaitAll().flatten()

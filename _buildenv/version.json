@@ -1,10 +1,10 @@
 {
-  "versionCode": 238,
-  "versionName": "1.42.38",
+  "versionCode": 239,
+  "versionName": "1.42.39",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "FINAL FIX (round 4): the disambiguating series resolver now uses token-subsequence matching, which catches the very common Xtream shape where shows are split per-season ('Gold Rush S01', 'Gold Rush S02 2011', etc.) instead of having a single bare-titled entry. Search → series should now show seasons + episodes for ALL series."
+    "FIXED: search → series now resolves the canonical series_id BEFORE navigating, so the series detail screen receives the same id Series-tab uses. Added timeouts to prevent any one slow Xtream call from hanging the whole resolver."
   ]
 }
