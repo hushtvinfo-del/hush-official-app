@@ -1,5 +1,74 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.36 — 2026-04-27 (versionCode 236)  ⬅ LATEST  (optional)
+
+**Reverted the TMDB fallback feature.** I misread the user's
+v1.42.31 request — they were saying "search isn't showing the
+episodes Series-tab shows, fix it" and I built a TMDB-fallback
+feature on top of it. The user's actual ask was for
+search→series to behave EXACTLY like Series-tab. The TMDB-only
+REQUEST rows were unwanted and made an already-in-library show
+look like a missing-content request — exactly the opposite of
+what the user wanted.
+
+### Changes
+**TV — `TVSeriesDetailScreen.kt`**:
+- Restored the original `if (xtEpisodes.isNotEmpty()) { ... }`
+  single-branch render. Removed the 3-way `else if (tmdbEpisodes
+  .isNotEmpty())` and `else { EmptySeasonCard }` branches.
+- `seasonList` reverted to Xtream-keys-only (no fallback to
+  TMDB `seasons`). Series-tab and search-flow now show the
+  identical season chip list — only seasons the provider has
+  loaded.
+- `presetEpisodeText` state retained but never set — the modal
+  receives `""` so it falls back to its generic per-season
+  pre-fill, same as before v1.42.32.
+- `TmdbOnlyEpisodeRow` and `EmptySeasonCard` composables left in
+  the file but no longer called (warning, not error). Will sweep
+  them out in a future cleanup pass once we're sure the user is
+  happy with the rollback.
+
+**Mobile — `MobileSeriesDetailScreen.kt`**:
+- `seasonKeys` reverted to Xtream-only (`xtreamSeasonKeys` is
+  used directly instead of `xtreamSeasonKeys ∪ tmdbKeys`).
+- Removed the `tmdbSeason` state + `LaunchedEffect(tmdbTv?.id,
+  activeSeason)` season-detail fetch. TMDB is now only used for
+  the RPDB hero backdrop (via `tmdbTv.external_ids.imdb_id`).
+- Removed the 3-way episode render. Pure Xtream-only.
+- Removed `presetEpisodeText` state, `TmdbOnlyEpisodeRow`,
+  `EmptySeasonCard` mobile composables, and the `TmdbEpisode` /
+  `TmdbSeasonDetail` imports.
+
+### Kept
+- **`XtreamApi.resolveSeriesInfo`** disambiguating resolver. This
+  is the actual fix for the original Gold Rush bug — it walks
+  duplicate series_id entries with title-matching candidates,
+  parallel-fetches each, returns the first one with episodes.
+  Series-tab pays zero extra cost (the first call short-circuits).
+- **RPDB rating-baked backdrops** on the mobile hero — purely
+  decorative, doesn't affect playability.
+- **Top-bar/sidebar cleanup** from v1.42.34.
+
+### Build + deploy
+- `versionCode 235 → 236`, `versionName "1.42.35" → "1.42.36"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `de676eb635792860e08c4fbf19070be8`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+### Process learning for future agents
+**Important** — the user's "fix it so it always displays the
+episodes" was not a request for a new TMDB fallback feature. It
+was a bug report: search-flow wasn't displaying the episodes
+that Series-tab displays. The right fix was the disambiguating
+resolver (which v1.42.34/35 added). The TMDB fallback was scope
+creep that turned a regression-fix into a fundamentally
+different UX, which the user (correctly) rejected.
+
+When in doubt about the user's intent, ASK before introducing a
+new feature on top of a bug fix.
+
+
 ## v1.42.35 — 2026-04-27 (versionCode 235)  ⬅ LATEST  (optional)
 
 **P0 fix — round 2 of the Gold Rush "search shows REQUEST instead

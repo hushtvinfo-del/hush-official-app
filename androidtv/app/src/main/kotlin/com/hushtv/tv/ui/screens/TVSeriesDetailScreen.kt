@@ -173,12 +173,14 @@ fun TVSeriesDetailScreen(
     val castList = tmdbTv?.credits?.cast?.sortedBy { it.order }?.take(20).orEmpty()
     val trailerKey = TmdbService.pickTrailer(tmdbTv?.videos)
 
-    val seasonList = remember(xtreamEpisodesBySeason, tmdbTv) {
-        val keys = xtreamEpisodesBySeason.keys
+    val seasonList = remember(xtreamEpisodesBySeason) {
+        // Xtream-only — same as Series-tab. We don't blend TMDB
+        // seasons in even when Xtream returns empty, because then
+        // tapping those chips would show empty episodes which is
+        // worse than showing no chips at all.
+        xtreamEpisodesBySeason.keys
             .mapNotNull { it.toIntOrNull() }
             .sorted()
-        if (keys.isNotEmpty()) keys
-        else tmdbTv?.seasons?.map { it.season_number }?.filter { it > 0 }.orEmpty()
     }
 
     // ── Layout ───────────────────────────────────────────────
@@ -386,36 +388,23 @@ fun TVSeriesDetailScreen(
             }
 
             // ── Episode list ─────────────────────────────
-            //
-            // Three render paths in priority order:
-            //   1. Xtream has episodes for the selected season →
-            //      original full-fat row with thumbnail + play.
-            //   2. Xtream has NO episodes for this season but TMDB
-            //      does (e.g. brand-new just-airing season the
-            //      provider hasn't indexed yet, or a season the
-            //      provider hasn't been able to source) → render
-            //      TMDB episodes WITHOUT a play button. Click
-            //      opens the request modal pre-filled with the
-            //      season number.
-            //   3. Neither has episodes → friendly empty state
-            //      with the same request CTA.
-            //
-            // Previously path 2 + 3 collapsed to "render nothing",
-            // which made the entire Episodes section disappear and
-            // confused users who'd opened a series via Search and
-            // selected a season Xtream had no data for.
+            // Xtream-only — same flow the Series-tab uses. We
+            // intentionally do NOT render TMDB-fallback rows for
+            // seasons Xtream is missing; that confused users into
+            // thinking real library content was a request. If the
+            // user's provider doesn't have a season, that season
+            // simply doesn't appear in the chip row above (because
+            // Xtream's episode keys drive `seasonList`).
             val seasonKey = selectedSeasonNum?.toString()
             val xtEpisodes = xtreamEpisodesBySeason[seasonKey].orEmpty()
-            val tmdbEpisodes = tmdbSeason?.episodes
-                ?.filter { it.episode_number > 0 }
-                .orEmpty()
 
             if (xtEpisodes.isNotEmpty()) {
                 SSectionHeader("Episodes")
                 Spacer(Modifier.height(10.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     xtEpisodes.forEach { ep ->
-                        val tmdbEp = tmdbEpisodes.firstOrNull { it.episode_number == ep.episode_num }
+                        val tmdbEp = tmdbSeason?.episodes
+                            ?.firstOrNull { it.episode_number == ep.episode_num }
                         EpisodeRow(
                             xtream = ep,
                             tmdb = tmdbEp,
@@ -444,48 +433,11 @@ fun TVSeriesDetailScreen(
                     }
                 }
                 Spacer(Modifier.height(16.dp))
+                // Per-season footer CTA — covers the rare case where
+                // ONE specific episode in an indexed season is missing.
+                // Pre-fills the Request modal with the show + season.
                 RequestEpisodeCta(
                     onClick = { showRequestModal = true },
-                )
-                Spacer(Modifier.height(28.dp))
-            } else if (tmdbEpisodes.isNotEmpty()) {
-                SSectionHeader("Episodes")
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Your provider hasn't indexed Season $selectedSeasonNum yet — " +
-                        "here's what TMDB knows about. Tap any episode to request it.",
-                    color = TextSecondary,
-                    fontSize = 13.sp,
-                    fontFamily = Inter,
-                    lineHeight = 18.sp,
-                )
-                Spacer(Modifier.height(12.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    tmdbEpisodes.forEach { ep ->
-                        TmdbOnlyEpisodeRow(
-                            episode = ep,
-                            onRequest = {
-                                // Pre-fill with the EXACT episode the
-                                // user tapped, e.g. "E04 — The Last
-                                // Bonanza". The modal already takes
-                                // care of "Season N" via presetSeason,
-                                // so we only need the episode part
-                                // here.
-                                val name = ep.name.takeIf { it.isNotBlank() }
-                                    ?.let { " — $it" }.orEmpty()
-                                presetEpisodeText = "E${ep.episode_number}$name"
-                                showRequestModal = true
-                            },
-                        )
-                    }
-                }
-                Spacer(Modifier.height(28.dp))
-            } else {
-                SSectionHeader("Episodes")
-                Spacer(Modifier.height(10.dp))
-                EmptySeasonCard(
-                    seasonNum = selectedSeasonNum,
-                    onRequest = { showRequestModal = true },
                 )
                 Spacer(Modifier.height(28.dp))
             }

@@ -1,7 +1,6 @@
 package com.hushtv.tv.mobile
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,8 +29,6 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.RpdbService
-import com.hushtv.tv.data.TmdbEpisode
-import com.hushtv.tv.data.TmdbSeasonDetail
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.TmdbTv
 import com.hushtv.tv.data.XtreamApi
@@ -81,18 +78,11 @@ fun MobileSeriesDetailScreen(
     var episodesBySeason by remember { mutableStateOf<Map<String, List<XtreamEpisode>>>(emptyMap()) }
     var activeSeason by remember { mutableStateOf<String?>(null) }
 
-    // ── TMDB state — backfills missing seasons / episodes / RPDB id ──
+    // ── TMDB state — used only for the RPDB hero backdrop. ──
     var tmdbTv by remember { mutableStateOf<TmdbTv?>(null) }
-    var tmdbSeason by remember { mutableStateOf<TmdbSeasonDetail?>(null) }
 
     // ── Request modal state ──
     var showRequestModal by remember { mutableStateOf(false) }
-    // Captures the TMDB-only episode label the user tapped so the
-    // modal pre-fills with the EXACT episode rather than just the
-    // season. Reset on every modal dismiss path so the next generic
-    // "Missing an episode? Request it" footer button doesn't
-    // accidentally inherit it.
-    var presetEpisodeText by remember { mutableStateOf("") }
 
     // 1️⃣ Xtream series_info — primary data source.
     LaunchedEffect(playlistId, seriesId) {
@@ -122,8 +112,11 @@ fun MobileSeriesDetailScreen(
         loading = false
     }
 
-    // 2️⃣ TMDB show detail — search by name, fetch detail for backdrop,
-    // imdb_id and full season list. Fires once per series visit.
+    // 2️⃣ TMDB show detail — search by name. Used ONLY for the
+    // backdrop hero (RPDB rating-baked artwork) and IMDb id. We
+    // don't blend TMDB seasons / episodes into the series detail —
+    // user wants Search and Series-tab to behave identically, and
+    // Series-tab is purely Xtream-driven.
     LaunchedEffect(seriesName) {
         runCatching {
             withContext(Dispatchers.IO) {
@@ -133,46 +126,10 @@ fun MobileSeriesDetailScreen(
         }.onSuccess { tmdbTv = it }
     }
 
-    // Combined season keys: Xtream first (in their natural order),
-    // then any TMDB-only seasons appended after. Falling back entirely
-    // to TMDB when Xtream returned nothing keeps the UI useful even
-    // for series the provider hasn't indexed at all.
-    val seasonKeys = remember(xtreamSeasonKeys, tmdbTv) {
-        val tmdbKeys = tmdbTv?.seasons
-            ?.filter { it.season_number > 0 }
-            ?.map { it.season_number.toString() }
-            .orEmpty()
-        if (xtreamSeasonKeys.isEmpty()) tmdbKeys
-        else xtreamSeasonKeys + tmdbKeys.filter { it !in xtreamSeasonKeys }
-    }
-    // If we just learned about more seasons (TMDB) and the user
-    // hasn't picked one yet, pre-select the first.
-    LaunchedEffect(seasonKeys) {
-        if (activeSeason == null) activeSeason = seasonKeys.firstOrNull()
-    }
-
-    // 3️⃣ TMDB season detail — fetches when active season changes so
-    // we have episode names + stills + overviews for the current
-    // season's TMDB-only fallback rows.
-    LaunchedEffect(tmdbTv?.id, activeSeason) {
-        val tvId = tmdbTv?.id
-        val seasonNum = activeSeason?.toIntOrNull()
-        if (tvId == null || seasonNum == null) {
-            tmdbSeason = null
-            return@LaunchedEffect
-        }
-        runCatching {
-            withContext(Dispatchers.IO) { TmdbService.getSeason(tvId, seasonNum) }
-        }.onSuccess { tmdbSeason = it }
-    }
-
     val currentSeason = activeSeason
     val xtEpisodes = if (currentSeason != null) {
         episodesBySeason[currentSeason].orEmpty()
     } else emptyList()
-    val tmdbEpisodes = tmdbSeason?.episodes
-        ?.filter { it.episode_number > 0 }
-        .orEmpty()
 
     // Backdrop URL: RPDB rating-baked → caller poster → null.
     val rpdbBackdrop = RpdbService.backgroundUrl(tmdbTv?.external_ids?.imdb_id)
@@ -247,7 +204,7 @@ fun MobileSeriesDetailScreen(
                         CircularProgressIndicator(color = Cyan)
                     }
                 }
-            } else if (seasonKeys.isEmpty()) {
+            } else if (xtreamSeasonKeys.isEmpty()) {
                 item {
                     Text(
                         "No episodes found for this series.",
@@ -258,13 +215,13 @@ fun MobileSeriesDetailScreen(
                 }
             } else {
                 // Season chip row.
-                if (seasonKeys.size > 1) {
+                if (xtreamSeasonKeys.size > 1) {
                     item {
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            items(seasonKeys, key = { it }) { s ->
+                            items(xtreamSeasonKeys, key = { it }) { s ->
                                 SeasonChip(
                                     label = "Season $s",
                                     selected = s == activeSeason,
@@ -277,7 +234,7 @@ fun MobileSeriesDetailScreen(
                     item { Spacer(Modifier.height(8.dp)) }
                 }
 
-                // ── Episode list — 3-way render ──
+                // ── Episode list — Xtream-only, like Series-tab. ──
                 if (xtEpisodes.isNotEmpty()) {
                     items(xtEpisodes, key = { "xt-${it.id}-${it.episode_num}" }) { ep ->
                         Box(Modifier.padding(horizontal = 12.dp)) {
@@ -309,44 +266,6 @@ fun MobileSeriesDetailScreen(
                                     ),
                                 )
                             }
-                        }
-                    }
-                } else if (tmdbEpisodes.isNotEmpty()) {
-                    // TMDB-only fallback — provider hasn't indexed
-                    // this season yet. Tapping any row pre-fills the
-                    // request modal with the exact episode.
-                    item {
-                        Text(
-                            "Your provider hasn't indexed Season $currentSeason yet — " +
-                                "tap any episode to request it.",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp,
-                            modifier = Modifier
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
-                    items(
-                        tmdbEpisodes,
-                        key = { "tmdb-${it.id}-${it.episode_number}" },
-                    ) { ep ->
-                        Box(Modifier.padding(horizontal = 12.dp)) {
-                            TmdbOnlyEpisodeRow(ep) {
-                                val name = ep.name.takeIf { it.isNotBlank() }
-                                    ?.let { " — $it" }.orEmpty()
-                                presetEpisodeText = "E${ep.episode_number}$name"
-                                showRequestModal = true
-                            }
-                        }
-                    }
-                } else {
-                    item {
-                        Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                            EmptySeasonCard(
-                                seasonNum = currentSeason,
-                                onRequest = { showRequestModal = true },
-                            )
                         }
                     }
                 }
@@ -406,20 +325,17 @@ fun MobileSeriesDetailScreen(
             presetType = "series",
             presetTitle = seriesName,
             presetSeason = currentSeason?.let { "Season $it" }.orEmpty(),
-            presetEpisode = presetEpisodeText,
+            presetEpisode = "",
             playlistId = playlistId,
             onDismiss = {
                 showRequestModal = false
-                presetEpisodeText = ""
             },
             onViewMyRequests = {
                 showRequestModal = false
-                presetEpisodeText = ""
                 nav.navigate("mrequests/$playlistId")
             },
             onAlreadyAvailable = { entry ->
                 showRequestModal = false
-                presetEpisodeText = ""
                 if (entry.kind == "series") {
                     nav.navigate(
                         mobileSeriesRoute(
@@ -529,143 +445,5 @@ private fun EpisodeRow(ep: XtreamEpisode, onPlay: () -> Unit) {
                 )
             }
         }
-    }
-}
-
-/**
- * TMDB-only episode row — shown when the user's Xtream provider
- * has no episodes for the active season (e.g. a season just-airing
- * the provider hasn't indexed yet). Same shape as the playable
- * [EpisodeRow] but the corner badge says REQUEST instead of PLAY,
- * and tapping calls back to the request modal handler with the
- * exact episode label captured.
- */
-@Composable
-private fun TmdbOnlyEpisodeRow(
-    ep: TmdbEpisode,
-    onRequest: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 5.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0x14FFFFFF))
-            .border(1.dp, Color(0x3306B6D4), RoundedCornerShape(10.dp))
-            .clickable(onClick = onRequest)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(width = 92.dp, height = 54.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF1F2937)),
-            contentAlignment = Alignment.Center,
-        ) {
-            val still = TmdbService.img(ep.still_path, "w300")
-            if (!still.isNullOrBlank()) {
-                AsyncImage(
-                    model = still,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Text(
-                    "E${ep.episode_number}",
-                    color = Color(0xFF94A3B8),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Black,
-                )
-            }
-            // REQUEST badge top-left so the row reads as
-            // "tap to request" rather than "tap to play".
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(4.dp)
-                    .background(Color(0xCC05080F), RoundedCornerShape(4.dp))
-                    .border(1.dp, Cyan.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 5.dp, vertical = 1.dp),
-            ) {
-                Text(
-                    "REQUEST",
-                    color = Cyan,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.1.sp,
-                )
-            }
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            val name = ep.name.ifBlank { "Episode ${ep.episode_number}" }
-            Text(
-                "E${ep.episode_number} · $name",
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val plot = ep.overview.orEmpty()
-            if (plot.isNotBlank()) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    plot,
-                    color = Color(0xFF94A3B8),
-                    fontSize = 11.sp,
-                    lineHeight = 14.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            val airDate = ep.air_date.orEmpty()
-            if (airDate.isNotBlank()) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    airDate,
-                    color = Cyan,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-        }
-    }
-}
-
-/**
- * Empty-state card shown when neither Xtream nor TMDB has any
- * episode metadata for the currently-selected season. Tapping
- * opens the generic per-season request modal.
- */
-@Composable
-private fun EmptySeasonCard(
-    seasonNum: String?,
-    onRequest: () -> Unit,
-) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0x08FFFFFF))
-            .border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(10.dp))
-            .clickable(onClick = onRequest)
-            .padding(16.dp),
-    ) {
-        Text(
-            "No episodes for Season ${seasonNum ?: "—"} yet",
-            color = Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Black,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Your provider hasn't loaded this season into the catalog. Tap to ask our team to add it.",
-            color = Color(0xFF94A3B8),
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-        )
     }
 }

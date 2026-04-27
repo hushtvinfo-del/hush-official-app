@@ -1,10 +1,10 @@
 {
-  "versionCode": 235,
-  "versionName": "1.42.35",
+  "versionCode": 236,
+  "versionName": "1.42.36",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "URGENT FIX (round 2): searching a series like Gold Rush and opening it now correctly resolves to your library's playable episodes. The disambiguator now uses the same proven TitleMatcher.isStrongMatch logic that powers the Already-In-Library badge, and runs all candidates in parallel so it's as fast as a single network call."
+    "FIXED: Search → series now behaves IDENTICALLY to opening it from the Series tab. Removed the TMDB-fallback rows entirely — series detail is pure Xtream-only, just like the Series tab. Disambiguating resolver remains so search lands on the right series_id with the right episodes."
   ]
 }
