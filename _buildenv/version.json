@@ -1,10 +1,10 @@
 {
-  "versionCode": 236,
-  "versionName": "1.42.36",
+  "versionCode": 237,
+  "versionName": "1.42.37",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "FIXED: Search → series now behaves IDENTICALLY to opening it from the Series tab. Removed the TMDB-fallback rows entirely — series detail is pure Xtream-only, just like the Series tab. Disambiguating resolver remains so search lands on the right series_id with the right episodes."
+    "FIXED for real this time: searching a series like Gold Rush now finds the same playable episodes Series-tab shows. Resolver now ALSO walks every series category (in parallel) — some Xtream providers expose the canonical series_id only via per-category calls, not the no-category list."
   ]
 }

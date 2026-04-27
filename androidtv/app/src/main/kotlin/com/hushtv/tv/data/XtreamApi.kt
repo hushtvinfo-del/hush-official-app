@@ -245,7 +245,7 @@ object XtreamApi {
         password: String,
         seriesId: String,
         seriesName: String,
-        maxAttempts: Int = 6,
+        maxAttempts: Int = 8,
     ): ResolvedSeries = coroutineScope {
         val first = getSeriesInfo(host, username, password, seriesId)
         if (!first.episodes.isNullOrEmpty()) {
@@ -255,29 +255,49 @@ object XtreamApi {
             return@coroutineScope ResolvedSeries(seriesId, first)
         }
 
-        val all = runCatching { getAllStreams(host, username, password, "series") }
-            .getOrDefault(emptyList())
+        // Build the candidate pool from BOTH sources in parallel:
+        //   • `getAllStreams("series")` — the no-category fast list,
+        //     same data the search screen uses.
+        //   • `getCategories("series")` + per-category fetches —
+        //     some providers expose series under category-specific
+        //     calls with a DIFFERENT series_id than the no-category
+        //     call returns. The Series-tab UI uses these per-category
+        //     calls; if those land users on the canonical id while
+        //     `getAllStreams` lands them on a stale dupe, we have to
+        //     consult the per-category list to recover.
+        // Both sources run concurrently; we union their results
+        // before walking title matches.
+        val allDeferred = async {
+            runCatching { getAllStreams(host, username, password, "series") }
+                .getOrDefault(emptyList())
+        }
+        val byCategoryDeferred = async {
+            val cats = runCatching { getCategories(host, username, password, "series") }
+                .getOrDefault(emptyList())
+            if (cats.isEmpty()) emptyList()
+            else cats.map { cat ->
+                async {
+                    runCatching {
+                        getStreamsForCategory(
+                            host, username, password, "series", cat.category_id,
+                        )
+                    }.getOrDefault(emptyList())
+                }
+            }.awaitAll().flatten()
+        }
+        val pool = (allDeferred.await() + byCategoryDeferred.await())
+            .filter { it.kind == "series" && it.seriesId > 0 }
+            .distinctBy { it.seriesId }
 
-        // Build a TitleMatcher index over the catalogue and select
-        // every entry that passes `isStrongMatch` against the series
-        // name. This honours containment + word-count gates so
-        // "Gold Rush" matches the bare-titled entry but NOT "Gold
-        // Rush: White Water" (different normalised words and the
-        // word-count gate would also reject the colon-suffix when
-        // years differ).
-        val seriesIndex = com.hushtv.tv.data.TitleMatcher.buildIndex(
-            all.filter { it.kind == "series" && it.seriesId > 0 }
-        ) { it.title }
-
+        // Title-match filter — exact normalised match (covers short
+        // titles where the 3-word containment gate would over-reject)
+        // OR `isStrongMatch` for longer titles (containment + year
+        // gate).
+        val seriesIndex = com.hushtv.tv.data.TitleMatcher.buildIndex(pool) { it.title }
         val needleNorm = com.hushtv.tv.data.TitleMatcher.normalize(seriesName)
 
         val candidateIds = seriesIndex
             .asSequence()
-            // Strong-match (containment + year gate) gives us
-            // permissive behaviour where the user's library has
-            // "Gold Rush (2010)" + "Gold Rush". Plus we still allow
-            // pure exact-normalised matches even for short 1-2 word
-            // titles where isStrongMatch's 3-word gate would reject.
             .filter { entry ->
                 entry.normalized == needleNorm ||
                     com.hushtv.tv.data.TitleMatcher.isStrongMatch(
@@ -297,8 +317,7 @@ object XtreamApi {
             return@coroutineScope ResolvedSeries(seriesId, first)
         }
 
-        // Parallel fan-out — first non-empty result wins. Worst-case
-        // wait ≈ ONE network round-trip instead of N sequential ones.
+        // Parallel fan-out — first non-empty result wins.
         val deferreds = candidateIds.map { candidate ->
             async {
                 val info = runCatching {

@@ -1,5 +1,73 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.37 — 2026-04-27 (versionCode 237)  ⬅ LATEST  (optional)
+
+**Round 3 of the Gold Rush "Search opens series → no episodes"
+bug.** v1.42.34/35 added a disambiguating resolver that walked
+duplicate `series_id` candidates from `getAllStreams("series")`
+(the no-category call). User confirmed v1.42.36 STILL didn't
+fix it — opening Gold Rush via Search showed only Cast, no
+seasons row, no episodes.
+
+### Real root cause
+Some Xtream providers (apparently the user's) return DIFFERENT
+sets of `series_id`s from the no-category list vs.
+per-category calls. Specifically:
+- `get_series` (no category) returns ONE series_id for "Gold
+  Rush" — the stale duplicate that has empty episodes.
+- `get_series?category_id=X` (per category) returns the
+  CANONICAL series_id with episodes — but only when you query
+  the right category.
+
+Series-tab works because users navigate via Reality →
+Gold Rush → series_id from `getStreamsForCategory(catId)` —
+canonical id. Search → series_id from `getAllStreams` —
+stale dupe. My v1.42.34/35 disambiguator only consulted
+`getAllStreams` for candidates, so when the canonical id is
+ONLY exposed under a specific category, my candidate pool
+literally didn't contain it.
+
+### Fix — `XtreamApi.resolveSeriesInfo()` round 3
+Candidate pool now built from BOTH sources in parallel:
+1. `getAllStreams("series")` (the no-category list).
+2. `getCategories("series")` followed by
+   `getStreamsForCategory("series", catId)` for every category,
+   all fetched concurrently via `async{}.awaitAll()`.
+
+Both sources are unioned, deduped by `seriesId`, then walked
+through the same `TitleMatcher`-based filter. First non-empty
+`getSeriesInfo` response wins. `maxAttempts` raised to 8 since
+the union pool may have more candidates than the single source.
+
+### Cost analysis
+Only fires on the buggy path (when the original `seriesId`
+returns empty). On a cold cache:
+- 1 fetch for `getAllStreams`.
+- 1 fetch for `getCategories` + N parallel for category lists
+  (typical N = 5-15 for a TV-shows-only deployment, all in
+  flight at once).
+- Up to 8 parallel `getSeriesInfo` retries.
+Worst-case wait ≈ 2-3 sequential round-trips total.
+
+Series-tab pays exactly zero extra cost — the first
+`getSeriesInfo` short-circuits because the user navigated to
+the canonical id directly.
+
+### Build + deploy
+- `versionCode 236 → 237`, `versionName "1.42.36" → "1.42.37"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `58dd5835960b58b6bdd5467a8ec4ce9a`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+### Process learning #2
+When a recurring "search vs series-tab show different things"
+bug presents itself, don't just check the no-category catalog —
+also check the per-category catalog. Some Xtream providers
+genuinely return different data per call signature. The
+resolver now defends against both shapes.
+
+
 ## v1.42.36 — 2026-04-27 (versionCode 236)  ⬅ LATEST  (optional)
 
 **Reverted the TMDB fallback feature.** I misread the user's
