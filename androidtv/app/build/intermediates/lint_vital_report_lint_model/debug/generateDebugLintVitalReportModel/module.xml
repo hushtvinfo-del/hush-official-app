@@ -6,7 +6,7 @@
     maven="HushTV:app:unspecified"
     agpVersion="8.5.2"
     buildFolder="build"
-    bootClassPath="/opt/android-sdk/platforms/android-34/android.jar:/opt/android-sdk/build-tools/34.0.0/core-lambda-stubs.jar"
+    bootClassPath="/app/_buildenv/android-sdk/platforms/android-34/android.jar:/app/_buildenv/android-sdk/build-tools/34.0.0/core-lambda-stubs.jar"
     javaSourceLevel="17"
     compileTarget="android-34"
     neverShrinking="true">

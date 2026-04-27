@@ -1,10 +1,10 @@
 {
-  "versionCode": 223,
-  "versionName": "1.42.23",
+  "versionCode": 224,
+  "versionName": "1.42.24",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Tiny version badge in the bottom-right of the TV home and the top-right of the mobile home — at-a-glance way to verify which build you're on. No more 'did the OTA update?' guesswork."
+    "Mobile home Hub now fits all 3 sections (Channel History · Continue Watching · My Requests) on one screen — no more scrolling. Tighter title, smaller cards everywhere, less breathing room between sections."
   ]
 }

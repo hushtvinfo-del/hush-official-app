@@ -210,25 +210,52 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
             pageSpacing = 0.dp,
         ) { pageIdx ->
             val def = pages[pageIdx]
-            // Title block re-used by each page.
+            // Title block re-used by each page. The Hub gets a more
+            // compact variant so all 3 sections fit on one screen
+            // without scrolling — only Hub needs to be dense, the
+            // other pages are single-purpose grids that look right
+            // with the larger title.
             val titleBlock: @Composable () -> Unit = {
-                Column(Modifier.padding(horizontal = 20.dp)) {
-                    Text(
-                        def.kicker,
-                        color = def.accent,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        def.title,
-                        color = Color.White,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Black,
-                        lineHeight = 30.sp,
-                    )
-                    Spacer(Modifier.height(16.dp))
+                if (def.id == "hub") {
+                    // Just an eyebrow — no big "For You" headline.
+                    Row(
+                        Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            def.title,
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            def.kicker,
+                            color = def.accent,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.6.sp,
+                        )
+                    }
+                } else {
+                    Column(Modifier.padding(horizontal = 20.dp)) {
+                        Text(
+                            def.kicker,
+                            color = def.accent,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 2.sp,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            def.title,
+                            color = Color.White,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Black,
+                            lineHeight = 30.sp,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                    }
                 }
             }
 
@@ -286,8 +313,8 @@ private fun HomeHubPage(
 
     androidx.compose.foundation.lazy.LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 0.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        contentPadding = PaddingValues(top = 0.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item("title") { titleBlock() }
 
@@ -299,7 +326,7 @@ private fun HomeHubPage(
             item("ch_row") {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(channelHistory, key = { "ch-${it.first}" }) { (sid, meta) ->
                         HubChannelTile(
@@ -333,7 +360,7 @@ private fun HomeHubPage(
             item("cw_row") {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(cwEntries, key = { "cw-${it.kind}-${it.streamId}" }) { e ->
                         HubCwCard(
@@ -520,11 +547,11 @@ private fun HubCwCard(
 ) {
     Box(
         Modifier
-            .width(180.dp)
-            .height(108.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .width(140.dp)
+            .height(80.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(Color(0xFF0F172A))
-            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(14.dp))
+            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongPress),
     ) {
         if (!entry.poster.isNullOrBlank()) {
@@ -547,7 +574,7 @@ private fun HubCwCard(
         Box(
             Modifier
                 .align(Alignment.Center)
-                .size(40.dp)
+                .size(28.dp)
                 .clip(CircleShape)
                 .background(Color(0xCC06B6D4)),
             contentAlignment = Alignment.Center,
@@ -555,23 +582,23 @@ private fun HubCwCard(
             Icon(
                 Icons.Default.PlayArrow, null,
                 tint = Color.White,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(18.dp),
             )
         }
         Column(
             Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
             Text(
                 entry.title,
-                color = Color.White, fontSize = 11.sp,
+                color = Color.White, fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             if (entry.durationMs > 0) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(3.dp))
                 val pct = (entry.positionMs.toFloat() /
                     entry.durationMs.toFloat()).coerceIn(0f, 1f)
                 Box(

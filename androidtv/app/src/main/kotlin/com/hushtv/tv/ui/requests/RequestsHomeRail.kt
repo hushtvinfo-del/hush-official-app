@@ -154,7 +154,7 @@ fun RequestsHomeRail(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(top = if (isTv) 12.dp else 14.dp, bottom = if (isTv) 12.dp else 18.dp),
+            .padding(top = if (isTv) 12.dp else 8.dp, bottom = if (isTv) 12.dp else 10.dp),
     ) {
         // ── Hairline divider, full-width ──
         Box(
@@ -163,7 +163,7 @@ fun RequestsHomeRail(
                 .height(1.dp)
                 .background(Color(0x14FFFFFF)),
         )
-        Spacer(Modifier.height(if (isTv) 14.dp else 12.dp))
+        Spacer(Modifier.height(if (isTv) 14.dp else 8.dp))
 
         // ── Section header ──
         Row(
@@ -196,7 +196,7 @@ fun RequestsHomeRail(
             ViewAllChip(onViewAll, isTv = isTv)
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(if (isTv) 10.dp else 6.dp))
 
         // ── Cards ──
         LazyRow(
@@ -289,7 +289,7 @@ private fun BackdropRequestCard(
 ) {
     val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
-    val cardWidth = if (isTv) 320.dp else 270.dp
+    val cardWidth = if (isTv) 320.dp else 200.dp
     // 16:9 — same ratio TMDB uses for backdrops, looks cinematic.
     val cardHeight = cardWidth * 9f / 16f
 

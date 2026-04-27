@@ -1,5 +1,54 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.24 — 2026-04-27 (versionCode 224)  ⬅ LATEST  (optional)
+
+**Mobile home Hub — fits all 3 sections on one screen.** User
+showed a screenshot where the "For You" hub had Channel History
++ Continue Watching + half of My Requests, with the rest cut
+off below the fold. Tightened every dimension so all three
+rails fit in the typical phone viewport with no scroll.
+
+### Diet
+- `MobileHomeScreen.kt`
+  - Hub-only compact title block: just an inline 18 sp title +
+    9 sp eyebrow on one row, replacing the 26 sp big "For You"
+    headline + 10 sp eyebrow + 16 sp trailing spacer that the
+    other pages keep.
+  - LazyColumn vertical arrangement: 20 dp → 14 dp.
+  - Channel rail item width: 160 dp → 96 dp.
+    - Aspect ratio 16:10 → 1:1 square (logo-first, no stretch).
+    - Padding 12 dp → 8 dp; initials 18 sp → 14 sp; label
+      12 sp → 10 sp.
+  - CW card: 180×108 dp → 140×80 dp.
+    - Play badge 40 dp → 28 dp; icon 24 dp → 18 dp.
+    - Title 11 sp → 10 sp; padding 10/8 dp → 8/6 dp.
+  - Channel + CW LazyRow horizontal arrangement: 12 dp → 10 dp.
+- `ui/requests/RequestsHomeRail.kt`
+  - Mobile card width: 270 dp → 200 dp (TV stays 320 dp).
+    Card stays 16:9 so height proportionally drops 152 → 112 dp.
+  - Section vertical padding: top 14 dp → 8 dp; bottom 18 dp →
+    10 dp; intra-spacer between divider and label 12 dp → 8 dp;
+    intra-spacer below label 10 dp → 6 dp.
+
+### Result (approx vertical budget on a typical 800 dp phone)
+| Block | Before | After |
+|-------|--------|-------|
+| Title block | 78 dp | 30 dp |
+| Channel History rail | 196 dp | 134 dp |
+| Continue Watching rail | 144 dp | 116 dp |
+| My Requests rail | 190 dp | 138 dp |
+| Section gaps | 60 dp (3×20) | 42 dp (3×14) |
+| **Total** | **668 dp** | **460 dp** |
+That's 30 % shorter — leaves ~340 dp of room on a typical 800 dp
+viewport for the top header + bottom nav, no scrolling needed.
+
+### Build + deploy
+- `versionCode 223 → 224`, `versionName "1.42.23" → "1.42.24"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. Symlink ensures
+  both `hushtv.apk` and `HushTV.apk` URLs are in sync.
+
+
 ## v1.42.23 — 2026-04-27 (versionCode 223)  ⬅ LATEST  (optional)
 
 **Version badge on home screens.** Future-proofs against another
