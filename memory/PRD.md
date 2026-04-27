@@ -1,5 +1,74 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.38 — 2026-04-27 (versionCode 238)  ⬅ LATEST  (optional)
+
+**Round 4 fix for the "Search → series → no episodes" bug.**
+User confirmed v1.42.37 still didn't fix it AND clarified that
+the bug affects EVERY series accessed via Search, not just
+Gold Rush.
+
+### New root-cause theory
+Many Xtream providers split a single show into MULTIPLE per-season
+series entries — e.g. "Gold Rush S01", "Gold Rush S02 2011",
+"Gold Rush US S03 HD" — instead of one bare "Gold Rush". When
+search lands on entry "Gold Rush S01" with `series_id` X (and X
+returns empty episodes), my v1.42.37 disambiguator was looking for
+candidates whose normalised title equalled `"gold rush"` exactly.
+None of the per-season entries match, so the candidate list was
+always empty.
+
+`isStrongMatch`'s containment fallback also rejects 2-word
+needles (`"Gold Rush"` is 2 words; the gate requires both sides
+to have ≥3 normalised words to consider containment). So
+"Gold Rush" had a hard time finding ANY match.
+
+### Fix — `XtreamApi.resolveSeriesInfo()` round 4
+Added a third matching tier to the candidate filter — **token
+subsequence**. The needle's normalised tokens are matched
+against contiguous runs of the library entry's normalised
+tokens:
+
+```kotlin
+fun tokenSubsequence(libNorm: String): Boolean {
+    val libTokens = libNorm.split(' ').filter { it.isNotBlank() }
+    if (libTokens.size < needleTokens.size) return false
+    for (i in 0..libTokens.size - needleTokens.size) {
+        if (needleTokens.indices.all { libTokens[i + it] == needleTokens[it] }) {
+            return true
+        }
+    }
+    return false
+}
+```
+
+For needle `"gold rush"` (tokens: `[gold, rush]`):
+- `"gold rush s01"` → tokens `[gold, rush, s01]` → at i=0,
+  `libTokens[0]=="gold" && libTokens[1]=="rush"` ✓ MATCH.
+- `"gold rush s02 2011"` → ✓ MATCH.
+- `"gold rush us s03 hd"` → ✓ MATCH.
+- `"hot pursuit gold"` → no contiguous "gold rush" run → no match.
+- `"gold star rush"` → no match (not contiguous).
+
+Combined with the existing exact-normalised + isStrongMatch
+tiers, this should finally find the canonical id(s) regardless
+of which Xtream-provider naming convention is in use.
+
+### Process learning #3
+The previous fixes assumed the user's library had a SINGLE bare
+entry per show with multiple duplicates ("Gold Rush" × N). The
+actual library shape was likely SPLIT-PER-SEASON
+("Gold Rush S01", "Gold Rush S02", …). The matching strategy
+needed to account for the fact that the canonical id might be
+attached to a per-season entry, not a bare-titled one.
+
+### Build + deploy
+- `versionCode 237 → 238`, `versionName "1.42.37" → "1.42.38"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `93719213535b694ad45328b0dbe25c9c`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.37 — 2026-04-27 (versionCode 237)  ⬅ LATEST  (optional)
 
 **Round 3 of the Gold Rush "Search opens series → no episodes"

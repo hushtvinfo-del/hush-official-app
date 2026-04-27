@@ -289,12 +289,36 @@ object XtreamApi {
             .filter { it.kind == "series" && it.seriesId > 0 }
             .distinctBy { it.seriesId }
 
-        // Title-match filter — exact normalised match (covers short
-        // titles where the 3-word containment gate would over-reject)
-        // OR `isStrongMatch` for longer titles (containment + year
-        // gate).
+        // Title-match filter — three tiers, in order:
+        //   1. Exact normalised match (covers bare-titled entries
+        //      and short titles where containment-with-year-gate
+        //      would over-reject).
+        //   2. `isStrongMatch` (containment + year gate, 3+ word
+        //      titles).
+        //   3. Token-subsequence containment — the needle's
+        //      normalised word sequence appears as a contiguous
+        //      run of words inside the library entry's normalised
+        //      title. Catches the very common Xtream shape where
+        //      series are split per-season ("Gold Rush S01",
+        //      "Gold Rush S02 2011", "Gold Rush US S03 HD") — none
+        //      of which match the bare "Gold Rush" needle via the
+        //      first two tiers, but all of which start with the
+        //      needle's tokens.
         val seriesIndex = com.hushtv.tv.data.TitleMatcher.buildIndex(pool) { it.title }
         val needleNorm = com.hushtv.tv.data.TitleMatcher.normalize(seriesName)
+        val needleTokens = needleNorm.split(' ').filter { it.isNotBlank() }
+
+        fun tokenSubsequence(libNorm: String): Boolean {
+            if (needleTokens.isEmpty()) return false
+            val libTokens = libNorm.split(' ').filter { it.isNotBlank() }
+            if (libTokens.size < needleTokens.size) return false
+            for (i in 0..libTokens.size - needleTokens.size) {
+                if ((0 until needleTokens.size).all { libTokens[i + it] == needleTokens[it] }) {
+                    return true
+                }
+            }
+            return false
+        }
 
         val candidateIds = seriesIndex
             .asSequence()
@@ -305,7 +329,8 @@ object XtreamApi {
                         tmdbYear = null,
                         libTitle = entry.raw,
                         libYear = entry.year,
-                    )
+                    ) ||
+                    tokenSubsequence(entry.normalized)
             }
             .map { it.payload.seriesId.toString() }
             .filter { it != seriesId }
