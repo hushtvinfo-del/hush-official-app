@@ -1,5 +1,71 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.31 — 2026-04-27 (versionCode 231)  ⬅ LATEST  (optional)
+
+**Two changes**: a P0 Series Detail bug fix + the rail-card RPDB
+backdrop swap.
+
+### 🔴 P0 fix — Series Detail "missing Episodes" bug
+User reported: searching a series like *Gold Rush* and clicking
+into a season showed seasons + cast but NO episodes section. Same
+series opened from the Series tab worked fine.
+
+**Root cause**: the screen had a single render path that hid the
+entire Episodes block when the user's Xtream provider had no
+episode data for the *selected* season. This happens routinely
+for newly-airing seasons (e.g. season 16 of a show currently on
+TV) where the provider hasn't indexed episodes yet, but TMDB
+already has them. The Series-tab path tended to land users on a
+season Xtream HAD indexed, while Search occasionally landed them
+on the latest season directly.
+
+**Fix** in `TVSeriesDetailScreen.kt`: replaced the single
+`if (xtEpisodes.isNotEmpty())` branch with a 3-way render:
+
+1. **Xtream has episodes** → existing fat row with thumbnail +
+   play button (unchanged).
+2. **Xtream empty, TMDB has episodes** → new `TmdbOnlyEpisodeRow`
+   composable. Same look as the Xtream row but with a small cyan
+   "REQUEST" badge top-left of the still, no play overlay, and
+   click opens the Request modal pre-filled with the series + the
+   current season number. Hairline header text above the list:
+   "Your provider hasn't indexed Season N yet — here's what TMDB
+   knows about. Tap any episode to request it."
+3. **Both empty** → new `EmptySeasonCard` — a focusable card that
+   says "No episodes for Season N yet" + "Tap to ask our team to
+   add it" and routes to the same Request modal.
+
+**Filter**: `tmdbEpisodes` now drops episodes with
+`episode_number == 0` (TMDB special "season 0" placeholders) so
+the user doesn't see phantom Episode 0 entries.
+
+### 🟡 RPDB backdrop on Request rail cards
+The detail page got RPDB ratings in v1.42.30. Now the rail cards
+on the Requests page itself show the RPDB `background-default`
+variant — IMDb / RT / Metacritic / TMDB scores baked into the 16:9
+backdrop strip.
+
+- `BackdropPosterCard` (in `TVRequestsScreen.kt`) now calls
+  `RequestPosterResolver.ensureImdbId(ctx, req)` from its
+  `LaunchedEffect(req.id)` so each rail card lazily backfills
+  its imdb_id on first scroll.
+- URL precedence: `RpdbService.backgroundUrl(imdbId)` →
+  `TmdbService.img(backdrop_path, "w780")` → poster fallback →
+  status-tinted gradient.
+- Same Coil `onError` swap-to-TMDB pattern as the detail screen
+  so a single-card RPDB 404 doesn't show a broken image.
+- `remember` keys on `(meta.imdbId, meta.backdropPath)` so we
+  reset the fallback state per-card when the user navigates back
+  to the rail with new metadata.
+
+### Build + deploy
+- `versionCode 230 → 231`, `versionName "1.42.30" → "1.42.31"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `70c218791646e3e694cca8076c490938`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.30 — 2026-04-27 (versionCode 230)  ⬅ LATEST  (optional)
 
 **RPDB rating-baked poster on Request Details.** User asked for

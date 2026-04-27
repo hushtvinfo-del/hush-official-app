@@ -659,6 +659,13 @@ private fun BackdropPosterCard(
     }
     LaunchedEffect(req.id) {
         if (meta == null) meta = RequestPosterResolver.resolveOrFetch(ctx, req)
+        // Enrich with imdbId so RPDB's rating-baked backdrop can
+        // take over from the plain TMDB backdrop. One-shot per
+        // request id thanks to the resolver's mutex de-dupe.
+        val enriched = RequestPosterResolver.ensureImdbId(ctx, req)
+        if (enriched != null && enriched.imdbId != meta?.imdbId) {
+            meta = enriched
+        }
     }
 
     val scale by animateFloatAsState(if (focused) 1.06f else 1f, tween(120))
@@ -681,15 +688,26 @@ private fun BackdropPosterCard(
             .focusable()
             .clickableWithEnterAndLongPress(onClick = onClick, onLongPress = onLongPress),
     ) {
-        // Backdrop image — falls back to solid status-tinted gradient.
-        val img = meta?.backdropPath?.let { TmdbService.img(it, "w780") }
+        // Backdrop image — prefer RPDB's rating-baked variant (IMDb,
+        // RT, Metacritic, TMDB scores embedded in the artwork itself)
+        // when we have an imdb_id; fall back to plain TMDB backdrop;
+        // fall back to status-tinted gradient. Coil's onError flips
+        // us to TMDB if RPDB 404s for a particular title.
+        val tmdbBackdrop = meta?.backdropPath?.let { TmdbService.img(it, "w780") }
             ?: meta?.posterPath?.let { TmdbService.img(it, "w780") }
-        if (img != null) {
+        val rpdbBackdrop = com.hushtv.tv.data.RpdbService.backgroundUrl(meta?.imdbId)
+        var useTmdbBackdrop by remember(meta?.imdbId, meta?.backdropPath) {
+            mutableStateOf(rpdbBackdrop.isNullOrBlank())
+        }
+        val chosen = if (useTmdbBackdrop || rpdbBackdrop.isNullOrBlank()) tmdbBackdrop
+                     else rpdbBackdrop
+        if (chosen != null) {
             AsyncImage(
-                model = img,
+                model = chosen,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
+                onError = { useTmdbBackdrop = true },
             )
         } else {
             Box(

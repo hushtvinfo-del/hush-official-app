@@ -1,10 +1,11 @@
 {
-  "versionCode": 230,
-  "versionName": "1.42.30",
+  "versionCode": 231,
+  "versionName": "1.42.31",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Request details hero poster now uses RPDB's rating-baked variant — IMDb, Rotten Tomatoes, Metacritic and TMDB scores are printed right on the poster strip. Old requests lazy-enrich with the IMDb id the first time you open their detail page."
+    "Fixed: Series detail no longer hides the Episodes section when your provider hasn't indexed a season yet — now falls back to TMDB episodes with a Request CTA, or a friendly empty card if neither has data.",
+    "Request rail cards now show RPDB rating-baked backdrops (IMDb / RT / Metacritic / TMDB scores embedded right on the artwork) for at-a-glance ratings before you click in."
   ]
 }

@@ -372,9 +372,30 @@ fun TVSeriesDetailScreen(
             }
 
             // ── Episode list ─────────────────────────────
+            //
+            // Three render paths in priority order:
+            //   1. Xtream has episodes for the selected season →
+            //      original full-fat row with thumbnail + play.
+            //   2. Xtream has NO episodes for this season but TMDB
+            //      does (e.g. brand-new just-airing season the
+            //      provider hasn't indexed yet, or a season the
+            //      provider hasn't been able to source) → render
+            //      TMDB episodes WITHOUT a play button. Click
+            //      opens the request modal pre-filled with the
+            //      season number.
+            //   3. Neither has episodes → friendly empty state
+            //      with the same request CTA.
+            //
+            // Previously path 2 + 3 collapsed to "render nothing",
+            // which made the entire Episodes section disappear and
+            // confused users who'd opened a series via Search and
+            // selected a season Xtream had no data for.
             val seasonKey = selectedSeasonNum?.toString()
             val xtEpisodes = xtreamEpisodesBySeason[seasonKey].orEmpty()
-            val tmdbEpisodes = tmdbSeason?.episodes.orEmpty()
+            val tmdbEpisodes = tmdbSeason?.episodes
+                ?.filter { it.episode_number > 0 }
+                .orEmpty()
+
             if (xtEpisodes.isNotEmpty()) {
                 SSectionHeader("Episodes")
                 Spacer(Modifier.height(10.dp))
@@ -409,13 +430,37 @@ fun TVSeriesDetailScreen(
                     }
                 }
                 Spacer(Modifier.height(16.dp))
-                // Per-season footer CTA — for users whose Xtream
-                // provider is missing one or more episodes from this
-                // season. Pre-fills the request form with the show
-                // name + current season so the user only has to type
-                // which episode is missing.
                 RequestEpisodeCta(
                     onClick = { showRequestModal = true },
+                )
+                Spacer(Modifier.height(28.dp))
+            } else if (tmdbEpisodes.isNotEmpty()) {
+                SSectionHeader("Episodes")
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Your provider hasn't indexed Season $selectedSeasonNum yet — " +
+                        "here's what TMDB knows about. Tap any episode to request it.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    fontFamily = Inter,
+                    lineHeight = 18.sp,
+                )
+                Spacer(Modifier.height(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    tmdbEpisodes.forEach { ep ->
+                        TmdbOnlyEpisodeRow(
+                            episode = ep,
+                            onRequest = { showRequestModal = true },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(28.dp))
+            } else {
+                SSectionHeader("Episodes")
+                Spacer(Modifier.height(10.dp))
+                EmptySeasonCard(
+                    seasonNum = selectedSeasonNum,
+                    onRequest = { showRequestModal = true },
                 )
                 Spacer(Modifier.height(28.dp))
             }
@@ -695,6 +740,180 @@ private fun EpisodeFallback(num: Int) {
             fontSize = 18.sp,
             fontFamily = Inter,
             fontWeight = FontWeight.Black,
+        )
+    }
+}
+
+/**
+ * TMDB-only episode row — used when Xtream has no episode data for
+ * the selected season (e.g. brand-new airing season the provider
+ * hasn't indexed yet). Same layout as [EpisodeRow] but the click
+ * action opens the Request modal instead of the player, and the
+ * thumbnail overlay says "Request" rather than "Play".
+ */
+@Composable
+private fun TmdbOnlyEpisodeRow(
+    episode: TmdbEpisode,
+    onRequest: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.02f else 1f,
+        animationSpec = tween(90),
+        label = "tmdb-ep-scale",
+    )
+    val still = TmdbService.img(episode.still_path, "w300")
+    val airDate = episode.air_date.orEmpty().takeIf { it.isNotBlank() }
+    val runtime = episode.runtime?.takeIf { it > 0 }?.let { "${it}m" }.orEmpty()
+    val plot = episode.overview.orEmpty()
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .background(
+                if (focused) Cyan.copy(alpha = 0.16f) else Color(0x08FFFFFF),
+                RoundedCornerShape(10.dp),
+            )
+            .border(
+                2.dp,
+                if (focused) Cyan else Color.Transparent,
+                RoundedCornerShape(10.dp),
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickable { onRequest() }
+            .padding(10.dp),
+    ) {
+        Box(
+            Modifier
+                .size(width = 160.dp, height = 90.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(SurfaceNavy),
+        ) {
+            if (!still.isNullOrBlank()) {
+                SubcomposeAsyncImage(
+                    model = still,
+                    contentDescription = episode.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    error = { EpisodeFallback(episode.episode_number) },
+                    loading = { EpisodeFallback(episode.episode_number) },
+                )
+            } else {
+                EpisodeFallback(episode.episode_number)
+            }
+            // Subtle "not on provider" badge top-left so users
+            // immediately understand the row isn't directly playable.
+            Box(
+                Modifier
+                    .padding(6.dp)
+                    .background(Color(0xCC05080F), RoundedCornerShape(4.dp))
+                    .border(1.dp, Cyan.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    "REQUEST",
+                    color = Cyan,
+                    fontSize = 9.sp,
+                    fontFamily = Inter,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.2.sp,
+                )
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "E${episode.episode_number}",
+                    color = Cyan,
+                    fontSize = 11.sp,
+                    fontFamily = Inter,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.2.sp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    episode.name.ifBlank { "Episode ${episode.episode_number}" },
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontFamily = Inter,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
+            if (airDate != null || runtime.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    airDate?.let {
+                        Text(it, color = TextMuted, fontSize = 11.sp, fontFamily = Inter)
+                        if (runtime.isNotBlank()) SMetaDot()
+                    }
+                    if (runtime.isNotBlank()) {
+                        Text(runtime, color = TextMuted, fontSize = 11.sp, fontFamily = Inter)
+                    }
+                }
+            }
+            if (plot.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    plot,
+                    color = Color(0xFFB8BDC7),
+                    fontSize = 12.sp,
+                    fontFamily = Inter,
+                    lineHeight = 16.sp,
+                    maxLines = 2,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Friendly empty state used when neither Xtream nor TMDB has any
+ * episodes for the currently-selected season. Surfaces the same
+ * "Request" CTA the regular footer has.
+ */
+@Composable
+private fun EmptySeasonCard(
+    seasonNum: Int?,
+    onRequest: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(
+                if (focused) Cyan.copy(alpha = 0.16f) else Color(0x08FFFFFF),
+                shape,
+            )
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Cyan else Color(0x14FFFFFF),
+                shape = shape,
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickable { onRequest() }
+            .padding(20.dp),
+    ) {
+        Text(
+            "No episodes for Season ${seasonNum ?: "—"} yet",
+            color = TextPrimary,
+            fontSize = 16.sp,
+            fontFamily = Inter,
+            fontWeight = FontWeight.Black,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Your provider hasn't loaded this season into the catalog. " +
+                "Tap to ask our team to add it.",
+            color = TextSecondary,
+            fontSize = 13.sp,
+            fontFamily = Inter,
+            lineHeight = 18.sp,
         )
     }
 }
