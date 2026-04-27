@@ -1,5 +1,44 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.23 — 2026-04-27 (versionCode 223)  ⬅ LATEST  (optional)
+
+**Version badge on home screens.** Future-proofs against another
+"did you actually update?" deploy ambiguity.
+
+### Changes
+- `TVMainMenuScreen.kt`
+  - Added a tiny `Text("v${BuildConfig.VERSION_NAME} · #${BuildConfig.VERSION_CODE}", …)`
+    pinned to `Alignment.BottomEnd` of the outer `Box`. 9 sp,
+    `0x66FFFFFF` (low-contrast white), 18 dp / 12 dp safe-area
+    padding. Doesn't take focus, doesn't intercept any input.
+- `MobileHomeScreen.kt`
+  - Added a second-line under the playlist name in the top header,
+    same format. Stacked via `Column(horizontalAlignment = End)`.
+
+### Build environment fix
+- The build container has been recycling and wiping `/opt`
+  several times today, blowing away `/opt/android-sdk` and
+  `/opt/aapt2-wrapper`. Moved the entire build env to
+  `/app/_buildenv/` (which IS persistent):
+  - `/app/_buildenv/android-sdk/` (cmdline-tools + platform-tools
+    + platforms;android-34 + build-tools;34.0.0)
+  - `/app/_buildenv/aapt2-wrapper/aapt2` (QEMU x86_64 wrapper for
+    the bundled aapt2 binary).
+- `gradle.properties`: `android.aapt2FromMavenOverride` updated.
+- `local.properties`: `sdk.dir=/app/_buildenv/android-sdk`.
+- These should survive future container restarts. JDK 17 + the
+  amd64 multilib runtime and `qemu-user-static` still need a
+  one-shot `apt-get install` after each restart — that's a host
+  package, can't be moved to /app.
+
+### Build + deploy
+- `versionCode 222 → 223`, `versionName "1.42.22" → "1.42.23"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. Symlink
+  `hushtv.apk → HushTV.apk` (set up earlier today) means both
+  URLs serve the new build.
+
+
 ## DEPLOY FIX — 2026-04-27  ⚠ CRITICAL POSTMORTEM
 
 **All updates from v1.42.8 through v1.42.22 were silently going to

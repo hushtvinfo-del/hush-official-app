@@ -694,6 +694,23 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 },
             )
         }
+
+        // ─── Version badge ────────────────────────────────────────
+        // Tiny, very low-contrast text in the bottom-right corner so
+        // the user can verify at a glance which build is actually
+        // running. Doesn't take focus, doesn't intercept any input —
+        // purely informational. Solves the "did you actually update?"
+        // ambiguity that bit us during the v1.42.8→22 deploy bug.
+        Text(
+            "v${com.hushtv.tv.BuildConfig.VERSION_NAME} · #${com.hushtv.tv.BuildConfig.VERSION_CODE}",
+            color = Color(0x66FFFFFF),
+            fontSize = 9.sp,
+            fontFamily = Inter,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 18.dp, bottom = 12.dp),
+        )
     }
 }
 // End TVMainMenuScreen

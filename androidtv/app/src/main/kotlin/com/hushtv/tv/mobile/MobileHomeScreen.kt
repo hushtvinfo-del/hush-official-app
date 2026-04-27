@@ -165,13 +165,21 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
                 letterSpacing = 1.sp,
             )
             Spacer(Modifier.weight(1f))
-            Text(
-                playlist?.name ?: "",
-                color = Cyan,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.4.sp,
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    playlist?.name ?: "",
+                    color = Cyan,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.4.sp,
+                )
+                Text(
+                    "v${com.hushtv.tv.BuildConfig.VERSION_NAME} · #${com.hushtv.tv.BuildConfig.VERSION_CODE}",
+                    color = Color(0x66FFFFFF),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
 
         // ── Page dots ──
