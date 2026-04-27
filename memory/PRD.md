@@ -1,5 +1,62 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.26 — 2026-04-27 (versionCode 226)  ⬅ LATEST  (optional)
+
+**TV Requests page — full rebuild. Horizontal rail, no squish.**
+User rejected v1.42.25's split layout too: "card is compacted, you
+can't even see what it is." Replaced the 3-col grid with a single
+full-width horizontal rail of the same 320×180 dp cinematic
+backdrop cards used on the mobile hub rail.
+
+### Final layout (top → bottom on a 1920×1080 canvas)
+```
+  ┌────────────────────────────────────────────────────────────────┐
+  │  ← Back                                             ⟳ Refresh  │
+  │                                                                │
+  │  MY REQUESTS                                                   │
+  │  The Boys                     ← 36 sp Black, focused title     │
+  │  [ IN PROGRESS ]  Working on it. Hold tight.                   │
+  │                                                                │
+  │  [ + New request ]  [  Open details  ]                         │
+  │                                                                │
+  │  ( All · 12 )  ( Pending · 4 )  ( In Progress · 3 )  ...       │
+  │                                                                │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ──▶       │
+  │  │ Backdrop │ │ Backdrop │ │ Backdrop │ │ Backdrop │           │
+  │  │  card 1  │ │  card 2  │ │  card 3  │ │  card 4  │           │
+  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
+  └────────────────────────────────────────────────────────────────┘
+```
+D-pad RIGHT scrolls through every request — no vertical grid, no
+cut-offs, no cramming. Full-bleed TMDB backdrop of the focused
+card still paints the hero, double-gradient dimmed so the left
+column stays crisp.
+
+### Changes — `ui/requests/TVRequestsScreen.kt`
+- Removed the 640 dp split `Row`; back to a single `Column` stack.
+- Grid → `LazyRow` with `contentPadding(end = 40.dp)` so the last
+  card never pins against the right edge.
+- Card size locked to 320×180 dp (16:9) so they never collapse
+  when the list is short (was what caused the "squished" feel
+  in the 3-col grid when filtering down to 1-2 cards).
+- Title size 56 sp → 36 sp, 1 line with ellipsis. Still prominent
+  but never wraps into the status row.
+- Dropped the `RequestPosterGrid` + `EmptyState` full-screen
+  composables (dead code after the redesign). `EmptyStateInline`
+  still handles the "no requests yet" case inline in the rail
+  track.
+- Removed grid imports (`LazyVerticalGrid`, `GridCells`,
+  grid-specific `itemsIndexed`), swapped in list-level LazyRow +
+  `foundation.lazy.itemsIndexed`.
+
+### Build + deploy
+- `versionCode 225 → 226`, `versionName "1.42.25" → "1.42.26"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `5460f117182fce268a5d8495886a0a7f`, 17.69 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.25 — 2026-04-27 (versionCode 225)  ⬅ LATEST  (optional)
 
 **TV Requests page — proper split layout.** User reported the

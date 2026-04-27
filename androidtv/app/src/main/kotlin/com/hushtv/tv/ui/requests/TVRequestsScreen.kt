@@ -1,11 +1,7 @@
 package com.hushtv.tv.ui.requests
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -15,17 +11,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -626,33 +619,7 @@ private fun IconChip(
     }
 }
 
-/* ───────────────────────── Poster grid ───────────────────────── */
-
-@Composable
-private fun RequestPosterGrid(
-    items: List<ContentRequestApi.Request>,
-    firstCardFocus: FocusRequester,
-    onFocus: (ContentRequestApi.Request) -> Unit,
-    onClick: (ContentRequestApi.Request) -> Unit,
-    onLongPress: (ContentRequestApi.Request) -> Unit,
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(bottom = 28.dp),
-    ) {
-        itemsIndexed(items, key = { _, r -> r.id }) { idx, r ->
-            BackdropPosterCard(
-                req = r,
-                focusMod = if (idx == 0) Modifier.focusRequester(firstCardFocus) else Modifier,
-                onFocus = { onFocus(r) },
-                onClick = { onClick(r) },
-                onLongPress = { onLongPress(r) },
-            )
-        }
-    }
-}
+/* ───────────────────────── Poster card ───────────────────────── */
 
 @Composable
 private fun BackdropPosterCard(
@@ -835,49 +802,5 @@ private fun EmptyStateInline(onCreate: () -> Unit) {
                 fontSize = 13.sp,
             )
         }
-    }
-}
-
-@Composable
-private fun EmptyState(onCreate: () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 40.dp, bottom = 60.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier
-                .size(88.dp)
-                .clip(CircleShape)
-                .background(Color(0x22FFFFFF)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Default.Inbox, null,
-                tint = Cyan,
-                modifier = Modifier.size(40.dp),
-            )
-        }
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "No requests yet",
-            color = Color.White,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Black,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "When a movie or series isn't in our library, hit the + below to ask for it.",
-            color = Color(0xFF94A3B8),
-            fontSize = 14.sp,
-        )
-        Spacer(Modifier.height(20.dp))
-        PillButton(
-            icon = Icons.Default.Add,
-            label = "Create your first request",
-            primary = true,
-            onClick = onCreate,
-        )
     }
 }

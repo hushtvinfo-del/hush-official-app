@@ -1,10 +1,10 @@
 {
-  "versionCode": 225,
-  "versionName": "1.42.25",
+  "versionCode": 226,
+  "versionName": "1.42.26",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "TV Requests page is now a proper split layout — details and actions live on the left column, poster grid fills the right half. Cards are no longer cut off at the bottom."
+    "TV Requests page redesigned — cinematic billboard header (backdrop + focused title + status) on top, full-width horizontal rail of big 320×180 backdrop cards below. No more squished 3-col grid; D-pad RIGHT scrolls through every request."
   ]
 }
