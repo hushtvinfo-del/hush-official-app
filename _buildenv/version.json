@@ -1,11 +1,11 @@
 {
-  "versionCode": 231,
-  "versionName": "1.42.31",
+  "versionCode": 232,
+  "versionName": "1.42.32",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Fixed: Series detail no longer hides the Episodes section when your provider hasn't indexed a season yet — now falls back to TMDB episodes with a Request CTA, or a friendly empty card if neither has data.",
-    "Request rail cards now show RPDB rating-baked backdrops (IMDb / RT / Metacritic / TMDB scores embedded right on the artwork) for at-a-glance ratings before you click in."
+    "Fixed: Requests tab is now visible from EVERY top-level screen (Live TV, Movies, Series, Search, Collection Detail) — not just Home. Single source of truth so any tab added in the future shows up everywhere automatically.",
+    "TMDB-only episode rows now pre-fill the request modal with the exact episode you tapped (e.g. 'E04 — The Last Bonanza'), so submitting an unindexed-episode request is one tap."
   ]
 }

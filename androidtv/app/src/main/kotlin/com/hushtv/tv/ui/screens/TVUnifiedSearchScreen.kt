@@ -150,15 +150,10 @@ fun TVUnifiedSearchScreen(
     val filtering = query.trim() != debouncedQuery.trim() && query.isNotBlank()
 
     // ── Focus + TopNav ──
-    val tabs = remember {
-        listOf(
-            TopNavTab("home",   "Home",    Icons.Default.Home,       "menu/$playlistId"),
-            TopNavTab("live",   "Live TV", Icons.Default.Tv,         "browse/$playlistId/live"),
-            TopNavTab("movies", "Movies",  Icons.Default.Movie,      "browse/$playlistId/movie"),
-            TopNavTab("series", "Series",  Icons.Outlined.Slideshow, "browse/$playlistId/series"),
-            TopNavTab("search", "Search",  Icons.Default.Search,     "search/$playlistId"),
-        )
-    }
+    val tabs = com.hushtv.tv.ui.screens.home.topNavTabs(
+        playlistId = playlistId,
+        requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
+    )
     val homeFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }
     val firstLiveFocus = remember { FocusRequester() }

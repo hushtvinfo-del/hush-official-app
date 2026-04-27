@@ -92,6 +92,13 @@ fun TVSeriesDetailScreen(
     var tmdbTv by remember { mutableStateOf<TmdbTv?>(null) }
     var loading by remember { mutableStateOf(true) }
     var showRequestModal by remember { mutableStateOf(false) }
+    // When the user taps a TMDB-only episode row (i.e. one Xtream
+    // hasn't indexed yet), we capture which episode they tapped so
+    // the request modal pre-fills with `S{N}E{N} — Title` instead of
+    // making them type it. Cleared back to null when the modal
+    // closes so the next "Request a missing episode" button still
+    // opens a generic season-level request.
+    var presetEpisodeText by remember { mutableStateOf("") }
 
     // Selected season → fetched TMDB season detail (with episode stills)
     var selectedSeasonNum by remember { mutableStateOf<Int?>(null) }
@@ -450,7 +457,18 @@ fun TVSeriesDetailScreen(
                     tmdbEpisodes.forEach { ep ->
                         TmdbOnlyEpisodeRow(
                             episode = ep,
-                            onRequest = { showRequestModal = true },
+                            onRequest = {
+                                // Pre-fill with the EXACT episode the
+                                // user tapped, e.g. "E04 — The Last
+                                // Bonanza". The modal already takes
+                                // care of "Season N" via presetSeason,
+                                // so we only need the episode part
+                                // here.
+                                val name = ep.name.takeIf { it.isNotBlank() }
+                                    ?.let { " — $it" }.orEmpty()
+                                presetEpisodeText = "E${ep.episode_number}$name"
+                                showRequestModal = true
+                            },
                         )
                     }
                 }
@@ -485,14 +503,20 @@ fun TVSeriesDetailScreen(
             presetType = "series",
             presetTitle = displayTitle,
             presetSeason = selectedSeasonNum?.let { "Season $it" }.orEmpty(),
+            presetEpisode = presetEpisodeText,
             playlistId = playlistId,
-            onDismiss = { showRequestModal = false },
+            onDismiss = {
+                showRequestModal = false
+                presetEpisodeText = ""
+            },
             onViewMyRequests = {
                 showRequestModal = false
+                presetEpisodeText = ""
                 nav.navigate("myrequests/$playlistId")
             },
             onAlreadyAvailable = { entry ->
                 showRequestModal = false
+                presetEpisodeText = ""
                 if (entry.kind == "series") {
                     nav.navigate(
                         "series/$playlistId/${entry.seriesId}/${Uri.encode(entry.title)}"

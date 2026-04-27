@@ -24,7 +24,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.outlined.Slideshow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,6 +71,66 @@ data class TopNavTab(
      */
     val showBadge: Boolean = false,
 )
+
+/**
+ * Single source of truth for the top-nav tab list.
+ *
+ * EVERY top-level screen (Home, Live TV, Movies, Series, Requests,
+ * Search, Collection Detail, …) must call this rather than building
+ * its own list. Otherwise tabs added to one screen don't appear on
+ * the others — which is exactly how the Requests tab was missing
+ * from Live TV / Movies / Series in the past.
+ *
+ * Order, labels and icons are intentionally fixed. The only per-call
+ * variation is:
+ *   - [requestsBadge] : drives the pulsing cyan dot on the Requests
+ *     tab to surface unread status changes.
+ *   - [homeRoute] : Home is `null` on the Home screen itself (no-op
+ *     when tapped) but `"menu/{playlistId}"` everywhere else so the
+ *     user can navigate back home.
+ */
+@Composable
+fun topNavTabs(
+    playlistId: String,
+    requestsBadge: Boolean = false,
+    homeRoute: String? = "menu/$playlistId",
+): List<TopNavTab> = listOf(
+    TopNavTab("home",     "Home",     Icons.Default.Home,       homeRoute),
+    TopNavTab("live",     "Live TV",  Icons.Default.Tv,         "browse/$playlistId/live"),
+    TopNavTab("movies",   "Movies",   Icons.Default.Movie,      "browse/$playlistId/movie"),
+    TopNavTab("series",   "Series",   Icons.Outlined.Slideshow, "browse/$playlistId/series"),
+    TopNavTab("requests", "Requests", Icons.Default.Inbox,      "requests/$playlistId", showBadge = requestsBadge),
+    TopNavTab("search",   "Search",   Icons.Default.Search,     "search/$playlistId"),
+)
+
+/**
+ * Shared "are there unseen request status changes?" reactive state.
+ * Drives the cyan pulse dot on the Requests tab from EVERY top-level
+ * screen, not just Home — otherwise the dot disappears when you
+ * leave Home and the user has no idea anything's pending.
+ *
+ * Recomputes on every Lifecycle.Event.ON_RESUME so navigating into
+ * the Requests page (which calls markSeen) silences the dot
+ * immediately when the user comes back.
+ */
+@Composable
+fun rememberRequestsBadge(): Boolean {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    var tick by remember { mutableStateOf(0) }
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick += 1
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    return remember(tick) {
+        val cached = com.hushtv.tv.data.RequestCache.all()
+        com.hushtv.tv.data.RequestSeenStore
+            .filterUnseen(ctx, cached).isNotEmpty()
+    }
+}
 
 /**
  * Netflix-style top navigation bar.

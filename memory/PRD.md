@@ -1,5 +1,81 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.32 — 2026-04-27 (versionCode 232)  ⬅ LATEST  (optional)
+
+**Two changes**: a P0 nav fix the user flagged, plus the
+"one-tap request the exact episode" enhancement to the new TMDB
+fallback rows.
+
+### 🔴 P0 fix — Requests tab visible on EVERY top-level screen
+User screenshot showed Live TV / Movies / Series / Requests
+correctly on the Home top nav, but the Requests tab was MISSING
+when the user navigated into Live TV, Movies, Series, Search or
+the Collection-detail screens. Each of those screens had its own
+hand-built `listOf(TopNavTab(...), ...)` that pre-dated the
+Requests addition and was never backfilled.
+
+**Permanent fix** — single source of truth in
+`ui/screens/home/TopNavBar.kt`:
+
+```kotlin
+@Composable
+fun topNavTabs(
+    playlistId: String,
+    requestsBadge: Boolean = false,
+    homeRoute: String? = "menu/$playlistId",
+): List<TopNavTab> = listOf(
+    TopNavTab("home",     "Home",     Icons.Default.Home,       homeRoute),
+    TopNavTab("live",     "Live TV",  Icons.Default.Tv,         "browse/$playlistId/live"),
+    TopNavTab("movies",   "Movies",   Icons.Default.Movie,      "browse/$playlistId/movie"),
+    TopNavTab("series",   "Series",   Icons.Outlined.Slideshow, "browse/$playlistId/series"),
+    TopNavTab("requests", "Requests", Icons.Default.Inbox,      "requests/$playlistId", showBadge = requestsBadge),
+    TopNavTab("search",   "Search",   Icons.Default.Search,     "search/$playlistId"),
+)
+```
+
+All five callers (`TVMainMenuScreen`, `TVBrowseScreen`,
+`TVLiveBrowseScreen`, `TVCollectionDetailScreen`,
+`TVUnifiedSearchScreen`) now call this single helper instead of
+maintaining their own list. Adding a new tab in the future means
+editing exactly one file. No screen can ever fall behind again.
+
+**Bonus** — extracted `rememberRequestsBadge()` to the same file
+so the cyan "NEW" pulse dot now lights up on EVERY screen the
+moment a status changes server-side, not just Home. Previously
+the dot disappeared the second you left Home and the user had no
+visual cue that something new arrived.
+
+### 🟡 One-tap request the exact missing episode
+The TMDB-only episode rows shipped in v1.42.31 used to all open a
+generic "request a missing episode" modal — the user still had
+to type which episode they wanted. Now:
+
+- New `presetEpisodeText` state in `TVSeriesDetailScreen` captures
+  the tapped episode's display string (e.g. `"E04 — The Last
+  Bonanza"`).
+- `TmdbOnlyEpisodeRow.onRequest` builds the string from the
+  TMDB episode metadata and sets the state before opening the
+  modal.
+- `RequestContentSheet` already had a `presetEpisode` parameter
+  from previous work; we just plumbed it through.
+- `presetEpisodeText` is reset to `""` in all three modal-close
+  paths (Cancel, "view my requests", "already available navigate
+  away") so the next "Request missing episode" button (the
+  generic one in the season footer) doesn't accidentally inherit
+  the tapped-episode string.
+
+Result: tapping a single TMDB episode → modal pops with
+"Series: Gold Rush", "Season 16", "Episode: E04 — The Last
+Bonanza" all pre-filled, user just hits Submit.
+
+### Build + deploy
+- `versionCode 231 → 232`, `versionName "1.42.31" → "1.42.32"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `55bc6f14d719c81f0e6aed719dd48811`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.31 — 2026-04-27 (versionCode 231)  ⬅ LATEST  (optional)
 
 **Two changes**: a P0 Series Detail bug fix + the rail-card RPDB

@@ -625,35 +625,10 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     }
     } // end useSidebar branch
     // ── TOP NAV overlay ─────────────────────────────────────
-    val navTabs = remember {
-        listOf(
-            com.hushtv.tv.ui.screens.home.TopNavTab(
-                "home", "Home",
-                androidx.compose.material.icons.Icons.Default.Home,
-                "menu/$playlistId",
-            ),
-            com.hushtv.tv.ui.screens.home.TopNavTab(
-                "live", "Live TV",
-                androidx.compose.material.icons.Icons.Default.Tv,
-                "browse/$playlistId/live",
-            ),
-            com.hushtv.tv.ui.screens.home.TopNavTab(
-                "movies", "Movies",
-                androidx.compose.material.icons.Icons.Default.Movie,
-                "browse/$playlistId/movie",
-            ),
-            com.hushtv.tv.ui.screens.home.TopNavTab(
-                "series", "Series",
-                androidx.compose.material.icons.Icons.Outlined.Slideshow,
-                "browse/$playlistId/series",
-            ),
-            com.hushtv.tv.ui.screens.home.TopNavTab(
-                "search", "Search",
-                androidx.compose.material.icons.Icons.Default.Search,
-                "search/$playlistId",
-            ),
-        )
-    }
+    val navTabs = com.hushtv.tv.ui.screens.home.topNavTabs(
+        playlistId = playlistId,
+        requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
+    )
     val navHomeFocus = remember { FocusRequester() }
     Box(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
         com.hushtv.tv.ui.screens.home.TopNavBar(

@@ -168,15 +168,10 @@ fun TVCollectionDetailScreen(
     }
 
     val playlistIdForNav = playlistId
-    val tabs = remember {
-        listOf(
-            TopNavTab("home",   "Home",    Icons.Default.Home,       "menu/$playlistIdForNav"),
-            TopNavTab("live",   "Live TV", Icons.Default.Tv,         "browse/$playlistIdForNav/live"),
-            TopNavTab("movies", "Movies",  Icons.Default.Movie,      "browse/$playlistIdForNav/movie"),
-            TopNavTab("series", "Series",  Icons.Outlined.Slideshow, "browse/$playlistIdForNav/series"),
-            TopNavTab("search", "Search",  Icons.Default.Search,     "search/$playlistIdForNav"),
-        )
-    }
+    val tabs = com.hushtv.tv.ui.screens.home.topNavTabs(
+        playlistId = playlistIdForNav,
+        requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
+    )
     val homeFocus = remember { FocusRequester() }
     val firstCardFocus = remember { FocusRequester() }
     LaunchedEffect(loading, entries.isNotEmpty()) {

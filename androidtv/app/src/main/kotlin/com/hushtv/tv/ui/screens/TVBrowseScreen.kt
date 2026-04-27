@@ -642,35 +642,10 @@ fun TVBrowseScreen(
         // Same nav as Home so Movies/Series/Live feel like siblings of
         // Home instead of drill-down sub-screens. Active tab highlights
         // based on the current screen kind.
-        val navTabs = remember {
-            listOf(
-                com.hushtv.tv.ui.screens.home.TopNavTab(
-                    "home", "Home",
-                    Icons.Default.Home,
-                    "menu/$playlistId",
-                ),
-                com.hushtv.tv.ui.screens.home.TopNavTab(
-                    "live", "Live TV",
-                    Icons.Default.Tv,
-                    "browse/$playlistId/live",
-                ),
-                com.hushtv.tv.ui.screens.home.TopNavTab(
-                    "movies", "Movies",
-                    Icons.Default.Movie,
-                    "browse/$playlistId/movie",
-                ),
-                com.hushtv.tv.ui.screens.home.TopNavTab(
-                    "series", "Series",
-                    Icons.Outlined.Slideshow,
-                    "browse/$playlistId/series",
-                ),
-                com.hushtv.tv.ui.screens.home.TopNavTab(
-                    "search", "Search",
-                    Icons.Default.Search,
-                    "search/$playlistId",
-                ),
-            )
-        }
+        val navTabs = com.hushtv.tv.ui.screens.home.topNavTabs(
+            playlistId = playlistId,
+            requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
+        )
         val activeTabKey = when (type) {
             "live" -> "live"
             "series" -> "series"
