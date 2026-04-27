@@ -1,11 +1,10 @@
 {
-  "versionCode": 232,
-  "versionName": "1.42.32",
+  "versionCode": 233,
+  "versionName": "1.42.33",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Fixed: Requests tab is now visible from EVERY top-level screen (Live TV, Movies, Series, Search, Collection Detail) — not just Home. Single source of truth so any tab added in the future shows up everywhere automatically.",
-    "TMDB-only episode rows now pre-fill the request modal with the exact episode you tapped (e.g. 'E04 — The Last Bonanza'), so submitting an unindexed-episode request is one tap."
+    "Mobile series detail now matches TV: TMDB-only episode rows for seasons your provider hasn't indexed, one-tap pre-filled episode requests, and RPDB rating-baked backdrops on the hero (IMDb / Rotten Tomatoes / Metacritic / TMDB scores)."
   ]
 }

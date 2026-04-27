@@ -1,5 +1,64 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.33 — 2026-04-27 (versionCode 233)  ⬅ LATEST  (optional)
+
+**Mobile series detail parity** — ports v1.42.31's TMDB fallback,
+v1.42.32's one-tap episode pre-fill, and v1.42.30's RPDB
+rating-baked imagery to phones.
+
+### Mobile changes — `MobileSeriesDetailScreen.kt`
+
+- **TMDB show resolution**: new `LaunchedEffect(seriesName)` calls
+  `TmdbService.searchTv(seriesName)` then `getTv(id)` to fetch
+  `TmdbTv` (which carries `external_ids.imdb_id` for RPDB and
+  `seasons` for the Xtream-empty fallback).
+- **TMDB season resolution**: separate
+  `LaunchedEffect(tmdbTv?.id, activeSeason)` calls
+  `TmdbService.getSeason(tvId, n)` whenever the user picks a
+  season, so the TMDB-only fallback rows have episode names +
+  stills + overviews.
+- **Combined season chips**: `seasonKeys` is now Xtream's keys ∪
+  TMDB-only seasons (TMDB seasons appended after Xtream seasons
+  to preserve the user's natural provider order). When Xtream has
+  zero seasons we fall back entirely to TMDB.
+- **3-way episode render**:
+  1. Xtream has episodes → existing playable `EpisodeRow`.
+  2. Xtream empty, TMDB has → new `TmdbOnlyEpisodeRow` —
+     same shape but a 1 dp cyan border, an outlined "REQUEST"
+     badge top-left of the still, and a different click action.
+     A single-line hint above the list says "Your provider
+     hasn't indexed Season N yet — tap any episode to request
+     it."
+  3. Both empty → new `EmptySeasonCard` matching the same surface
+     style.
+- **One-tap episode pre-fill**: tapping a `TmdbOnlyEpisodeRow`
+  computes `"E${ep.episode_number} — ${ep.name}"`, stashes it in
+  `presetEpisodeText`, and opens the request modal. The modal
+  already accepts `presetEpisode` from the v1.42.32 work — just
+  plumbed it through. Reset to `""` on every modal-close path so
+  the next generic "Missing an episode" footer button doesn't
+  inherit it.
+- **RPDB-aware backdrop**: hero now prefers
+  `RpdbService.backgroundUrl(tmdbTv.external_ids.imdb_id)` and
+  falls back to the caller-supplied `posterUrl` when RPDB has no
+  record / 404s (Coil `onError` flips a local boolean). Phone
+  users now see the same IMDb / RT / Metacritic / TMDB scores
+  baked into the hero strip that TV users got in v1.42.30.
+
+### Why this matters
+Mobile users were the ONLY ones still seeing "Cast immediately
+under Seasons with no Episodes section" on unindexed seasons —
+that was the original P0 bug from earlier today. Now identically
+fixed for both form factors.
+
+### Build + deploy
+- `versionCode 232 → 233`, `versionName "1.42.32" → "1.42.33"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `570cd0a7a4acef4710b1c95057552e6f`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.32 — 2026-04-27 (versionCode 232)  ⬅ LATEST  (optional)
 
 **Two changes**: a P0 nav fix the user flagged, plus the
