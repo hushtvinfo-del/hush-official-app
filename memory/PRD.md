@@ -1,5 +1,63 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.42 — 2026-04-27 (versionCode 242)  ⬅ LATEST  (optional)
+
+**🎯 ROOT CAUSE FOUND** for the Gold Rush "no episodes" bug.
+
+User shared a screenshot of their Xtream panel showing Gold Rush
+has episodes labeled `S00E119`, `S00E120`, etc. (specials season).
+This is the actual root cause:
+
+**Xtream Codes API quirk**: when a series has any `S00` /
+specials episodes, some providers serialize the `episodes`
+field as a **JSON array** (sparse, indexed by season number)
+instead of a JSON object keyed by string season numbers. Our
+Moshi adapter expects `Map<String, List<XtreamEpisode>>` —
+which silently fails on the array shape, returning the rest of
+the response intact but `episodes = null`.
+
+That's why:
+- Breaking Bad → no S00 → object shape → strict parse works.
+- Gold Rush → has S00E119 → array shape → strict parse fails →
+  `episodes = null` → screen renders zero seasons + zero
+  episodes.
+- The user's id `4058537` was being correctly resolved
+  end-to-end (the resolver wasn't broken!) — the parse step
+  just dropped the episode data on the floor.
+
+### Fix — `XtreamApi.getSeriesInfo()`
+Now has a 2-stage parser:
+1. **Strict adapter first** — works for the common object shape.
+   Strict success only short-circuits if the parsed Map has at
+   least one season with at least one episode (defends against
+   a Map-of-empty-lists edge case).
+2. **Permissive fallback** — re-parses the JSON via Moshi's
+   generic `Any` adapter, inspects `episodes`:
+   - If `Map<*, *>` → iterate entries, deserialize each list
+     value via `XtreamEpisode` adapter `fromJsonValue`.
+   - If `List<*>` → iterate with index, use the array index as
+     the season key. Each non-null array element is a list of
+     episodes. Empty slots in the sparse array (typical between
+     S00 specials and S01) just get skipped.
+   - Anything else → episodes = null (genuine empty case).
+   - The `info` and `seasons` sub-objects are re-cast from the
+     generic Map representation so they're preserved alongside
+     the recovered episode map.
+
+### Why this also fixes the broader resolver
+The resolver's `getSeriesInfo` candidates are filtered by
+`!episodes.isNullOrEmpty()` to pick the winner. With the array
+shape silently returning null episodes, ALL Gold Rush candidates
+looked empty and the resolver fell through to the original empty
+result. Now the canonical id (4058537 in the user's case) returns
+the full season map and immediately wins the highest-tier race.
+
+### Build + deploy
+- `versionCode 241 → 242`, `versionName "1.42.41" → "1.42.42"`.
+- Non-mandatory. APK md5 `a2a2c15041d0e8f643936d1e285c8612`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.41 — 2026-04-27 (versionCode 241)  ⬅ LATEST  (optional)
 
 **Two changes**: always-visible search bar in Movies/Series, +

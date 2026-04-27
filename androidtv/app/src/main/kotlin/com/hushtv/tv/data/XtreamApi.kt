@@ -198,8 +198,83 @@ object XtreamApi {
     ): XtreamSeriesInfo {
         val body = rawCall(host, username, password, mapOf(
             "action" to "get_series_info", "series_id" to seriesId))
+        val repaired = repairAndParse(body)
+
+        // First try the strict adapter — works for the most common
+        // case where `episodes` is a JSON object keyed by string
+        // season numbers.
         val adapter = moshi.adapter(XtreamSeriesInfo::class.java)
-        return adapter.fromJson(repairAndParse(body)) ?: XtreamSeriesInfo()
+        val strict = runCatching { adapter.fromJson(repaired) }.getOrNull()
+        // Only short-circuit if strict-parse actually got real
+        // episodes — a Map of empty lists isn't useful.
+        val strictHasEpisodes = strict?.episodes
+            ?.values?.any { it.isNotEmpty() } == true
+        if (strictHasEpisodes) return strict!!
+
+        // Fallback: some Xtream providers serialise `episodes` as a
+        // JSON ARRAY (sparse, indexed by season number) when the
+        // catalogue contains an "S00" / specials season. Moshi's
+        // `Map<String, List<XtreamEpisode>>` adapter silently fails
+        // on the array shape, leaving the rest of the response intact
+        // but `episodes = null`. We re-parse with a permissive
+        // generic adapter, normalise both shapes into a Map, and
+        // hand-deserialise each episode entry.
+        val anyAdapter = moshi.adapter(Any::class.java)
+        val rootAny = runCatching { anyAdapter.fromJson(repaired) }.getOrNull()
+                as? Map<*, *> ?: return strict ?: XtreamSeriesInfo()
+
+        val infoMap = (rootAny["info"] as? Map<*, *>)
+        val seasonsList = (rootAny["seasons"] as? List<*>)
+        val episodesNode = rootAny["episodes"]
+
+        val episodeAdapter = moshi.adapter(XtreamEpisode::class.java)
+        val episodes = mutableMapOf<String, List<XtreamEpisode>>()
+
+        when (episodesNode) {
+            is Map<*, *> -> {
+                episodesNode.forEach { (k, v) ->
+                    val key = k?.toString() ?: return@forEach
+                    val list = (v as? List<*>).orEmpty().mapNotNull { ep ->
+                        runCatching {
+                            episodeAdapter.fromJsonValue(ep)
+                        }.getOrNull()
+                    }
+                    if (list.isNotEmpty()) episodes[key] = list
+                }
+            }
+            is List<*> -> {
+                episodesNode.forEachIndexed { idx, v ->
+                    val list = (v as? List<*>).orEmpty().mapNotNull { ep ->
+                        runCatching {
+                            episodeAdapter.fromJsonValue(ep)
+                        }.getOrNull()
+                    }
+                    if (list.isNotEmpty()) {
+                        // Use the array index as the season key when
+                        // the provider serialised `episodes` as a
+                        // sparse array. Each episode also carries its
+                        // own `season` field so the UI rarely needs
+                        // to trust the key, but downstream code uses
+                        // the key to power the season chip row.
+                        episodes[idx.toString()] = list
+                    }
+                }
+            }
+        }
+
+        // Re-cast the generic info / seasons maps into the shapes
+        // XtreamSeriesInfo expects. Best-effort — if cast fails, we
+        // just fall back to the strict-parser values (or null).
+        @Suppress("UNCHECKED_CAST")
+        val info = (infoMap as? Map<String, Any>) ?: strict?.info
+        @Suppress("UNCHECKED_CAST")
+        val seasons = (seasonsList as? List<Map<String, Any>>) ?: strict?.seasons
+
+        return XtreamSeriesInfo(
+            info = info,
+            seasons = seasons,
+            episodes = if (episodes.isEmpty()) null else episodes,
+        )
     }
 
     /**

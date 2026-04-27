@@ -1,11 +1,10 @@
 {
-  "versionCode": 241,
-  "versionName": "1.42.41",
+  "versionCode": 242,
+  "versionName": "1.42.42",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Added an always-visible search box at the top of the Movies and Series sidebars — type to narrow within the current category.",
-    "Series resolver now scores candidates by title quality so bare 'Gold Rush' wins over sub-franchises like 'Gold Rush: White Water'. Tries best-tier candidates first; only walks down to lower tiers if the top tier returns empty."
+    "FIXED: Gold Rush (and any series whose provider serializes episodes as a JSON array because it has S00 specials) now loads seasons + episodes correctly. Added a permissive parser that handles both the standard object shape and the array shape some Xtream providers return."
   ]
 }
