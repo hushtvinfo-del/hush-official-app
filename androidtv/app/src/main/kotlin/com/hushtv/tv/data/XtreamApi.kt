@@ -5,6 +5,9 @@ import com.squareup.moshi.Types
 import com.squareup.moshi.adapter
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.Cache
 import okhttp3.CacheControl
@@ -242,39 +245,74 @@ object XtreamApi {
         password: String,
         seriesId: String,
         seriesName: String,
-        maxAttempts: Int = 5,
-    ): ResolvedSeries {
+        maxAttempts: Int = 6,
+    ): ResolvedSeries = coroutineScope {
         val first = getSeriesInfo(host, username, password, seriesId)
-        if (!first.episodes.isNullOrEmpty()) return ResolvedSeries(seriesId, first)
+        if (!first.episodes.isNullOrEmpty()) {
+            return@coroutineScope ResolvedSeries(seriesId, first)
+        }
+        if (seriesName.isBlank()) {
+            return@coroutineScope ResolvedSeries(seriesId, first)
+        }
 
-        // Empty episodes — try other duplicate entries with the same
-        // normalised title.
-        val needle = com.hushtv.tv.data.TitleMatcher.normalize(seriesName)
-        if (needle.isBlank()) return ResolvedSeries(seriesId, first)
+        val all = runCatching { getAllStreams(host, username, password, "series") }
+            .getOrDefault(emptyList())
 
-        val all = runCatching {
-            getAllStreams(host, username, password, "series")
-        }.getOrDefault(emptyList())
+        // Build a TitleMatcher index over the catalogue and select
+        // every entry that passes `isStrongMatch` against the series
+        // name. This honours containment + word-count gates so
+        // "Gold Rush" matches the bare-titled entry but NOT "Gold
+        // Rush: White Water" (different normalised words and the
+        // word-count gate would also reject the colon-suffix when
+        // years differ).
+        val seriesIndex = com.hushtv.tv.data.TitleMatcher.buildIndex(
+            all.filter { it.kind == "series" && it.seriesId > 0 }
+        ) { it.title }
 
-        val candidates = all
+        val needleNorm = com.hushtv.tv.data.TitleMatcher.normalize(seriesName)
+
+        val candidateIds = seriesIndex
             .asSequence()
-            .filter { it.kind == "series" }
-            .filter { it.seriesId > 0 && it.seriesId.toString() != seriesId }
-            .filter { com.hushtv.tv.data.TitleMatcher.normalize(it.title) == needle }
-            .map { it.seriesId.toString() }
+            // Strong-match (containment + year gate) gives us
+            // permissive behaviour where the user's library has
+            // "Gold Rush (2010)" + "Gold Rush". Plus we still allow
+            // pure exact-normalised matches even for short 1-2 word
+            // titles where isStrongMatch's 3-word gate would reject.
+            .filter { entry ->
+                entry.normalized == needleNorm ||
+                    com.hushtv.tv.data.TitleMatcher.isStrongMatch(
+                        tmdbTitle = seriesName,
+                        tmdbYear = null,
+                        libTitle = entry.raw,
+                        libYear = entry.year,
+                    )
+            }
+            .map { it.payload.seriesId.toString() }
+            .filter { it != seriesId }
             .distinct()
             .take(maxAttempts)
             .toList()
 
-        for (candidate in candidates) {
-            val info = runCatching {
-                getSeriesInfo(host, username, password, candidate)
-            }.getOrNull()
-            if (info != null && !info.episodes.isNullOrEmpty()) {
-                return ResolvedSeries(candidate, info)
+        if (candidateIds.isEmpty()) {
+            return@coroutineScope ResolvedSeries(seriesId, first)
+        }
+
+        // Parallel fan-out — first non-empty result wins. Worst-case
+        // wait ≈ ONE network round-trip instead of N sequential ones.
+        val deferreds = candidateIds.map { candidate ->
+            async {
+                val info = runCatching {
+                    getSeriesInfo(host, username, password, candidate)
+                }.getOrNull()
+                candidate to info
             }
         }
-        return ResolvedSeries(seriesId, first)
+        val results = deferreds.awaitAll()
+        val winner = results.firstOrNull { (_, info) ->
+            info != null && !info.episodes.isNullOrEmpty()
+        }
+        winner?.let { ResolvedSeries(it.first, it.second!!) }
+            ?: ResolvedSeries(seriesId, first)
     }
 
     // URL builders — mirror TVBrowse.jsx + standard Xtream

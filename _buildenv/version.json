@@ -1,11 +1,10 @@
 {
-  "versionCode": 234,
-  "versionName": "1.42.34",
+  "versionCode": 235,
+  "versionName": "1.42.35",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "URGENT FIX: searching a series and opening it now correctly resolves to the right Xtream entry — episodes show as playable rows again instead of as REQUEST rows. Auto-walks duplicate series_id entries until it finds the one with episodes loaded.",
-    "Cleaner top bar: removed the layout-hint chip and expiry badge from the right side. Sidebar expiry pill removed too. Subscription info is still on Settings → Subscription."
+    "URGENT FIX (round 2): searching a series like Gold Rush and opening it now correctly resolves to your library's playable episodes. The disambiguator now uses the same proven TitleMatcher.isStrongMatch logic that powers the Already-In-Library badge, and runs all candidates in parallel so it's as fast as a single network call."
   ]
 }

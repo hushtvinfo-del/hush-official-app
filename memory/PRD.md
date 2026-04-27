@@ -1,5 +1,55 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.35 — 2026-04-27 (versionCode 235)  ⬅ LATEST  (optional)
+
+**P0 fix — round 2 of the Gold Rush "search shows REQUEST instead
+of playable" bug.** v1.42.34 shipped a disambiguating resolver
+but used too-strict matching (`normalize(a) == normalize(b)` only).
+For shows like *Gold Rush* the user's library has multiple bare
+"Gold Rush" entries plus colon-suffixed variants ("Gold Rush:
+White Water", etc.). When the search-flow's `seriesId` returns
+empty episodes, the strict matcher found ZERO candidate ids
+(because the only entry sharing the exact normalised title was
+the one already tried), so the resolver fell through to the
+empty result and the screen rendered TMDB REQUEST rows.
+
+### Fix — `XtreamApi.resolveSeriesInfo()` rewritten
+
+1. **Match logic**: now uses the proven
+   `TitleMatcher.isStrongMatch` containment-with-year-gate matcher
+   that powers the Already-In-Library badge in the request modal
+   (the same matcher the user's screenshots prove already finds 4
+   Gold Rush entries correctly). Plus an `entry.normalized ==
+   needleNorm` short-circuit for short 2-word titles where
+   `isStrongMatch`'s 3-word floor would over-reject.
+2. **Parallel fan-out**: candidate `getSeriesInfo` calls now run
+   concurrently via `async { ... }.awaitAll()`. The first
+   non-empty response wins. Up to 6 candidates run at once;
+   worst-case wait ≈ ONE network round-trip instead of N.
+3. **Index reuse**: builds a `TitleMatcher.buildIndex` over the
+   filtered series list once, so the matcher walk is a flat scan
+   over normalised tuples — no per-candidate normalisation.
+
+### Why this works for Gold Rush specifically
+- `seriesName = "Gold Rush"` (from search MediaCard).
+- Original `seriesId` returns empty episodes (the stale duplicate).
+- `isStrongMatch("Gold Rush", null, "Gold Rush", year)` → true via
+  exact normalised match → that candidate id is returned.
+- `isStrongMatch("Gold Rush", null, "Gold Rush: White Water",
+  year)` → fails the 3-word floor (Gold Rush is 2 words) → not
+  considered. Even when both are 3+ words, the year gate or
+  containment direction would still reject a colon-suffix.
+- All bare-titled "Gold Rush" entries are tried in parallel; the
+  one with the loaded episode catalog wins.
+
+### Build + deploy
+- `versionCode 234 → 235`, `versionName "1.42.34" → "1.42.35"`.
+- Marked **non-mandatory**.
+- Deployed to `66.163.113.147:/var/www/hushtv/`. APK md5
+  `1e2e88d8b7bbde736cff890875fedbcd`, 17.7 MB. Live on
+  `https://hushtv.xyz/hushtv.apk` via the symlink.
+
+
 ## v1.42.34 — 2026-04-27 (versionCode 234)  ⬅ LATEST  (optional)
 
 **Two changes**: a P0 series-detail fix the user flagged as
