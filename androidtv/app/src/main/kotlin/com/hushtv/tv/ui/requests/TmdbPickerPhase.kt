@@ -181,47 +181,43 @@ fun TmdbPickerPhase(
         val snapshot = hits
         decorateJob = scope.launch {
             runCatching {
-                kotlinx.coroutines.withTimeoutOrNull(6_000) {
+                kotlinx.coroutines.withTimeoutOrNull(8_000) {
                     val libKind = if (type == "series") "series" else "movie"
-                    // Sequential decoration with explicit yield()
-                    // cancellation points between rows. We used to
-                    // run 4 lookups in parallel, but on low-power
-                    // boxes (Fire Stick / cheap MeCool) the cancel
-                    // path doesn't actually stop the in-flight CPU
-                    // scan — `LibraryIndex.findBest` is a sync O(n)
-                    // search across tens of thousands of titles, so
-                    // pre-empting it requires cooperation. Result:
-                    // typing fast, every keystroke fires a new
-                    // search, each one stacks 4 more parallel scans
-                    // on top of the previous (cancelled but still
-                    // executing) ones, the box's CPU runs out, the
-                    // main thread starves, the app freezes / ANRs.
+                    // Sequential decoration with per-row incremental
+                    // commit. Each iteration:
+                    //   1. yield() — cancellation point so a fresh
+                    //      keystroke can stop us cold.
+                    //   2. Library lookup for ONE row.
+                    //   3. Commit just that row to `hits`. The user
+                    //      sees individual rows flip from "CHECKING
+                    //      YOUR LIBRARY…" to their real badge as
+                    //      decoration progresses, instead of waiting
+                    //      for the whole batch.
                     //
-                    // Sequential + yield() fixes both halves: only
-                    // one scan runs at a time AND the next yield()
-                    // hop stops the loop the instant a fresh search
-                    // cancels this job. Total cost for ~12 hits is
-                    // 120–600 ms which is well under the 6 s
-                    // timeout above.
-                    val decorated = withContext(Dispatchers.Default) {
-                        val out = ArrayList<TmdbHitWithLibrary>(snapshot.size)
-                        for (wrapped in snapshot) {
-                            kotlinx.coroutines.yield()
-                            val title = wrapped.hit.title
-                                ?: wrapped.hit.name ?: ""
-                            val year = parseYear(wrapped.hit.release_date)
-                                ?: parseYear(wrapped.hit.first_air_date)
-                            val libHit = runCatching {
+                    // Click handler blocks taps on rows where
+                    // `decorated == false`, so users can't request
+                    // something while we're still figuring out
+                    // whether they already have it.
+                    val rolling = snapshot.toMutableList()
+                    for ((idx, wrapped) in snapshot.withIndex()) {
+                        kotlinx.coroutines.yield()
+                        val title = wrapped.hit.title
+                            ?: wrapped.hit.name ?: ""
+                        val year = parseYear(wrapped.hit.release_date)
+                            ?: parseYear(wrapped.hit.first_air_date)
+                        val libHit = withContext(Dispatchers.Default) {
+                            runCatching {
                                 LibraryIndex.findBest(title, libKind, year)
                             }.getOrNull()
-                            out += TmdbHitWithLibrary(wrapped.hit, libHit)
                         }
-                        out
+                        rolling[idx] = TmdbHitWithLibrary(
+                            wrapped.hit, libHit, decorated = true,
+                        )
+                        if (q == lastSearchedQuery) {
+                            hits = rolling.toList()
+                        }
                     }
-                    if (q == lastSearchedQuery) {
-                        hits = decorated
-                        decoratedQuery = q
-                    }
+                    if (q == lastSearchedQuery) decoratedQuery = q
                 }
             }
         }
@@ -380,6 +376,13 @@ fun TmdbPickerPhase(
                             wrapped = wrapped,
                             type = type,
                             onPick = onClick@{
+                                if (!wrapped.decorated) {
+                                    // Library cross-reference still
+                                    // running — block the tap so the
+                                    // user can't accidentally request
+                                    // a title they already have.
+                                    return@onClick
+                                }
                                 runCatching {
                                     val title = wrapped.hit.title ?: wrapped.hit.name ?: ""
                                     val year = parseYear(wrapped.hit.release_date)
@@ -467,6 +470,13 @@ fun TmdbPickerPhase(
 private data class TmdbHitWithLibrary(
     val hit: TmdbSearchHit,
     val libraryEntry: LibraryIndex.Entry?,
+    /**
+     * False until the library cross-reference has run for this row.
+     * UI uses this to render a "CHECKING YOUR LIBRARY…" pill and
+     * blocks click; once true the row flips to its real state
+     * (TAP TO REQUEST / TAP FOR OPTIONS / ALREADY IN LIBRARY).
+     */
+    val decorated: Boolean = false,
 )
 
 /* ───────── Search field ───────── */
@@ -650,12 +660,18 @@ private fun TmdbHitRow(
                 )
             }
             Spacer(Modifier.height(6.dp))
-            // Badge text differs by content type. For SERIES we route
-            // every click to the series-detail phase (regardless of
-            // library state) so the badge always says "TAP FOR
-            // OPTIONS"; for MOVIES the existing fast-path applies
-            // (in-library → deep-link, else → submit).
-            when {
+            // While decoration is pending, show a single neutral
+            // "CHECKING YOUR LIBRARY…" pill so users know we're
+            // verifying availability before letting them tap. The
+            // outer onPick handler returns early for undecorated
+            // rows.
+            if (!wrapped.decorated) {
+                AvailabilityBadge(
+                    label = "CHECKING YOUR LIBRARY…",
+                    bg = Color(0x22F59E0B),
+                    fg = Color(0xFFF59E0B),
+                )
+            } else when {
                 isSeries && inLibrary -> AvailabilityBadge(
                     label = "ALREADY IN LIBRARY · TAP FOR OPTIONS",
                     bg = Color(0x3322C55E),

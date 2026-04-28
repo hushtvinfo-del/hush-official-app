@@ -89,18 +89,109 @@ import kotlinx.coroutines.withContext
  *  • TMDB metadata (synopsis, year, genres) is fetched in a
  *    LaunchedEffect — the screen renders the static title + poster
  *    immediately, then enriches.
+ *  • SMART SHORTCUT: when the user already has the show in their
+ *    library AND every episode TMDB knows about is present in their
+ *    Xtream library, this phase skips itself entirely and calls
+ *    [onTapToWatch] — there's no point showing a "Request Missing
+ *    Episodes" CTA when nothing is missing. While that check runs
+ *    we render a brief full-screen "Looking up episodes…" state so
+ *    the page doesn't briefly flash before the redirect.
  */
 @Composable
 fun SeriesDetailPhase(
     pick: TmdbPick,
+    playlistId: String,
     onBack: () -> Unit,
     onTapToWatch: () -> Unit,
     onRequestWholeSeries: () -> Unit,
     onRequestMissingEpisodes: () -> Unit,
 ) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var tv by remember(pick.tmdbId) { mutableStateOf<TmdbTv?>(null) }
+    // Episode-completeness check state machine:
+    //   IDLE      — user doesn't own the show, skip the check
+    //   CHECKING  — user owns the show, comparing TMDB total to
+    //               library episode union
+    //   DECIDED   — check finished, normal page can render
+    //               (auto-redirect already happened if applicable)
+    var checkPhase by remember(pick.tmdbId, pick.library?.seriesId) {
+        mutableStateOf(
+            if (pick.library != null && pick.tmdbId > 0) "CHECKING" else "DECIDED",
+        )
+    }
+
+    LaunchedEffect(pick.tmdbId, pick.library?.seriesId) {
+        if (checkPhase != "CHECKING") return@LaunchedEffect
+        runCatching {
+            kotlinx.coroutines.withTimeoutOrNull(7_000) {
+                val playlist = withContext(Dispatchers.IO) {
+                    com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
+                }
+                val show = withContext(Dispatchers.IO) {
+                    TmdbService.getTv(pick.tmdbId)
+                }
+                tv = show
+                if (show != null && playlist != null) {
+                    // Sum library episodes across every matching
+                    // Xtream entry (per-season splits etc.).
+                    val libraryEpisodeCount = withContext(Dispatchers.IO) {
+                        com.hushtv.tv.data.XtreamApi.resolveLibraryEpisodes(
+                            playlist.host, playlist.username,
+                            playlist.password, pick.title,
+                        ).values.sumOf { it.size }
+                    }
+                    // TMDB's number_of_episodes counts S0+ specials,
+                    // but season 0 / "Specials" are often missing
+                    // legitimately. Use the sum of episode_count
+                    // for non-zero seasons as the canonical total.
+                    val tmdbTotal = show.seasons
+                        .filter { it.season_number > 0 }
+                        .sumOf { it.episode_count }
+                    if (tmdbTotal > 0 && libraryEpisodeCount >= tmdbTotal) {
+                        // User has all known episodes — go straight
+                        // to the series card.
+                        onTapToWatch()
+                        return@withTimeoutOrNull
+                    }
+                }
+                checkPhase = "DECIDED"
+            } ?: run { checkPhase = "DECIDED" }
+        }.onFailure { checkPhase = "DECIDED" }
+    }
+
+    if (checkPhase == "CHECKING") {
+        Box(
+            Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(0.5f),
+            ) {
+                Text(
+                    "Looking up your episodes…",
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.material3.LinearProgressIndicator(
+                    color = Cyan,
+                    trackColor = Color(0x22FFFFFF),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(999.dp)),
+                )
+            }
+        }
+        return
+    }
 
     LaunchedEffect(pick.tmdbId) {
+        // If we already populated `tv` during the completeness
+        // check, skip the redundant re-fetch.
+        if (tv != null) return@LaunchedEffect
         if (pick.tmdbId <= 0) return@LaunchedEffect
         runCatching {
             withContext(Dispatchers.IO) { TmdbService.getTv(pick.tmdbId) }

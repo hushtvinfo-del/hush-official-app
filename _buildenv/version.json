@@ -1,10 +1,10 @@
 {
-  "versionCode": 262,
-  "versionName": "1.42.62",
+  "versionCode": 263,
+  "versionName": "1.42.63",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Fix freeze when typing fast in the request search (e.g. 'The Wrecking Crew'). Library cross-reference now runs sequentially with cancellation points so old searches actually stop the moment a new keystroke arrives — no more piled-up CPU scans on Fire Stick / low-power boxes."
+    "Smarter request search: each result now shows a 'CHECKING YOUR LIBRARY…' badge until the cross-reference completes for that row, so you can never accidentally request a title we already have. Series with every episode in your library (e.g. Breaking Bad) now skip the request landing entirely and open the series card directly."
   ]
 }

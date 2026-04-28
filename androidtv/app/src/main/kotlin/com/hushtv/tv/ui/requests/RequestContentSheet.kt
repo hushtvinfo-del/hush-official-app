@@ -330,6 +330,7 @@ fun RequestContentSheet(
                             backdropPath = null, overview = null,
                             library = null,
                         ),
+                        playlistId = playlistId,
                         onBack = { phase = Phase.PICK },
                         onTapToWatch = {
                             val entry = pickedTmdb?.library ?: return@SeriesDetailPhase
