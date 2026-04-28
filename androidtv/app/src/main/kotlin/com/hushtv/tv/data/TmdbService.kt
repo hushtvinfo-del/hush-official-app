@@ -381,6 +381,71 @@ object TmdbService {
         }.getOrDefault(emptyList())
     }
 
+    /**
+     * Rich credit entry for the Person Filmography screen. Includes
+     * everything the UI needs to render a card AND to feed the
+     * library cross-reference + request flows: tmdb id, type
+     * (movie/tv), title, year, poster, popularity ranking and the
+     * actor's role in that title.
+     */
+    @JsonClass(generateAdapter = true)
+    data class PersonCredit(
+        val id: Int = 0,
+        val media_type: String = "",        // "movie" | "tv"
+        val title: String? = null,          // movies
+        val name: String? = null,           // tv
+        val release_date: String? = null,
+        val first_air_date: String? = null,
+        val poster_path: String? = null,
+        val character: String = "",
+        val popularity: Double = 0.0,
+        val vote_count: Int = 0,
+        val episode_count: Int = 0,
+    )
+
+    @JsonClass(generateAdapter = true)
+    private data class PersonCreditsResp(
+        val id: Int = 0,
+        val cast: List<PersonCredit> = emptyList(),
+    )
+
+    /**
+     * Full person filmography (cast credits only — we don't surface
+     * crew jobs). De-dups by `id` so an actor who appears in both
+     * the original AND the recurring cast of a show only gets one
+     * row, and sorted descending by popularity * vote_count so the
+     * most relevant titles surface first.
+     *
+     * Hidden:
+     *   • items missing both title & name (orphan rows in TMDB)
+     *   • items with NO poster AND NO release date (production
+     *     entries TMDB hasn't fully populated yet)
+     *   • adult films (TMDB doesn't return them by default but the
+     *     belt-and-braces filter is cheap)
+     */
+    suspend fun personFilmography(personId: Int): List<PersonCredit> =
+        withContext(Dispatchers.IO) {
+            if (personId <= 0) return@withContext emptyList()
+            val url = "$BASE/person/$personId/combined_credits" +
+                "?api_key=${ApiKeys.TMDB}&language=en-US"
+            runCatching {
+                val body = client.newCall(Request.Builder().url(url).build())
+                    .execute().body?.string() ?: return@runCatching emptyList()
+                val resp = moshi.adapter(PersonCreditsResp::class.java)
+                    .fromJson(body) ?: return@runCatching emptyList()
+                resp.cast
+                    .filter { it.media_type == "movie" || it.media_type == "tv" }
+                    .filter { !(it.title.orEmpty() + it.name.orEmpty()).isBlank() }
+                    .filter {
+                        !it.poster_path.isNullOrBlank() ||
+                            !it.release_date.isNullOrBlank() ||
+                            !it.first_air_date.isNullOrBlank()
+                    }
+                    .distinctBy { it.media_type to it.id }
+                    .sortedByDescending { it.popularity }
+            }.getOrDefault(emptyList())
+        }
+
     /** Pull the YouTube key for the first official trailer, if any. */
     fun pickTrailer(videos: TmdbVideos?): String? {
         if (videos == null) return null

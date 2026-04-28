@@ -1,10 +1,10 @@
 {
-  "versionCode": 264,
-  "versionName": "1.42.64",
+  "versionCode": 265,
+  "versionName": "1.42.65",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Added a Clear search button under the request search field — one tap wipes the query so you don't have to hold backspace 30 times to start a new search."
+    "Cast members are now tappable! Click any actor on a movie or series detail page to see their full filmography from TMDB, automatically cross-referenced against your library — IN LIBRARY titles open straight to play, missing titles open the request modal pre-filled. Cast row is now pinned above Seasons on series pages with proper spacing."
   ]
 }

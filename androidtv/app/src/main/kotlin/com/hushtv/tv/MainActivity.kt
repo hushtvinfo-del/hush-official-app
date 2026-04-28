@@ -210,6 +210,14 @@ private fun AppContent() {
                 bs.arguments?.getString("playlistId") ?: "",
             )
         }
+        composable("person/{playlistId}/{personId}/{name}") { bs ->
+            com.hushtv.tv.ui.screens.TVPersonFilmographyScreen(
+                nav = nav,
+                playlistId = bs.arguments?.getString("playlistId") ?: "",
+                personId = bs.arguments?.getString("personId")?.toIntOrNull() ?: 0,
+                personName = Uri.decode(bs.arguments?.getString("name") ?: ""),
+            )
+        }
         composable("requestdetail/{playlistId}/{requestId}") { bs ->
             com.hushtv.tv.ui.requests.TVRequestDetailScreen(
                 nav = nav,

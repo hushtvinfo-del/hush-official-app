@@ -371,6 +371,30 @@ fun TVSeriesDetailScreen(
 
             Spacer(Modifier.height(28.dp))
 
+            // ── Cast ─────────────────────────────────────
+            // Pinned ABOVE the seasons + episodes blocks per
+            // user preference. Cards are tappable and open the
+            // person's filmography (TMDB combined credits with
+            // library cross-reference).
+            if (castList.isNotEmpty()) {
+                SSectionHeader("Cast")
+                Spacer(Modifier.height(10.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    items(castList, key = { "cast-${it.id}" }) { c ->
+                        SeriesCastCard(
+                            member = c,
+                            onClick = {
+                                nav.navigate(
+                                    "person/$playlistId/${c.id}/" +
+                                        Uri.encode(c.name),
+                                )
+                            },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(28.dp))
+            }
+
             // ── Season selector ──────────────────────────
             if (seasonList.size > 1) {
                 SSectionHeader("Seasons")
@@ -439,18 +463,6 @@ fun TVSeriesDetailScreen(
                 RequestEpisodeCta(
                     onClick = { showRequestModal = true },
                 )
-                Spacer(Modifier.height(28.dp))
-            }
-
-            // ── Cast ─────────────────────────────────────
-            if (castList.isNotEmpty()) {
-                SSectionHeader("Cast")
-                Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(castList, key = { "cast-${it.id}" }) { c ->
-                        SeriesCastCard(c)
-                    }
-                }
                 Spacer(Modifier.height(28.dp))
             }
         }
@@ -906,7 +918,7 @@ private fun EmptySeasonCard(
 /* ──────────────────────────────────────────────────────────────── */
 
 @Composable
-private fun SeriesCastCard(member: TmdbCastMember) {
+private fun SeriesCastCard(member: TmdbCastMember, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.08f else 1f,
@@ -919,7 +931,8 @@ private fun SeriesCastCard(member: TmdbCastMember) {
             .width(96.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .focusable(),
+            .focusable()
+            .clickableWithEnter(onClick),
     ) {
         Box(
             Modifier

@@ -388,7 +388,15 @@ fun TVMovieDetailScreen(
                 Spacer(Modifier.height(12.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(castList, key = { "cast-${it.id}" }) { c ->
-                        CastCard(member = c)
+                        CastCard(
+                            member = c,
+                            onClick = {
+                                nav.navigate(
+                                    "person/$playlistId/${c.id}/" +
+                                        Uri.encode(c.name),
+                                )
+                            },
+                        )
                     }
                 }
                 Spacer(Modifier.height(32.dp))
@@ -481,11 +489,9 @@ private fun RatingBadge(
 /* ──────────────────────────────────────────────────────────────── */
 
 @Composable
-private fun CastCard(member: TmdbCastMember) {
-    // Display-only — clicking an actor is intentionally a no-op because
-    // cross-referencing TMDB filmography to the noisy Xtream library was
-    // unreliable. The card still gets a focus highlight so it looks alive
-    // on the D-pad but does nothing on Enter.
+private fun CastCard(member: TmdbCastMember, onClick: () -> Unit) {
+    // Tappable — opens the person's full filmography (TMDB combined
+    // credits) cross-referenced against the user's Xtream library.
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.08f else 1f,
@@ -498,7 +504,8 @@ private fun CastCard(member: TmdbCastMember) {
             .width(96.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .onFocusChanged { focused = it.isFocused }
-            .focusable(),
+            .focusable()
+            .clickableWithEnter(onClick),
     ) {
         Box(
             Modifier
