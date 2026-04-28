@@ -1,10 +1,10 @@
 {
-  "versionCode": 260,
-  "versionName": "1.42.60",
+  "versionCode": 261,
+  "versionName": "1.42.61",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Hardened network security config to silence the Google Play Protect 'App scan recommended' warning. App now refuses user-installed CAs (the #1 Play Protect red flag) and explicitly declares HTTPS-only for every backend we control (TMDB, RPDB, Hush, Base44, GitHub, etc.). Cleartext stays permitted only for user-supplied IPTV provider hosts where it's unavoidable."
+    "Fix: Tapping a request result (e.g. Mario) could crash the app if the provider returned malformed metadata while we were verifying library presence. Every step in the tap-to-request path is now wrapped in defensive error handling, double-tap is blocked while a submit is in flight, and any failure surfaces as an inline error instead of taking the app down."
   ]
 }

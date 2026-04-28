@@ -147,47 +147,71 @@ fun RequestContentSheet(
             submitError = "Please pick or type a title."
             return
         }
+        if (submitting) return  // guard against double-tap that fires
+                                 // while the submit POST is still
+                                 // in flight — without this a quick
+                                 // double-press shoots two requests
+                                 // and on slow networks the second
+                                 // landed fast enough to cause UI
+                                 // confusion.
         submitting = true
         submitError = null
         scope.launch {
-            val tmdbMeta = finalTmdb?.let {
-                RequestMetaStore.Meta(
-                    tmdbId = it.tmdbId,
-                    tmdbType = it.tmdbType,
-                    posterPath = it.posterPath,
-                    backdropPath = it.backdropPath,
-                    releaseYear = it.year,
-                    title = it.title,
-                    overview = it.overview,
-                    imdbId = null,
-                )
-            }
-            val res = withContext(Dispatchers.IO) {
-                ContentRequestApi.submitRequest(
-                    ctx = ctx,
-                    type = finalType,
-                    title = finalTitle,
-                    additionalInfo = notes.trim().ifBlank { null },
-                    seriesRequestType = if (finalType == "series") seriesScope else null,
-                    seasons = if (finalType == "series" && seriesScope == "specific_episodes")
-                        seasons.trim().ifBlank { null } else null,
-                    episodes = if (finalType == "series" && seriesScope == "specific_episodes")
-                        episodes.trim().ifBlank { null } else null,
-                    tmdbMeta = tmdbMeta,
-                )
+            // Outer runCatching so an unexpected throw (Moshi
+            // serialisation, OOM in tmdb meta build, anything else)
+            // surfaces as an inline error instead of killing the
+            // app from the launch dispatcher's unhandled-exception
+            // path.
+            runCatching {
+                val tmdbMeta = finalTmdb?.let {
+                    RequestMetaStore.Meta(
+                        tmdbId = it.tmdbId,
+                        tmdbType = it.tmdbType,
+                        posterPath = it.posterPath,
+                        backdropPath = it.backdropPath,
+                        releaseYear = it.year,
+                        title = it.title,
+                        overview = it.overview,
+                        imdbId = null,
+                    )
+                }
+                val res = withContext(Dispatchers.IO) {
+                    ContentRequestApi.submitRequest(
+                        ctx = ctx,
+                        type = finalType,
+                        title = finalTitle,
+                        additionalInfo = notes.trim().ifBlank { null },
+                        seriesRequestType = if (finalType == "series") seriesScope else null,
+                        seasons = if (finalType == "series" && seriesScope == "specific_episodes")
+                            seasons.trim().ifBlank { null } else null,
+                        episodes = if (finalType == "series" && seriesScope == "specific_episodes")
+                            episodes.trim().ifBlank { null } else null,
+                        tmdbMeta = tmdbMeta,
+                    )
+                }
+                when (res) {
+                    is ContentRequestApi.SubmitResult.Success -> {
+                        if (tmdbMeta != null) {
+                            // SharedPreferences write is async via
+                            // apply(), but route through IO anyway
+                            // for parity with all our other disk
+                            // writes.
+                            withContext(Dispatchers.IO) {
+                                runCatching {
+                                    RequestMetaStore.put(ctx, res.requestId, tmdbMeta)
+                                }
+                            }
+                        }
+                        lastResult = res
+                        phase = Phase.SUCCESS
+                    }
+                    is ContentRequestApi.SubmitResult.Error ->
+                        submitError = res.message
+                }
+            }.onFailure { e ->
+                submitError = e.message ?: "Submit failed unexpectedly."
             }
             submitting = false
-            when (res) {
-                is ContentRequestApi.SubmitResult.Success -> {
-                    if (tmdbMeta != null) {
-                        RequestMetaStore.put(ctx, res.requestId, tmdbMeta)
-                    }
-                    lastResult = res
-                    phase = Phase.SUCCESS
-                }
-                is ContentRequestApi.SubmitResult.Error ->
-                    submitError = res.message
-            }
         }
     }
 

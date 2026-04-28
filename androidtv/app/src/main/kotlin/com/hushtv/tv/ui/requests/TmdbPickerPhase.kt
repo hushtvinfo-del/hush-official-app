@@ -368,19 +368,20 @@ fun TmdbPickerPhase(
                             wrapped = wrapped,
                             type = type,
                             onPick = onClick@{
-                                val title = wrapped.hit.title ?: wrapped.hit.name ?: ""
-                                val year = parseYear(wrapped.hit.release_date)
-                                    ?: parseYear(wrapped.hit.first_air_date)
-                                val pick = TmdbPick(
-                                    tmdbId = wrapped.hit.id,
-                                    tmdbType = if (type == "series") "tv" else "movie",
-                                    title = title,
-                                    year = year,
-                                    posterPath = wrapped.hit.poster_path,
-                                    backdropPath = wrapped.hit.backdrop_path,
-                                    overview = wrapped.hit.overview.ifBlank { null },
-                                    library = wrapped.libraryEntry,
-                                )
+                                runCatching {
+                                    val title = wrapped.hit.title ?: wrapped.hit.name ?: ""
+                                    val year = parseYear(wrapped.hit.release_date)
+                                        ?: parseYear(wrapped.hit.first_air_date)
+                                    val pick = TmdbPick(
+                                        tmdbId = wrapped.hit.id,
+                                        tmdbType = if (type == "series") "tv" else "movie",
+                                        title = title,
+                                        year = year,
+                                        posterPath = wrapped.hit.poster_path,
+                                        backdropPath = wrapped.hit.backdrop_path,
+                                        overview = wrapped.hit.overview.ifBlank { null },
+                                        library = wrapped.libraryEntry,
+                                    )
                                 // For SERIES we always route the parent
                                 // to the series-detail phase (regardless
                                 // of in-library status) so the user can
@@ -398,25 +399,50 @@ fun TmdbPickerPhase(
                                 // submit immediately.
                                 if (wrapped.libraryEntry != null) {
                                     scope.launch {
-                                        val playlist = withContext(Dispatchers.IO) {
-                                            com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
-                                        }
-                                        val confirmed = if (playlist != null) {
-                                            val resolved = withContext(Dispatchers.IO) {
-                                                com.hushtv.tv.data.TmdbIdResolver
-                                                    .resolveTmdbId(playlist, wrapped.libraryEntry)
+                                        // Belt-and-braces: any failure
+                                        // in the TMDB-id resolver
+                                        // (provider returning malformed
+                                        // JSON, network blip, etc.)
+                                        // must NOT propagate out of
+                                        // this launch — an uncaught
+                                        // exception here would kill
+                                        // the app, freezing the
+                                        // request modal in place.
+                                        // On any error we degrade
+                                        // gracefully to "not in
+                                        // library" semantics.
+                                        runCatching {
+                                            val playlist = withContext(Dispatchers.IO) {
+                                                com.hushtv.tv.data.PlaylistStore
+                                                    .find(ctx, playlistId)
                                             }
-                                            resolved == null || resolved == wrapped.hit.id
-                                        } else true
-                                        if (confirmed) {
-                                            onAlreadyAvailable(wrapped.libraryEntry)
-                                        } else {
+                                            val confirmed = if (playlist != null) {
+                                                val resolved = withContext(Dispatchers.IO) {
+                                                    com.hushtv.tv.data.TmdbIdResolver
+                                                        .resolveTmdbId(
+                                                            playlist,
+                                                            wrapped.libraryEntry,
+                                                        )
+                                                }
+                                                resolved == null || resolved == wrapped.hit.id
+                                            } else true
+                                            if (confirmed) {
+                                                onAlreadyAvailable(wrapped.libraryEntry)
+                                            } else {
+                                                onPicked(pick)
+                                            }
+                                        }.onFailure {
+                                            // Resolver failed — fall
+                                            // through to the request
+                                            // path so the user can
+                                            // still submit.
                                             onPicked(pick)
                                         }
                                     }
                                 } else {
                                     onPicked(pick)
                                 }
+                                }  // end runCatching
                             },
                         )
                     }
