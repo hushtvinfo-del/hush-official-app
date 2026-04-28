@@ -1,5 +1,39 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.47 — 2026-04-27 (versionCode 247)  ⬅ LATEST  (optional)
+
+**Search results vertical-scroll fix.** User: "When I search a
+title that has Collections (e.g. Terminator), DOWN doesn't move
+me past the first row. When I search one that doesn't (e.g.
+The Wrecking Crew), DOWN works."
+
+### Root cause
+`TVUnifiedSearchScreen` was rendering its result rows inside a
+`LazyColumn`. LazyColumn doesn't compose children outside the
+viewport — so when the user pressed DOWN repeatedly to walk
+through rows, the next row's first card was a focusable that
+hadn't been laid out yet, and Compose's 2D focus search couldn't
+find it. The Wrecking Crew query (single row, fits in viewport)
+worked because there was nothing below to walk to anyway.
+
+### Fix
+Replaced the LazyColumn with a regular `Column.verticalScroll(
+rememberScrollState())`. Total row count is at most 5 (live,
+movies, series, collections, request CTA), each containing a
+horizontal LazyRow — the vertical content is small enough that
+eager composition is cheap. All rows now exist in the focus
+tree from frame one, so D-pad walks through them without the
+LazyColumn layout race.
+
+Each `if (...) item("key") { ... }` block converted to plain
+`if (...) { ... }` since we're no longer inside a LazyListScope.
+
+### Build + deploy
+- `versionCode 246 → 247`, `versionName "1.42.46" → "1.42.47"`.
+- Non-mandatory. APK md5 `eab8d6169f87446803329865b9178929`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.46 — 2026-04-27 (versionCode 246)  ⬅ LATEST  (optional)
 
 **Master Search focus trap on DOWN — fixed.** User couldn't move

@@ -1,10 +1,10 @@
 {
-  "versionCode": 246,
-  "versionName": "1.42.46",
+  "versionCode": 247,
+  "versionName": "1.42.47",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Fixed master Search on TV: pressing DOWN from the search bar now correctly moves focus into the result cards. Previously the focus requester was attached to a non-focusable wrapper and the keypress no-op'd."
+    "Fixed: searching titles with multiple result rows (e.g. 'Terminator' which has Series + Franchise rows) wouldn't let you scroll down past the first row. The off-screen rows weren't composed yet so D-pad DOWN had no target. Switched to a fully-composed scroll column."
   ]
 }

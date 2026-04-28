@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
@@ -249,11 +251,31 @@ fun TVUnifiedSearchScreen(
                     onRequest = { showRequestModal = true },
                 )
                 else -> {
-                    androidx.compose.foundation.lazy.LazyColumn(
-                        contentPadding = PaddingValues(vertical = 18.dp),
+                    // Regular Column + verticalScroll — NOT a LazyColumn.
+                    // The result rows live inside horizontal LazyRows
+                    // already, so the vertical content is at most 4
+                    // items (live, movies, series, collections). With a
+                    // LazyColumn, rows below the viewport weren't being
+                    // composed, so their `firstXFocus` requesters had
+                    // nothing to attach to and DOWN-from-card-to-card
+                    // navigation hit a dead end (Compose's 2D focus
+                    // search can't find a focusable that hasn't been
+                    // laid out yet). The user reproduced this by
+                    // searching titles with both Series and Franchise
+                    // hits — the franchise row was off-screen until the
+                    // LazyColumn happened to scroll it in. Regular
+                    // verticalScroll composes all children up-front so
+                    // every row's first card is always a valid focus
+                    // target.
+                    val resultsScrollState = rememberScrollState()
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(resultsScrollState)
+                            .padding(vertical = 18.dp),
                         verticalArrangement = Arrangement.spacedBy(22.dp),
                     ) {
-                        if (liveHits.isNotEmpty()) item("live") {
+                        if (liveHits.isNotEmpty()) {
                             SearchResultRow(
                                 label = "LIVE CHANNELS · ${liveHits.size}",
                                 accent = Color(0xFFEF4444),
@@ -278,7 +300,7 @@ fun TVUnifiedSearchScreen(
                                 )
                             }
                         }
-                        if (moviesHits.isNotEmpty()) item("movies") {
+                        if (moviesHits.isNotEmpty()) {
                             SearchResultRow(
                                 label = "MOVIES · ${moviesHits.size}",
                                 accent = Cyan,
@@ -299,7 +321,7 @@ fun TVUnifiedSearchScreen(
                                 )
                             }
                         }
-                        if (seriesHits.isNotEmpty()) item("series") {
+                        if (seriesHits.isNotEmpty()) {
                             SearchResultRow(
                                 label = "SERIES · ${seriesHits.size}",
                                 accent = Color(0xFF8B5CF6),
@@ -344,7 +366,7 @@ fun TVUnifiedSearchScreen(
                                 )
                             }
                         }
-                        if (collectionsHits.isNotEmpty()) item("coll") {
+                        if (collectionsHits.isNotEmpty()) {
                             SearchResultRow(
                                 label = "FRANCHISES · ${collectionsHits.size}",
                                 accent = Color(0xFFF97316),
@@ -366,18 +388,16 @@ fun TVUnifiedSearchScreen(
                         // exist, give users a way to request the exact
                         // title they were looking for (e.g. typo, or
                         // their library doesn't carry that franchise).
-                        item("request") {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 40.dp, vertical = 8.dp),
-                            ) {
-                                RequestCta(
-                                    label = "Don't see it? Request \"${query.trim()}\"",
-                                    focusRequester = requestCtaFocus,
-                                    onClick = { showRequestModal = true },
-                                )
-                            }
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 40.dp, vertical = 8.dp),
+                        ) {
+                            RequestCta(
+                                label = "Don't see it? Request \"${query.trim()}\"",
+                                focusRequester = requestCtaFocus,
+                                onClick = { showRequestModal = true },
+                            )
                         }
                     }
                 }
