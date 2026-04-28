@@ -1,10 +1,10 @@
 {
-  "versionCode": 252,
-  "versionName": "1.42.52",
+  "versionCode": 253,
+  "versionName": "1.42.53",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Fix: 'Tap to Watch' from the request modal now correctly opens the series page when launched from My Requests (was bouncing back to the empty My Requests page)."
+    "Request modal now lands focus on the Movie button by default instead of jumping straight into the search field. D-pad DOWN to reach the search field."
   ]
 }

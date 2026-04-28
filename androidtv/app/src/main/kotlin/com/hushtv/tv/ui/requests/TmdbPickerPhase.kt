@@ -207,13 +207,17 @@ fun TmdbPickerPhase(
             )
 
             Spacer(Modifier.height(22.dp))
-            TypeRadioRow(type = type, onChangeType = onChangeType)
+            TypeRadioRow(
+                type = type,
+                onChangeType = onChangeType,
+                firstFocus = firstFocus,
+            )
 
             Spacer(Modifier.height(18.dp))
             SearchField(
                 value = query,
                 onValueChange = { query = it },
-                focusRequester = firstFocus,
+                focusRequester = null,
                 placeholder = if (type == "series") "Type a series name…"
                 else "Type a movie name…",
             )
@@ -345,7 +349,7 @@ private data class TmdbHitWithLibrary(
 private fun SearchField(
     value: String,
     onValueChange: (String) -> Unit,
-    focusRequester: FocusRequester,
+    focusRequester: FocusRequester?,
     placeholder: String,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -371,7 +375,7 @@ private fun SearchField(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
             modifier = Modifier
                 .fillMaxWidth()
-                .focusRequester(focusRequester)
+                .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                 .onFocusChanged { focused = it.isFocused },
         )
         if (value.isEmpty()) {
@@ -383,19 +387,33 @@ private fun SearchField(
 /* ───────── Type radio (Movie / Series) ───────── */
 
 @Composable
-private fun TypeRadioRow(type: String, onChangeType: (String) -> Unit) {
+private fun TypeRadioRow(
+    type: String,
+    onChangeType: (String) -> Unit,
+    firstFocus: FocusRequester? = null,
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        TypePill("🎬 Movie", selected = type == "movie",
-            modifier = Modifier.weight(1f)) { onChangeType("movie") }
-        TypePill("📺 Series", selected = type == "series",
-            modifier = Modifier.weight(1f)) { onChangeType("series") }
+        TypePill(
+            "🎬 Movie",
+            selected = type == "movie",
+            modifier = Modifier.weight(1f),
+            focusRequester = firstFocus,
+        ) { onChangeType("movie") }
+        TypePill(
+            "📺 Series",
+            selected = type == "series",
+            modifier = Modifier.weight(1f),
+            focusRequester = null,
+        ) { onChangeType("series") }
     }
 }
 
 @Composable
 private fun TypePill(
     label: String, selected: Boolean,
-    modifier: Modifier = Modifier, onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     Box(
@@ -414,6 +432,7 @@ private fun TypePill(
                 },
                 shape = RoundedCornerShape(12.dp),
             )
+            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick),
