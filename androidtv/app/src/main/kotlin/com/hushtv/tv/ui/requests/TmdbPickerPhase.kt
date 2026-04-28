@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +60,8 @@ import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -116,7 +118,9 @@ fun TmdbPickerPhase(
     var libraryReady by remember { mutableStateOf(false) }
     var hits by remember { mutableStateOf<List<TmdbHitWithLibrary>>(emptyList()) }
     var lastSearchedQuery by remember { mutableStateOf("") }
+    var searchError by remember { mutableStateOf<String?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
+    var decorateJob by remember { mutableStateOf<Job?>(null) }
 
     // Prime the LibraryIndex so the "already available" badge can
     // light up for matching results. Cache hit on subsequent uses.
@@ -129,42 +133,69 @@ fun TmdbPickerPhase(
         }
     }
 
-    // Debounced TMDB search. Cancels any in-flight job and only fires
-    // after 350 ms of typing inactivity. Empty query = empty grid.
+    // Two-stage debounced search:
+    //   STAGE 1 — TMDB call. Results render IMMEDIATELY without library
+    //             badges so the user sees something within ~500 ms.
+    //   STAGE 2 — Async library decoration. Each TMDB hit gets matched
+    //             against the user's Xtream library off-thread; as
+    //             matches come back we update the same `hits` state in
+    //             place, lighting up "ALREADY IN LIBRARY" badges
+    //             progressively.
+    // This prevents the 5-second wait users were seeing for queries
+    // like "Mario" that return 20 hits on a 50k+ title library.
     LaunchedEffect(query, type, libraryReady) {
         searchJob?.cancel()
+        decorateJob?.cancel()
         val q = query.trim()
         if (q.length < 2) {
             hits = emptyList()
             loading = false
+            searchError = null
             return@LaunchedEffect
         }
         searchJob = scope.launch {
             delay(350)
             loading = true
-            // Both the TMDB HTTP call AND the library-membership decoration
-            // run inside Dispatchers.IO. The decoration loop calls
-            // LibraryIndex.findBest(...) which on a fully-primed library
-            // is an O(n) substring search across thousands of VOD titles.
-            // Running that on Main blocked the keystroke pipeline long
-            // enough to ANR / crash the app on every other letter on
-            // larger libraries — moving it off-Main fixes the freeze
-            // user reported during in-modal search.
-            val decorated = withContext(Dispatchers.IO) {
-                val raw = if (type == "series") TmdbService.searchTvList(q)
-                          else TmdbService.searchMoviesList(q)
-                raw.map { hit ->
-                    val title = hit.title ?: hit.name ?: ""
-                    val libKind = if (type == "series") "series" else "movie"
-                    val year = parseYear(hit.release_date)
-                        ?: parseYear(hit.first_air_date)
-                    val libHit = LibraryIndex.findBest(title, libKind, year)
-                    TmdbHitWithLibrary(hit = hit, libraryEntry = libHit)
+            searchError = null
+            val raw = withContext(Dispatchers.IO) {
+                runCatching {
+                    if (type == "series") TmdbService.searchTvList(q)
+                    else TmdbService.searchMoviesList(q)
+                }.getOrElse {
+                    searchError = "Couldn't reach TMDB. Check your connection."
+                    emptyList()
                 }
             }
-            hits = decorated
+            // Show raw TMDB hits immediately (no library badges yet).
+            hits = raw.map { TmdbHitWithLibrary(it, libraryEntry = null) }
             lastSearchedQuery = q
             loading = false
+
+            // STAGE 2 — Decorate in the background, in parallel.
+            if (raw.isNotEmpty() && libraryReady) {
+                decorateJob = scope.launch {
+                    runCatching {
+                        val libKind = if (type == "series") "series" else "movie"
+                        val decorated = withContext(Dispatchers.IO) {
+                            raw.map { hit ->
+                                async {
+                                    val title = hit.title ?: hit.name ?: ""
+                                    val year = parseYear(hit.release_date)
+                                        ?: parseYear(hit.first_air_date)
+                                    val libHit = runCatching {
+                                        LibraryIndex.findBest(title, libKind, year)
+                                    }.getOrNull()
+                                    TmdbHitWithLibrary(hit = hit, libraryEntry = libHit)
+                                }
+                            }.awaitAll()
+                        }
+                        // Only commit if the query hasn't changed under us.
+                        if (q == lastSearchedQuery) hits = decorated
+                    }
+                    // Any decoration failure is non-fatal — user still
+                    // sees TMDB results; only the badges are missing.
+                }
+            }
         }
     }
 
@@ -263,10 +294,51 @@ fun TmdbPickerPhase(
                         fontSize = 13.sp,
                     )
                 }
-                loading -> Box(
+                loading -> Column(
                     Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) { CircularProgressIndicator(color = Cyan) }
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        "Searching TMDB…",
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        color = Cyan,
+                        trackColor = Color(0x22FFFFFF),
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(999.dp)),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Hold tight — gathering matches.",
+                        color = Color(0xFF64748B),
+                        fontSize = 12.sp,
+                    )
+                }
+                searchError != null -> Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        searchError ?: "",
+                        color = Color(0xFFEF4444),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "We'll retry as soon as you type something new.",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                    )
+                }
                 hits.isEmpty() -> EmptyTmdbState(
                     query = query.trim(),
                     onFreeTextSubmit = onFreeTextSubmit,

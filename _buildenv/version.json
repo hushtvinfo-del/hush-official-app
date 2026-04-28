@@ -1,10 +1,10 @@
 {
-  "versionCode": 256,
-  "versionName": "1.42.56",
+  "versionCode": 257,
+  "versionName": "1.42.57",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Introducing the Hush+ section! New top-nav tab on TV (between Series and Requests) and a new Hush+ tab in the mobile bottom bar. Browse the Overview plus dedicated pages for HushVOD+, HushBooks+, HushArcade+ and HushTube+. Coming soon — full launch with the next platform update."
+    "Request search is now much faster: TMDB results render the moment they arrive while library cross-reference happens in the background. Replaced the spinner with a linear progress bar so it no longer looks like buffering. Crash on broad searches like 'Mario' is fixed — failures now surface inline instead of taking down the app."
   ]
 }
