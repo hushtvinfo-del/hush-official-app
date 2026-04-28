@@ -376,27 +376,39 @@ private fun PersonCreditsGrid(
     hits: List<PersonHit>,
     onClick: (PersonHit) -> Unit,
 ) {
-    // 5 columns × up to 2 rows (10 per page). Fixed structure means
-    // alignment is identical across every card on the page.
-    val perRow = 5
-    val rows = hits.chunked(perRow)
+    // Fixed dimensions tuned to fit a 5-column × 2-row grid in the
+    // available filmography viewport on a 1080p screen:
+    //   • card width 196 dp → poster 2:3 = 196 × 294 dp
+    //   • text rows below poster total ~73 dp (title/meta/pill)
+    //   • full card height ≈ 367 dp; two rows + 18 dp gap = 752 dp
+    //
+    // Earlier attempts used Modifier.weight(1f) which stretched
+    // each card to ~350 dp wide, which then pushed the 2:3 poster
+    // to 524 dp tall, overflowing the second row INTO the first.
+    // Anchoring width explicitly makes the grid bulletproof.
+    val cardWidth = 196.dp
+    val rows = hits.chunked(5)
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
                 row.forEach { ph ->
                     PersonCreditCard(
                         hit = ph,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.width(cardWidth),
                         onClick = { onClick(ph) },
                     )
                 }
-                // Pad the last row so cards don't grow weirdly when
-                // there are fewer than perRow items.
-                repeat(perRow - row.size) {
-                    Spacer(Modifier.weight(1f))
+                // Pad the last row with empty same-width slots so a
+                // page with 7 hits (e.g. last page) keeps the same
+                // SpaceEvenly rhythm as a full row.
+                repeat(5 - row.size) {
+                    Spacer(Modifier.width(cardWidth))
                 }
             }
         }

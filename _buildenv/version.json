@@ -1,10 +1,10 @@
 {
-  "versionCode": 266,
-  "versionName": "1.42.66",
+  "versionCode": 267,
+  "versionName": "1.42.67",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Cast filmography pages are now paginated to 10 newest titles per page with Prev / Next buttons — only the visible 10 cards run the library cross-check, so each page is verified in well under a second instead of waiting on 70+ titles. Cards are now perfectly aligned: titles clipped to one line and meta + status pills at fixed heights so two-line titles never break the grid."
+    "Fix: filmography grid was overflowing because cards were being stretched horizontally which pushed posters past the bottom of the screen. Cards are now a fixed 196 dp wide spread across the row so all 10 fit cleanly on one screen with no overlap."
   ]
 }
