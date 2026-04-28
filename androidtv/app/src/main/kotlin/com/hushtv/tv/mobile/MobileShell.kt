@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -59,6 +60,7 @@ fun MobileShell(nav: NavController, playlistId: String) {
                 "movies" -> MobileBrowseScreen(nav, playlistId, "movie", inline = true)
                 "series" -> MobileBrowseScreen(nav, playlistId, "series", inline = true)
                 "live" -> MobileLiveHubScreen(nav, playlistId)
+                "hushplus" -> com.hushtv.tv.ui.hushplus.MobileHushPlusScreen()
                 "settings" -> MobileSettingsScreen(nav, playlistId)
                 else -> MobileHomeScreen(nav, playlistId)
             }
@@ -77,6 +79,7 @@ private fun MobileBottomNav(
         BottomItem("live", "Live", Icons.Default.LiveTv),
         BottomItem("movies", "Movies", Icons.Default.Movie),
         BottomItem("series", "Series", Icons.Default.Tv),
+        BottomItem("hushplus", "Hush+", Icons.Default.Star),
     )
     Row(
         Modifier
@@ -127,7 +130,7 @@ private fun BottomNavBtn(
         Modifier
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(

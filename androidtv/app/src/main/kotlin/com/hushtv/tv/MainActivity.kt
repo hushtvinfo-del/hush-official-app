@@ -204,6 +204,12 @@ private fun AppContent() {
                 bs.arguments?.getString("playlistId") ?: "",
             )
         }
+        composable("hushplus/{playlistId}") { bs ->
+            com.hushtv.tv.ui.hushplus.TVHushPlusScreen(
+                nav,
+                bs.arguments?.getString("playlistId") ?: "",
+            )
+        }
         composable("requestdetail/{playlistId}/{requestId}") { bs ->
             com.hushtv.tv.ui.requests.TVRequestDetailScreen(
                 nav = nav,
