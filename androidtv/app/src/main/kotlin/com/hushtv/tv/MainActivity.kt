@@ -54,11 +54,6 @@ class MainActivity : ComponentActivity() {
         // Must be called before super.onCreate(). Instantly shows the pure-black
         // splash background — the animated wordmark is rendered by Compose.
         installSplashScreen()
-        // Capture every uncaught exception to a file we can pull off
-        // the device — Android's default UncaughtExceptionHandler
-        // otherwise just prints to logcat which is gone the moment
-        // the user reboots.
-        CrashLogger.install(this)
         super.onCreate(savedInstanceState)
         setContent {
             HushTVTheme {
