@@ -60,8 +60,6 @@ import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -185,26 +183,40 @@ fun TmdbPickerPhase(
             runCatching {
                 kotlinx.coroutines.withTimeoutOrNull(6_000) {
                     val libKind = if (type == "series") "series" else "movie"
-                    val semaphore = kotlinx.coroutines.sync.Semaphore(4)
-                    val decorated = withContext(Dispatchers.IO) {
-                        snapshot.map { wrapped ->
-                            async {
-                                semaphore.acquire()
-                                try {
-                                    val title = wrapped.hit.title
-                                        ?: wrapped.hit.name ?: ""
-                                    val year =
-                                        parseYear(wrapped.hit.release_date)
-                                            ?: parseYear(wrapped.hit.first_air_date)
-                                    val libHit = runCatching {
-                                        LibraryIndex.findBest(title, libKind, year)
-                                    }.getOrNull()
-                                    TmdbHitWithLibrary(wrapped.hit, libHit)
-                                } finally {
-                                    semaphore.release()
-                                }
-                            }
-                        }.awaitAll()
+                    // Sequential decoration with explicit yield()
+                    // cancellation points between rows. We used to
+                    // run 4 lookups in parallel, but on low-power
+                    // boxes (Fire Stick / cheap MeCool) the cancel
+                    // path doesn't actually stop the in-flight CPU
+                    // scan — `LibraryIndex.findBest` is a sync O(n)
+                    // search across tens of thousands of titles, so
+                    // pre-empting it requires cooperation. Result:
+                    // typing fast, every keystroke fires a new
+                    // search, each one stacks 4 more parallel scans
+                    // on top of the previous (cancelled but still
+                    // executing) ones, the box's CPU runs out, the
+                    // main thread starves, the app freezes / ANRs.
+                    //
+                    // Sequential + yield() fixes both halves: only
+                    // one scan runs at a time AND the next yield()
+                    // hop stops the loop the instant a fresh search
+                    // cancels this job. Total cost for ~12 hits is
+                    // 120–600 ms which is well under the 6 s
+                    // timeout above.
+                    val decorated = withContext(Dispatchers.Default) {
+                        val out = ArrayList<TmdbHitWithLibrary>(snapshot.size)
+                        for (wrapped in snapshot) {
+                            kotlinx.coroutines.yield()
+                            val title = wrapped.hit.title
+                                ?: wrapped.hit.name ?: ""
+                            val year = parseYear(wrapped.hit.release_date)
+                                ?: parseYear(wrapped.hit.first_air_date)
+                            val libHit = runCatching {
+                                LibraryIndex.findBest(title, libKind, year)
+                            }.getOrNull()
+                            out += TmdbHitWithLibrary(wrapped.hit, libHit)
+                        }
+                        out
                     }
                     if (q == lastSearchedQuery) {
                         hits = decorated

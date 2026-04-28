@@ -1,10 +1,10 @@
 {
-  "versionCode": 261,
-  "versionName": "1.42.61",
+  "versionCode": 262,
+  "versionName": "1.42.62",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Fix: Tapping a request result (e.g. Mario) could crash the app if the provider returned malformed metadata while we were verifying library presence. Every step in the tap-to-request path is now wrapped in defensive error handling, double-tap is blocked while a submit is in flight, and any failure surfaces as an inline error instead of taking the app down."
+    "Fix freeze when typing fast in the request search (e.g. 'The Wrecking Crew'). Library cross-reference now runs sequentially with cancellation points so old searches actually stop the moment a new keystroke arrives — no more piled-up CPU scans on Fire Stick / low-power boxes."
   ]
 }
