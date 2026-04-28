@@ -259,12 +259,13 @@ fun TVUnifiedSearchScreen(
                                 accent = Color(0xFFEF4444),
                                 items = liveHits,
                                 firstItemFocus = firstLiveFocus,
-                            ) { mc ->
+                            ) { mc, fr ->
                                 PosterCard(
                                     title = mc.title,
                                     image = mc.poster,
                                     badge = "LIVE",
                                     badgeTint = Color(0xFFEF4444),
+                                    focusRequester = fr,
                                     onClick = {
                                         val p = playlist ?: return@PosterCard
                                         val url = XtreamApi.liveUrl(
@@ -283,12 +284,13 @@ fun TVUnifiedSearchScreen(
                                 accent = Cyan,
                                 items = moviesHits,
                                 firstItemFocus = firstMovieFocus,
-                            ) { mc ->
+                            ) { mc, fr ->
                                 PosterCard(
                                     title = mc.title,
                                     image = mc.poster,
                                     badge = "MOVIE",
                                     badgeTint = Cyan,
+                                    focusRequester = fr,
                                     onClick = {
                                         nav.navigate(
                                             "moviedetail/$playlistId/${mc.streamId}/${Uri.encode(mc.title)}"
@@ -303,12 +305,13 @@ fun TVUnifiedSearchScreen(
                                 accent = Color(0xFF8B5CF6),
                                 items = seriesHits,
                                 firstItemFocus = firstSeriesFocus,
-                            ) { mc ->
+                            ) { mc, fr ->
                                 PosterCard(
                                     title = mc.title,
                                     image = mc.poster,
                                     badge = "SERIES",
                                     badgeTint = Color(0xFF8B5CF6),
+                                    focusRequester = fr,
                                     onClick = {
                                         // Resolve to the canonical
                                         // series_id BEFORE navigating.
@@ -347,9 +350,10 @@ fun TVUnifiedSearchScreen(
                                 accent = Color(0xFFF97316),
                                 items = collectionsHits,
                                 firstItemFocus = firstCollFocus,
-                            ) { coll ->
+                            ) { coll, fr ->
                                 CollectionPosterCard(
                                     coll = coll,
+                                    focusRequester = fr,
                                     onClick = {
                                         nav.navigate(
                                             "collection/$playlistId/${coll.tmdbCollectionId}/${Uri.encode(coll.displayName)}"
@@ -593,7 +597,7 @@ private fun <T> SearchResultRow(
     accent: Color,
     items: List<T>,
     firstItemFocus: FocusRequester,
-    cardContent: @Composable (T) -> Unit,
+    cardContent: @Composable (T, FocusRequester?) -> Unit,
 ) {
     Column(Modifier.padding(start = 40.dp, end = 40.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -615,9 +619,14 @@ private fun <T> SearchResultRow(
         Spacer(Modifier.height(10.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             items(items) { item ->
-                val mod = if (item == items.firstOrNull())
-                    Modifier.focusRequester(firstItemFocus) else Modifier
-                Box(mod) { cardContent(item) }
+                // Pass the focus requester DOWN INTO the card itself
+                // (rather than its non-focusable wrapper Box) so the
+                // search bar's `firstItemFocus.requestFocus()` from
+                // the DOWN keypress lands on something focusable.
+                // Previously the requester sat on a wrapper Box that
+                // wasn't `.focusable()`, so requestFocus() silently
+                // no-op'd and the user got stuck on the search bar.
+                cardContent(item, if (item == items.firstOrNull()) firstItemFocus else null)
             }
         }
     }
@@ -630,12 +639,14 @@ private fun PosterCard(
     badge: String,
     badgeTint: Color,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(10.dp)
     Column(
         Modifier
             .width(124.dp)
+            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .onFocusChanged { focused = it.isFocused }
             .tvFocusable(scaleOnFocus = 1.05f, shape = shape)
             .focusable()
@@ -719,12 +730,14 @@ private fun PosterCard(
 private fun CollectionPosterCard(
     coll: MovieCollection,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(10.dp)
     Column(
         Modifier
             .width(180.dp)
+            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .onFocusChanged { focused = it.isFocused }
             .tvFocusable(scaleOnFocus = 1.05f, shape = shape)
             .focusable()

@@ -1,5 +1,42 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.46 — 2026-04-27 (versionCode 246)  ⬅ LATEST  (optional)
+
+**Master Search focus trap on DOWN — fixed.** User couldn't move
+focus from the search bar down into the result cards.
+
+### Root cause
+`SearchResultRow` was attaching `firstItemFocus` to a wrapping
+`Box(mod) { cardContent(item) }` that wasn't itself focusable.
+The `PosterCard`/`CollectionPosterCard` *inside* the wrapper Box
+DID have `.focusable()` but didn't carry the requester. So the
+search bar's DOWN handler called `firstItemFocus.requestFocus()`
+on a non-focusable Box → silent no-op → user got stuck.
+
+### Fix
+- `SearchResultRow.cardContent` lambda signature changed from
+  `(T) -> Unit` to `(T, FocusRequester?) -> Unit`. The row passes
+  `firstItemFocus` for the first item only, `null` for the rest.
+- `PosterCard` + `CollectionPosterCard` accept an optional
+  `focusRequester: FocusRequester? = null` param, applied via a
+  `.let { if (focusRequester != null) it.focusRequester(...) else it }`
+  on their root Modifier — BEFORE `.focusable()`, so the requester
+  lands on a focusable target.
+- All four `cardContent` call sites in `TVUnifiedSearchScreen`
+  (Live / Movie / Series / Collection rows) updated to forward
+  the requester through to the underlying card composable.
+
+DOWN from the search bar now reliably lands on the first card of
+the first non-empty results row (live → movies → series →
+collections in that priority order, per the existing
+`downTarget = when { ... }` chain).
+
+### Build + deploy
+- `versionCode 245 → 246`, `versionName "1.42.45" → "1.42.46"`.
+- Non-mandatory. APK md5 `4c5b6fd508954d7b65f3289ce935fc2b`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.45 — 2026-04-27 (versionCode 245)  ⬅ LATEST  (optional)
 
 **Inline search ported to Mobile Movies + Series tabs.**

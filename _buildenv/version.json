@@ -1,10 +1,10 @@
 {
-  "versionCode": 245,
-  "versionName": "1.42.45",
+  "versionCode": 246,
+  "versionName": "1.42.46",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Mobile Movies and Series tabs now have an inline search field at the top of the page — same auto-switch-to-All behaviour as TV. Live TV tab keeps its uncluttered grid."
+    "Fixed master Search on TV: pressing DOWN from the search bar now correctly moves focus into the result cards. Previously the focus requester was attached to a non-focusable wrapper and the keypress no-op'd."
   ]
 }
