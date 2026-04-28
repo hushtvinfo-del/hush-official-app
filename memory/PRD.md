@@ -1,6 +1,84 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.42.50 — 2026-04-27 (versionCode 250)  ⬅ LATEST  (optional)
+## v1.42.51 — 2026-04-28 (versionCode 251)  ⬅ LATEST  (optional)
+
+**3-page Multi-Select Episode Request flow.** User flagged the
+v1.42.50 inline "PICK EPISODE →" chip as "ugly, you can't even
+click on it" and asked for a card-tap-to-expand pattern with
+multi-select. Shipped a brand-new 3-page flow inside the request
+modal:
+
+### Page 1 — Clean search row (`TmdbPickerPhase.kt`)
+Removed the broken inline chip from `TmdbHitRow`. Series result
+rows are now a single focusable surface — one D-pad ENTER opens
+Page 2. Movies preserve the existing fast-path: in-library →
+deep-link to library; not in library → submit immediately. Badge
+text now reflects the expanded UX:
+- Series in library: "ALREADY IN LIBRARY · TAP FOR OPTIONS"
+- Series missing: "TAP TO REQUEST OR PICK EPISODES"
+- Movies unchanged.
+
+### Page 2 — `SeriesDetailPhase.kt` (NEW)
+Left/right split inside the modal viewport (no outer scrolling):
+- **Left**: 280 dp 2:3 poster fetched at TMDB w500.
+- **Right**: title (32 sp Black), meta line (year · genres ·
+  N seasons), green "ALREADY IN YOUR LIBRARY" pill (when applies),
+  scrollable synopsis from `TmdbService.getTv(id).overview`, then
+  CTAs stacked at the bottom.
+
+CTAs render conditionally:
+- **▶ Tap to Watch** (only when `pick.library != null`) — calls
+  `onAlreadyAvailable` which dismisses the modal and deep-links
+  the user into their library entry (matches the existing search
+  fast-path).
+- **+ Request Whole Series** — submits an `entire_series` scope
+  request via the existing `doSubmit()` pipeline.
+- **➕ Request Missing Episodes** — routes to Page 3.
+- **← Back** — returns to Page 1 with state preserved.
+
+Primary button is the first non-Back CTA (Tap to Watch when
+in-library, else Request Whole Series). Focus auto-lands on it
+once TMDB metadata arrives so the user can ENTER without an
+extra DOWN press.
+
+### Page 3 — `MultiEpisodePickerPhase.kt` (NEW, replaces the v1.42.50 single-tap picker)
+Same 2-pane season list / episode list shape as v1.42.50, plus:
+- **`CheckboxBox` on every row** + **"Select Whole Season" chip**
+  pinned to the top of the episode list. Selection state lives
+  per-screen and **resets when the user switches seasons** (per
+  user requirement: one season at a time, not cross-season).
+- **Pinned footer**: "{N} episodes selected" + a SUBMIT button.
+  Disabled when count == 0; shows a 16 dp spinner during submit.
+- Library cross-reference + MISSING/IN LIBRARY pills + auto-scroll-
+  to-first-missing all preserved from v1.42.50.
+
+Submission packs all selected episodes into a single request:
+`seasons = "15"`, `episodes = "E04 — Foo, E05 — Bar, E07 — Baz"`.
+
+### Files
+- **NEW**: `SeriesDetailPhase.kt` (~340 lines: BackChipPill,
+  ActionButton, InLibraryBadge).
+- **NEW**: `MultiEpisodePickerPhase.kt` (~590 lines: SeasonList,
+  EpisodeCheckboxList, SelectWholeSeasonChip, EpisodeCheckboxRow,
+  CheckboxBox, LibraryStatusPill, SubmitFooter, SubmitButton).
+- **DELETED**: `EpisodePickerPhase.kt` (v1.42.49/50's single-tap
+  picker; replaced by the new multi-select picker).
+- **MODIFIED**: `TmdbPickerPhase.kt` — removed the inline
+  `EpisodeShortcutChip`, removed the `onPickEpisode` parameter,
+  series row click now always routes to `onPicked` so the parent
+  can show Page 2.
+- **MODIFIED**: `RequestContentSheet.kt` — replaced
+  `Phase.EPISODE_PICKER` with `Phase.SERIES_DETAIL` +
+  `Phase.MULTI_EPISODE_PICKER`. New phase wiring carries
+  `pickedTmdb.library` through to the Tap-to-Watch CTA on Page 2.
+
+### Build + deploy
+- `versionCode 250 → 251`, `versionName "1.42.50" → "1.42.51"`.
+- Non-mandatory. APK md5 `cc2d93ed9db84e9206acc0c4e0c09dd2`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
+## v1.42.50 — 2026-04-27 (versionCode 250)  (optional)
 
 **Episode picker — library cross-reference + auto-scroll to
 first missing episode.**

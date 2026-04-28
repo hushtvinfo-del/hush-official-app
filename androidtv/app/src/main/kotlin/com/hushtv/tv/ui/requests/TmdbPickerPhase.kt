@@ -107,7 +107,6 @@ fun TmdbPickerPhase(
     onPicked: (TmdbPick) -> Unit,
     onAlreadyAvailable: (LibraryIndex.Entry) -> Unit,
     onFreeTextSubmit: (String) -> Unit,
-    onPickEpisode: ((TmdbPick) -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -276,26 +275,6 @@ fun TmdbPickerPhase(
                         TmdbHitRow(
                             wrapped = wrapped,
                             type = type,
-                            onPickEpisode = onPickEpisode?.let { cb ->
-                                { wrappedHit ->
-                                    val title = wrappedHit.hit.title
-                                        ?: wrappedHit.hit.name ?: ""
-                                    val y = parseYear(wrappedHit.hit.release_date)
-                                        ?: parseYear(wrappedHit.hit.first_air_date)
-                                    cb(
-                                        TmdbPick(
-                                            tmdbId = wrappedHit.hit.id,
-                                            tmdbType = "tv",
-                                            title = title,
-                                            year = y,
-                                            posterPath = wrappedHit.hit.poster_path,
-                                            backdropPath = wrappedHit.hit.backdrop_path,
-                                            overview = null,
-                                            library = wrappedHit.libraryEntry,
-                                        ),
-                                    )
-                                }
-                            },
                             onPick = onClick@{
                                 val title = wrapped.hit.title ?: wrapped.hit.name ?: ""
                                 val year = parseYear(wrapped.hit.release_date)
@@ -307,9 +286,24 @@ fun TmdbPickerPhase(
                                     year = year,
                                     posterPath = wrapped.hit.poster_path,
                                     backdropPath = wrapped.hit.backdrop_path,
-                                    overview = null,
+                                    overview = wrapped.hit.overview.ifBlank { null },
                                     library = wrapped.libraryEntry,
                                 )
+                                // For SERIES we always route the parent
+                                // to the series-detail phase (regardless
+                                // of in-library status) so the user can
+                                // pick "Tap to Watch" OR "Request Whole
+                                // Series" OR "Request Missing Episodes".
+                                // The library entry is carried inside
+                                // the pick; the parent decides what to
+                                // do.
+                                if (type == "series") {
+                                    onPicked(pick)
+                                    return@onClick
+                                }
+                                // Movies — keep the existing fast-path:
+                                // already-in-library = deep-link, else
+                                // submit immediately.
                                 if (wrapped.libraryEntry != null) {
                                     scope.launch {
                                         val playlist = withContext(Dispatchers.IO) {
@@ -441,7 +435,6 @@ private fun TmdbHitRow(
     wrapped: TmdbHitWithLibrary,
     onPick: () -> Unit,
     type: String,
-    onPickEpisode: ((TmdbHitWithLibrary) -> Unit)? = null,
 ) {
     var rowFocused by remember { mutableStateOf(false) }
     val hit = wrapped.hit
@@ -512,75 +505,34 @@ private fun TmdbHitRow(
                 )
             }
             Spacer(Modifier.height(6.dp))
-            if (inLibrary) {
-                AvailabilityBadge(
+            // Badge text differs by content type. For SERIES we route
+            // every click to the series-detail phase (regardless of
+            // library state) so the badge always says "TAP FOR
+            // OPTIONS"; for MOVIES the existing fast-path applies
+            // (in-library → deep-link, else → submit).
+            when {
+                isSeries && inLibrary -> AvailabilityBadge(
+                    label = "ALREADY IN LIBRARY · TAP FOR OPTIONS",
+                    bg = Color(0x3322C55E),
+                    fg = Color(0xFF34D399),
+                )
+                isSeries -> AvailabilityBadge(
+                    label = "TAP TO REQUEST OR PICK EPISODES",
+                    bg = Cyan.copy(alpha = 0.15f),
+                    fg = Cyan,
+                )
+                inLibrary -> AvailabilityBadge(
                     label = "ALREADY IN YOUR LIBRARY · TAP TO WATCH",
                     bg = Color(0x3322C55E),
                     fg = Color(0xFF34D399),
                 )
-            } else {
-                AvailabilityBadge(
+                else -> AvailabilityBadge(
                     label = "TAP TO REQUEST",
                     bg = Cyan.copy(alpha = 0.15f),
                     fg = Cyan,
                 )
             }
         }
-
-        // Series-only secondary CTA — independently focusable so D-pad
-        // RIGHT from the row body lands on it. Click submits a
-        // request scoped to a specific episode (drills into a TMDB
-        // season/episode picker rather than the manual seasons +
-        // episodes text inputs in the legacy DETAILS phase).
-        // Only shown when `onPickEpisode` is wired AND the result
-        // type is "series" — movies don't have episodes.
-        if (isSeries && onPickEpisode != null) {
-            Spacer(Modifier.width(10.dp))
-            EpisodeShortcutChip(onClick = { onPickEpisode(wrapped) })
-        }
-    }
-}
-
-/** Compact secondary chip for the per-row "pick a missing episode"
- *  affordance. Independently focusable so the user can D-pad RIGHT
- *  to reach it from the row body. Lights up cyan on focus to make
- *  the secondary action discoverable. */
-@Composable
-private fun EpisodeShortcutChip(onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(10.dp)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier
-            .height(40.dp)
-            .background(
-                if (focused) Cyan.copy(alpha = 0.22f) else Color(0x14FFFFFF),
-                shape,
-            )
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Cyan else Cyan.copy(alpha = 0.45f),
-                shape = shape,
-            )
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickableWithEnter(onClick)
-            .padding(horizontal = 12.dp),
-    ) {
-        Text(
-            "PICK EPISODE",
-            color = if (focused) Cyan else TextPrimary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 1.sp,
-        )
-        Text(
-            "→",
-            color = if (focused) Cyan else TextSecondary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-        )
     }
 }
 

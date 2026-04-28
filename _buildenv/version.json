@@ -1,10 +1,10 @@
 {
-  "versionCode": 250,
-  "versionName": "1.42.50",
+  "versionCode": 251,
+  "versionName": "1.42.51",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
-  "releasedAt": "2026-04-27",
+  "releasedAt": "2026-04-28",
   "changelog": [
-    "Episode picker now cross-references your library: episodes you DO have show 'IN LIBRARY' (green), episodes you don't show 'MISSING' (cyan). The list auto-scrolls to the first missing episode."
+    "Brand-new request flow: tapping a series in the request modal now opens a clean detail screen with Tap to Watch, Request Whole Series, and Request Missing Episodes options. The episode picker now supports multi-select with checkboxes — pick many missing episodes at once."
   ]
 }

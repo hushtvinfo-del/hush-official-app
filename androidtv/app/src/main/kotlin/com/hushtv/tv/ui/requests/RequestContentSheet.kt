@@ -250,11 +250,13 @@ fun RequestContentSheet(
                             // Movies — submit immediately. Notes /
                             // priority can be edited later from the
                             // detail page or by re-requesting.
-                            // Series — show DETAILS phase to let the
-                            // user pick scope (entire vs. specific
-                            // episodes) before submitting.
+                            // Series — show the new SERIES_DETAIL
+                            // landing page so the user can choose
+                            // Tap-to-Watch (if in library), Request
+                            // Whole Series, or Request Missing
+                            // Episodes.
                             if (type == "series") {
-                                phase = Phase.DETAILS
+                                phase = Phase.SERIES_DETAIL
                             } else {
                                 doSubmit(
                                     finalType = "movie",
@@ -282,6 +284,10 @@ fun RequestContentSheet(
                             pickedTmdb = null
                             freeTextTitle = typed
                             if (type == "series") {
+                                // No TMDB id → no episode picker
+                                // possible. Drop straight into the
+                                // legacy DETAILS phase so the user
+                                // can hand-type seasons/episodes.
                                 phase = Phase.DETAILS
                             } else {
                                 doSubmit(
@@ -291,19 +297,46 @@ fun RequestContentSheet(
                                 )
                             }
                         },
-                        // Series-only secondary path: user clicked the
-                        // "PICK EPISODE →" chip on a series result. We
-                        // route into the EPISODE_PICKER phase, which
-                        // drills down via TMDB and submits a
-                        // specific-episode request when they pick one.
-                        onPickEpisode = { pick ->
-                            pickedTmdb = pick
-                            freeTextTitle = null
+                    )
+                    Phase.SERIES_DETAIL -> SeriesDetailPhase(
+                        pick = pickedTmdb ?: TmdbPick(
+                            tmdbId = 0, tmdbType = "tv",
+                            title = freeTextTitle ?: "",
+                            year = null, posterPath = null,
+                            backdropPath = null, overview = null,
+                            library = null,
+                        ),
+                        onBack = { phase = Phase.PICK },
+                        onTapToWatch = {
+                            val entry = pickedTmdb?.library ?: return@SeriesDetailPhase
+                            onAlreadyAvailable?.invoke(
+                                LibraryEntry(
+                                    kind = entry.kind,
+                                    streamId = entry.streamId,
+                                    seriesId = entry.seriesId,
+                                    title = entry.title,
+                                    poster = entry.poster,
+                                ),
+                            )
+                            onDismiss()
+                        },
+                        onRequestWholeSeries = {
+                            seriesScope = "entire_series"
+                            seasons = ""
+                            episodes = ""
+                            doSubmit(
+                                finalType = "series",
+                                finalTitle = pickedTmdb?.title
+                                    ?: freeTextTitle ?: "",
+                                finalTmdb = pickedTmdb,
+                            )
+                        },
+                        onRequestMissingEpisodes = {
                             seriesScope = "specific_episodes"
-                            phase = Phase.EPISODE_PICKER
+                            phase = Phase.MULTI_EPISODE_PICKER
                         },
                     )
-                    Phase.EPISODE_PICKER -> EpisodePickerPhase(
+                    Phase.MULTI_EPISODE_PICKER -> MultiEpisodePickerPhase(
                         pick = pickedTmdb ?: TmdbPick(
                             tmdbId = 0, tmdbType = "tv",
                             title = freeTextTitle ?: "",
@@ -312,11 +345,12 @@ fun RequestContentSheet(
                             library = null,
                         ),
                         playlistId = playlistId,
-                        onBack = { phase = Phase.PICK },
-                        onSubmitEpisode = { season, episodeLabel ->
+                        submitting = submitting,
+                        onBack = { phase = Phase.SERIES_DETAIL },
+                        onSubmit = { season, episodesLabel ->
                             seriesScope = "specific_episodes"
                             seasons = season.toString()
-                            episodes = episodeLabel
+                            episodes = episodesLabel
                             doSubmit(
                                 finalType = "series",
                                 finalTitle = pickedTmdb?.title
@@ -358,7 +392,7 @@ fun RequestContentSheet(
     }
 }
 
-private enum class Phase { CONTACT, PICK, DETAILS, EPISODE_PICKER, SUCCESS }
+private enum class Phase { CONTACT, PICK, SERIES_DETAIL, MULTI_EPISODE_PICKER, DETAILS, SUCCESS }
 
 /**
  * Public, slim copy of [com.hushtv.tv.data.LibraryIndex.Entry] so
