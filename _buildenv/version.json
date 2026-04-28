@@ -1,10 +1,10 @@
 {
-  "versionCode": 263,
-  "versionName": "1.42.63",
+  "versionCode": 264,
+  "versionName": "1.42.64",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Smarter request search: each result now shows a 'CHECKING YOUR LIBRARY…' badge until the cross-reference completes for that row, so you can never accidentally request a title we already have. Series with every episode in your library (e.g. Breaking Bad) now skip the request landing entirely and open the series card directly."
+    "Added a Clear search button under the request search field — one tap wipes the query so you don't have to hold backspace 30 times to start a new search."
   ]
 }

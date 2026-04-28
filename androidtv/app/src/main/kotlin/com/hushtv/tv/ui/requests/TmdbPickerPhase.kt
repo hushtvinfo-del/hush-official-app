@@ -277,6 +277,14 @@ fun TmdbPickerPhase(
                 else "Type a movie name…",
             )
 
+            // Clear chip — only renders when there's something to
+            // clear. Saves users from holding the BACKSPACE key
+            // 30+ times to wipe out a long query and start over.
+            if (query.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                ClearSearchChip(onClick = { query = "" })
+            }
+
             Spacer(Modifier.height(14.dp))
             // Status hint just below the search field — keeps the
             // user oriented while they're typing.
@@ -480,6 +488,47 @@ private data class TmdbHitWithLibrary(
 )
 
 /* ───────── Search field ───────── */
+
+@Composable
+private fun ClearSearchChip(onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(46.dp)
+            .background(
+                if (focused) Cyan.copy(alpha = 0.22f) else Color(0x14FFFFFF),
+                shape,
+            )
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Cyan else Color(0x33FFFFFF),
+                shape = shape,
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
+            .padding(horizontal = 16.dp),
+    ) {
+        Text(
+            "✕",
+            color = if (focused) Cyan else TextSecondary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Black,
+        )
+        Text(
+            "Clear search",
+            color = if (focused) Cyan else TextPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.4.sp,
+        )
+    }
+}
+
 
 @Composable
 private fun SearchField(
