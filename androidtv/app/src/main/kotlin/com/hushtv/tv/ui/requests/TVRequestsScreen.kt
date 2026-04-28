@@ -341,6 +341,20 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
                 showSheet = false
                 refreshTick += 1
             },
+            onAlreadyAvailable = { entry ->
+                showSheet = false
+                if (entry.kind == "series") {
+                    nav.navigate(
+                        "series/$playlistId/${entry.seriesId}/" +
+                            android.net.Uri.encode(entry.title),
+                    )
+                } else {
+                    nav.navigate(
+                        "moviedetail/$playlistId/${entry.streamId}/" +
+                            android.net.Uri.encode(entry.title),
+                    )
+                }
+            },
         )
     }
 

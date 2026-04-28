@@ -1,10 +1,10 @@
 {
-  "versionCode": 251,
-  "versionName": "1.42.51",
+  "versionCode": 252,
+  "versionName": "1.42.52",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Brand-new request flow: tapping a series in the request modal now opens a clean detail screen with Tap to Watch, Request Whole Series, and Request Missing Episodes options. The episode picker now supports multi-select with checkboxes — pick many missing episodes at once."
+    "Fix: 'Tap to Watch' from the request modal now correctly opens the series page when launched from My Requests (was bouncing back to the empty My Requests page)."
   ]
 }
