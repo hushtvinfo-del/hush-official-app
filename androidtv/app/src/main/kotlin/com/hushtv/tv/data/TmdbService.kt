@@ -305,7 +305,7 @@ object TmdbService {
                     .body?.string() ?: return@withContext emptyList()
                 moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)?.results
                     ?.sortedByDescending { it.popularity }
-                    ?.take(20)
+                    ?.take(12)
                     ?: emptyList()
             }.getOrDefault(emptyList())
         }
@@ -352,7 +352,7 @@ object TmdbService {
                     .body?.string() ?: return@withContext emptyList()
                 moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)?.results
                     ?.sortedByDescending { it.popularity }
-                    ?.take(20)
+                    ?.take(12)
                     ?: emptyList()
             }.getOrDefault(emptyList())
         }

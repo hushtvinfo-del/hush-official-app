@@ -1,10 +1,10 @@
 {
-  "versionCode": 257,
-  "versionName": "1.42.57",
+  "versionCode": 258,
+  "versionName": "1.42.58",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Request search is now much faster: TMDB results render the moment they arrive while library cross-reference happens in the background. Replaced the spinner with a linear progress bar so it no longer looks like buffering. Crash on broad searches like 'Mario' is fixed — failures now surface inline instead of taking down the app."
+    "Major hardening for the request modal. Library decoration is now decoupled from the search loop, capped at 4 concurrent lookups, and force-times-out at 6 seconds so it can never hang. TMDB results capped at 12 (was 20) to halve memory pressure on TV boxes. Crashes are now dumped to a local file at /Android/data/com.hushtv.tv/files/crash.log so we can diagnose any future issue."
   ]
 }

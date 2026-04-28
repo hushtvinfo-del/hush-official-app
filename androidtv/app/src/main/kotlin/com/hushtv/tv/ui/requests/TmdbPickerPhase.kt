@@ -118,6 +118,7 @@ fun TmdbPickerPhase(
     var libraryReady by remember { mutableStateOf(false) }
     var hits by remember { mutableStateOf<List<TmdbHitWithLibrary>>(emptyList()) }
     var lastSearchedQuery by remember { mutableStateOf("") }
+    var decoratedQuery by remember { mutableStateOf("") }
     var searchError by remember { mutableStateOf<String?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
     var decorateJob by remember { mutableStateOf<Job?>(null) }
@@ -133,17 +134,13 @@ fun TmdbPickerPhase(
         }
     }
 
-    // Two-stage debounced search:
-    //   STAGE 1 — TMDB call. Results render IMMEDIATELY without library
-    //             badges so the user sees something within ~500 ms.
-    //   STAGE 2 — Async library decoration. Each TMDB hit gets matched
-    //             against the user's Xtream library off-thread; as
-    //             matches come back we update the same `hits` state in
-    //             place, lighting up "ALREADY IN LIBRARY" badges
-    //             progressively.
-    // This prevents the 5-second wait users were seeing for queries
-    // like "Mario" that return 20 hits on a 50k+ title library.
-    LaunchedEffect(query, type, libraryReady) {
+    // Stage 1 — TMDB call only. NOT keyed on libraryReady so a slow
+    // library prime can't re-trigger the entire search loop after the
+    // user has already started looking at results (this was the
+    // 15-second-then-crash path: prime finishes → effect re-runs →
+    // 20 parallel library scans fan out on a 50k-title library →
+    // OOM on TV boxes).
+    LaunchedEffect(query, type) {
         searchJob?.cancel()
         decorateJob?.cancel()
         val q = query.trim()
@@ -166,34 +163,53 @@ fun TmdbPickerPhase(
                     emptyList()
                 }
             }
-            // Show raw TMDB hits immediately (no library badges yet).
             hits = raw.map { TmdbHitWithLibrary(it, libraryEntry = null) }
             lastSearchedQuery = q
             loading = false
+        }
+    }
 
-            // STAGE 2 — Decorate in the background, in parallel.
-            if (raw.isNotEmpty() && libraryReady) {
-                decorateJob = scope.launch {
-                    runCatching {
-                        val libKind = if (type == "series") "series" else "movie"
-                        val decorated = withContext(Dispatchers.IO) {
-                            raw.map { hit ->
-                                async {
-                                    val title = hit.title ?: hit.name ?: ""
-                                    val year = parseYear(hit.release_date)
-                                        ?: parseYear(hit.first_air_date)
+    // Stage 2 — Library decoration. Independent of stage 1 so it can
+    // wait quietly for the library to finish priming without nuking
+    // the user's already-rendered TMDB results. Concurrency capped at
+    // 4 with a 6-second hard timeout so the worst-case scan can't
+    // hang the app.
+    LaunchedEffect(lastSearchedQuery, libraryReady, type) {
+        decorateJob?.cancel()
+        if (!libraryReady) return@LaunchedEffect
+        val q = lastSearchedQuery
+        if (q.isBlank() || q == decoratedQuery) return@LaunchedEffect
+        if (hits.isEmpty()) return@LaunchedEffect
+        val snapshot = hits
+        decorateJob = scope.launch {
+            runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(6_000) {
+                    val libKind = if (type == "series") "series" else "movie"
+                    val semaphore = kotlinx.coroutines.sync.Semaphore(4)
+                    val decorated = withContext(Dispatchers.IO) {
+                        snapshot.map { wrapped ->
+                            async {
+                                semaphore.acquire()
+                                try {
+                                    val title = wrapped.hit.title
+                                        ?: wrapped.hit.name ?: ""
+                                    val year =
+                                        parseYear(wrapped.hit.release_date)
+                                            ?: parseYear(wrapped.hit.first_air_date)
                                     val libHit = runCatching {
                                         LibraryIndex.findBest(title, libKind, year)
                                     }.getOrNull()
-                                    TmdbHitWithLibrary(hit = hit, libraryEntry = libHit)
+                                    TmdbHitWithLibrary(wrapped.hit, libHit)
+                                } finally {
+                                    semaphore.release()
                                 }
-                            }.awaitAll()
-                        }
-                        // Only commit if the query hasn't changed under us.
-                        if (q == lastSearchedQuery) hits = decorated
+                            }
+                        }.awaitAll()
                     }
-                    // Any decoration failure is non-fatal — user still
-                    // sees TMDB results; only the badges are missing.
+                    if (q == lastSearchedQuery) {
+                        hits = decorated
+                        decoratedQuery = q
+                    }
                 }
             }
         }
