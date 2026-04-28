@@ -10,11 +10,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -99,7 +101,7 @@ fun TVPersonFilmographyScreen(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val perPage = 10
+    val perPage = 8
     var loading by remember { mutableStateOf(true) }
     var libraryReady by remember { mutableStateOf(false) }
     var hits by remember { mutableStateOf<List<PersonHit>>(emptyList()) }
@@ -346,7 +348,7 @@ private fun parseCreditYear(c: TmdbService.PersonCredit): Int? {
     return raw.take(4).toIntOrNull()
 }
 
-/* ───────────── Deterministic 5×2 grid + paginator ───────────── */
+/* ───────────── Deterministic 4×2 grid + paginator ───────────── */
 
 @Composable
 private fun DeterministicGrid(
@@ -359,41 +361,29 @@ private fun DeterministicGrid(
 ) {
     BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
         // Reserve 56dp at the bottom for the paginator (40dp + 16dp gap).
-        // Whatever's left is split between two card rows with a 18dp gap.
+        // Two rows + one 18dp row gap fills the rest.
         val totalH = maxHeight
-        val totalW = maxWidth
         val paginatorBlock = 56.dp
         val rowGap = 18.dp
         val gridH = totalH - paginatorBlock
         val rowH: Dp = (gridH - rowGap) / 2
-        // Card width: (totalW - 4 gaps × 16 dp) / 5 = (W − 64) / 5.
-        val cardGap = 16.dp
-        val cardW: Dp = (totalW - cardGap * 4) / 5
-        // Inside each card the poster takes whatever's left after the
-        // text strip (78 dp = 8 + 18 + 2 + 15 + 8 + 22 + 5 buffer).
-        val textBlock = 78.dp
-        val posterH = rowH - textBlock
 
         Column(Modifier.fillMaxSize()) {
-            val rows = hits.chunked(5)
+            val rows = hits.chunked(4)
             for ((rowIdx, row) in rows.withIndex()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(rowH),
-                    horizontalArrangement = Arrangement.spacedBy(cardGap),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     row.forEach { ph ->
-                        FixedSizeCreditCard(
+                        ImmersiveCreditCard(
                             hit = ph,
-                            cardWidth = cardW,
                             cardHeight = rowH,
-                            posterHeight = posterH,
                             onClick = { onClick(ph) },
                         )
-                    }
-                    repeat(5 - row.size) {
-                        Spacer(Modifier.width(cardW))
                     }
                 }
                 if (rowIdx == 0 && rows.size > 1) {
@@ -401,7 +391,6 @@ private fun DeterministicGrid(
                 }
             }
             Spacer(Modifier.weight(1f, fill = true))
-            // Paginator pinned to the bottom of the grid Box.
             if (totalPages > 1) {
                 Row(
                     modifier = Modifier
@@ -447,16 +436,29 @@ private fun DeterministicGrid(
     }
 }
 
+/**
+ * Immersive card — entire surface is the poster, with title /
+ * meta / status pill overlaid on a dark gradient at the bottom.
+ *
+ * The gradient is what solves the white-on-white readability
+ * problem: regardless of the poster's background colour, the
+ * bottom 60% of the card is darkened to a near-black, which gives
+ * the white title text guaranteed contrast.
+ *
+ * Aspect ratio is locked to 2:3 with [matchHeightConstraintsFirst]
+ * = true so the card height is set externally (one half of the
+ * grid area) and the width is derived from it. That keeps every
+ * poster at proper movie-poster proportions and never crops the
+ * artwork.
+ */
 @Composable
-private fun FixedSizeCreditCard(
+private fun ImmersiveCreditCard(
     hit: PersonHit,
-    cardWidth: Dp,
     cardHeight: Dp,
-    posterHeight: Dp,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val current by androidx.compose.runtime.rememberUpdatedState(hit)
+    val current by rememberUpdatedState(hit)
     val ctx = LocalContext.current
     val title = hit.credit.title ?: hit.credit.name ?: "—"
     val year = parseCreditYear(hit.credit)
@@ -465,28 +467,25 @@ private fun FixedSizeCreditCard(
         hit.libraryEntry != null -> Color(0xFF34D399)
         else -> Cyan
     }
-    val shape = RoundedCornerShape(12.dp)
-    // Whole card dims while we're still cross-referencing so users
-    // get an unmistakable visual signal that the card isn't ready
-    // to be tapped yet — matches the "TAP TO REQUEST" gating in
-    // the request modal but louder.
+    val shape = RoundedCornerShape(14.dp)
     val cardAlpha = if (hit.decorated) 1f else 0.55f
+    val poster = TmdbService.img(hit.credit.poster_path, "w500")
 
-    Column(
+    Box(
         Modifier
-            .width(cardWidth)
             .height(cardHeight)
-            .clipToBounds()
+            .aspectRatio(2f / 3f, matchHeightConstraintsFirst = true)
+            .clip(shape)
+            .background(SurfaceNavy)
+            .border(
+                width = if (focused) 3.dp else 1.dp,
+                color = if (focused) accent else Color(0x22FFFFFF),
+                shape = shape,
+            )
             .focusRequester(remember { FocusRequester() })
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter {
-                // Defensive double-check using the latest hit state
-                // (rememberUpdatedState). Even if Compose's lambda
-                // memoization keeps a stale onClick reference, the
-                // current.decorated value is always fresh, so we
-                // CANNOT navigate / open the request modal until
-                // the row's library cross-reference has finished.
                 if (current.decorated) {
                     onClick()
                 } else {
@@ -499,62 +498,74 @@ private fun FixedSizeCreditCard(
             }
             .graphicsLayer { alpha = cardAlpha },
     ) {
-        // Poster — ABSOLUTE height. No aspectRatio.
-        Box(
-            Modifier
-                .width(cardWidth)
-                .height(posterHeight)
-                .clip(shape)
-                .background(SurfaceNavy)
-                .border(
-                    width = if (focused) 3.dp else 1.dp,
-                    color = if (focused) accent else Color(0x22FFFFFF),
-                    shape = shape,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            val poster = TmdbService.img(hit.credit.poster_path, "w342")
-            if (!poster.isNullOrBlank()) {
-                AsyncImage(
-                    model = poster,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
+        // ── Poster (fills the entire card) ──────────────────
+        if (!poster.isNullOrBlank()) {
+            AsyncImage(
+                model = poster,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
                 Text(
                     title.take(1).uppercase(),
                     color = TextSecondary,
-                    fontSize = 36.sp,
+                    fontSize = 56.sp,
                     fontWeight = FontWeight.Black,
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        // Title — exactly one line.
+
+        // ── Dark gradient (bottom half) for text readability ──
         Box(
             Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        // Linear ramp:
+                        //   top 50%  fully transparent
+                        //   55–80 %  fade in
+                        //   80–100% near-opaque black
+                        colorStops = arrayOf(
+                            0.0f to Color.Transparent,
+                            0.50f to Color.Transparent,
+                            0.75f to Color(0xAA000000),
+                            1.0f to Color(0xF0000000),
+                        ),
+                    ),
+                ),
+        )
+
+        // ── Status pill (top-right corner) ──────────────────
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp),
+        ) {
+            ImmersiveStatusPill(hit = hit)
+        }
+
+        // ── Title + meta (bottom) ──────────────────────────
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .height(18.dp),
-            contentAlignment = Alignment.CenterStart,
+                .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
             Text(
                 title,
-                color = TextPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Black,
+                lineHeight = 19.sp,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-        Spacer(Modifier.height(2.dp))
-        // Meta — exactly one line.
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(15.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
+            Spacer(Modifier.height(2.dp))
             val metaLine = buildString {
                 if (year != null) append(year)
                 if (hit.credit.character.isNotBlank()) {
@@ -565,24 +576,52 @@ private fun FixedSizeCreditCard(
             if (metaLine.isNotBlank()) {
                 Text(
                     metaLine,
-                    color = TextSecondary,
+                    color = Color(0xFFE2E8F0),
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        // Status pill — fixed height.
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(22.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            StatusPill(hit = hit)
-        }
+    }
+}
+
+/** Compact variant of the status pill for the immersive card. */
+@Composable
+private fun ImmersiveStatusPill(hit: PersonHit) {
+    val (label, fg, bg) = when {
+        !hit.decorated -> Triple(
+            "CHECKING…",
+            Color(0xFFF59E0B),
+            Color(0xCC1A1F2E),
+        )
+        hit.libraryEntry != null -> Triple(
+            "IN LIBRARY",
+            Color(0xFF34D399),
+            Color(0xDD0F2A1E),
+        )
+        else -> Triple(
+            "TAP TO REQUEST",
+            Cyan,
+            Color(0xDD0E2530),
+        )
+    }
+    Box(
+        Modifier
+            .background(bg, RoundedCornerShape(6.dp))
+            .border(1.dp, fg.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text(
+            label,
+            color = fg,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.2.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

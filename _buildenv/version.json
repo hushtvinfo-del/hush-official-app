@@ -1,10 +1,10 @@
 {
-  "versionCode": 269,
-  "versionName": "1.42.69",
+  "versionCode": 270,
+  "versionName": "1.42.70",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Filmography cards are now hard-locked while the library cross-check is still running. Cards visibly dim until verified, and tapping a still-checking card shows a 'Still checking your library' toast instead of opening the request modal. The latest decoration state is read at the moment of click using rememberUpdatedState so stale lambda references can't slip through."
+    "Filmography page redesigned with bigger immersive cards: 4 columns × 2 rows = 8 results per page, full 2:3 movie posters that fill the entire card with title, year, and character name overlaid on a dark gradient at the bottom for guaranteed readability on any poster background. Status pill (CHECKING / IN LIBRARY / TAP TO REQUEST) is anchored to the top-right corner with its own colored background."
   ]
 }
