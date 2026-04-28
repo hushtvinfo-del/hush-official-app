@@ -12,7 +12,9 @@ import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -68,6 +70,36 @@ fun MobileBrowseScreen(
     var loadError by remember { mutableStateOf<String?>(null) }
     var showCatPicker by remember { mutableStateOf(false) }
 
+    // Inline search state — narrows the current card list as the user
+    // types. Same auto-switch-to-All behaviour as the TV toolbar
+    // search: typing in a specific category temporarily flips back to
+    // "All" (empty selectedCatId) so the search hits the entire
+    // library; clearing the field restores the previous category.
+    // Only applies to VOD (movie / series) — not Live, where the
+    // existing taller-row layout has its own ergonomics and Live
+    // search is owned by the EPG screen.
+    var searchQuery by androidx.compose.runtime.saveable.rememberSaveable(
+        key = "mbrowse-search-$type",
+    ) { mutableStateOf("") }
+    var preSearchCatId by remember { mutableStateOf<String?>(null) }
+    fun onSearchChange(value: String) {
+        val wasEmpty = searchQuery.isEmpty()
+        val isNowEmpty = value.isEmpty()
+        if (wasEmpty && !isNowEmpty) {
+            // Started typing.
+            if (selectedCatId.isNotBlank()) {
+                preSearchCatId = selectedCatId
+                selectedCatId = ""   // empty == "All categories"
+            }
+        } else if (!wasEmpty && isNowEmpty) {
+            preSearchCatId?.let {
+                selectedCatId = it
+                preSearchCatId = null
+            }
+        }
+        searchQuery = value
+    }
+
     // Load categories once.
     LaunchedEffect(playlistId, type) {
         if (playlist == null) { loading = false; return@LaunchedEffect }
@@ -118,6 +150,16 @@ fun MobileBrowseScreen(
     val selectedCatName = remember(selectedCatId, categories) {
         if (selectedCatId.isBlank()) "All categories"
         else categories.firstOrNull { it.category_id == selectedCatId }?.category_name ?: "All"
+    }
+
+    // Apply live search filter to the loaded cards. Case-insensitive
+    // substring match on title — same as TV's `displayedItems` logic.
+    val displayedCards = remember(cardList, searchQuery) {
+        if (searchQuery.isBlank()) cardList
+        else {
+            val needle = searchQuery.trim().lowercase()
+            cardList.filter { it.title.lowercase().contains(needle) }
+        }
     }
 
     Column(Modifier.fillMaxSize().background(Color(0xFF05080F))) {
@@ -181,10 +223,20 @@ fun MobileBrowseScreen(
             }
             Spacer(Modifier.weight(1f))
             Text(
-                "${cardList.size}",
+                "${displayedCards.size}",
                 color = Color(0xFF94A3B8),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        // Inline search field — only on VOD screens. Live keeps its
+        // streamlined channel grid uncluttered.
+        if (!isLive) {
+            MobileInlineSearchField(
+                value = searchQuery,
+                onChange = ::onSearchChange,
+                placeholder = "Search ${title.lowercase()}…",
             )
         }
 
@@ -217,14 +269,27 @@ fun MobileBrowseScreen(
                         )
                     }
                 }
+                displayedCards.isEmpty() -> Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "No matches for \"$searchQuery\"",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 isLive -> {
                     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
                     // When coming back from the player, auto-scroll so the
                     // last-played channel is visible. Keyed off the stream
                     // id so switching channels re-aligns correctly.
-                    LaunchedEffect(cardList, lastPlayedStreamId) {
+                    LaunchedEffect(displayedCards, lastPlayedStreamId) {
                         if (lastPlayedStreamId >= 0) {
-                            val idx = cardList.indexOfFirst { it.streamId == lastPlayedStreamId }
+                            val idx = displayedCards.indexOfFirst { it.streamId == lastPlayedStreamId }
                             if (idx >= 0) listState.scrollToItem(idx)
                         }
                     }
@@ -233,7 +298,7 @@ fun MobileBrowseScreen(
                         state = listState,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     ) {
-                        listItems(cardList, key = { "live-${it.id}" }) { card ->
+                        listItems(displayedCards, key = { "live-${it.id}" }) { card ->
                             MobileLiveRow(
                                 card = card,
                                 isSelected = card.streamId == lastPlayedStreamId,
@@ -260,7 +325,7 @@ fun MobileBrowseScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    gridItems(cardList, key = { "${it.kind}-${it.id}" }) { card ->
+                    gridItems(displayedCards, key = { "${it.kind}-${it.id}" }) { card ->
                         MobileVodCard(card) {
                             val p = playlist ?: return@MobileVodCard
                             if (type == "movie") {
@@ -468,6 +533,75 @@ private fun MobileCategoryPicker(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+
+@androidx.compose.runtime.Composable
+private fun MobileInlineSearchField(
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0x14FFFFFF))
+            .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Default.Search,
+            null,
+            tint = Color(0xFF94A3B8),
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        androidx.compose.foundation.text.BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+            ),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(Cyan),
+            modifier = Modifier.weight(1f),
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(
+                            placeholder,
+                            color = Color(0xFF64748B),
+                            fontSize = 14.sp,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+        if (value.isNotEmpty()) {
+            Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier
+                    .size(24.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable { onChange("") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    null,
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(14.dp),
+                )
             }
         }
     }

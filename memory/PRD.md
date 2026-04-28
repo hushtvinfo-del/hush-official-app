@@ -1,5 +1,36 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.45 — 2026-04-27 (versionCode 245)  ⬅ LATEST  (optional)
+
+**Inline search ported to Mobile Movies + Series tabs.**
+
+- New `MobileInlineSearchField` composable — 40 dp pill, search
+  icon prefix, close-icon clear button, cyan cursor. Renders
+  unconditionally for `kind = movie | series`; suppressed for
+  `kind = live` since the live grid uses a different ergonomics
+  pattern.
+- New `searchQuery` state (saved across nav via
+  `rememberSaveable` keyed by `type`) drives a `displayedCards`
+  derivation: `cardList.filter { title.lowercase().contains(needle) }`.
+- New `preSearchCatId` state + `onSearchChange()` callback
+  mirror the TV behaviour: typing while a category is selected
+  stashes the category and switches `selectedCatId = ""` (mobile's
+  All-categories sentinel); clearing the field restores it.
+- All three render paths (live LazyColumn, vod LazyVerticalGrid,
+  empty-state column) updated to use `displayedCards` instead
+  of `cardList`. New no-match empty state ("No matches for
+  \"{query}\"") shown when the user typed something that
+  filtered the list to zero.
+- Count badge in the toolbar (next to the BROWSE pill) now
+  displays the *displayed* count, so the user sees their
+  filter's hit count live as they type.
+
+### Build + deploy
+- `versionCode 244 → 245`, `versionName "1.42.44" → "1.42.45"`.
+- Non-mandatory. APK md5 `29eab5af64770f9c36eedfee74fd1629`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.44 — 2026-04-27 (versionCode 244)  ⬅ LATEST  (optional)
 
 **Toolbar search auto-switches to All while typing.** v1.42.43
