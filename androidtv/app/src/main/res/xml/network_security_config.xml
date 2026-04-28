@@ -1,9 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Config
+    ──────────────────────────────────────────────────────────────
+    Why we don't trust user-installed CAs:
+      Google Play Protect flags any APK whose network config trusts
+      `<certificates src="user" />` because it enables MITM proxy
+      tools (Charles, mitmproxy, Proxyman) to read TLS traffic. We
+      do NOT need that in production — only the system CA bundle.
+      Removing this anchor is the single biggest improvement to our
+      Play Protect heuristic score.
+
+    Why cleartext is still permitted globally:
+      IPTV (Xtream) provider hosts are user-supplied at runtime and
+      most providers only serve plain HTTP. We cannot statically
+      allowlist them. The base-config keeps cleartext on for those.
+
+    HTTPS-only domains:
+      Every backend the app *we* control hits is over HTTPS. The
+      explicit `<domain-config>` blocks below tell the OS — and
+      Play Protect's static analyzer — that traffic to those
+      domains MUST be encrypted, even if some other code path
+      somehow tried plain HTTP.
+-->
 <network-security-config>
+
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
-            <certificates src="user" />
         </trust-anchors>
     </base-config>
+
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">themoviedb.org</domain>
+        <domain includeSubdomains="true">tmdb.org</domain>
+        <domain includeSubdomains="true">ratingposterdb.com</domain>
+        <domain includeSubdomains="true">opensubtitles.com</domain>
+        <domain includeSubdomains="true">hushtv.com</domain>
+        <domain includeSubdomains="true">hushtv.xyz</domain>
+        <domain includeSubdomains="true">base44.app</domain>
+        <domain includeSubdomains="true">base44.com</domain>
+        <domain includeSubdomains="true">cloudflare.com</domain>
+        <domain includeSubdomains="true">youtube.com</domain>
+        <domain includeSubdomains="true">googlevideo.com</domain>
+        <domain includeSubdomains="true">github.com</domain>
+        <domain includeSubdomains="true">githubusercontent.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
 </network-security-config>

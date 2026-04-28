@@ -1,10 +1,10 @@
 {
-  "versionCode": 259,
-  "versionName": "1.42.59",
+  "versionCode": 260,
+  "versionName": "1.42.60",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Tap-to-watch from request cards: once admin marks a request as Available or Added, tapping the request card on My Requests or the home rail now opens the title directly in the player — same flow as opening from Search or the Movies/Series tabs. Loading screens for requests now use a horizontal progress bar instead of a spinner so it no longer looks like buffering."
+    "Hardened network security config to silence the Google Play Protect 'App scan recommended' warning. App now refuses user-installed CAs (the #1 Play Protect red flag) and explicitly declares HTTPS-only for every backend we control (TMDB, RPDB, Hush, Base44, GitHub, etc.). Cleartext stays permitted only for user-supplied IPTV provider hosts where it's unavoidable."
   ]
 }
