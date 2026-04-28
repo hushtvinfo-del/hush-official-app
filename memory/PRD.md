@@ -1,5 +1,61 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.50 — 2026-04-27 (versionCode 250)  ⬅ LATEST  (optional)
+
+**Episode picker — library cross-reference + auto-scroll to
+first missing episode.**
+
+When the user opens the new episode picker (v1.42.49), each
+episode row now shows whether they already have it in their
+Xtream library:
+
+- **MISSING** badge (cyan, the actionable state) on rows whose
+  episode_number isn't found in the user's library for that
+  season.
+- **IN LIBRARY** badge (green, dimmed) on rows the user already
+  has — informational, lets them confirm what they already have
+  before submitting.
+- The episode row's resting border is also tinted: cyan-at-55%
+  for MISSING rows, near-transparent for in-library rows. So
+  the user's eye is drawn to the cyan rows immediately.
+
+When BOTH the TMDB episode list AND the Xtream cross-reference
+are loaded, the list auto-scrolls to the first MISSING episode.
+For Gold Rush S15: if the user has E01-E03 but is missing E04
+onwards, the list opens scrolled to E04 with a cyan halo around
+it. One D-pad press → ENTER → request submitted.
+
+### Implementation
+- New `playlistId: String` parameter to `EpisodePickerPhase`,
+  threaded from `RequestContentSheet`.
+- New `LaunchedEffect(pick.tmdbId, pick.title)` resolves the
+  user's Xtream series via `XtreamApi.resolveSeriesInfo()` (the
+  same disambiguating resolver from v1.42.42 that handles array-
+  shape `episodes`). Builds a `Map<String, Set<Int>>` of
+  season-num → present episode numbers.
+- New `LaunchedEffect(seasonDetail, xtreamPresent, selectedSeason)`
+  computes the first-missing index and calls
+  `episodeListState.animateScrollToItem(idx)` once both sides
+  are loaded.
+- New `LibraryStatusPill(missing: Boolean)` composable. Skipped
+  entirely when the show isn't in the user's library at all
+  (every row would render MISSING — useless noise).
+- `EpisodeRow` gained `isMissing: Boolean` + `showLibraryBadge:
+  Boolean` parameters; resting border colour now reflects state.
+
+### Failure modes
+- Series not in library → `xtreamPresent` resolves to empty
+  map → `presentEpisodeNums.isEmpty()` → no badges, picker
+  works as a plain TMDB browser.
+- Resolver throws → caught, `xtreamPresent = emptyMap()` → no
+  badges, no auto-scroll. Picker remains fully functional.
+
+### Build + deploy
+- `versionCode 249 → 250`, `versionName "1.42.49" → "1.42.50"`.
+- Non-mandatory. APK md5 `4f48c37c2eeb84011cab0b98a4598f50`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.49 — 2026-04-27 (versionCode 249)  ⬅ LATEST  (optional)
 
 **Episode-level requests in the request modal — Approach A.**

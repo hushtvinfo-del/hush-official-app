@@ -93,15 +93,27 @@ import kotlinx.coroutines.withContext
 @Composable
 fun EpisodePickerPhase(
     pick: TmdbPick,
+    playlistId: String,
     onBack: () -> Unit,
     onSubmitEpisode: (season: Int, episodeLabel: String) -> Unit,
 ) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var tv by remember { mutableStateOf<TmdbTv?>(null) }
     var selectedSeason by remember { mutableStateOf<Int?>(null) }
     var seasonDetail by remember { mutableStateOf<TmdbSeasonDetail?>(null) }
     var seasonLoading by remember { mutableStateOf(false) }
+    // season-num (as String) → set of episode numbers we DO have in
+    // the user's Xtream library. Used to flag the rest with a
+    // "MISSING" badge so the user knows exactly which row to tap.
+    // null while we're still resolving; empty when the series isn't
+    // in the library at all (in which case we don't show badges,
+    // because every episode would be flagged → useless noise).
+    var xtreamPresent by remember { mutableStateOf<Map<String, Set<Int>>?>(null) }
+    // The episode list state — exposed so we can auto-scroll to the
+    // first missing episode after both sides have loaded.
+    val episodeListState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     val backFocus = remember { FocusRequester() }
     val firstSeasonFocus = remember { FocusRequester() }
@@ -138,6 +150,44 @@ fun EpisodePickerPhase(
             withContext(Dispatchers.IO) { TmdbService.getSeason(pick.tmdbId, s) }
         }.onSuccess { seasonDetail = it }
         seasonLoading = false
+    }
+
+    // Cross-reference against the user's Xtream library so we can
+    // flag missing episodes. Done off the main thread; the UI works
+    // fine without this resolving — the badges just don't render.
+    LaunchedEffect(pick.tmdbId, pick.title) {
+        val playlist = com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
+            ?: return@LaunchedEffect
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val resolved = com.hushtv.tv.data.XtreamApi.resolveSeriesInfo(
+                    playlist.host, playlist.username, playlist.password,
+                    seriesId = "0",          // forces the title-search fallback
+                    seriesName = pick.title,
+                )
+                resolved.info.episodes
+                    ?.mapValues { (_, list) ->
+                        list.mapNotNull { ep -> ep.episode_num.takeIf { it > 0 } }
+                            .toSet()
+                    }
+                    ?: emptyMap()
+            }
+        }.onSuccess { xtreamPresent = it }
+            .onFailure { xtreamPresent = emptyMap() }
+    }
+
+    // Auto-scroll to the first missing episode once BOTH the TMDB
+    // episode list AND the Xtream library cross-reference are ready.
+    LaunchedEffect(seasonDetail, xtreamPresent, selectedSeason) {
+        val episodes = seasonDetail?.episodes
+            ?.filter { it.episode_number > 0 }
+            ?: return@LaunchedEffect
+        val present = xtreamPresent?.get(selectedSeason?.toString()).orEmpty()
+        if (present.isEmpty()) return@LaunchedEffect
+        val firstMissingIdx = episodes.indexOfFirst { it.episode_number !in present }
+        if (firstMissingIdx > 0) {
+            episodeListState.animateScrollToItem(firstMissingIdx)
+        }
     }
 
     // Land focus on the back chip first, then move into the picker
@@ -234,6 +284,10 @@ fun EpisodePickerPhase(
                             else -> EpisodeList(
                                 episodes = seasonDetail!!.episodes
                                     .filter { it.episode_number > 0 },
+                                presentEpisodeNums = xtreamPresent
+                                    ?.get(selectedSeason?.toString())
+                                    .orEmpty(),
+                                listState = episodeListState,
                                 firstFocus = firstEpisodeFocus,
                                 onPick = { ep ->
                                     val cleanName = ep.name
@@ -403,6 +457,8 @@ private fun SeasonChip(
 @Composable
 private fun EpisodeList(
     episodes: List<TmdbEpisode>,
+    presentEpisodeNums: Set<Int>,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     firstFocus: FocusRequester,
     onPick: (TmdbEpisode) -> Unit,
 ) {
@@ -419,15 +475,24 @@ private fun EpisodeList(
         }
         return
     }
+    // Skip the cross-reference badge when the show isn't in the
+    // user's Xtream library at all (every episode would render
+    // MISSING — useless noise; user already knows the show isn't
+    // there).
+    val hasLibraryData = presentEpisodeNums.isNotEmpty()
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(end = 4.dp),
     ) {
         items(episodes, key = { it.id }) { ep ->
             val isFirst = ep == episodes.firstOrNull()
+            val isMissing = hasLibraryData && ep.episode_number !in presentEpisodeNums
             EpisodeRow(
                 episode = ep,
+                isMissing = isMissing,
+                showLibraryBadge = hasLibraryData,
                 focusRequester = if (isFirst) firstFocus else null,
                 onPick = { onPick(ep) },
             )
@@ -438,18 +503,29 @@ private fun EpisodeList(
 @Composable
 private fun EpisodeRow(
     episode: TmdbEpisode,
+    isMissing: Boolean,
+    showLibraryBadge: Boolean,
     focusRequester: FocusRequester?,
     onPick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(10.dp)
+    // Cyan border when missing-and-not-focused so the user's eye
+    // immediately sees which rows need their attention. Brightens to
+    // full cyan on focus. In-library rows render in a quieter slate
+    // border so they read as "you already have this".
+    val restingBorder = when {
+        !showLibraryBadge -> Color(0x22FFFFFF)
+        isMissing -> Cyan.copy(alpha = 0.55f)
+        else -> Color(0x14FFFFFF)
+    }
     Row(
         Modifier
             .fillMaxWidth()
             .background(SurfaceNavy, shape)
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Cyan else Color(0x22FFFFFF),
+                color = if (focused) Cyan else restingBorder,
                 shape = shape,
             )
             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
@@ -503,7 +579,12 @@ private fun EpisodeRow(
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                if (showLibraryBadge) {
+                    Spacer(Modifier.width(8.dp))
+                    LibraryStatusPill(missing = isMissing)
+                }
             }
             val airDate = episode.air_date.orEmpty()
             val runtime = episode.runtime?.takeIf { it > 0 }?.let { "${it}m" }.orEmpty()
@@ -538,6 +619,33 @@ private fun EpisodeRow(
             color = if (focused) Cyan else TextSecondary,
             fontSize = 18.sp,
             fontWeight = FontWeight.Black,
+        )
+    }
+}
+
+/** Library-presence pill — "MISSING" (cyan, the action target) vs
+ *  "IN LIBRARY" (green, dimmed, just informational). Only rendered
+ *  when we successfully cross-referenced the show against the user's
+ *  Xtream catalogue. */
+@Composable
+private fun LibraryStatusPill(missing: Boolean) {
+    val (label, fg, bg) = if (missing) {
+        Triple("MISSING", Cyan, Cyan.copy(alpha = 0.16f))
+    } else {
+        Triple("IN LIBRARY", Color(0xFF34D399), Color(0x2222C55E))
+    }
+    Box(
+        Modifier
+            .background(bg, RoundedCornerShape(6.dp))
+            .border(1.dp, fg.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+    ) {
+        Text(
+            label,
+            color = fg,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.2.sp,
         )
     }
 }

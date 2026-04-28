@@ -311,6 +311,7 @@ fun RequestContentSheet(
                             backdropPath = null, overview = null,
                             library = null,
                         ),
+                        playlistId = playlistId,
                         onBack = { phase = Phase.PICK },
                         onSubmitEpisode = { season, episodeLabel ->
                             seriesScope = "specific_episodes"

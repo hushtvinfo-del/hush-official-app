@@ -1,10 +1,10 @@
 {
-  "versionCode": 249,
-  "versionName": "1.42.49",
+  "versionCode": 250,
+  "versionName": "1.42.50",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "New: every series result in the request modal now has a 'PICK EPISODE →' chip. One click drills into a TMDB-powered season+episode picker; tapping any episode submits the request with the exact season/episode pre-filled. No typing required."
+    "Episode picker now cross-references your library: episodes you DO have show 'IN LIBRARY' (green), episodes you don't show 'MISSING' (cyan). The list auto-scrolls to the first missing episode."
   ]
 }
