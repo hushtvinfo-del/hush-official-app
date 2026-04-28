@@ -1,10 +1,10 @@
 {
-  "versionCode": 265,
-  "versionName": "1.42.65",
+  "versionCode": 266,
+  "versionName": "1.42.66",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Cast members are now tappable! Click any actor on a movie or series detail page to see their full filmography from TMDB, automatically cross-referenced against your library — IN LIBRARY titles open straight to play, missing titles open the request modal pre-filled. Cast row is now pinned above Seasons on series pages with proper spacing."
+    "Cast filmography pages are now paginated to 10 newest titles per page with Prev / Next buttons — only the visible 10 cards run the library cross-check, so each page is verified in well under a second instead of waiting on 70+ titles. Cards are now perfectly aligned: titles clipped to one line and meta + status pills at fixed heights so two-line titles never break the grid."
   ]
 }

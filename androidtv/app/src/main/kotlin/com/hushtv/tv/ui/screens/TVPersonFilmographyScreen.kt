@@ -90,10 +90,12 @@ fun TVPersonFilmographyScreen(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    val perPage = 10  // 5 columns × 2 rows on TV
     var loading by remember { mutableStateOf(true) }
     var libraryReady by remember { mutableStateOf(false) }
     var hits by remember { mutableStateOf<List<PersonHit>>(emptyList()) }
     var tab by remember { mutableStateOf("movie") }
+    var page by remember(tab) { mutableStateOf(0) }
     var requestPreset by remember {
         mutableStateOf<Pair<String, String>?>(null)  // type, title
     }
@@ -110,34 +112,42 @@ fun TVPersonFilmographyScreen(
         }
     }
 
-    // Stage 1 — fetch all credits up front.
+    // Stage 1 — fetch all credits up front. We sort newest-first by
+    // year so users see the latest work in the actor's career on
+    // page 1; popularity-based sort buried recent releases.
     LaunchedEffect(personId) {
         loading = true
         val raw = withContext(Dispatchers.IO) {
             runCatching { TmdbService.personFilmography(personId) }
                 .getOrDefault(emptyList())
         }
-        hits = raw.map { PersonHit(it, libraryEntry = null, decorated = false) }
+        val sorted = raw.sortedByDescending { parseCreditYear(it) ?: 0 }
+        hits = sorted.map { PersonHit(it, libraryEntry = null, decorated = false) }
         // Default to the type with the most credits (avoids opening
         // an empty Movies tab for a TV-only actor like the cast of a
         // soap opera).
-        val movieCount = raw.count { it.media_type == "movie" }
-        val tvCount = raw.count { it.media_type == "tv" }
+        val movieCount = sorted.count { it.media_type == "movie" }
+        val tvCount = sorted.count { it.media_type == "tv" }
         tab = if (tvCount > movieCount) "tv" else "movie"
         loading = false
     }
 
-    // Stage 2 — sequential library decoration with row-by-row commit
-    // and yield() cancellation between rows. Same proven pattern as
-    // the request search modal.
-    LaunchedEffect(hits.firstOrNull()?.credit?.id, libraryReady) {
+    // Stage 2 — decorate ONLY the 10 cards on the visible page. With
+    // pagination we don't need to scan 73+ titles up front; we
+    // amortise the cost across pages and the user gets a fully
+    // verified, ready-to-tap page in well under a second.
+    LaunchedEffect(page, tab, libraryReady, hits.size) {
         if (!libraryReady || hits.isEmpty()) return@LaunchedEffect
-        if (hits.all { it.decorated }) return@LaunchedEffect
-        val snapshot = hits.toList()
-        val rolling = snapshot.toMutableList()
-        for ((idx, ph) in snapshot.withIndex()) {
+        val visible = hits
+            .withIndex()
+            .filter { it.value.credit.media_type == tab }
+            .drop(page * perPage)
+            .take(perPage)
+            .filter { !it.value.decorated }
+        if (visible.isEmpty()) return@LaunchedEffect
+        val rolling = hits.toMutableList()
+        for ((idx, ph) in visible) {
             kotlinx.coroutines.yield()
-            if (ph.decorated) continue
             val title = ph.credit.title ?: ph.credit.name ?: ""
             val year = parseCreditYear(ph.credit)
             val libKind = if (ph.credit.media_type == "tv") "series" else "movie"
@@ -232,31 +242,48 @@ fun TVPersonFilmographyScreen(
                         fontSize = 14.sp,
                     )
                 } else {
-                    PersonCreditsGrid(
-                        hits = current,
-                        onClick = { ph ->
-                            if (!ph.decorated) return@PersonCreditsGrid
-                            val title = ph.credit.title ?: ph.credit.name ?: return@PersonCreditsGrid
-                            val entry = ph.libraryEntry
-                            if (entry != null) {
-                                val encoded = Uri.encode(title)
-                                if (entry.kind == "series") {
-                                    nav.navigate(
-                                        "series/$playlistId/${entry.seriesId}/$encoded",
-                                    )
-                                } else {
-                                    nav.navigate(
-                                        "moviedetail/$playlistId/${entry.streamId}/$encoded",
-                                    )
-                                }
-                            } else {
-                                requestPreset = (
-                                    if (ph.credit.media_type == "tv") "series"
-                                    else "movie"
-                                ) to title
-                            }
-                        },
-                    )
+                    val totalPages = (current.size + perPage - 1) / perPage
+                    if (page >= totalPages) page = 0
+                    val pageItems = current.drop(page * perPage).take(perPage)
+                    Column(Modifier.fillMaxSize()) {
+                        Box(Modifier.weight(1f)) {
+                            PersonCreditsGrid(
+                                hits = pageItems,
+                                onClick = { ph ->
+                                    if (!ph.decorated) return@PersonCreditsGrid
+                                    val title = ph.credit.title
+                                        ?: ph.credit.name ?: return@PersonCreditsGrid
+                                    val entry = ph.libraryEntry
+                                    if (entry != null) {
+                                        val encoded = Uri.encode(title)
+                                        if (entry.kind == "series") {
+                                            nav.navigate(
+                                                "series/$playlistId/${entry.seriesId}/$encoded",
+                                            )
+                                        } else {
+                                            nav.navigate(
+                                                "moviedetail/$playlistId/${entry.streamId}/$encoded",
+                                            )
+                                        }
+                                    } else {
+                                        requestPreset = (
+                                            if (ph.credit.media_type == "tv") "series"
+                                            else "movie"
+                                        ) to title
+                                    }
+                                },
+                            )
+                        }
+                        if (totalPages > 1) {
+                            Spacer(Modifier.height(14.dp))
+                            PaginationBar(
+                                page = page,
+                                totalPages = totalPages,
+                                onPrev = { if (page > 0) page -= 1 },
+                                onNext = { if (page < totalPages - 1) page += 1 },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -349,15 +376,15 @@ private fun PersonCreditsGrid(
     hits: List<PersonHit>,
     onClick: (PersonHit) -> Unit,
 ) {
-    // Five 2:3 posters per row at our standard hub width.
+    // 5 columns × up to 2 rows (10 per page). Fixed structure means
+    // alignment is identical across every card on the page.
     val perRow = 5
     val rows = hits.chunked(perRow)
-    LazyColumn(
+    Column(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 36.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        items(rows) { row ->
+        rows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 row.forEach { ph ->
                     PersonCreditCard(
@@ -373,6 +400,92 @@ private fun PersonCreditsGrid(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PaginationBar(
+    page: Int,
+    totalPages: Int,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PageChip(
+            label = "← Prev",
+            enabled = page > 0,
+            onClick = onPrev,
+        )
+        Box(
+            Modifier
+                .background(
+                    Color(0x14FFFFFF),
+                    RoundedCornerShape(999.dp),
+                )
+                .border(
+                    1.dp,
+                    Color(0x22FFFFFF),
+                    RoundedCornerShape(999.dp),
+                )
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            Text(
+                "Page ${page + 1} of $totalPages",
+                color = TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.4.sp,
+            )
+        }
+        PageChip(
+            label = "Next →",
+            enabled = page < totalPages - 1,
+            onClick = onNext,
+        )
+    }
+}
+
+@Composable
+private fun PageChip(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(999.dp)
+    val alpha = if (enabled) 1f else 0.35f
+    Box(
+        Modifier
+            .height(40.dp)
+            .background(
+                if (enabled && focused) Cyan.copy(alpha = 0.22f)
+                else Color(0x14FFFFFF),
+                shape,
+            )
+            .border(
+                width = if (enabled && focused) 2.dp else 1.dp,
+                color = if (enabled && focused) Cyan
+                else Color(0x22FFFFFF),
+                shape = shape,
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable(enabled = enabled)
+            .clickableWithEnter { if (enabled) onClick() }
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = (if (enabled && focused) Cyan else TextPrimary)
+                .copy(alpha = alpha),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 0.4.sp,
+        )
     }
 }
 
@@ -435,34 +548,65 @@ private fun PersonCreditCard(
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text(
-            title,
-            color = TextPrimary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            lineHeight = 16.sp,
-        )
-        if (year != null || hit.credit.character.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
+        // Fixed-height title row — single line clipped with ellipsis
+        // so every card under the row aligns identically. Multi-line
+        // titles like "The School for Good and Evil" no longer push
+        // the meta + status pill out of alignment with neighbouring
+        // cards.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(18.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
             Text(
-                buildString {
-                    if (year != null) append(year)
-                    if (hit.credit.character.isNotBlank()) {
-                        if (isNotEmpty()) append(" · ")
-                        append("as ${hit.credit.character}")
-                    }
-                },
-                color = TextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
+                title,
+                color = TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.height(6.dp))
-        StatusPill(hit = hit)
+        Spacer(Modifier.height(2.dp))
+        // Fixed-height meta row — also single-line + ellipsis so
+        // long character names like "as Lorraine Broughton" don't
+        // break the grid.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(15.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            val metaLine = buildString {
+                if (year != null) append(year)
+                if (hit.credit.character.isNotBlank()) {
+                    if (isNotEmpty()) append(" · ")
+                    append("as ${hit.credit.character}")
+                }
+            }
+            if (metaLine.isNotBlank()) {
+                Text(
+                    metaLine,
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        // Fixed-height status pill — keeps every card the same
+        // overall height regardless of title/meta content.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(22.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            StatusPill(hit = hit)
+        }
     }
 }
 
