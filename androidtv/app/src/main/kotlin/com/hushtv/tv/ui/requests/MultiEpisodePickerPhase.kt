@@ -99,6 +99,7 @@ fun MultiEpisodePickerPhase(
     submitting: Boolean,
     onBack: () -> Unit,
     onSubmit: (season: Int, episodesLabel: String) -> Unit,
+    onTapInLibraryEpisode: () -> Unit,
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var loading by remember { mutableStateOf(true) }
@@ -292,30 +293,58 @@ fun MultiEpisodePickerPhase(
                             else -> {
                                 val episodes = seasonDetail!!.episodes
                                     .filter { it.episode_number > 0 }
+                                val present = xtreamPresent
+                                    ?.get(selectedSeason?.toString())
+                                    .orEmpty()
+                                val hasLibraryData = present.isNotEmpty()
                                 EpisodeCheckboxList(
                                     episodes = episodes,
                                     selectedNums = selectedEpisodes,
-                                    presentEpisodeNums = xtreamPresent
-                                        ?.get(selectedSeason?.toString())
-                                        .orEmpty(),
+                                    presentEpisodeNums = present,
                                     listState = episodeListState,
                                     onToggleEpisode = { num ->
+                                        // Don't allow toggling for
+                                        // episodes already in library —
+                                        // those route to the player.
+                                        if (hasLibraryData && num in present) {
+                                            onTapInLibraryEpisode()
+                                            return@EpisodeCheckboxList
+                                        }
                                         selectedEpisodes =
                                             if (num in selectedEpisodes)
                                                 selectedEpisodes - num
                                             else selectedEpisodes + num
                                     },
                                     onToggleSelectAll = {
-                                        val allNums = episodes.map { it.episode_number }.toSet()
+                                        // "Whole season" only picks
+                                        // episodes the user is MISSING.
+                                        // In-library episodes are never
+                                        // requestable.
+                                        val requestable = episodes
+                                            .map { it.episode_number }
+                                            .filter {
+                                                !hasLibraryData ||
+                                                    it !in present
+                                            }
+                                            .toSet()
                                         selectedEpisodes =
-                                            if (selectedEpisodes.containsAll(allNums))
-                                                emptySet()
-                                            else allNums
+                                            if (selectedEpisodes
+                                                    .containsAll(requestable) &&
+                                                requestable.isNotEmpty()
+                                            ) emptySet()
+                                            else requestable
                                     },
                                     isAllSelected = run {
-                                        val allNums = episodes.map { it.episode_number }.toSet()
-                                        allNums.isNotEmpty() &&
-                                            selectedEpisodes.containsAll(allNums)
+                                        val requestable = episodes
+                                            .map { it.episode_number }
+                                            .filter {
+                                                !hasLibraryData ||
+                                                    it !in present
+                                            }
+                                            .toSet()
+                                        requestable.isNotEmpty() &&
+                                            selectedEpisodes
+                                                .containsAll(requestable)
                                     },
                                 )
                             }
@@ -601,7 +630,12 @@ private fun EpisodeCheckboxRow(
 ) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(10.dp)
+    // In-library episodes are NOT requestable. They render with a
+    // play affordance instead of a checkbox; tapping the row jumps
+    // the user into the series detail screen so they can hit play.
+    val isInLibrary = showLibraryBadge && !isMissing
     val restingBorder = when {
+        isInLibrary -> Color(0x3322C55E)
         checked -> Cyan.copy(alpha = 0.6f)
         !showLibraryBadge -> Color(0x22FFFFFF)
         isMissing -> Cyan.copy(alpha = 0.45f)
@@ -612,6 +646,7 @@ private fun EpisodeCheckboxRow(
             .fillMaxWidth()
             .background(
                 when {
+                    isInLibrary -> Color(0x1422C55E)
                     checked -> Cyan.copy(alpha = 0.10f)
                     else -> SurfaceNavy
                 },
@@ -619,7 +654,9 @@ private fun EpisodeCheckboxRow(
             )
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Cyan else restingBorder,
+                color = if (focused) {
+                    if (isInLibrary) Color(0xFF34D399) else Cyan
+                } else restingBorder,
                 shape = shape,
             )
             .onFocusChanged { focused = it.isFocused }
@@ -629,7 +666,11 @@ private fun EpisodeCheckboxRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CheckboxBox(checked = checked)
+        if (isInLibrary) {
+            PlayAffordance(focused = focused)
+        } else {
+            CheckboxBox(checked = checked)
+        }
         Box(
             Modifier
                 .width(120.dp)
@@ -659,7 +700,7 @@ private fun EpisodeCheckboxRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "E${episode.episode_number}",
-                    color = Cyan,
+                    color = if (isInLibrary) Color(0xFF34D399) else Cyan,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 1.sp,
@@ -707,6 +748,36 @@ private fun EpisodeCheckboxRow(
                 )
             }
         }
+    }
+}
+
+/** Used in place of the checkbox on episodes the user already has in
+ *  their Xtream library — visually distinct play glyph signals "tap
+ *  me to watch instead of selecting for request". */
+@Composable
+private fun PlayAffordance(focused: Boolean) {
+    val shape = RoundedCornerShape(50)
+    Box(
+        Modifier
+            .size(22.dp)
+            .background(
+                if (focused) Color(0xFF34D399) else Color(0x3322C55E),
+                shape,
+            )
+            .border(
+                width = 2.dp,
+                color = Color(0xFF34D399),
+                shape = shape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Triangle play glyph rendered as a centered "▶".
+        Text(
+            "▶",
+            color = if (focused) Color(0xFF05080F) else Color(0xFF34D399),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Black,
+        )
     }
 }
 

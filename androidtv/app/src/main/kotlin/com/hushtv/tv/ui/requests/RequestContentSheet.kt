@@ -358,6 +358,24 @@ fun RequestContentSheet(
                                 finalTmdb = pickedTmdb,
                             )
                         },
+                        // In-library episodes are not requestable.
+                        // Tapping one routes the user into the
+                        // library entry the same way the Tap-to-Watch
+                        // CTA on Page 2 does.
+                        onTapInLibraryEpisode = {
+                            val entry = pickedTmdb?.library
+                                ?: return@MultiEpisodePickerPhase
+                            onAlreadyAvailable?.invoke(
+                                LibraryEntry(
+                                    kind = entry.kind,
+                                    streamId = entry.streamId,
+                                    seriesId = entry.seriesId,
+                                    title = entry.title,
+                                    poster = entry.poster,
+                                ),
+                            )
+                            onDismiss()
+                        },
                     )
                     Phase.DETAILS -> DetailsPhase(
                         chosenTitle = pickedTmdb?.title ?: freeTextTitle ?: "",

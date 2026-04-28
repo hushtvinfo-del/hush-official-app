@@ -1,10 +1,10 @@
 {
-  "versionCode": 253,
-  "versionName": "1.42.53",
+  "versionCode": 254,
+  "versionName": "1.42.54",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Request modal now lands focus on the Movie button by default instead of jumping straight into the search field. D-pad DOWN to reach the search field."
+    "Episode picker now blocks selection of episodes you already have. In-library episodes show a green play badge and tapping one jumps you into the series page to watch it. Select Whole Season skips episodes already in your library."
   ]
 }
