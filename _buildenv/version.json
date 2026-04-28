@@ -1,10 +1,10 @@
 {
-  "versionCode": 268,
-  "versionName": "1.42.68",
+  "versionCode": 269,
+  "versionName": "1.42.69",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Filmography page rebuilt from scratch with deterministic layout. Card sizes are now computed from the actual viewport using BoxWithConstraints — no more aspectRatio or weight gymnastics — and every container has clipToBounds so nothing can ever paint outside its space again. Solid black background guarantees no bleed-through from the previous screen."
+    "Filmography cards are now hard-locked while the library cross-check is still running. Cards visibly dim until verified, and tapping a still-checking card shows a 'Still checking your library' toast instead of opening the request modal. The latest decoration state is read at the moment of click using rememberUpdatedState so stale lambda references can't slip through."
   ]
 }

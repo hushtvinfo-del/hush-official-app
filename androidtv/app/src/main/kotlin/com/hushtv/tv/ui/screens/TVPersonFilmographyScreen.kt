@@ -34,6 +34,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -273,6 +274,16 @@ fun TVPersonFilmographyScreen(
                                 onPrev = { if (page > 0) page -= 1 },
                                 onNext = { if (page < totalPages - 1) page += 1 },
                                 onClick = { ph ->
+                                    // Belt-and-braces: the card's
+                                    // own clickableWithEnter already
+                                    // blocks taps on undecorated
+                                    // cards. This is a second
+                                    // safety check so even if some
+                                    // future refactor breaks the
+                                    // inner guard, requests still
+                                    // can't fire on a row where the
+                                    // library cross-reference hasn't
+                                    // finished yet.
                                     if (!ph.decorated) return@DeterministicGrid
                                     val title = ph.credit.title
                                         ?: ph.credit.name ?: return@DeterministicGrid
@@ -445,6 +456,8 @@ private fun FixedSizeCreditCard(
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val current by androidx.compose.runtime.rememberUpdatedState(hit)
+    val ctx = LocalContext.current
     val title = hit.credit.title ?: hit.credit.name ?: "—"
     val year = parseCreditYear(hit.credit)
     val accent = when {
@@ -453,16 +466,38 @@ private fun FixedSizeCreditCard(
         else -> Cyan
     }
     val shape = RoundedCornerShape(12.dp)
+    // Whole card dims while we're still cross-referencing so users
+    // get an unmistakable visual signal that the card isn't ready
+    // to be tapped yet — matches the "TAP TO REQUEST" gating in
+    // the request modal but louder.
+    val cardAlpha = if (hit.decorated) 1f else 0.55f
 
     Column(
         Modifier
             .width(cardWidth)
             .height(cardHeight)
-            .clipToBounds()  // hard guarantee no child paints out
+            .clipToBounds()
             .focusRequester(remember { FocusRequester() })
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clickableWithEnter(onClick),
+            .clickableWithEnter {
+                // Defensive double-check using the latest hit state
+                // (rememberUpdatedState). Even if Compose's lambda
+                // memoization keeps a stale onClick reference, the
+                // current.decorated value is always fresh, so we
+                // CANNOT navigate / open the request modal until
+                // the row's library cross-reference has finished.
+                if (current.decorated) {
+                    onClick()
+                } else {
+                    android.widget.Toast.makeText(
+                        ctx,
+                        "Still checking your library — hang tight…",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            .graphicsLayer { alpha = cardAlpha },
     ) {
         // Poster — ABSOLUTE height. No aspectRatio.
         Box(
