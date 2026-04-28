@@ -482,6 +482,123 @@ object XtreamApi {
         return@coroutineScope ResolvedSeries(seriesId, first)
     }
 
+    /**
+     * Returns the union of every episode the user's library has for
+     * [seriesName], keyed by season number. Used by the request
+     * modal's multi-episode picker to mark already-owned episodes
+     * as "IN LIBRARY" (and lock them from selection).
+     *
+     * Why a separate fn from [resolveSeriesInfo]?
+     * Many providers split a single show across MULTIPLE Xtream
+     * `series` entries — typically per-season ("Gold Rush S01",
+     * "Gold Rush S02 2011", "Gold Rush US S03 HD"). [resolveSeriesInfo]
+     * picks ONE entry (the highest-scoring with non-empty episodes)
+     * and returns it. That one entry usually only contains episodes
+     * for ONE season — so the cross-reference would mark every
+     * other season as "MISSING" even when the user clearly has it.
+     *
+     * This function keeps walking ALL matching candidates and unions
+     * their episode catalogs, giving the picker a complete picture
+     * of what the user already owns across every season.
+     */
+    suspend fun resolveLibraryEpisodes(
+        host: String,
+        username: String,
+        password: String,
+        seriesName: String,
+    ): Map<String, Set<Int>> = coroutineScope {
+        if (seriesName.isBlank()) return@coroutineScope emptyMap()
+
+        val allDeferred = async {
+            runCatching { getAllStreams(host, username, password, "series") }
+                .getOrDefault(emptyList())
+        }
+        val byCategoryDeferred = async {
+            val cats = runCatching { getCategories(host, username, password, "series") }
+                .getOrDefault(emptyList())
+            if (cats.isEmpty()) emptyList()
+            else cats.map { cat ->
+                async {
+                    runCatching {
+                        kotlinx.coroutines.withTimeoutOrNull(6_000) {
+                            getStreamsForCategory(
+                                host, username, password, "series", cat.category_id,
+                            )
+                        }.orEmpty()
+                    }.getOrDefault(emptyList())
+                }
+            }.awaitAll().flatten()
+        }
+        val pool = (allDeferred.await() + byCategoryDeferred.await())
+            .filter { it.kind == "series" && it.seriesId > 0 }
+            .distinctBy { it.seriesId }
+        if (pool.isEmpty()) return@coroutineScope emptyMap()
+
+        val seriesIndex = com.hushtv.tv.data.TitleMatcher.buildIndex(pool) { it.title }
+        val needleNorm = com.hushtv.tv.data.TitleMatcher.normalize(seriesName)
+        val needleTokens = needleNorm.split(' ').filter { it.isNotBlank() }
+
+        fun tokenSubsequence(libNorm: String): Boolean {
+            if (needleTokens.isEmpty()) return false
+            val libTokens = libNorm.split(' ').filter { it.isNotBlank() }
+            if (libTokens.size < needleTokens.size) return false
+            for (i in 0..libTokens.size - needleTokens.size) {
+                if ((0 until needleTokens.size).all { libTokens[i + it] == needleTokens[it] }) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        // Same scoring tiers as resolveSeriesInfo, but we keep
+        // EVERY tier-100/70/50 candidate (skip the noisy 30 tier
+        // which captures sub-franchises like "Gold Rush: White
+        // Water"). The picker wants signal, not exhaustion.
+        val candidates = seriesIndex.mapNotNull { entry ->
+            val score = when {
+                entry.normalized == needleNorm -> 100
+                run {
+                    val libTokens = entry.normalized
+                        .split(' ').filter { it.isNotBlank() }
+                    libTokens.size > needleTokens.size &&
+                        (0 until needleTokens.size)
+                            .all { libTokens[it] == needleTokens[it] }
+                } -> 70
+                tokenSubsequence(entry.normalized) -> 50
+                else -> 0
+            }
+            if (score > 0) entry.payload.seriesId.toString() else null
+        }.distinct()
+
+        if (candidates.isEmpty()) return@coroutineScope emptyMap()
+
+        // Fan out — fetch up to 16 candidates in parallel. Any one
+        // that 404s or hangs gets dropped silently; we union the
+        // rest. 16 covers even the chunkiest per-season splits
+        // (16 seasons of Gold Rush = exactly 16 entries).
+        val infos = candidates.take(16).map { id ->
+            async {
+                runCatching {
+                    kotlinx.coroutines.withTimeoutOrNull(8_000) {
+                        getSeriesInfo(host, username, password, id)
+                    }
+                }.getOrNull()
+            }
+        }.awaitAll()
+
+        val merged = mutableMapOf<String, MutableSet<Int>>()
+        for (info in infos) {
+            val episodes = info?.episodes ?: continue
+            for ((seasonKey, list) in episodes) {
+                if (list.isNullOrEmpty()) continue
+                val nums = list.mapNotNull { ep -> ep.episode_num.takeIf { it > 0 } }
+                if (nums.isEmpty()) continue
+                merged.getOrPut(seasonKey) { mutableSetOf() }.addAll(nums)
+            }
+        }
+        merged.mapValues { (_, v) -> v.toSet() }
+    }
+
     // URL builders — mirror TVBrowse.jsx + standard Xtream
     fun liveUrl(host: String, user: String, pass: String, streamId: Int): String {
         val h = if (host.startsWith("http")) host else "http://$host"

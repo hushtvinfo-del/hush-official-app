@@ -1,10 +1,10 @@
 {
-  "versionCode": 254,
-  "versionName": "1.42.54",
+  "versionCode": 255,
+  "versionName": "1.42.55",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Episode picker now blocks selection of episodes you already have. In-library episodes show a green play badge and tapping one jumps you into the series page to watch it. Select Whole Season skips episodes already in your library."
+    "Episode picker now correctly detects episodes already in your library across ALL seasons (including shows split into per-season Xtream entries like Gold Rush S01, S02 etc). Owned episodes show a green play badge; missing episodes show a cyan checkbox."
   ]
 }

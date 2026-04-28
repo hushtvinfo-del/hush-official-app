@@ -159,32 +159,30 @@ fun MultiEpisodePickerPhase(
     }
 
     // Cross-reference the user's Xtream library so we can flag which
-    // episodes they already have. Same approach as the v1.42.50
-    // EpisodePickerPhase — falls back to empty map on any error so
-    // the picker still works as a plain TMDB browser.
+    // episodes they already have. This now scans ALL matching library
+    // entries (not just one) and merges their episode catalogs, which
+    // is critical for providers that split a show across per-season
+    // entries ("Gold Rush S01", "Gold Rush S02", …). Falls back to
+    // empty map on any error so the picker still works as a plain
+    // TMDB browser.
     LaunchedEffect(pick.tmdbId, pick.title) {
         val playlist = com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
             ?: return@LaunchedEffect
         runCatching {
             withContext(Dispatchers.IO) {
-                val resolved = com.hushtv.tv.data.XtreamApi.resolveSeriesInfo(
+                com.hushtv.tv.data.XtreamApi.resolveLibraryEpisodes(
                     playlist.host, playlist.username, playlist.password,
-                    seriesId = "0",          // forces title-search fallback
                     seriesName = pick.title,
                 )
-                resolved.info.episodes
-                    ?.mapValues { (_, list) ->
-                        list.mapNotNull { ep -> ep.episode_num.takeIf { it > 0 } }
-                            .toSet()
-                    }
-                    ?: emptyMap()
             }
         }.onSuccess { xtreamPresent = it }
             .onFailure { xtreamPresent = emptyMap() }
     }
 
     // Auto-scroll to the first missing episode once both data sides
-    // are loaded — same UX as v1.42.50.
+    // are loaded. We only auto-scroll for seasons where the user
+    // has at least ONE episode already (i.e. they're catching up
+    // mid-season). For all-missing seasons the picker stays at top.
     LaunchedEffect(seasonDetail, xtreamPresent, selectedSeason) {
         val episodes = seasonDetail?.episodes
             ?.filter { it.episode_number > 0 }
@@ -296,17 +294,25 @@ fun MultiEpisodePickerPhase(
                                 val present = xtreamPresent
                                     ?.get(selectedSeason?.toString())
                                     .orEmpty()
-                                val hasLibraryData = present.isNotEmpty()
+                                // Show MISSING/IN LIBRARY badges as
+                                // long as we know the user owns this
+                                // show in any season — even if they
+                                // own zero episodes for the SELECTED
+                                // season (so they can see which
+                                // episodes are missing in newly-
+                                // airing seasons too).
+                                val userOwnsShow = !xtreamPresent.isNullOrEmpty()
                                 EpisodeCheckboxList(
                                     episodes = episodes,
                                     selectedNums = selectedEpisodes,
                                     presentEpisodeNums = present,
+                                    showLibraryBadges = userOwnsShow,
                                     listState = episodeListState,
                                     onToggleEpisode = { num ->
                                         // Don't allow toggling for
                                         // episodes already in library —
                                         // those route to the player.
-                                        if (hasLibraryData && num in present) {
+                                        if (userOwnsShow && num in present) {
                                             onTapInLibraryEpisode()
                                             return@EpisodeCheckboxList
                                         }
@@ -323,7 +329,7 @@ fun MultiEpisodePickerPhase(
                                         val requestable = episodes
                                             .map { it.episode_number }
                                             .filter {
-                                                !hasLibraryData ||
+                                                !userOwnsShow ||
                                                     it !in present
                                             }
                                             .toSet()
@@ -338,7 +344,7 @@ fun MultiEpisodePickerPhase(
                                         val requestable = episodes
                                             .map { it.episode_number }
                                             .filter {
-                                                !hasLibraryData ||
+                                                !userOwnsShow ||
                                                     it !in present
                                             }
                                             .toSet()
@@ -529,6 +535,7 @@ private fun EpisodeCheckboxList(
     episodes: List<TmdbEpisode>,
     selectedNums: Set<Int>,
     presentEpisodeNums: Set<Int>,
+    showLibraryBadges: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
     isAllSelected: Boolean,
     onToggleEpisode: (Int) -> Unit,
@@ -547,7 +554,6 @@ private fun EpisodeCheckboxList(
         }
         return
     }
-    val hasLibraryData = presentEpisodeNums.isNotEmpty()
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
@@ -562,12 +568,13 @@ private fun EpisodeCheckboxList(
         }
         items(episodes, key = { it.id }) { ep ->
             val checked = ep.episode_number in selectedNums
-            val isMissing = hasLibraryData && ep.episode_number !in presentEpisodeNums
+            val isMissing = showLibraryBadges &&
+                ep.episode_number !in presentEpisodeNums
             EpisodeCheckboxRow(
                 episode = ep,
                 checked = checked,
                 isMissing = isMissing,
-                showLibraryBadge = hasLibraryData,
+                showLibraryBadge = showLibraryBadges,
                 onToggle = { onToggleEpisode(ep.episode_number) },
             )
         }
