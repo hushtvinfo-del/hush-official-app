@@ -173,9 +173,14 @@ fun TVPersonFilmographyScreen(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 56.dp, vertical = 32.dp),
+                .padding(horizontal = 56.dp, vertical = 28.dp),
         ) {
-            // ── Header ─────────────────────────────────────
+            // ── Header row: Back · Filmography/Name · Tabs ──
+            // Tabs live INLINE with the title to save vertical space
+            // for bigger cards below. Layout left-to-right with the
+            // Movies / TV tabs pushed to the right edge.
+            val movieCount = hits.count { it.credit.media_type == "movie" }
+            val tvCount = hits.count { it.credit.media_type == "tv" }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -184,7 +189,7 @@ fun TVPersonFilmographyScreen(
             ) {
                 BackChip(onClick = { nav.popBackStack() })
                 Spacer(Modifier.width(20.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(
                         "FILMOGRAPHY",
                         color = Cyan,
@@ -202,25 +207,17 @@ fun TVPersonFilmographyScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // ── Tabs ───────────────────────────────────────
-            val movieCount = hits.count { it.credit.media_type == "movie" }
-            val tvCount = hits.count { it.credit.media_type == "tv" }
-            Row(
-                modifier = Modifier.height(40.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                FilmTab(
-                    label = "Movies", count = movieCount,
-                    selected = tab == "movie", onClick = { tab = "movie" },
-                )
-                FilmTab(
-                    label = "TV", count = tvCount,
-                    selected = tab == "tv", onClick = { tab = "tv" },
-                )
+                Spacer(Modifier.width(24.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilmTab(
+                        label = "Movies", count = movieCount,
+                        selected = tab == "movie", onClick = { tab = "movie" },
+                    )
+                    FilmTab(
+                        label = "TV", count = tvCount,
+                        selected = tab == "tv", onClick = { tab = "tv" },
+                    )
+                }
             }
 
             Spacer(Modifier.height(20.dp))

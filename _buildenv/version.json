@@ -1,10 +1,10 @@
 {
-  "versionCode": 270,
-  "versionName": "1.42.70",
+  "versionCode": 271,
+  "versionName": "1.42.71",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Filmography page redesigned with bigger immersive cards: 4 columns × 2 rows = 8 results per page, full 2:3 movie posters that fill the entire card with title, year, and character name overlaid on a dark gradient at the bottom for guaranteed readability on any poster background. Status pill (CHECKING / IN LIBRARY / TAP TO REQUEST) is anchored to the top-right corner with its own colored background."
+    "Filmography page now uses the same kind of immersive poster cards as the rest of the app, but bigger. Movies / TV tabs moved into the header row to free up vertical space, so cards now grow to ~263 × 395 dp with the title, year, character name, and library status all overlaid on the poster with a dark gradient for guaranteed readability."
   ]
 }
