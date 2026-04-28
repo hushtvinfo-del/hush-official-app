@@ -98,12 +98,17 @@ fun TVHushPlusScreen(nav: NavController, playlistId: String) {
             .fillMaxSize()
             .background(Color(0xFF05080F)),
     ) {
-        // ── Page content (sits BEHIND the top-nav overlay, with
-        //    top padding to clear the nav bar) ─────────────────────
+        // ── Page content (offset by the rail width so the catalog
+        //    never sits behind the rail). ─────────────────────────
         Row(
             Modifier
                 .fillMaxSize()
-                .padding(start = 56.dp, end = 56.dp, top = 110.dp, bottom = 36.dp),
+                .padding(
+                    start = 56.dp + com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth,
+                    end = 56.dp,
+                    top = 36.dp,
+                    bottom = 36.dp,
+                ),
         ) {
             HushPlusSidebar(
                 selectedKey = selectedKey,
@@ -123,34 +128,17 @@ fun TVHushPlusScreen(nav: NavController, playlistId: String) {
             }
         }
 
-        // ── Top-nav overlay (renders after content so it stays
-        //    above the sidebar/content scrim) ────────────────────────
-        val navTabs = topNavTabs(
-            playlistId = playlistId,
-            requestsBadge = rememberRequestsBadge(),
-        )
+        // ── Disney+ style left rail ─────────────────────────────
+        // Self-positions to the start edge with fillMaxHeight at
+        // its collapsed width. Expansion is handled internally
+        // and overlays content with a backdrop dim.
         val homeTabFocus = remember { FocusRequester() }
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth(),
-        ) {
-            TopNavBar(
-                tabs = navTabs,
-                activeKey = "hushplus",
-                homeFocus = homeTabFocus,
-                onTab = { t ->
-                    if (t.key == "hushplus") return@TopNavBar
-                    t.route?.let { route ->
-                        nav.navigate(route) {
-                            popUpTo("menu/$playlistId") { inclusive = false }
-                            launchSingleTop = true
-                        }
-                    }
-                },
-                onSettings = { nav.navigate("settings/$playlistId") },
-            )
-        }
+        com.hushtv.tv.ui.screens.home.TVHubRail(
+            activeKey = "hushplus",
+            playlistId = playlistId,
+            nav = nav,
+            homeFocus = homeTabFocus,
+        )
     }
 }
 

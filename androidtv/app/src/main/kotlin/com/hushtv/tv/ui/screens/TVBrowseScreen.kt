@@ -613,7 +613,7 @@ fun TVBrowseScreen(
             Row(
                 Modifier
                     .fillMaxSize()
-                    .padding(top = 72.dp)
+                    .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth)
                     .onFocusChanged { gridHasFocus = it.hasFocus && focusedIdx >= 0 },
             ) {
                 com.hushtv.tv.ui.screens.home.CategorySidebar(
@@ -639,7 +639,7 @@ fun TVBrowseScreen(
             Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(top = 72.dp) // room for the global top nav
+                    .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth) // room for the side rail
                     .onFocusChanged { gridHasFocus = it.hasFocus && focusedIdx >= 0 },
             ) {
                 // ── TOOLBAR — BROWSE dropdown on the LEFT, category
@@ -682,32 +682,14 @@ fun TVBrowseScreen(
             "search" -> "search"
             else -> "movies"
         }
+        // Disney+ left rail — replaces top nav bar on browse pages.
         val homeTabFocus = remember { FocusRequester() }
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth(),
-        ) {
-            com.hushtv.tv.ui.screens.home.TopNavBar(
-                tabs = navTabs,
-                activeKey = activeTabKey,
-                homeFocus = homeTabFocus,
-                onTab = { t ->
-                    // Don't re-navigate to our current screen.
-                    if (t.key == activeTabKey) return@TopNavBar
-                    t.route?.let { route ->
-                        nav.navigate(route) {
-                            // Replace so back still works sensibly.
-                            popUpTo("menu/$playlistId") { inclusive = false }
-                            launchSingleTop = true
-                        }
-                    }
-                },
-                onSettings = { nav.navigate("settings/$playlistId") },
-                layoutHint = if (useSidebar) "SIDEBAR" else "TOP BAR",
-                onLayoutHintClick = { showLayoutChooser = true },
-            )
-        }
+        com.hushtv.tv.ui.screens.home.TVHubRail(
+            activeKey = activeTabKey,
+            playlistId = playlistId,
+            nav = nav,
+            homeFocus = homeTabFocus,
+        )
 
         // ── Category-picker overlay. Rendered at the ROOT Box so it
         // sits above EVERY other pane (grid, toolbar). Previously the
@@ -718,7 +700,7 @@ fun TVBrowseScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .padding(top = 72.dp),
+                    .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth),
             ) {
                 CategoryDropdownPanel(
                     entries = sidebarEntries.filter { !it.isDivider && it.id != CAT_SEARCH },

@@ -478,7 +478,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         Row(
             Modifier
                 .fillMaxSize()
-                .padding(top = 72.dp)
+                .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth)
                 .background(
                     Brush.verticalGradient(0f to Color(0xFF050B18), 1f to Color(0xFF000000))
                 )
@@ -542,7 +542,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     Column(
         Modifier
             .fillMaxSize()
-            .padding(top = 72.dp)
+            .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth)
             .background(
                 Brush.verticalGradient(0f to Color(0xFF050B18), 1f to Color(0xFF000000))
             )
@@ -630,25 +630,12 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
     )
     val navHomeFocus = remember { FocusRequester() }
-    Box(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
-        com.hushtv.tv.ui.screens.home.TopNavBar(
-            tabs = navTabs,
-            activeKey = "live",
-            homeFocus = navHomeFocus,
-            onTab = { t ->
-                if (t.key == "live") return@TopNavBar
-                t.route?.let { route ->
-                    nav.navigate(route) {
-                        popUpTo("menu/$playlistId") { inclusive = false }
-                        launchSingleTop = true
-                    }
-                }
-            },
-            onSettings = { nav.navigate("settings/$playlistId") },
-            layoutHint = if (useSidebar) "SIDEBAR" else "TOP BAR",
-            onLayoutHintClick = { showLayoutChooser = true },
-        )
-    }
+    com.hushtv.tv.ui.screens.home.TVHubRail(
+        activeKey = "live",
+        playlistId = playlistId,
+        nav = nav,
+        homeFocus = navHomeFocus,
+    )
 
     // ── Category-picker overlay. Rendered at the ROOT Box so it sits
     // above every other pane (preview bar, channel list, toolbar) —
@@ -658,7 +645,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(top = 72.dp),
+                .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth),
         ) {
             LiveCategoryPanel(
                 categories = uiCategories,

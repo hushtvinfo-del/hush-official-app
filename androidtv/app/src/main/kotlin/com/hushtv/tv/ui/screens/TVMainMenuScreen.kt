@@ -428,11 +428,11 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
 
         // Static top nav height — hero + content start right below it
         // at a constant 72 dp offset. No animation.
-        val navHeightDp = 72.dp
+        val navHeightDp = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(top = navHeightDp),
+                .padding(start = navHeightDp),
         ) {
             androidx.compose.animation.AnimatedContent(
                 targetState = currentPage,
@@ -616,39 +616,17 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // the top of the screen. D-pad Down from any tab still focuses
         // the first content card; D-pad Up from the first card focuses
         // the Home tab (no visual break — the nav was already there).
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth()
-                .onPreviewKeyEvent { ev ->
-                    // D-pad DOWN from any top-nav tab → focus first card
-                    // of the CURRENTLY VISIBLE page.
-                    if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
-                        ev.key == androidx.compose.ui.input.key.Key.DirectionDown
-                    ) {
-                        val target = when (navDownTarget) {
-                            "collections" -> firstCollectionsFocus
-                            "ss_movies" -> firstSsMoviesFocus
-                            "ss_series" -> firstSsSeriesFocus
-                            "genres_movies" -> firstGenresMoviesFocus
-                            "genres_series" -> firstGenresSeriesFocus
-                            "years_movies" -> firstYearsMoviesFocus
-                            else -> firstDiscoveryFocus
-                        }
-                        runCatching { target.requestFocus() }
-                        true
-                    } else false
-                },
-        ) {
-            com.hushtv.tv.ui.screens.home.TopNavBar(
-                tabs = tabs,
-                activeKey = "home",
-                homeFocus = topNavHomeFocus,
-                onTab = { t -> t.route?.let { nav.navigate(it) } },
-                onSettings = { nav.navigate("settings/$playlistId") },
-                daysLeft = daysLeft,
-            )
-        }
+        // Disney+ left rail — replaces the previous top nav bar.
+        // Self-positions to the start edge with fillMaxHeight at
+        // its collapsed width; expands on focus and overlays content
+        // with a backdrop dim.
+        val homeTabFocus = remember { FocusRequester() }
+        com.hushtv.tv.ui.screens.home.TVHubRail(
+            activeKey = "home",
+            playlistId = playlistId,
+            nav = nav,
+            homeFocus = homeTabFocus,
+        )
 
         // ── First-run / Settings layout chooser modal ──
         // Declared at the end of the root Box so it composes last and

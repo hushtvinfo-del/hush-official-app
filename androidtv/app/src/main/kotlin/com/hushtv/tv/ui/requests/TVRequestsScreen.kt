@@ -205,7 +205,12 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 56.dp, vertical = 28.dp),
+                .padding(
+                    start = 56.dp + com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth,
+                    end = 56.dp,
+                    top = 28.dp,
+                    bottom = 28.dp,
+                ),
         ) {
             // Top row: back chip + REFRESH
             Row(
@@ -327,6 +332,15 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
                 }
             }
         }
+
+        // Disney+ left rail.
+        val railHomeFocus = remember { FocusRequester() }
+        com.hushtv.tv.ui.screens.home.TVHubRail(
+            activeKey = "requests",
+            playlistId = playlistId,
+            nav = nav,
+            homeFocus = railHomeFocus,
+        )
     }
 
     // ── New-request sheet (TMDB-aware) ──

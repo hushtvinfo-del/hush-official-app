@@ -1,10 +1,10 @@
 {
-  "versionCode": 272,
-  "versionName": "1.42.72",
+  "versionCode": 273,
+  "versionName": "1.42.73",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "New 'Refreshing your library' boot sequence. Every cold app launch now runs a clean: clears HTTP and image caches, re-pulls categories, Live TV, Movies, Series, refreshes the request statuses and re-indexes your library for instant search. Hard-capped at 6 seconds so a slow connection never blocks you. Both TV and mobile."
+    "Disney+ style left-side navigation rail. Collapsed to 80 dp wide as a sleek icon strip with the Hush mark at the top. Press LEFT to enter the rail — it expands to 280 dp showing labels for Home, Live TV, Movies, Series, Hush+, Requests, and Settings, with a backdrop dim over the catalog. Press RIGHT to leave; focus returns to where you were."
   ]
 }
