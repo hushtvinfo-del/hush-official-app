@@ -38,12 +38,14 @@ fun MobileApp() {
     val ctx = LocalContext.current
     val nav = rememberNavController()
 
-    val startDestination = remember {
-        val id = LastProfileStore.load(ctx)
-        // Use "menu/" as the authenticated start — same route TVHomeScreen &
-        // TVAddAccountScreen navigate to after login, so all three entry
-        // paths converge on the same MobileShell.
-        if (id != null && PlaylistStore.find(ctx, id) != null) "menu/$id" else "home"
+    val needsBoot = remember { !com.hushtv.tv.BootGate.didBootRefresh }
+    val startDestination = remember(needsBoot) {
+        if (needsBoot) {
+            "boot"
+        } else {
+            val id = LastProfileStore.load(ctx)
+            if (id != null && PlaylistStore.find(ctx, id) != null) "menu/$id" else "home"
+        }
     }
 
     Surface(
@@ -51,6 +53,18 @@ fun MobileApp() {
         color = BgBlack,
     ) {
         NavHost(navController = nav, startDestination = startDestination) {
+            composable("boot") {
+                com.hushtv.tv.ui.boot.BootRefreshScreen(onDone = {
+                    com.hushtv.tv.BootGate.didBootRefresh = true
+                    val id = LastProfileStore.load(ctx)
+                    val target = if (id != null && PlaylistStore.find(ctx, id) != null)
+                        "menu/$id" else "home"
+                    nav.navigate(target) {
+                        popUpTo("boot") { inclusive = true }
+                        launchSingleTop = true
+                    }
+                })
+            }
             composable("home") { MobileProfilePickerScreen(nav) }
             composable("add") { MobileAddAccountScreen(nav) }
             // Mobile-native profile & add screens both navigate to "menu/{id}"

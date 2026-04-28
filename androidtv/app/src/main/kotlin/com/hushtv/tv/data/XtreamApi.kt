@@ -51,6 +51,15 @@ object XtreamApi {
             .build()
     }
 
+    /**
+     * Wipes the OkHttp on-disk cache. Safe to call from a background
+     * thread; failure is silent. Used by the boot-refresh sequence
+     * to force fresh API responses on the next request.
+     */
+    fun flushHttpCache() {
+        runCatching { client.cache?.evictAll() }
+    }
+
     private val moshi: Moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
         .build()

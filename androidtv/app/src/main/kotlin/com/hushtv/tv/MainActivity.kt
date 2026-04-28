@@ -106,12 +106,42 @@ private fun AppContent() {
     //   • Valid saved profile → boot straight into that profile's menu.
     //     The picker is NOT in the back stack → BACK exits the app.
     //   • No saved profile (first run or after a wipe) → show the picker.
-    val startDestination = remember {
-        val id = LastProfileStore.load(ctx)
-        if (id != null && PlaylistStore.find(ctx, id) != null) "menu/$id" else "home"
+    // ── Boot refresh sequence ─────────────────────────────────────
+    // On every COLD start (process death → relaunch), we route the
+    // user through a brief "Refreshing your library" splash that
+    // wipes stale HTTP caches, re-pulls categories / catalogues,
+    // re-primes the library index, etc. This is the cheapest UX
+    // win we can make: every screen after boot feels instant and
+    // shows real-time data, instead of whatever was in cache from
+    // 3 days ago.
+    //
+    // The flag is process-wide (not navigation-wide) so an Activity
+    // recreation (config change, deep-link relaunch) does NOT force
+    // a refresh. A genuine cold start = process restart = flag
+    // resets to false → boot screen shown.
+    val needsBoot = remember { !BootGate.didBootRefresh }
+    val startDestination = remember(needsBoot) {
+        if (needsBoot) {
+            "boot"
+        } else {
+            val id = LastProfileStore.load(ctx)
+            if (id != null && PlaylistStore.find(ctx, id) != null) "menu/$id" else "home"
+        }
     }
 
     NavHost(navController = nav, startDestination = startDestination) {
+        composable("boot") {
+            com.hushtv.tv.ui.boot.BootRefreshScreen(onDone = {
+                BootGate.didBootRefresh = true
+                val id = LastProfileStore.load(ctx)
+                val target = if (id != null && PlaylistStore.find(ctx, id) != null)
+                    "menu/$id" else "home"
+                nav.navigate(target) {
+                    popUpTo("boot") { inclusive = true }
+                    launchSingleTop = true
+                }
+            })
+        }
         composable("home") { TVHomeScreen(nav) }
         composable("add") { TVAddAccountScreen(nav) }
         composable("menu/{playlistId}") { bs ->

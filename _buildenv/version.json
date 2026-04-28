@@ -1,10 +1,10 @@
 {
-  "versionCode": 271,
-  "versionName": "1.42.71",
+  "versionCode": 272,
+  "versionName": "1.42.72",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Filmography page now uses the same kind of immersive poster cards as the rest of the app, but bigger. Movies / TV tabs moved into the header row to free up vertical space, so cards now grow to ~263 × 395 dp with the title, year, character name, and library status all overlaid on the poster with a dark gradient for guaranteed readability."
+    "New 'Refreshing your library' boot sequence. Every cold app launch now runs a clean: clears HTTP and image caches, re-pulls categories, Live TV, Movies, Series, refreshes the request statuses and re-indexes your library for instant search. Hard-capped at 6 seconds so a slow connection never blocks you. Both TV and mobile."
   ]
 }
