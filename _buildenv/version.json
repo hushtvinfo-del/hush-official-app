@@ -1,10 +1,10 @@
 {
-  "versionCode": 247,
-  "versionName": "1.42.47",
+  "versionCode": 248,
+  "versionName": "1.42.48",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Fixed: searching titles with multiple result rows (e.g. 'Terminator' which has Series + Franchise rows) wouldn't let you scroll down past the first row. The off-screen rows weren't composed yet so D-pad DOWN had no target. Switched to a fully-composed scroll column."
+    "Redesigned the 'Don't see it? Request' CTA — bigger, clearer, dark glassy surface with a cyan border and a + icon prefix. Bright white label that's actually readable on TV."
   ]
 }

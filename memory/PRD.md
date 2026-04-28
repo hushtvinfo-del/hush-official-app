@@ -1,5 +1,35 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.48 — 2026-04-27 (versionCode 248)  ⬅ LATEST  (optional)
+
+**"Don't see it? Request" CTA — modern dark-surface redesign.**
+
+User screenshot showed the old CTA (solid-cyan pill, dark-navy
+13 sp Black label) was nearly unreadable on TV — bright cyan
+washed out the dark text against itself.
+
+### New design
+- 56 dp height (was 48), 28 dp corner radius (was 24).
+- Dark glassy background (`Color(0x14FFFFFF)` resting,
+  `Cyan @ 20%` on focus) instead of solid cyan — gives the label
+  a dark backdrop to contrast against.
+- Cyan border at 1.5 dp resting / 3 dp on focus, intensifies
+  to full Cyan when focused (acts as a halo).
+- Plus-glyph icon prefix in a 28 dp cyan circle — clear "create
+  / submit" affordance even when the label is too long to read
+  at a glance.
+- Label: 16 sp Bold (was 13 sp Black) in pure white. Letter
+  spacing dropped from 1 sp to 0.3 sp so the text reads as
+  natural English instead of a marketing tagline.
+- Horizontal padding 28 dp + 12 dp icon-text gap for a more
+  balanced visual weight.
+
+### Build + deploy
+- `versionCode 247 → 248`, `versionName "1.42.47" → "1.42.48"`.
+- Non-mandatory. APK md5 `f6200f5ef8f9020c01c72d9aba014f2b`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.47 — 2026-04-27 (versionCode 247)  ⬅ LATEST  (optional)
 
 **Search results vertical-scroll fix.** User: "When I search a

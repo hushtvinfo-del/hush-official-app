@@ -23,10 +23,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Movie
@@ -581,30 +583,58 @@ private fun RequestCta(
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(28.dp)
+
+    // Modern dark-surface CTA with cyan accent. Was previously a
+    // solid-cyan pill with dark-navy text — the low-contrast dark
+    // text on bright cyan was almost unreadable on real TVs (user
+    // screenshot showed the label nearly invisible). Now: dark
+    // glassy surface with a cyan border that intensifies on focus,
+    // bright white label, plus an icon prefix for at-a-glance
+    // intent.
     Row(
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
-            .height(48.dp)
-            .background(if (focused) Cyan else Cyan.copy(alpha = 0.85f), shape)
+            .height(56.dp)
+            .background(
+                if (focused) Cyan.copy(alpha = 0.20f)
+                else Color(0x14FFFFFF),
+                shape,
+            )
             .border(
-                width = if (focused) 2.dp else 0.dp,
-                color = if (focused) Color.White else Color.Transparent,
+                width = if (focused) 3.dp else 1.5.dp,
+                color = if (focused) Cyan else Cyan.copy(alpha = 0.45f),
                 shape = shape,
             )
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
-            .padding(horizontal = 22.dp),
+            .padding(horizontal = 28.dp),
     ) {
+        // Plus-circle glyph — clearly signals "create / submit"
+        Box(
+            Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(if (focused) Cyan else Cyan.copy(alpha = 0.85f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.Add,
+                null,
+                tint = Color(0xFF05080F),
+                modifier = Modifier.size(18.dp),
+            )
+        }
         Text(
             label,
-            color = Color(0xFF05080F),
-            fontSize = 13.sp,
+            color = Color.White,
+            fontSize = 16.sp,
             fontFamily = Inter,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 1.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.3.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
