@@ -1,10 +1,10 @@
 {
-  "versionCode": 258,
-  "versionName": "1.42.58",
+  "versionCode": 259,
+  "versionName": "1.42.59",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Major hardening for the request modal. Library decoration is now decoupled from the search loop, capped at 4 concurrent lookups, and force-times-out at 6 seconds so it can never hang. TMDB results capped at 12 (was 20) to halve memory pressure on TV boxes. Crashes are now dumped to a local file at /Android/data/com.hushtv.tv/files/crash.log so we can diagnose any future issue."
+    "Tap-to-watch from request cards: once admin marks a request as Available or Added, tapping the request card on My Requests or the home rail now opens the title directly in the player — same flow as opening from Search or the Movies/Series tabs. Loading screens for requests now use a horizontal progress bar instead of a spinner so it no longer looks like buffering."
   ]
 }

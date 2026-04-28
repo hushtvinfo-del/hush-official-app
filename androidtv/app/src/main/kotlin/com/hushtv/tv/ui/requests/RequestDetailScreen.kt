@@ -40,7 +40,7 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -138,9 +138,28 @@ fun TVRequestDetailScreen(
     ) {
         when {
             loading && request == null -> Box(
-                Modifier.fillMaxSize(), contentAlignment = Alignment.Center,
+                Modifier.fillMaxSize().padding(48.dp), contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator(color = Cyan)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth(0.4f),
+                ) {
+                    Text(
+                        "Loading request…",
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        color = Cyan,
+                        trackColor = Color(0x22FFFFFF),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(999.dp)),
+                    )
+                }
             }
             error != null && request == null -> Box(
                 Modifier.fillMaxSize().padding(24.dp),
@@ -354,8 +373,30 @@ fun MobileRequestDetailScreen(
         }
         when {
             loading && request == null -> Box(
-                Modifier.fillMaxSize(), contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator(color = Cyan) }
+                Modifier.fillMaxSize().padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth(0.7f),
+                ) {
+                    Text(
+                        "Loading request…",
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        color = Cyan,
+                        trackColor = Color(0x22FFFFFF),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(999.dp)),
+                    )
+                }
+            }
             error != null && request == null -> Box(
                 Modifier.fillMaxSize().padding(24.dp),
                 contentAlignment = Alignment.Center,
@@ -1212,7 +1253,7 @@ private fun formatDate(iso: String): String {
  *  RequestNotificationHost banner uses.
  * ────────────────────────────────────────────────────────────────── */
 
-private suspend fun resolveTarget(
+internal suspend fun resolveTarget(
     ctx: Context,
     playlistId: String,
     req: ContentRequestApi.Request,
@@ -1254,3 +1295,32 @@ private suspend fun resolveTarget(
         else -> WatchTarget.Movie(match.streamId, match.title)
     }
 }
+
+/**
+ * Decides whether a tap on a request card / row should jump straight
+ * into the library (when the admin has marked the request available)
+ * or fall back to the request-detail screen (otherwise).
+ *
+ * Behaviour matrix:
+ *   • status ∈ {ADDED, ALREADY_AVAILABLE} → resolve in xtream, then
+ *     navigate to TV/mobile movie/series detail (same destination as
+ *     opening the title from Search or the Movies/Series tabs). If
+ *     resolution fails the request-detail screen is shown so the
+ *     user still gets useful context.
+ *   • Any other status                    → request-detail screen.
+ *
+ * [openMovie] / [openSeries] / [openDetail] are caller-provided so a
+ * single helper works for both TV (uses NavController routes like
+ * `series/{playlist}/{id}/{name}`) and Mobile (uses
+ * `mobileSeriesRoute(...)` builders).
+ */
+internal fun com.hushtv.tv.ui.requests.WatchTarget.isAvailable(): Boolean = when (this) {
+    is WatchTarget.Movie -> true
+    is WatchTarget.Series -> true
+    WatchTarget.NotFound -> false
+}
+
+internal val AVAILABLE_REQUEST_STATUSES = setOf(
+    ContentRequestApi.Status.ADDED,
+    ContentRequestApi.Status.ALREADY_AVAILABLE,
+)

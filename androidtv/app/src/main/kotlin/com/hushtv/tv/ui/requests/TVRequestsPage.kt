@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +54,9 @@ import com.hushtv.tv.data.RequestSeenStore
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.ui.screens.clickableWithEnterAndLongPress
 import com.hushtv.tv.ui.theme.Cyan
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * TV Home "REQUESTS" page — full-screen page in the home pager,
@@ -77,6 +81,8 @@ fun TVRequestsPage(
     onRequestHidden: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var resolvingId by remember { mutableStateOf<String?>(null) }
     var focusedReq by remember(requests) {
         mutableStateOf(requests.firstOrNull())
     }
@@ -139,7 +145,34 @@ fun TVRequestsPage(
                     firstItemFocus = firstItemFocus,
                     onFocusedReqChange = { focusedReq = it },
                     onCardClick = { req ->
-                        nav.navigate("requestdetail/$playlistId/${req.id}")
+                        if (resolvingId != null) return@TVRequestsRow
+                        if (req.status !in AVAILABLE_REQUEST_STATUSES) {
+                            nav.navigate("requestdetail/$playlistId/${req.id}")
+                            return@TVRequestsRow
+                        }
+                        // Status is available — try a direct deep
+                        // link into xtream. Mirrors the search /
+                        // browse "tap to watch" flow exactly.
+                        resolvingId = req.id
+                        scope.launch {
+                            val target = withContext(Dispatchers.IO) {
+                                resolveTarget(ctx, playlistId, req)
+                            }
+                            resolvingId = null
+                            when (target) {
+                                is WatchTarget.Movie -> nav.navigate(
+                                    "moviedetail/$playlistId/${target.streamId}/" +
+                                        android.net.Uri.encode(target.title),
+                                )
+                                is WatchTarget.Series -> nav.navigate(
+                                    "series/$playlistId/${target.seriesId}/" +
+                                        android.net.Uri.encode(target.title),
+                                )
+                                WatchTarget.NotFound -> nav.navigate(
+                                    "requestdetail/$playlistId/${req.id}",
+                                )
+                            }
+                        }
                     },
                     onLongPress = { hideTarget = it },
                     onUpFromRow = onUpFromRow,

@@ -25,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,7 @@ import com.hushtv.tv.ui.theme.SurfaceNavy
 import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -123,8 +125,30 @@ fun MyRequestsList(
         }
 
         when {
-            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Cyan)
+            loading -> Box(
+                Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth(0.5f),
+                ) {
+                    Text(
+                        "Loading your requests…",
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        color = Cyan,
+                        trackColor = Color(0x22FFFFFF),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(999.dp)),
+                    )
+                }
             }
             error != null -> Box(
                 Modifier.fillMaxSize().padding(24.dp),
@@ -204,6 +228,10 @@ fun MyRequestsList(
 @Composable
 fun TVMyRequestsScreen(nav: NavController, playlistId: String) {
     var refreshKey by remember { mutableStateOf(0) }
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var resolvingId by remember { mutableStateOf<String?>(null) }
+
     Column(
         Modifier.fillMaxSize().background(BgBlack)
             .padding(horizontal = 64.dp, vertical = 32.dp),
@@ -222,7 +250,36 @@ fun TVMyRequestsScreen(nav: NavController, playlistId: String) {
             MyRequestsList(
                 showHeader = false,
                 onOpen = { req ->
-                    nav.navigate("requestdetail/$playlistId/${req.id}")
+                    if (resolvingId != null) return@MyRequestsList
+                    if (req.status !in AVAILABLE_REQUEST_STATUSES) {
+                        nav.navigate("requestdetail/$playlistId/${req.id}")
+                        return@MyRequestsList
+                    }
+                    // Status is ADDED / ALREADY_AVAILABLE — try to
+                    // open the library entry directly.
+                    resolvingId = req.id
+                    scope.launch {
+                        val target = withContext(Dispatchers.IO) {
+                            resolveTarget(ctx, playlistId, req)
+                        }
+                        resolvingId = null
+                        when (target) {
+                            is WatchTarget.Movie -> nav.navigate(
+                                "moviedetail/$playlistId/${target.streamId}/" +
+                                    android.net.Uri.encode(target.title),
+                            )
+                            is WatchTarget.Series -> nav.navigate(
+                                "series/$playlistId/${target.seriesId}/" +
+                                    android.net.Uri.encode(target.title),
+                            )
+                            // Fall back to detail screen if the title
+                            // can't be matched in xtream — admin note
+                            // there explains why.
+                            WatchTarget.NotFound -> nav.navigate(
+                                "requestdetail/$playlistId/${req.id}",
+                            )
+                        }
+                    }
                 },
             )
         }
@@ -233,6 +290,10 @@ fun TVMyRequestsScreen(nav: NavController, playlistId: String) {
 @Composable
 fun MobileMyRequestsScreen(nav: NavController, playlistId: String) {
     var refreshKey by remember { mutableStateOf(0) }
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var resolvingId by remember { mutableStateOf<String?>(null) }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -272,7 +333,57 @@ fun MobileMyRequestsScreen(nav: NavController, playlistId: String) {
             MyRequestsList(
                 showHeader = false,
                 onOpen = { req ->
-                    nav.navigate("mrequestdetail/$playlistId/${req.id}")
+                    if (resolvingId != null) return@MyRequestsList
+                    if (req.status !in AVAILABLE_REQUEST_STATUSES) {
+                        nav.navigate("mrequestdetail/$playlistId/${req.id}")
+                        return@MyRequestsList
+                    }
+                    resolvingId = req.id
+                    scope.launch {
+                        val target = withContext(Dispatchers.IO) {
+                            resolveTarget(ctx, playlistId, req)
+                        }
+                        resolvingId = null
+                        when (target) {
+                            is WatchTarget.Movie -> {
+                                val playlist = com.hushtv.tv.data
+                                    .PlaylistStore.find(ctx, playlistId)
+                                if (playlist != null) {
+                                    val url = com.hushtv.tv.data.XtreamApi.movieUrl(
+                                        playlist.host, playlist.username,
+                                        playlist.password,
+                                        target.streamId, null,
+                                    )
+                                    nav.navigate(
+                                        com.hushtv.tv.mobile.mobilePlayerRoute(
+                                            playlistId = playlistId,
+                                            streamUrl = url,
+                                            channelName = target.title,
+                                            isLive = false,
+                                            vodStreamId = target.streamId,
+                                            vodKind = "movie",
+                                            vodPoster = null,
+                                        ),
+                                    )
+                                } else {
+                                    nav.navigate(
+                                        "mrequestdetail/$playlistId/${req.id}",
+                                    )
+                                }
+                            }
+                            is WatchTarget.Series -> nav.navigate(
+                                com.hushtv.tv.mobile.mobileSeriesRoute(
+                                    playlistId = playlistId,
+                                    seriesId = target.seriesId.toString(),
+                                    name = target.title,
+                                    poster = target.poster,
+                                ),
+                            )
+                            WatchTarget.NotFound -> nav.navigate(
+                                "mrequestdetail/$playlistId/${req.id}",
+                            )
+                        }
+                    }
                 },
             )
         }
