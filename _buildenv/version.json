@@ -1,10 +1,10 @@
 {
-  "versionCode": 248,
-  "versionName": "1.42.48",
+  "versionCode": 249,
+  "versionName": "1.42.49",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Redesigned the 'Don't see it? Request' CTA — bigger, clearer, dark glassy surface with a cyan border and a + icon prefix. Bright white label that's actually readable on TV."
+    "New: every series result in the request modal now has a 'PICK EPISODE →' chip. One click drills into a TMDB-powered season+episode picker; tapping any episode submits the request with the exact season/episode pre-filled. No typing required."
   ]
 }

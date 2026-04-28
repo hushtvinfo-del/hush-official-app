@@ -107,6 +107,7 @@ fun TmdbPickerPhase(
     onPicked: (TmdbPick) -> Unit,
     onAlreadyAvailable: (LibraryIndex.Entry) -> Unit,
     onFreeTextSubmit: (String) -> Unit,
+    onPickEpisode: ((TmdbPick) -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -274,6 +275,27 @@ fun TmdbPickerPhase(
                     items(hits, key = { it.hit.id }) { wrapped ->
                         TmdbHitRow(
                             wrapped = wrapped,
+                            type = type,
+                            onPickEpisode = onPickEpisode?.let { cb ->
+                                { wrappedHit ->
+                                    val title = wrappedHit.hit.title
+                                        ?: wrappedHit.hit.name ?: ""
+                                    val y = parseYear(wrappedHit.hit.release_date)
+                                        ?: parseYear(wrappedHit.hit.first_air_date)
+                                    cb(
+                                        TmdbPick(
+                                            tmdbId = wrappedHit.hit.id,
+                                            tmdbType = "tv",
+                                            title = title,
+                                            year = y,
+                                            posterPath = wrappedHit.hit.poster_path,
+                                            backdropPath = wrappedHit.hit.backdrop_path,
+                                            overview = null,
+                                            library = wrappedHit.libraryEntry,
+                                        ),
+                                    )
+                                }
+                            },
                             onPick = onClick@{
                                 val title = wrapped.hit.title ?: wrapped.hit.name ?: ""
                                 val year = parseYear(wrapped.hit.release_date)
@@ -415,27 +437,33 @@ private fun TypePill(
 /* ───────── TMDB hit row ───────── */
 
 @Composable
-private fun TmdbHitRow(wrapped: TmdbHitWithLibrary, onPick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
+private fun TmdbHitRow(
+    wrapped: TmdbHitWithLibrary,
+    onPick: () -> Unit,
+    type: String,
+    onPickEpisode: ((TmdbHitWithLibrary) -> Unit)? = null,
+) {
+    var rowFocused by remember { mutableStateOf(false) }
     val hit = wrapped.hit
     val title = hit.title ?: hit.name ?: "—"
     val year = parseYear(hit.release_date) ?: parseYear(hit.first_air_date)
     val inLibrary = wrapped.libraryEntry != null
+    val isSeries = type == "series"
 
     Row(
         Modifier
             .fillMaxWidth()
             .background(SurfaceNavy, RoundedCornerShape(12.dp))
             .border(
-                width = if (focused) 2.dp else 1.dp,
+                width = if (rowFocused) 2.dp else 1.dp,
                 color = when {
-                    focused -> Cyan
+                    rowFocused -> Cyan
                     inLibrary -> Color(0xFF34D399)
                     else -> Color(0x22FFFFFF)
                 },
                 shape = RoundedCornerShape(12.dp),
             )
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged { rowFocused = it.isFocused }
             .focusable()
             .clickableWithEnter(onPick)
             .padding(10.dp),
@@ -498,6 +526,61 @@ private fun TmdbHitRow(wrapped: TmdbHitWithLibrary, onPick: () -> Unit) {
                 )
             }
         }
+
+        // Series-only secondary CTA — independently focusable so D-pad
+        // RIGHT from the row body lands on it. Click submits a
+        // request scoped to a specific episode (drills into a TMDB
+        // season/episode picker rather than the manual seasons +
+        // episodes text inputs in the legacy DETAILS phase).
+        // Only shown when `onPickEpisode` is wired AND the result
+        // type is "series" — movies don't have episodes.
+        if (isSeries && onPickEpisode != null) {
+            Spacer(Modifier.width(10.dp))
+            EpisodeShortcutChip(onClick = { onPickEpisode(wrapped) })
+        }
+    }
+}
+
+/** Compact secondary chip for the per-row "pick a missing episode"
+ *  affordance. Independently focusable so the user can D-pad RIGHT
+ *  to reach it from the row body. Lights up cyan on focus to make
+ *  the secondary action discoverable. */
+@Composable
+private fun EpisodeShortcutChip(onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .height(40.dp)
+            .background(
+                if (focused) Cyan.copy(alpha = 0.22f) else Color(0x14FFFFFF),
+                shape,
+            )
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Cyan else Cyan.copy(alpha = 0.45f),
+                shape = shape,
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick)
+            .padding(horizontal = 12.dp),
+    ) {
+        Text(
+            "PICK EPISODE",
+            color = if (focused) Cyan else TextPrimary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp,
+        )
+        Text(
+            "→",
+            color = if (focused) Cyan else TextSecondary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 

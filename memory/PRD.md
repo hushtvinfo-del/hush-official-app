@@ -1,5 +1,65 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.49 — 2026-04-27 (versionCode 249)  ⬅ LATEST  (optional)
+
+**Episode-level requests in the request modal — Approach A.**
+
+User asked for a clean, click-only way to request a missing
+episode of a series. Previously the only option was a manual
+"specific seasons / episodes" text field in the legacy DETAILS
+phase. Now the modal has a dedicated 2-pane episode picker
+backed entirely by TMDB.
+
+### How it works
+1. **TMDB picker phase**: every series result row now has a
+   focusable `PICK EPISODE →` chip on the right. Cyan accent,
+   highlights on focus. Lives next to the existing primary CTA
+   ("Tap to watch" / "Tap to request") and is reached via
+   D-pad RIGHT from the row body.
+2. **EPISODE_PICKER phase** (new): drills into a 2-pane layout
+   inside the modal viewport — fits in one frame, no outer
+   scrolling.
+   - **Left**: vertical season list (220 dp), each chip shows
+     "Season N · 24" (episode count). Auto-scrolls to the
+     selected season. Auto-picks the latest non-zero season on
+     first load (likeliest place a missing episode is).
+   - **Right**: TMDB episode rows — 120 × 68 still on the left,
+     `E04 · The Last Bonanza` title, `Sep 22, 2024 · 42m` meta,
+     2-line plot. Cyan focus ring + chevron on focus.
+3. **Submit**: tapping an episode immediately fires
+   `doSubmit()` with `seriesScope = "specific_episodes"`,
+   `seasons = "15"`, `episodes = "E04 — The Last Bonanza"`.
+   Backend already accepts these fields (existing
+   series-with-season requests use them).
+
+### Navigation contract (D-pad)
+- UP/DOWN within either column = navigate items.
+- LEFT/RIGHT = jump between season chips and episode list.
+- ENTER on season chip = load that season's episodes.
+- ENTER on episode = submit (one tap, no manual entry).
+- ENTER on "← Back" chip = return to TMDB picker (state
+  preserved — same query, same hits).
+
+### Files
+- **NEW**: `EpisodePickerPhase.kt` (~480 lines, fully self-
+  contained: BackChip, SeasonList, SeasonChip, EpisodeList,
+  EpisodeRow).
+- **MODIFIED**: `TmdbPickerPhase.kt` — added optional
+  `onPickEpisode: ((TmdbPick) -> Unit)?` param + new
+  `EpisodeShortcutChip` composable wired into `TmdbHitRow`
+  (only renders when `type == "series"` AND callback present).
+- **MODIFIED**: `RequestContentSheet.kt` — added
+  `Phase.EPISODE_PICKER`, wired the new callback to seed
+  `pickedTmdb` and route to it; the picker's
+  `onSubmitEpisode(season, label)` populates `seasons` /
+  `episodes` and reuses the existing `doSubmit()` pipeline.
+
+### Build + deploy
+- `versionCode 248 → 249`, `versionName "1.42.48" → "1.42.49"`.
+- Non-mandatory. APK md5 `55bd52ee3bba14f31c13439bcc439c88`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.48 — 2026-04-27 (versionCode 248)  ⬅ LATEST  (optional)
 
 **"Don't see it? Request" CTA — modern dark-surface redesign.**

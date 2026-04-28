@@ -291,6 +291,38 @@ fun RequestContentSheet(
                                 )
                             }
                         },
+                        // Series-only secondary path: user clicked the
+                        // "PICK EPISODE →" chip on a series result. We
+                        // route into the EPISODE_PICKER phase, which
+                        // drills down via TMDB and submits a
+                        // specific-episode request when they pick one.
+                        onPickEpisode = { pick ->
+                            pickedTmdb = pick
+                            freeTextTitle = null
+                            seriesScope = "specific_episodes"
+                            phase = Phase.EPISODE_PICKER
+                        },
+                    )
+                    Phase.EPISODE_PICKER -> EpisodePickerPhase(
+                        pick = pickedTmdb ?: TmdbPick(
+                            tmdbId = 0, tmdbType = "tv",
+                            title = freeTextTitle ?: "",
+                            year = null, posterPath = null,
+                            backdropPath = null, overview = null,
+                            library = null,
+                        ),
+                        onBack = { phase = Phase.PICK },
+                        onSubmitEpisode = { season, episodeLabel ->
+                            seriesScope = "specific_episodes"
+                            seasons = season.toString()
+                            episodes = episodeLabel
+                            doSubmit(
+                                finalType = "series",
+                                finalTitle = pickedTmdb?.title
+                                    ?: freeTextTitle ?: "",
+                                finalTmdb = pickedTmdb,
+                            )
+                        },
                     )
                     Phase.DETAILS -> DetailsPhase(
                         chosenTitle = pickedTmdb?.title ?: freeTextTitle ?: "",
@@ -325,7 +357,7 @@ fun RequestContentSheet(
     }
 }
 
-private enum class Phase { CONTACT, PICK, DETAILS, SUCCESS }
+private enum class Phase { CONTACT, PICK, DETAILS, EPISODE_PICKER, SUCCESS }
 
 /**
  * Public, slim copy of [com.hushtv.tv.data.LibraryIndex.Entry] so
