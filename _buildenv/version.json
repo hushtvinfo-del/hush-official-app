@@ -1,10 +1,10 @@
 {
-  "versionCode": 243,
-  "versionName": "1.42.43",
+  "versionCode": 244,
+  "versionName": "1.42.44",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-27",
   "changelog": [
-    "Movies and Series now have a search field built into the top toolbar (next to the BROWSE dropdown). Type to live-filter the current category — works in both top-bar and sidebar layouts."
+    "Toolbar search now searches the WHOLE library — typing auto-switches to 'All', clearing the field restores your previous category. One-stop find anywhere in Movies / Series."
   ]
 }

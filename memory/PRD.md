@@ -1,5 +1,38 @@
 # HushTV Android TV — Product Requirements Document
 
+## v1.42.44 — 2026-04-27 (versionCode 244)  ⬅ LATEST  (optional)
+
+**Toolbar search auto-switches to All while typing.** v1.42.43
+shipped the inline toolbar search but it only narrowed within
+the user's currently-selected category. Now it acts as a quick
+global filter:
+
+- New `preSearchCatId` state remembers the user's category at
+  the moment they start typing.
+- Custom `onSearchChange(value)` callback wraps `searchQuery =
+  value`:
+  - When the field transitions from EMPTY → non-empty: stash
+    `selectedCatId` into `preSearchCatId`, force `selectedCatId
+    = CAT_ALL` so the grid shows the whole library.
+  - When the field transitions from non-empty → EMPTY: restore
+    `selectedCatId = preSearchCatId`, clear the stash.
+  - In-flight character changes (e.g. "G" → "Go" → "Gold") just
+    update `searchQuery` — no category churn.
+- Skip-list: if the user was already on `CAT_ALL` or one of
+  the special non-category buckets (`__divider__`,
+  `__divider2__`), we don't stash. They get the regular "search
+  while staying on All" behaviour.
+
+Wired only to the toolbar search field — the sidebar entry for
+"Search" stays a discrete category. The Movies and Series
+toolbars both use the same handler.
+
+### Build + deploy
+- `versionCode 243 → 244`, `versionName "1.42.43" → "1.42.44"`.
+- Non-mandatory. APK md5 `6efd117d99d34176bc3b5dfba5e5125e`.
+- Live on `https://hushtv.xyz/hushtv.apk`.
+
+
 ## v1.42.43 — 2026-04-27 (versionCode 243)  ⬅ LATEST  (optional)
 
 **Inline search in Movies + Series toolbar (top-bar layout)**.

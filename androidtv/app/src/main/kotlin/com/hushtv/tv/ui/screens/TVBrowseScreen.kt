@@ -153,6 +153,32 @@ fun TVBrowseScreen(
         )
     }
     var searchQuery by remember { mutableStateOf("") }
+    // When the user starts typing in the toolbar search, auto-switch
+    // to "All" so they search the entire library not just the active
+    // category. We remember the category they were on and restore it
+    // when they clear the field. Skipped if they're already on "All"
+    // or one of the special non-category buckets.
+    var preSearchCatId by remember { mutableStateOf<String?>(null) }
+    fun onSearchChange(value: String) {
+        val wasEmpty = searchQuery.isEmpty()
+        val isNowEmpty = value.isEmpty()
+        if (wasEmpty && !isNowEmpty) {
+            // Started typing.
+            if (selectedCatId != CAT_ALL && selectedCatId != "__divider__"
+                && selectedCatId != "__divider2__"
+            ) {
+                preSearchCatId = selectedCatId
+                selectedCatId = CAT_ALL
+            }
+        } else if (!wasEmpty && isNowEmpty) {
+            // Cleared field → restore previous category.
+            preSearchCatId?.let {
+                selectedCatId = it
+                preSearchCatId = null
+            }
+        }
+        searchQuery = value
+    }
 
     // ── Fetch categories + All pool once ──────────────────────────
     LaunchedEffect(playlistId, effectiveKind) {
@@ -629,7 +655,7 @@ fun TVBrowseScreen(
                     dropdownFocus = dropdownFocus,
                     downTarget = firstGridFocus,
                     searchQuery = searchQuery,
-                    onSearchChange = { searchQuery = it },
+                    onSearchChange = { onSearchChange(it) },
                     searchPlaceholder = "Search ${title.lowercase()}…",
                 )
 
