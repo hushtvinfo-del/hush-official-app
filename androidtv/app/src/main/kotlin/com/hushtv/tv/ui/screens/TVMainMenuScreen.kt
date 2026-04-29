@@ -429,10 +429,13 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // Static top nav height — hero + content start right below it
         // at a constant 72 dp offset. No animation.
         val navHeightDp = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth
+        // Hoisted to share between rail and content's focus-redirect.
+        val homeTabFocus = remember { FocusRequester() }
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(start = navHeightDp),
+                .padding(start = navHeightDp)
+                .tvHubContentFocus(homeTabFocus),
         ) {
             androidx.compose.animation.AnimatedContent(
                 targetState = currentPage,
@@ -620,7 +623,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // Self-positions to the start edge with fillMaxHeight at
         // its collapsed width; expands on focus and overlays content
         // with a backdrop dim.
-        val homeTabFocus = remember { FocusRequester() }
         com.hushtv.tv.ui.screens.home.TVHubRail(
             activeKey = "home",
             playlistId = playlistId,

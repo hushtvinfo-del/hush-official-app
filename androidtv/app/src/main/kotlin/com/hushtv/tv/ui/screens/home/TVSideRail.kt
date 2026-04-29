@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,7 +37,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -89,6 +92,33 @@ private val EXPANDED_WIDTH = 220.dp
 
 /** Public constant — hub screens use this to offset their content. */
 val SideRailCollapsedWidth = COLLAPSED_WIDTH
+
+/**
+ * Apply this Modifier to the OUTER container of a hub screen's
+ * content so:
+ *   • Pressing LEFT anywhere inside the content always jumps focus
+ *     to the rail's first item (Home), regardless of which card
+ *     the user came from. This is the [exit] redirect — Compose
+ *     normally uses spatial search (closest left focusable), which
+ *     would land on whatever rail item is vertically aligned
+ *     with the user's current card.
+ *   • When the user enters the rail and then presses RIGHT to come
+ *     back, focus is restored to the SAME card they came from
+ *     (focusRestorer remembers the last-focused child of the group).
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+fun Modifier.tvHubContentFocus(
+    firstRailItemFocus: FocusRequester,
+): Modifier = this
+    .focusGroup()
+    .focusRestorer()
+    .focusProperties {
+        exit = { dir ->
+            if (dir == androidx.compose.ui.focus.FocusDirection.Left) firstRailItemFocus
+            else FocusRequester.Default
+        }
+    }
 
 /**
  * Adapter — converts the existing TopNavTab list to SideRailItems
