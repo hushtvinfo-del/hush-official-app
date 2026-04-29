@@ -302,10 +302,22 @@ fun MultiEpisodePickerPhase(
                                 // episodes are missing in newly-
                                 // airing seasons too).
                                 val userOwnsShow = !xtreamPresent.isNullOrEmpty()
+                                // Episodes with air_date in the future
+                                // are NOT REQUESTABLE — TMDB lists them
+                                // for upcoming-season pages but they
+                                // don't actually exist yet anywhere on
+                                // the internet. The picker disables
+                                // their checkbox and "Select Whole
+                                // Season" never includes them.
+                                val unreleasedNums = episodes
+                                    .filter { isFutureReleaseDate(it.air_date) }
+                                    .map { it.episode_number }
+                                    .toSet()
                                 EpisodeCheckboxList(
                                     episodes = episodes,
                                     selectedNums = selectedEpisodes,
                                     presentEpisodeNums = present,
+                                    unreleasedEpisodeNums = unreleasedNums,
                                     showLibraryBadges = userOwnsShow,
                                     listState = episodeListState,
                                     onToggleEpisode = { num ->
@@ -316,6 +328,14 @@ fun MultiEpisodePickerPhase(
                                             onTapInLibraryEpisode()
                                             return@EpisodeCheckboxList
                                         }
+                                        // Don't allow toggling for
+                                        // episodes that haven't aired
+                                        // yet. Visual cue is already on
+                                        // the row; tap is a no-op so
+                                        // the user can't sneak one in.
+                                        if (num in unreleasedNums) {
+                                            return@EpisodeCheckboxList
+                                        }
                                         selectedEpisodes =
                                             if (num in selectedEpisodes)
                                                 selectedEpisodes - num
@@ -323,14 +343,17 @@ fun MultiEpisodePickerPhase(
                                     },
                                     onToggleSelectAll = {
                                         // "Whole season" only picks
-                                        // episodes the user is MISSING.
-                                        // In-library episodes are never
+                                        // episodes the user is MISSING
+                                        // AND have already aired. In-
+                                        // library and unreleased
+                                        // episodes are never
                                         // requestable.
                                         val requestable = episodes
                                             .map { it.episode_number }
                                             .filter {
-                                                !userOwnsShow ||
-                                                    it !in present
+                                                (!userOwnsShow ||
+                                                    it !in present) &&
+                                                    it !in unreleasedNums
                                             }
                                             .toSet()
                                         selectedEpisodes =
@@ -344,8 +367,9 @@ fun MultiEpisodePickerPhase(
                                         val requestable = episodes
                                             .map { it.episode_number }
                                             .filter {
-                                                !userOwnsShow ||
-                                                    it !in present
+                                                (!userOwnsShow ||
+                                                    it !in present) &&
+                                                    it !in unreleasedNums
                                             }
                                             .toSet()
                                         requestable.isNotEmpty() &&
@@ -535,6 +559,7 @@ private fun EpisodeCheckboxList(
     episodes: List<TmdbEpisode>,
     selectedNums: Set<Int>,
     presentEpisodeNums: Set<Int>,
+    unreleasedEpisodeNums: Set<Int>,
     showLibraryBadges: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
     isAllSelected: Boolean,
@@ -570,10 +595,12 @@ private fun EpisodeCheckboxList(
             val checked = ep.episode_number in selectedNums
             val isMissing = showLibraryBadges &&
                 ep.episode_number !in presentEpisodeNums
+            val isUnreleased = ep.episode_number in unreleasedEpisodeNums
             EpisodeCheckboxRow(
                 episode = ep,
                 checked = checked,
                 isMissing = isMissing,
+                isUnreleased = isUnreleased,
                 showLibraryBadge = showLibraryBadges,
                 onToggle = { onToggleEpisode(ep.episode_number) },
             )
@@ -632,6 +659,7 @@ private fun EpisodeCheckboxRow(
     episode: TmdbEpisode,
     checked: Boolean,
     isMissing: Boolean,
+    isUnreleased: Boolean,
     showLibraryBadge: Boolean,
     onToggle: () -> Unit,
 ) {
@@ -641,7 +669,12 @@ private fun EpisodeCheckboxRow(
     // play affordance instead of a checkbox; tapping the row jumps
     // the user into the series detail screen so they can hit play.
     val isInLibrary = showLibraryBadge && !isMissing
+    // Amber accent palette for not-yet-aired episodes — visually
+    // distinct from cyan ("missing/requestable") and green ("in
+    // library") so users get the state at a glance.
+    val unreleasedAmber = Color(0xFFF59E0B)
     val restingBorder = when {
+        isUnreleased -> unreleasedAmber.copy(alpha = 0.32f)
         isInLibrary -> Color(0x3322C55E)
         checked -> Cyan.copy(alpha = 0.6f)
         !showLibraryBadge -> Color(0x22FFFFFF)
@@ -653,6 +686,7 @@ private fun EpisodeCheckboxRow(
             .fillMaxWidth()
             .background(
                 when {
+                    isUnreleased -> Color(0x14F59E0B)
                     isInLibrary -> Color(0x1422C55E)
                     checked -> Cyan.copy(alpha = 0.10f)
                     else -> SurfaceNavy
@@ -662,21 +696,28 @@ private fun EpisodeCheckboxRow(
             .border(
                 width = if (focused) 2.dp else 1.dp,
                 color = if (focused) {
-                    if (isInLibrary) Color(0xFF34D399) else Cyan
+                    when {
+                        isUnreleased -> unreleasedAmber
+                        isInLibrary -> Color(0xFF34D399)
+                        else -> Cyan
+                    }
                 } else restingBorder,
                 shape = shape,
             )
             .onFocusChanged { focused = it.isFocused }
+            // Focusable for keyboard nav even when unreleased — users
+            // should still be able to D-pad through and read the
+            // metadata. The toggle is the only thing that's gated.
             .focusable()
             .clickableWithEnter(onToggle)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (isInLibrary) {
-            PlayAffordance(focused = focused)
-        } else {
-            CheckboxBox(checked = checked)
+        when {
+            isUnreleased -> UnreleasedAffordance(focused = focused)
+            isInLibrary -> PlayAffordance(focused = focused)
+            else -> CheckboxBox(checked = checked)
         }
         Box(
             Modifier
@@ -707,7 +748,11 @@ private fun EpisodeCheckboxRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "E${episode.episode_number}",
-                    color = if (isInLibrary) Color(0xFF34D399) else Cyan,
+                    color = when {
+                        isUnreleased -> unreleasedAmber
+                        isInLibrary -> Color(0xFF34D399)
+                        else -> Cyan
+                    },
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 1.sp,
@@ -716,16 +761,17 @@ private fun EpisodeCheckboxRow(
                 Text(
                     episode.name.takeIf { it.isNotBlank() }
                         ?: "Episode ${episode.episode_number}",
-                    color = TextPrimary,
+                    color = if (isUnreleased) TextSecondary else TextPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (showLibraryBadge) {
-                    Spacer(Modifier.width(8.dp))
-                    LibraryStatusPill(missing = isMissing)
+                Spacer(Modifier.width(8.dp))
+                when {
+                    isUnreleased -> NotReleasedPill()
+                    showLibraryBadge -> LibraryStatusPill(missing = isMissing)
                 }
             }
             val airDate = episode.air_date.orEmpty()
@@ -733,11 +779,13 @@ private fun EpisodeCheckboxRow(
             if (airDate.isNotBlank() || runtime.isNotBlank()) {
                 Spacer(Modifier.height(3.dp))
                 Text(
-                    listOfNotNull(
+                    if (isUnreleased && airDate.isNotBlank())
+                        "Airs $airDate"
+                    else listOfNotNull(
                         airDate.takeIf { it.isNotBlank() },
                         runtime.takeIf { it.isNotBlank() },
                     ).joinToString(" · "),
-                    color = TextSecondary,
+                    color = if (isUnreleased) unreleasedAmber else TextSecondary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                 )
@@ -830,6 +878,61 @@ private fun LibraryStatusPill(missing: Boolean) {
         Text(
             label,
             color = fg,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.2.sp,
+        )
+    }
+}
+
+/**
+ * Affordance shown in place of the checkbox for episodes whose
+ * `air_date` is in the future. A small clock glyph telegraphs
+ * "this hasn't aired yet — you can't request it". Toggling the row
+ * is a no-op when this is shown.
+ */
+@Composable
+private fun UnreleasedAffordance(focused: Boolean) {
+    val amber = Color(0xFFF59E0B)
+    val shape = RoundedCornerShape(50)
+    Box(
+        Modifier
+            .size(22.dp)
+            .background(
+                if (focused) amber.copy(alpha = 0.20f) else Color(0x14F59E0B),
+                shape,
+            )
+            .border(
+                width = 2.dp,
+                color = amber.copy(alpha = if (focused) 1f else 0.6f),
+                shape = shape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        // U+29D6 hourglass — small enough to fit, instantly readable.
+        Text(
+            "⌛",
+            color = amber,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Black,
+        )
+    }
+}
+
+/** Amber pill rendered in place of MISSING/IN LIBRARY for episodes
+ *  that haven't aired yet. */
+@Composable
+private fun NotReleasedPill() {
+    val amber = Color(0xFFF59E0B)
+    Box(
+        Modifier
+            .background(amber.copy(alpha = 0.16f), RoundedCornerShape(6.dp))
+            .border(1.dp, amber.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+    ) {
+        Text(
+            "NOT RELEASED",
+            color = amber,
             fontSize = 9.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 1.2.sp,

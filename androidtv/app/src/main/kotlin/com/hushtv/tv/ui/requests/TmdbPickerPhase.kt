@@ -646,6 +646,17 @@ private fun TmdbHitRow(
     val year = parseYear(hit.release_date) ?: parseYear(hit.first_air_date)
     val inLibrary = wrapped.libraryEntry != null
     val isSeries = type == "series"
+    // Movies: unreleased if release_date is strictly in the future.
+    // Series: unreleased only if the WHOLE show hasn't started yet
+    // (first_air_date in the future). Partially-released series go
+    // through the detail screen where per-episode unreleased state
+    // is handled by the episode picker.
+    val unreleased = if (isSeries)
+        isFutureReleaseDate(hit.first_air_date)
+    else
+        isFutureReleaseDate(hit.release_date)
+    val airDate = if (isSeries) hit.first_air_date else hit.release_date
+    val amber = Color(0xFFF59E0B)
 
     Row(
         Modifier
@@ -654,7 +665,8 @@ private fun TmdbHitRow(
             .border(
                 width = if (rowFocused) 2.dp else 1.dp,
                 color = when {
-                    rowFocused -> Cyan
+                    rowFocused -> if (unreleased) amber else Cyan
+                    unreleased -> amber.copy(alpha = 0.4f)
                     inLibrary -> Color(0xFF34D399)
                     else -> Color(0x22FFFFFF)
                 },
@@ -662,7 +674,9 @@ private fun TmdbHitRow(
             )
             .onFocusChanged { rowFocused = it.isFocused }
             .focusable()
-            .clickableWithEnter(onPick)
+            // Tap is a no-op for unreleased content. The amber pill +
+            // "NOT RELEASED YET" badge already telegraphs why.
+            .clickableWithEnter { if (!unreleased) onPick() }
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -721,6 +735,14 @@ private fun TmdbHitRow(
                     fg = Color(0xFFF59E0B),
                 )
             } else when {
+                unreleased -> AvailabilityBadge(
+                    label = if (!airDate.isNullOrBlank())
+                        "NOT RELEASED YET · AIRS $airDate"
+                    else
+                        "NOT RELEASED YET",
+                    bg = amber.copy(alpha = 0.16f),
+                    fg = amber,
+                )
                 isSeries && inLibrary -> AvailabilityBadge(
                     label = "ALREADY IN LIBRARY · TAP FOR OPTIONS",
                     bg = Color(0x3322C55E),

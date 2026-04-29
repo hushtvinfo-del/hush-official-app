@@ -1,10 +1,10 @@
 {
-  "versionCode": 286,
-  "versionName": "1.42.86",
+  "versionCode": 287,
+  "versionName": "1.42.87",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-29",
   "changelog": [
-    "Fixed crash when entering Search from the side rail. Removed the experimental verticalScroll wrapper on the rail's items column (suspected cause of measure-time crashes when a child requested focus mid-navigation). All 7 rail items still fit naturally within the available column height after the v1.42.85 height/spacing reductions, so scroll wasn't required."
+    "Block requests for content that hasn't been released yet — users can no longer request unreleased movies, series or episodes. The multi-episode picker now shows an amber 'NOT RELEASED · Airs <date>' pill on episodes whose TMDB air_date is in the future, hides the checkbox in favour of a small hourglass affordance, and skips them when toggling 'Whole Season'. The TMDB search row blocks the tap (no submit) for unreleased movies and for series whose entire run hasn't started yet, replacing 'TAP TO REQUEST' with 'NOT RELEASED YET · AIRS <date>'."
   ]
 }
