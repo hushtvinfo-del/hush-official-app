@@ -393,96 +393,96 @@ private fun BrandMark(expanded: Boolean) {
  * monogram is wanted (collapsed sidebar, splash, etc.). All sizing
  * is derived from a single [size] parameter so the icon scales
  * gracefully.
+ *
+ * # Design
+ * The tile is FULLY TRANSPARENT — no dark background fills, no
+ * solid chip behind the "h". This lets the icon sit cleanly on
+ * top of whatever is behind it (the side rail's near-black, a
+ * splash hero image, a marketing card, etc.) without ever
+ * looking glued-on or boxed-in.
+ *
+ * Visual elements (back-to-front):
+ *   • A faint behind-the-h halo (cyan → transparent radial) just
+ *     wide enough to anchor the letterform on busy backgrounds.
+ *     Kept subtle (≤8% alpha) so it disappears on pure black but
+ *     keeps the "h" readable on photos.
+ *   • A single gradient-stroked rounded square (cyan → indigo →
+ *     violet, top-left to bottom-right diagonal) — this is the
+ *     identity, the only solid graphic in the mark.
+ *   • A chrome / silver vertical-gradient "h" centred inside the
+ *     ring, with a tight negative letter-spacing so it visually
+ *     hugs the ring's interior.
  */
 @Composable
 private fun HushBrandTile(size: androidx.compose.ui.unit.Dp) {
-    val outerShape = RoundedCornerShape(percent = 22)
-    val frameShape = RoundedCornerShape(percent = 22)
-    // Cyan → violet gradient palette borrowed from the reference
-    // image. The cyan end matches our existing brand accent so it
-    // stays on-palette.
-    val gradient = Brush.linearGradient(
+    val ringShape = RoundedCornerShape(percent = 22)
+    // Diagonal cyan → indigo → violet gradient. Linear (not radial)
+    // so the stroke reads as a single sweeping arc from one corner
+    // to the other — more dynamic than a uniform colour and
+    // cheaper to render than a conic gradient.
+    val ringStroke = Brush.linearGradient(
         colors = listOf(
             Color(0xFF22D3EE),  // cyan
             Color(0xFF6366F1),  // indigo
             Color(0xFF8B5CF6),  // violet
         ),
     )
+    // Subtle behind-the-letter glow so the "h" stays readable on
+    // varied backgrounds without us needing a solid fill.
     val haloRadiusPx = with(androidx.compose.ui.platform.LocalDensity.current) {
-        (size * 1.2f).toPx()
+        (size * 0.55f).toPx()
     }
     Box(
         Modifier.size(size),
         contentAlignment = Alignment.Center,
     ) {
-        // Outer halo glow so the icon never looks flat against
-        // pure black.
+        // Behind-the-letter cyan halo. Sits inside the ring so it
+        // doesn't contaminate the gradient stroke's appearance.
         Box(
             Modifier
-                .size(size)
+                .size(size * 0.92f)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0x4422D3EE),
+                            Color(0x2222D3EE),
                             Color.Transparent,
                         ),
                         radius = haloRadiusPx,
                     ),
                 ),
         )
-        // Outer dark chip.
+        // Gradient-stroked ring. No fill — the box's background
+        // stays transparent so whatever is behind shows through.
         Box(
             Modifier
                 .size(size)
-                .clip(outerShape)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(0xFF0C1426),
-                            Color(0xFF050912),
-                        ),
-                    ),
-                )
                 .border(
-                    width = 1.dp,
-                    color = Color(0x33FFFFFF),
-                    shape = outerShape,
+                    width = (size.value * 0.046f).dp.coerceAtLeast(2.dp),
+                    brush = ringStroke,
+                    shape = ringShape,
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            // Inner gradient-bordered inset frame.
-            Box(
-                Modifier
-                    .size(size * 0.72f)
-                    .clip(frameShape)
-                    .background(Color(0xFF050912))
-                    .border(
-                        width = 2.dp,
-                        brush = gradient,
-                        shape = frameShape,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                // Chrome "h" — vertical gradient from bright white
-                // at the top to a slightly muted off-white at the
-                // base, mimicking polished chrome / silver.
-                Text(
-                    "h",
-                    color = Color.White,
-                    fontSize = (size.value * 0.42f).sp,
-                    fontWeight = FontWeight.Black,
-                    fontFamily = com.hushtv.tv.ui.theme.Inter,
-                    letterSpacing = (-1).sp,
-                    style = androidx.compose.ui.text.TextStyle(
-                        brush = Brush.verticalGradient(
-                            listOf(
-                                Color(0xFFFFFFFF),
-                                Color(0xFFD4D9E0),
-                            ),
+            // Chrome "h" — vertical gradient from bright white at
+            // the top to a slightly muted off-white at the base,
+            // mimicking polished chrome / silver.
+            Text(
+                "h",
+                color = Color.White,
+                fontSize = (size.value * 0.5f).sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = com.hushtv.tv.ui.theme.Inter,
+                letterSpacing = (-1).sp,
+                style = androidx.compose.ui.text.TextStyle(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color(0xFFFFFFFF),
+                            Color(0xFFE2E8F0),
+                            Color(0xFFB0B7C3),
                         ),
                     ),
-                )
-            }
+                ),
+            )
         }
     }
 }

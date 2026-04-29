@@ -1,10 +1,10 @@
 {
-  "versionCode": 287,
-  "versionName": "1.42.87",
+  "versionCode": 288,
+  "versionName": "1.42.88",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-29",
   "changelog": [
-    "Block requests for content that hasn't been released yet — users can no longer request unreleased movies, series or episodes. The multi-episode picker now shows an amber 'NOT RELEASED · Airs <date>' pill on episodes whose TMDB air_date is in the future, hides the checkbox in favour of a small hourglass affordance, and skips them when toggling 'Whole Season'. The TMDB search row blocks the tap (no submit) for unreleased movies and for series whose entire run hasn't started yet, replacing 'TAP TO REQUEST' with 'NOT RELEASED YET · AIRS <date>'."
+    "Re-designed the Hush brand mark to be fully transparent. Removed the dark navy chip + inner inset frame; the mark is now a single gradient-stroked rounded square (cyan → indigo → violet) with a chrome 'h' floating inside. Added a soft cyan behind-the-letter halo so the 'h' stays readable on photos / busy backgrounds without re-introducing a solid fill. Reads cleaner against any background — side rail, splash, hero images."
   ]
 }
