@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -296,16 +298,26 @@ fun TVSideRail(
                     .weight(1f)
                     .fillMaxHeight()
                     .background(Color(0xFF05080F))
-                    .padding(vertical = 24.dp),
+                    .padding(vertical = 18.dp),
             ) {
                 BrandMark(expanded = expanded)
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(18.dp))
 
                 Column(
                     Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                        .fillMaxWidth()
+                        // Rail can hold up to 7 items (Home / Live TV /
+                        // Movies / Series / Hush+ / Requests / Search)
+                        // plus a separate Settings row at the bottom.
+                        // On a 540 dp-effective TV that's tight, so we
+                        // (a) keep item heights compact (48 dp) and
+                        // (b) wrap in verticalScroll as a safety valve.
+                        // D-pad focus traversal triggers bringIntoView
+                        // so the user never sees an item disappear
+                        // off-screen even on the smallest TVs.
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     items.forEachIndexed { idx, item ->
                         RailItem(
@@ -324,7 +336,7 @@ fun TVSideRail(
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 RailItem(
                     item = SideRailItem(
                         key = "settings",
@@ -507,7 +519,7 @@ private fun RailItem(
     val shape = RoundedCornerShape(12.dp)
     val baseModifier = Modifier
         .fillMaxWidth()
-        .height(54.dp)
+        .height(48.dp)
         .padding(horizontal = 12.dp)
         .clip(shape)
         .background(

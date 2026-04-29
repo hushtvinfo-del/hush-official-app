@@ -1,10 +1,10 @@
 {
-  "versionCode": 284,
-  "versionName": "1.42.84",
+  "versionCode": 285,
+  "versionName": "1.42.85",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-29",
   "changelog": [
-    "Player audio defaults to English — movie + series playback now auto-selects the English audio track when one is available, even if the stream's first track is in another language. Fixes the Gold Land (2026) Korean-by-default issue and applies to ALL Xtream movies/series on TV and Mobile. Falls back gracefully when English isn't present (uses ExoPlayer's default selection so audio is never silenced)."
+    "Restored Search in the side rail. The Search item was being clipped off the bottom of the rail on standard 540 dp TV displays because all 7 items + Settings exceeded the available column height. Tightened item height (54 → 48 dp) and inter-item spacing (6 → 4 dp), trimmed brand-mark padding, and wrapped the items column in verticalScroll as a safety net so the rail never silently hides an entry on smaller screens."
   ]
 }
