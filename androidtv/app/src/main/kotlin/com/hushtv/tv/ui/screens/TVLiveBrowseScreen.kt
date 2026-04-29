@@ -542,7 +542,6 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     Column(
         Modifier
             .fillMaxSize()
-            .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth)
             .background(
                 Brush.verticalGradient(0f to Color(0xFF050B18), 1f to Color(0xFF000000))
             )

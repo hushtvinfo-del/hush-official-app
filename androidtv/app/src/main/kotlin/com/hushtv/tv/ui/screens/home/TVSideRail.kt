@@ -165,30 +165,27 @@ fun TVSideRail(
     onSelect: (SideRailItem) -> Unit,
     onSettings: () -> Unit,
 ) {
-    // Track WHICH item currently has focus — collapsing only when
-    // NOTHING in the rail holds focus prevents flicker as the user
-    // moves between menu items (item N loses focus a frame before
-    // item N+1 gains it).
+    // Track WHICH item currently has focus and WHEN it gained focus
+    // — we only act on focus that has been stable for [HOLD_MS] ms.
+    // This prevents the home page's lazy-load focus-flicker from
+    // briefly highlighting the rail's first item AND from flashing
+    // the expand animation. Below the hold threshold the rail
+    // visually pretends nothing happened — the item gets no focus
+    // ring, the rail stays its collapsed width, the divider
+    // doesn't move.
     var focusedItemKey by remember { mutableStateOf<String?>(null) }
-    // Debounced expansion. Compose's focus system can briefly route
-    // focus through the rail's first item during re-layout (e.g.
-    // when the home page lazy-loads new sections as the user scrolls
-    // down). Without a debounce, that transient focus event flashes
-    // the rail open and closed, producing the "glitch" the user
-    // sees as a logo/divider blink. The debounce requires focus to
-    // stick for [EXPAND_DELAY_MS] before we actually expand —
-    // long enough to ignore re-layout flicker, short enough that
-    // a deliberate LEFT-press still feels instant.
-    var expanded by remember { mutableStateOf(false) }
+    var stableFocus by remember { mutableStateOf<String?>(null) }
+    val expanded = stableFocus != null
     LaunchedEffect(focusedItemKey) {
-        if (focusedItemKey != null) {
-            kotlinx.coroutines.delay(140)
-            // Re-check — if focus is gone by the time the delay
-            // expires, this was a transient flicker; don't expand.
-            if (focusedItemKey != null) expanded = true
+        val key = focusedItemKey
+        if (key == null) {
+            stableFocus = null
         } else {
-            // Collapse immediately on focus leaving.
-            expanded = false
+            // Hold at least 250 ms before treating focus as stable.
+            // 4-frame transient flickers from lazy-list re-layout
+            // are gone in <60 ms, so 250 ms is plenty of cushion.
+            kotlinx.coroutines.delay(250)
+            if (focusedItemKey == key) stableFocus = key
         }
     }
     val width by animateDpAsState(
@@ -237,6 +234,7 @@ fun TVSideRail(
                             item = item,
                             active = item.key == activeKey,
                             expanded = expanded,
+                            showVisualFocus = expanded,
                             focusRequester = if (idx == 0) firstItemFocus else null,
                             onFocusChanged = { hasFocus ->
                                 focusedItemKey = if (hasFocus) item.key
@@ -257,6 +255,7 @@ fun TVSideRail(
                     ),
                     active = activeKey == "settings",
                     expanded = expanded,
+                    showVisualFocus = expanded,
                     focusRequester = null,
                     onFocusChanged = { hasFocus ->
                         focusedItemKey = if (hasFocus) "settings"
@@ -322,11 +321,18 @@ private fun RailItem(
     item: SideRailItem,
     active: Boolean,
     expanded: Boolean,
+    showVisualFocus: Boolean,
     focusRequester: FocusRequester?,
     onFocusChanged: (Boolean) -> Unit,
     onSelect: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    // Focus-driven visuals only render once the rail has actually
+    // committed to being expanded (i.e. the parent's stable-focus
+    // debounce confirmed). Without this gate, transient focus
+    // events from the home page's lazy-load re-layout would briefly
+    // light the item's cyan ring before the debounce nukes it.
+    val visuallyFocused = focused && showVisualFocus
     val shape = RoundedCornerShape(12.dp)
     val baseModifier = Modifier
         .fillMaxWidth()
@@ -335,14 +341,14 @@ private fun RailItem(
         .clip(shape)
         .background(
             when {
-                focused -> Cyan.copy(alpha = 0.22f)
+                visuallyFocused -> Cyan.copy(alpha = 0.22f)
                 active -> Cyan.copy(alpha = 0.12f)
                 else -> Color.Transparent
             },
         )
         .border(
-            width = if (focused) 2.dp else 0.dp,
-            color = if (focused) Cyan else Color.Transparent,
+            width = if (visuallyFocused) 2.dp else 0.dp,
+            color = if (visuallyFocused) Cyan else Color.Transparent,
             shape = shape,
         )
 
@@ -366,7 +372,7 @@ private fun RailItem(
             Icon(
                 imageVector = item.icon,
                 contentDescription = item.label,
-                tint = if (focused || active) Cyan else TextSecondary,
+                tint = if (visuallyFocused || active) Cyan else TextSecondary,
                 modifier = Modifier.size(24.dp),
             )
             if (item.showBadge) {
@@ -387,7 +393,7 @@ private fun RailItem(
         ) {
             Text(
                 item.label,
-                color = if (focused || active) TextPrimary else TextSecondary,
+                color = if (visuallyFocused || active) TextPrimary else TextSecondary,
                 fontSize = 15.sp,
                 fontWeight = if (active) FontWeight.Black else FontWeight.SemiBold,
                 maxLines = 1,

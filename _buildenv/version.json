@@ -1,10 +1,10 @@
 {
-  "versionCode": 275,
-  "versionName": "1.42.75",
+  "versionCode": 276,
+  "versionName": "1.42.76",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Fix rail glitch when scrolling Home (transient focus flicker now debounced — no more logo/divider flash). Live TV, Movies, Series, Hush+ and Requests screens now go truly full-screen with the Back-to-Home chip integrated INTO each screen's existing top bar — no more floating overlays."
+    "Two fixes. (1) Side rail no longer flashes the home item highlight when scrolling Home — focus now has to stay on the rail for 250 ms before any visual change, so the lazy-load focus flicker can never reach the screen. (2) Live TV had a leftover 80 dp padding from when the rail was there; removed so the channel grid uses the full screen width."
   ]
 }
