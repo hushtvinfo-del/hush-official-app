@@ -1,10 +1,10 @@
 {
-  "versionCode": 288,
-  "versionName": "1.42.88",
+  "versionCode": 289,
+  "versionName": "1.42.89",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-29",
   "changelog": [
-    "Re-designed the Hush brand mark to be fully transparent. Removed the dark navy chip + inner inset frame; the mark is now a single gradient-stroked rounded square (cyan → indigo → violet) with a chrome 'h' floating inside. Added a soft cyan behind-the-letter halo so the 'h' stays readable on photos / busy backgrounds without re-introducing a solid fill. Reads cleaner against any background — side rail, splash, hero images."
+    "Brand mark redesigned to match the user-supplied 'Screen + Play' reference. Fully transparent — no dark fills anywhere. Now shows a gradient-stroked rounded-rectangle screen frame (cyan → indigo → violet) with a chrome 'h' inside and a royal-blue play triangle that pierces the screen's bottom edge. Stroke width and triangle scale proportionally with tile size so it reads cleanly at every dimension."
   ]
 }
