@@ -11,6 +11,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
@@ -96,27 +100,41 @@ val SideRailCollapsedWidth = COLLAPSED_WIDTH
 /**
  * Apply this Modifier to the OUTER container of a hub screen's
  * content so:
- *   • Pressing LEFT anywhere inside the content always jumps focus
- *     to the rail's first item (Home), regardless of which card
- *     the user came from. This is the [exit] redirect — Compose
- *     normally uses spatial search (closest left focusable), which
- *     would land on whatever rail item is vertically aligned
- *     with the user's current card.
+ *   • Pressing LEFT when there is no further card to the left
+ *     (i.e. focus has reached the leftmost column of a row) jumps
+ *     focus to the rail's first item (Home), regardless of which
+ *     row the user is on. Compose's default 2D focus search
+ *     would otherwise pick whichever rail item is vertically
+ *     aligned with the user's current card; we want the entry
+ *     point to ALWAYS be Home so the model is predictable.
  *   • When the user enters the rail and then presses RIGHT to come
  *     back, focus is restored to the SAME card they came from
  *     (focusRestorer remembers the last-focused child of the group).
+ *
+ * Implementation note — we use `onKeyEvent` (the BUBBLE phase, after
+ * children have had a chance to handle the key) rather than
+ * `onPreviewKeyEvent` (capture phase) so intra-row LEFT navigation
+ * between cards keeps working. Compose's built-in `focusable()`
+ * handler consumes LEFT when 2D focus search succeeds within the
+ * content; only when it fails (focus is already at the leftmost
+ * card) does the event bubble up to us and we redirect to the rail.
+ *
+ * We deliberately AVOID the declarative `focusProperties { exit = … }`
+ * form because it resolves its target synchronously inside
+ * `dispatchKeyEvent` and crashes if the target isn't attached
+ * (the codebase audit task enforces this rule).
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-@Composable
 fun Modifier.tvHubContentFocus(
     firstRailItemFocus: FocusRequester,
 ): Modifier = this
     .focusGroup()
     .focusRestorer()
-    .focusProperties {
-        exit = { dir ->
-            if (dir == androidx.compose.ui.focus.FocusDirection.Left) firstRailItemFocus
-            else FocusRequester.Default
+    .onKeyEvent { ev ->
+        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+            runCatching { firstRailItemFocus.requestFocus() }.isSuccess
+        } else {
+            false
         }
     }
 

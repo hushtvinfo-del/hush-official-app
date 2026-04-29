@@ -1,10 +1,10 @@
 {
-  "versionCode": 279,
-  "versionName": "1.42.79",
+  "versionCode": 280,
+  "versionName": "1.42.80",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
-  "releasedAt": "2026-04-28",
+  "releasedAt": "2026-04-29",
   "changelog": [
-    "New premium HushTV brand tile in the side rail. Outer dark rounded-square chip with subtle cyan halo, inner inset frame outlined with a cyan→indigo→violet gradient, centred chrome lowercase 'h' — matching the reference image exactly."
+    "TV Home D-pad navigation polish — pressing LEFT from any home content card now always lands on the Home rail item (predictable entry point), and pressing RIGHT from the rail restores focus to the exact card you came from. Implemented with focusGroup + focusRestorer + a bubble-phase onKeyEvent redirect so intra-row LEFT navigation between cards still works."
   ]
 }

@@ -1,6 +1,50 @@
 # HushTV Android TV — Product Requirements Document
 
-## v1.42.51 — 2026-04-28 (versionCode 251)  ⬅ LATEST  (optional)
+## v1.42.80 — 2026-04-29 (versionCode 280)  ⬅ LATEST
+
+**Disney+ rail D-pad focus polish.** Finalised the focus model
+between the new left side rail and the home content area.
+
+### Behaviour
+- Pressing **LEFT** from any home content card always lands on
+  the **Home** rail item — no matter which row/card you started
+  from. Compose's default 2D spatial search would have picked
+  whichever rail item was vertically aligned, which felt
+  arbitrary. The Home item is now the predictable entry point.
+- Pressing **RIGHT** from a rail item restores focus to the
+  **exact card you were on previously** (Compose's
+  `focusRestorer()` remembers the last-focused child of the
+  content focus group).
+- Intra-row LEFT/RIGHT card navigation is unchanged.
+
+### Implementation (`TVSideRail.kt`, `TVMainMenuScreen.kt`)
+- New `Modifier.tvHubContentFocus(firstRailItemFocus)` — applied
+  to the outer content `Box`. Combines `focusGroup()` +
+  `focusRestorer()` for the RIGHT-restore semantic, plus a
+  bubble-phase `onKeyEvent` LEFT-redirect.
+- Why bubble-phase (`onKeyEvent`) and NOT capture-phase
+  (`onPreviewKeyEvent`)? The bubble phase only fires when no
+  descendant consumed the LEFT key — i.e. focus is already at
+  the leftmost card and Compose's default focus search couldn't
+  navigate further left. Intra-row LEFT navigation between cards
+  is consumed BEFORE bubbling, so it keeps working.
+- Why NOT `Modifier.focusProperties { exit = … }`? Compose
+  resolves the target requester synchronously inside
+  `dispatchKeyEvent` and crashes with
+  `IllegalStateException: FocusRequester is not initialized`
+  when the target isn't attached. The `auditFocusProperties`
+  Gradle task fails the build on any unmarked usage. We use
+  `runCatching { target.requestFocus() }.isSuccess` instead so
+  unattached targets are a safe no-op.
+- `homeTabFocus` is hoisted at `TVMainMenuScreen` and shared
+  between the rail (`firstItemFocus`) and the content's
+  redirect, so both ends of the routing reference the SAME
+  requester.
+
+---
+
+
+## v1.42.51 — 2026-04-28 (versionCode 251)  (optional)
 
 **3-page Multi-Select Episode Request flow.** User flagged the
 v1.42.50 inline "PICK EPISODE →" chip as "ugly, you can't even
