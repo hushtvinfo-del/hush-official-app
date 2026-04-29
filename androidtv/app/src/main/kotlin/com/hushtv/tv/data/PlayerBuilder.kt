@@ -102,6 +102,28 @@ object PlayerBuilder {
             .build()
             .apply {
                 setWakeMode(C.WAKE_MODE_NETWORK)
+                // ── Default audio track preference ──────────────────
+                // Always prefer English audio when the stream provides
+                // multiple audio tracks. Some IPTV providers ship
+                // sources where the FIRST audio track is in the source
+                // language (e.g. Korean for "Gold Land", Japanese for
+                // anime, Hindi for Bollywood, etc.) and ExoPlayer's
+                // default behaviour is to pick the first track.
+                //
+                // We pass BOTH ISO-639-1 ("en") and ISO-639-2 ("eng")
+                // because providers tag tracks inconsistently — some
+                // streams use one, some use the other. ExoPlayer's
+                // matcher normalises via java.util.Locale, but
+                // providing both removes any ambiguity. The track
+                // matcher honours order, so "en" is tried first, then
+                // "eng" as a fallback. If NEITHER is present (English
+                // simply doesn't exist on this stream) ExoPlayer falls
+                // back to its default selection — usually the first
+                // track — so we never silently mute the audio.
+                trackSelectionParameters = trackSelectionParameters
+                    .buildUpon()
+                    .setPreferredAudioLanguages("en", "eng")
+                    .build()
                 // Log the decoder ExoPlayer ends up picking — gives us
                 // ground-truth visibility into "are we running on
                 // hardware?" without guessing. The decoder name + an
