@@ -11,8 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -306,17 +304,7 @@ fun TVSideRail(
                 Column(
                     Modifier
                         .weight(1f)
-                        .fillMaxWidth()
-                        // Rail can hold up to 7 items (Home / Live TV /
-                        // Movies / Series / Hush+ / Requests / Search)
-                        // plus a separate Settings row at the bottom.
-                        // On a 540 dp-effective TV that's tight, so we
-                        // (a) keep item heights compact (48 dp) and
-                        // (b) wrap in verticalScroll as a safety valve.
-                        // D-pad focus traversal triggers bringIntoView
-                        // so the user never sees an item disappear
-                        // off-screen even on the smallest TVs.
-                        .verticalScroll(rememberScrollState()),
+                        .fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     items.forEachIndexed { idx, item ->

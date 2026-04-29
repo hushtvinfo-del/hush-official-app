@@ -1,10 +1,10 @@
 {
-  "versionCode": 285,
-  "versionName": "1.42.85",
+  "versionCode": 286,
+  "versionName": "1.42.86",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-29",
   "changelog": [
-    "Restored Search in the side rail. The Search item was being clipped off the bottom of the rail on standard 540 dp TV displays because all 7 items + Settings exceeded the available column height. Tightened item height (54 → 48 dp) and inter-item spacing (6 → 4 dp), trimmed brand-mark padding, and wrapped the items column in verticalScroll as a safety net so the rail never silently hides an entry on smaller screens."
+    "Fixed crash when entering Search from the side rail. Removed the experimental verticalScroll wrapper on the rail's items column (suspected cause of measure-time crashes when a child requested focus mid-navigation). All 7 rail items still fit naturally within the available column height after the v1.42.85 height/spacing reductions, so scroll wasn't required."
   ]
 }
