@@ -1,10 +1,10 @@
 {
-  "versionCode": 281,
-  "versionName": "1.42.81",
+  "versionCode": 282,
+  "versionName": "1.42.82",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-29",
   "changelog": [
-    "TV Home D-pad navigation fix — pressing LEFT from a non-leftmost card now correctly moves to the previous card instead of opening the side rail. The rail only opens when LEFT is pressed at the leftmost card of a row. Intra-grid LEFT/RIGHT/UP/DOWN navigation works exactly like the Movies/Series catalogue. Implemented by manually attempting focusManager.moveFocus(Left) inside a focusGroup-bounded scope, and only redirecting to the rail when no card-target was found."
+    "Full-screen layout sweep — Collection Detail, Collections Browse and Unified Search no longer render the legacy top nav. They now match Movies / Series / Live TV / Hush+ with a small top-left Back-to-Home chip. Every inner page (besides Home) is now full-screen for maximum content real-estate."
   ]
 }

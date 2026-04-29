@@ -71,8 +71,6 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.hushtv.tv.data.TitleMatcher
 import com.hushtv.tv.ui.screens.home.MovieCollection
-import com.hushtv.tv.ui.screens.home.TopNavBar
-import com.hushtv.tv.ui.screens.home.TopNavTab
 import com.hushtv.tv.ui.screens.home.rememberMovieCollections
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
@@ -109,16 +107,6 @@ fun TVCollectionsBrowseScreen(
         }
     }
 
-    val tabs = remember {
-        listOf(
-            TopNavTab("home",   "Home",    Icons.Default.Home,       "menu/$playlistId"),
-            TopNavTab("live",   "Live TV", Icons.Default.Tv,         "browse/$playlistId/live"),
-            TopNavTab("movies", "Movies",  Icons.Default.Movie,      "browse/$playlistId/movie"),
-            TopNavTab("series", "Series",  Icons.Outlined.Slideshow, "browse/$playlistId/series"),
-            TopNavTab("search", "Search",  Icons.Default.Search,     "search/$playlistId"),
-        )
-    }
-    val homeFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }
     val firstCardFocus = remember { FocusRequester() }
     val gridFocus = remember { FocusRequester() }
@@ -130,21 +118,24 @@ fun TVCollectionsBrowseScreen(
     }
 
     Box(Modifier.fillMaxSize().background(BgBlack)) {
-        // Top nav.
-        Box(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
-            TopNavBar(
-                tabs = tabs,
-                activeKey = "movies",
-                homeFocus = homeFocus,
-                onTab = { t -> t.route?.let { nav.navigate(it) } },
-                onSettings = { nav.navigate("settings/$playlistId") },
+        // Top-left Back-to-Home chip — replaces the old top nav.
+        // Matches the full-screen pattern used by Movies / Series /
+        // Live TV / Hush+ etc.
+        Box(
+            Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 32.dp, top = 24.dp),
+        ) {
+            com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                nav = nav,
+                playlistId = playlistId,
             )
         }
 
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(top = 72.dp, start = 48.dp, end = 48.dp, bottom = 24.dp),
+                .padding(top = 80.dp, start = 48.dp, end = 48.dp, bottom = 24.dp),
         ) {
             // ── Page header + inline search bar ──
             Row(

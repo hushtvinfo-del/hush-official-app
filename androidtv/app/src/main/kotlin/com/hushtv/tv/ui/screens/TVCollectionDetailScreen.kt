@@ -68,8 +68,6 @@ import com.hushtv.tv.data.TitleMatcher
 import com.hushtv.tv.data.TmdbCollectionPart
 import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.XtreamApi
-import com.hushtv.tv.ui.screens.home.TopNavBar
-import com.hushtv.tv.ui.screens.home.TopNavTab
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.Inter
@@ -168,11 +166,6 @@ fun TVCollectionDetailScreen(
     }
 
     val playlistIdForNav = playlistId
-    val tabs = com.hushtv.tv.ui.screens.home.topNavTabs(
-        playlistId = playlistIdForNav,
-        requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
-    )
-    val homeFocus = remember { FocusRequester() }
     val firstCardFocus = remember { FocusRequester() }
     LaunchedEffect(loading, entries.isNotEmpty()) {
         if (!loading && entries.isNotEmpty()) {
@@ -201,21 +194,24 @@ fun TVCollectionDetailScreen(
             exit = fadeOut(tween(200)),
         ) {
             Box(Modifier.fillMaxSize()) {
-                // Top nav overlay (same as other browse screens).
-                Box(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
-                    TopNavBar(
-                        tabs = tabs,
-                        activeKey = "movies",
-                        homeFocus = homeFocus,
-                        onTab = { t -> t.route?.let { nav.navigate(it) } },
-                        onSettings = { nav.navigate("settings/$playlistIdForNav") },
+                // Top-left Back-to-Home chip — replaces the old top
+                // nav. Matches the full-screen pattern used by Movies,
+                // Series, Live TV, Hush+, etc.
+                Box(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 32.dp, top = 24.dp),
+                ) {
+                    com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                        nav = nav,
+                        playlistId = playlistIdForNav,
                     )
                 }
 
                 Column(
                     Modifier
                         .fillMaxSize()
-                        .padding(top = 72.dp, start = 48.dp, end = 48.dp, bottom = 24.dp),
+                        .padding(top = 80.dp, start = 48.dp, end = 48.dp, bottom = 24.dp),
                 ) {
                     // Header — franchise name + count + chronological badge.
                     Row(

@@ -74,8 +74,6 @@ import com.hushtv.tv.data.TmdbService
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.ui.requests.RequestContentSheet
 import com.hushtv.tv.ui.screens.home.MovieCollection
-import com.hushtv.tv.ui.screens.home.TopNavBar
-import com.hushtv.tv.ui.screens.home.TopNavTab
 import com.hushtv.tv.ui.screens.home.rememberMovieCollections
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
@@ -163,18 +161,13 @@ fun TVUnifiedSearchScreen(
     // query — prevents "no results" flashing between keystrokes.
     val filtering = query.trim() != debouncedQuery.trim() && query.isNotBlank()
 
-    // ── Focus + TopNav ──
-    val tabs = com.hushtv.tv.ui.screens.home.topNavTabs(
-        playlistId = playlistId,
-        requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
-    )
-    val homeFocus = remember { FocusRequester() }
-    val searchFocus = remember { FocusRequester() }
+    // ── Focus ──
     val firstLiveFocus = remember { FocusRequester() }
     val firstMovieFocus = remember { FocusRequester() }
     val firstSeriesFocus = remember { FocusRequester() }
     val firstCollFocus = remember { FocusRequester() }
     val requestCtaFocus = remember { FocusRequester() }
+    val searchFocus = remember { FocusRequester() }
 
     var showRequestModal by remember { mutableStateOf(false) }
 
@@ -406,14 +399,17 @@ fun TVUnifiedSearchScreen(
             }
         }
 
-        // Top nav.
-        Box(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
-            TopNavBar(
-                tabs = tabs,
-                activeKey = "search",
-                homeFocus = homeFocus,
-                onTab = { t -> t.route?.let { nav.navigate(it) } },
-                onSettings = { nav.navigate("settings/$playlistId") },
+        // Top-left Back-to-Home chip — replaces the old top nav.
+        // Matches the full-screen pattern used by Movies / Series /
+        // Live TV / Hush+ etc.
+        Box(
+            Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 32.dp, top = 24.dp),
+        ) {
+            com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                nav = nav,
+                playlistId = playlistId,
             )
         }
     }
