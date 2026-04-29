@@ -294,26 +294,83 @@ private fun BrandMark(expanded: Boolean) {
             // Full wordmark — only shown in the expanded state.
             com.hushtv.tv.ui.HushTVLogo(fontSize = 22.sp)
         } else {
-            // Collapsed monogram — square cyan-tinted "H" tile that
-            // reads as a recognizable launcher-style icon.
+            // Collapsed brand mark — premium "h." monogram. The
+            // recipe (mirrored from the full wordmark):
+            //   • Soft inner glow disc — cyan→transparent radial,
+            //     gives the icon a subtle backlit halo so it
+            //     reads on dark backgrounds without looking flat.
+            //   • Rounded-square chip with a cyan→darker-cyan
+            //     vertical gradient that matches Disney+'s
+            //     "premium dark accent" feel.
+            //   • Lowercase white "h" + cyan period — the same
+            //     two-colour pattern as the wordmark, so the
+            //     collapsed icon is instantly recognisable as a
+            //     condensed version of the brand.
+            //   • Hairline cyan border for definition.
             Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Cyan, Color(0xFF0891B2)),
-                        ),
-                    ),
+                Modifier.size(48.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    "H",
-                    color = Color(0xFF05080F),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = (-1).sp,
+                // Outer glow halo (sits behind the chip).
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Cyan.copy(alpha = 0.30f),
+                                    Color.Transparent,
+                                ),
+                                radius = 60f,
+                            ),
+                        ),
                 )
+                // Chip — gradient + border.
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color(0xFF0F2C36),
+                                    Color(0xFF071A22),
+                                ),
+                            ),
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Cyan.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(11.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    ) {
+                        Text(
+                            "h",
+                            color = Color.White,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = com.hushtv.tv.ui.theme.Inter,
+                            letterSpacing = (-1).sp,
+                            modifier = Modifier
+                                .padding(bottom = 0.dp),
+                        )
+                        // Cyan period with subtle glow — the
+                        // signature flourish from the full
+                        // "hushtv." wordmark.
+                        Box(
+                            Modifier
+                                .padding(start = 1.dp, bottom = 6.dp)
+                                .size(5.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(Cyan),
+                        )
+                    }
+                }
             }
         }
     }

@@ -1,10 +1,10 @@
 {
-  "versionCode": 277,
-  "versionName": "1.42.77",
+  "versionCode": 278,
+  "versionName": "1.42.78",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Side rail divider line is now solid opaque dark grey instead of translucent cyan. The line no longer takes on the colour of whatever's scrolling behind it on the right — fully isolated visual."
+    "Beautified the side rail's collapsed brand icon. Replaced the plain cyan 'H' tile with a premium 'h.' monogram on a dark gradient chip with a cyan glow halo and hairline cyan border — instantly recognizable as a condensed version of the full hushtv. wordmark."
   ]
 }
