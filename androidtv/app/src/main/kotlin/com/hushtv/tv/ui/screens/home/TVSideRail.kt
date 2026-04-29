@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,12 +41,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -103,40 +105,68 @@ val SideRailCollapsedWidth = COLLAPSED_WIDTH
  *   • Pressing LEFT when there is no further card to the left
  *     (i.e. focus has reached the leftmost column of a row) jumps
  *     focus to the rail's first item (Home), regardless of which
- *     row the user is on. Compose's default 2D focus search
- *     would otherwise pick whichever rail item is vertically
- *     aligned with the user's current card; we want the entry
- *     point to ALWAYS be Home so the model is predictable.
+ *     row the user is on. Compose's default 2D focus search would
+ *     otherwise pick whichever rail item is vertically aligned
+ *     with the user's current card; we want the entry point to
+ *     ALWAYS be Home so the model is predictable.
  *   • When the user enters the rail and then presses RIGHT to come
  *     back, focus is restored to the SAME card they came from
  *     (focusRestorer remembers the last-focused child of the group).
+ *   • Intra-grid LEFT/RIGHT/UP/DOWN navigation between cards is
+ *     completely unaffected — only the LEFT-at-the-edge case is
+ *     redirected to the rail.
  *
- * Implementation note — we use `onKeyEvent` (the BUBBLE phase, after
- * children have had a chance to handle the key) rather than
- * `onPreviewKeyEvent` (capture phase) so intra-row LEFT navigation
- * between cards keeps working. Compose's built-in `focusable()`
- * handler consumes LEFT when 2D focus search succeeds within the
- * content; only when it fails (focus is already at the leftmost
- * card) does the event bubble up to us and we redirect to the rail.
+ * # Implementation
+ *
+ * We can't naively consume LEFT in `onPreviewKeyEvent` (that breaks
+ * intra-row navigation) and we can't trust `onKeyEvent` to fire only
+ * after children handle it (Compose's default focusable navigation
+ * doesn't propagate "consumed" upwards — `onKeyEvent` always fires
+ * on every ancestor regardless of whether focus moved).
+ *
+ * The robust approach is: in `onPreviewKeyEvent`, MANUALLY call
+ * `focusManager.moveFocus(Left)`. This returns `true` when focus
+ * successfully moved within the focus group (intra-row case), and
+ * `false` when no focusable target was found in that direction
+ * (we're at the leftmost edge). Either way we consume the event so
+ * the default focusable handler doesn't fire afterwards and
+ * double-move focus.
+ *
+ * `focusGroup()` is what bounds `moveFocus(Left)` to STAY inside
+ * the content area — without it, the spatial search would happily
+ * step out of the content area and into the rail, defeating the
+ * whole point of the redirect.
  *
  * We deliberately AVOID the declarative `focusProperties { exit = … }`
  * form because it resolves its target synchronously inside
- * `dispatchKeyEvent` and crashes if the target isn't attached
- * (the codebase audit task enforces this rule).
+ * `dispatchKeyEvent` and crashes if the target isn't attached.
+ * The codebase's `auditFocusProperties` Gradle task enforces this.
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
 fun Modifier.tvHubContentFocus(
     firstRailItemFocus: FocusRequester,
-): Modifier = this
-    .focusGroup()
-    .focusRestorer()
-    .onKeyEvent { ev ->
-        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-            runCatching { firstRailItemFocus.requestFocus() }.isSuccess
-        } else {
-            false
+): Modifier {
+    val focusManager = LocalFocusManager.current
+    return this
+        .focusGroup()
+        .focusRestorer()
+        .onPreviewKeyEvent { ev ->
+            if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            if (ev.key != Key.DirectionLeft) return@onPreviewKeyEvent false
+            // Try moving focus left WITHIN the focus group first.
+            // focusGroup() bounds the search so it can't escape into
+            // the rail — when there's no card to the left, this
+            // returns false and we redirect.
+            val moved = focusManager.moveFocus(FocusDirection.Left)
+            if (!moved) {
+                runCatching { firstRailItemFocus.requestFocus() }
+            }
+            // Always consume so Compose's default focusable LEFT
+            // handler doesn't run afterwards and double-move focus.
+            true
         }
-    }
+}
 
 /**
  * Adapter — converts the existing TopNavTab list to SideRailItems
