@@ -1,10 +1,10 @@
 {
-  "versionCode": 292,
-  "versionName": "1.42.92",
+  "versionCode": 293,
+  "versionName": "1.42.93",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-29",
   "changelog": [
-    "New HUSHTV wordmark logo applied across the app — Android launcher icon at every density (mdpi 48 → xxxhdpi 192), legacy round mipmap variants, adaptive icon foreground (Android 8+), and Leanback TV banner all swapped to the new wordmark on a deep-navy tile. Side rail brand mark (both expanded and collapsed states) now uses the same wordmark drawable so the in-app logo and launcher icon match exactly. The wordmark itself is a clean vector reproduction (no AI artifacts, pin-sharp at every size) of the user's spec: 'HUSH' in white Inter Light + 'TV' in a purple-to-cyan gradient with 0.15 em letter-spacing."
+    "Unified the brand wordmark across the entire app — same 'hush' (white) + 'tv.' (cyan) recipe used in the cinematic splash screen now drives the Android launcher icon (all densities, legacy + adaptive), the Leanback TV banner, and both the expanded and collapsed states of the TV side rail. The wordmark is rendered into a single drawable resource (ic_hushtv_logo.png) so every surface is pixel-identical and scales responsively from 48 dp collapsed-rail through 192 dp xxxhdpi launcher to 1280 × 720 TV banner with no hand-tuned per-context code."
   ]
 }

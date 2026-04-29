@@ -84,6 +84,10 @@
         "source": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-main-6:/mipmap-xhdpi/ic_launcher_round.png"
     },
     {
+        "merged": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-debug-4:/drawable_ic_hushtv_logo.png.flat",
+        "source": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-main-6:/drawable/ic_hushtv_logo.png"
+    },
+    {
         "merged": "com.hushtv.tv.app-debug-4:/drawable-xxxhdpi_ic_launcher_foreground.png.flat",
         "source": "com.hushtv.tv.app-main-6:/drawable-xxxhdpi/ic_launcher_foreground.png"
     },
