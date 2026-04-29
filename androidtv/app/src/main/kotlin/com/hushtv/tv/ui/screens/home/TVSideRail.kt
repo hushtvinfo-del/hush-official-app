@@ -287,90 +287,123 @@ private fun BrandMark(expanded: Boolean) {
     Box(
         Modifier
             .fillMaxWidth()
-            .height(48.dp),
+            .height(56.dp),
         contentAlignment = Alignment.Center,
     ) {
         if (expanded) {
             // Full wordmark — only shown in the expanded state.
             com.hushtv.tv.ui.HushTVLogo(fontSize = 22.sp)
         } else {
-            // Collapsed brand mark — premium "h." monogram. The
-            // recipe (mirrored from the full wordmark):
-            //   • Soft inner glow disc — cyan→transparent radial,
-            //     gives the icon a subtle backlit halo so it
-            //     reads on dark backgrounds without looking flat.
-            //   • Rounded-square chip with a cyan→darker-cyan
-            //     vertical gradient that matches Disney+'s
-            //     "premium dark accent" feel.
-            //   • Lowercase white "h" + cyan period — the same
-            //     two-colour pattern as the wordmark, so the
-            //     collapsed icon is instantly recognisable as a
-            //     condensed version of the brand.
-            //   • Hairline cyan border for definition.
+            // Collapsed brand mark — modelled on the user's
+            // reference design:
+            //   • Outer dark rounded-square "tile" (chip).
+            //   • Inner inset frame outlined with a cyan→violet
+            //     diagonal gradient — the iconic touch.
+            //   • Centred lowercase "h" with a chrome / silver
+            //     vertical gradient (white at top → slightly
+            //     dimmed at bottom) for premium depth.
+            //   • Optional subtle outer halo behind the chip so
+            //     the icon glows against pure-black backgrounds
+            //     without looking glued on.
+            HushBrandTile(size = 48.dp)
+        }
+    }
+}
+
+/**
+ * Reusable HushTV brand tile. Drop this anywhere a square brand
+ * monogram is wanted (collapsed sidebar, splash, etc.). All sizing
+ * is derived from a single [size] parameter so the icon scales
+ * gracefully.
+ */
+@Composable
+private fun HushBrandTile(size: androidx.compose.ui.unit.Dp) {
+    val outerShape = RoundedCornerShape(percent = 22)
+    val frameShape = RoundedCornerShape(percent = 22)
+    // Cyan → violet gradient palette borrowed from the reference
+    // image. The cyan end matches our existing brand accent so it
+    // stays on-palette.
+    val gradient = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFF22D3EE),  // cyan
+            Color(0xFF6366F1),  // indigo
+            Color(0xFF8B5CF6),  // violet
+        ),
+    )
+    val haloRadiusPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+        (size * 1.2f).toPx()
+    }
+    Box(
+        Modifier.size(size),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Outer halo glow so the icon never looks flat against
+        // pure black.
+        Box(
+            Modifier
+                .size(size)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x4422D3EE),
+                            Color.Transparent,
+                        ),
+                        radius = haloRadiusPx,
+                    ),
+                ),
+        )
+        // Outer dark chip.
+        Box(
+            Modifier
+                .size(size)
+                .clip(outerShape)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF0C1426),
+                            Color(0xFF050912),
+                        ),
+                    ),
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color(0x33FFFFFF),
+                    shape = outerShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Inner gradient-bordered inset frame.
             Box(
-                Modifier.size(48.dp),
+                Modifier
+                    .size(size * 0.72f)
+                    .clip(frameShape)
+                    .background(Color(0xFF050912))
+                    .border(
+                        width = 2.dp,
+                        brush = gradient,
+                        shape = frameShape,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                // Outer glow halo (sits behind the chip).
-                Box(
-                    Modifier
-                        .size(48.dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Cyan.copy(alpha = 0.30f),
-                                    Color.Transparent,
-                                ),
-                                radius = 60f,
+                // Chrome "h" — vertical gradient from bright white
+                // at the top to a slightly muted off-white at the
+                // base, mimicking polished chrome / silver.
+                Text(
+                    "h",
+                    color = Color.White,
+                    fontSize = (size.value * 0.42f).sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = com.hushtv.tv.ui.theme.Inter,
+                    letterSpacing = (-1).sp,
+                    style = androidx.compose.ui.text.TextStyle(
+                        brush = Brush.verticalGradient(
+                            listOf(
+                                Color(0xFFFFFFFF),
+                                Color(0xFFD4D9E0),
                             ),
                         ),
+                    ),
                 )
-                // Chip — gradient + border.
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color(0xFF0F2C36),
-                                    Color(0xFF071A22),
-                                ),
-                            ),
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = Cyan.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(11.dp),
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(0.dp),
-                    ) {
-                        Text(
-                            "h",
-                            color = Color.White,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = com.hushtv.tv.ui.theme.Inter,
-                            letterSpacing = (-1).sp,
-                            modifier = Modifier
-                                .padding(bottom = 0.dp),
-                        )
-                        // Cyan period with subtle glow — the
-                        // signature flourish from the full
-                        // "hushtv." wordmark.
-                        Box(
-                            Modifier
-                                .padding(start = 1.dp, bottom = 6.dp)
-                                .size(5.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(Cyan),
-                        )
-                    }
-                }
             }
         }
     }
