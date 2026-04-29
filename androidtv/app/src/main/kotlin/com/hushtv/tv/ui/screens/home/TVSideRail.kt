@@ -265,13 +265,16 @@ fun TVSideRail(
                     onSelect = { onSettings() },
                 )
             }
-            // Cyan-tinted right-edge divider — sharp visual break
-            // between rail and catalogue, no scroll bleed.
+            // Solid opaque divider — fully opaque dark grey so the
+            // line cannot ever pick up the background colour of the
+            // catalogue content as it scrolls past. Translucent cyan
+            // looked great on a static background but visibly shifted
+            // hue against bright content, which read as a "glitch".
             Box(
                 Modifier
                     .width(1.dp)
                     .fillMaxHeight()
-                    .background(Color(0x4422D3EE)),
+                    .background(Color(0xFF1F2937)),
             )
         }
     }
