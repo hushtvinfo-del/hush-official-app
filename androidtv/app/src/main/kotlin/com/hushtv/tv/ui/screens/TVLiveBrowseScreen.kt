@@ -478,7 +478,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         Row(
             Modifier
                 .fillMaxSize()
-                .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth)
+                .padding(start = 0.dp)
                 .background(
                     Brush.verticalGradient(0f to Color(0xFF050B18), 1f to Color(0xFF000000))
                 )
@@ -630,12 +630,17 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
     )
     val navHomeFocus = remember { FocusRequester() }
-    com.hushtv.tv.ui.screens.home.TVHubRail(
-        activeKey = "live",
-        playlistId = playlistId,
-        nav = nav,
-        homeFocus = navHomeFocus,
-    )
+    androidx.compose.foundation.layout.Box(
+        modifier = androidx.compose.ui.Modifier
+            .align(Alignment.TopStart)
+            .padding(start = 24.dp, top = 24.dp),
+    ) {
+        com.hushtv.tv.ui.screens.home.BackToHomeChip(
+            nav = nav,
+            playlistId = playlistId,
+            focusRequester = navHomeFocus,
+        )
+    }
 
     // ── Category-picker overlay. Rendered at the ROOT Box so it sits
     // above every other pane (preview bar, channel list, toolbar) —
@@ -645,7 +650,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth),
+                .padding(start = 0.dp),
         ) {
             LiveCategoryPanel(
                 categories = uiCategories,

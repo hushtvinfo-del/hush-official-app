@@ -84,7 +84,7 @@ data class SideRailItem(
 )
 
 private val COLLAPSED_WIDTH = 80.dp
-private val EXPANDED_WIDTH = 280.dp
+private val EXPANDED_WIDTH = 220.dp
 
 /** Public constant — hub screens use this to offset their content. */
 val SideRailCollapsedWidth = COLLAPSED_WIDTH
@@ -189,67 +189,69 @@ fun TVSideRail(
             )
         }
 
-        Column(
+        Row(
             Modifier
                 .width(width)
-                .fillMaxHeight()
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            Color(0xF20B1220),
-                            Color(0xF20B1220),
-                            Color(0xE60B1220),
-                        ),
-                    ),
-                )
-                .border(
-                    width = 1.dp,
-                    color = Color(0x1F22D3EE),
-                    shape = RoundedCornerShape(0.dp),
-                )
-                .padding(vertical = 24.dp),
+                .fillMaxHeight(),
         ) {
-            BrandMark(expanded = expanded)
-            Spacer(Modifier.height(28.dp))
-
+            // Solid rail background.
             Column(
                 Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                    .fillMaxHeight()
+                    .background(Color(0xFF05080F))
+                    .padding(vertical = 24.dp),
             ) {
-                items.forEachIndexed { idx, item ->
-                    RailItem(
-                        item = item,
-                        active = item.key == activeKey,
-                        expanded = expanded,
-                        focusRequester = if (idx == 0) firstItemFocus else null,
-                        onFocusChanged = { hasFocus ->
-                            focusedItemKey = if (hasFocus) item.key
-                            else if (focusedItemKey == item.key) null
-                            else focusedItemKey
-                        },
-                        onSelect = { onSelect(item) },
-                    )
-                }
-            }
+                BrandMark(expanded = expanded)
+                Spacer(Modifier.height(28.dp))
 
-            Spacer(Modifier.height(8.dp))
-            RailItem(
-                item = SideRailItem(
-                    key = "settings",
-                    label = "Settings",
-                    icon = Icons.Filled.Settings,
-                ),
-                active = activeKey == "settings",
-                expanded = expanded,
-                focusRequester = null,
-                onFocusChanged = { hasFocus ->
-                    focusedItemKey = if (hasFocus) "settings"
-                    else if (focusedItemKey == "settings") null
-                    else focusedItemKey
-                },
-                onSelect = { onSettings() },
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items.forEachIndexed { idx, item ->
+                        RailItem(
+                            item = item,
+                            active = item.key == activeKey,
+                            expanded = expanded,
+                            focusRequester = if (idx == 0) firstItemFocus else null,
+                            onFocusChanged = { hasFocus ->
+                                focusedItemKey = if (hasFocus) item.key
+                                else if (focusedItemKey == item.key) null
+                                else focusedItemKey
+                            },
+                            onSelect = { onSelect(item) },
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                RailItem(
+                    item = SideRailItem(
+                        key = "settings",
+                        label = "Settings",
+                        icon = Icons.Filled.Settings,
+                    ),
+                    active = activeKey == "settings",
+                    expanded = expanded,
+                    focusRequester = null,
+                    onFocusChanged = { hasFocus ->
+                        focusedItemKey = if (hasFocus) "settings"
+                        else if (focusedItemKey == "settings") null
+                        else focusedItemKey
+                    },
+                    onSelect = { onSettings() },
+                )
+            }
+            // Cyan-tinted right-edge divider — sharp visual break
+            // between rail and catalogue, no scroll bleed.
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(Color(0x4422D3EE)),
             )
         }
     }

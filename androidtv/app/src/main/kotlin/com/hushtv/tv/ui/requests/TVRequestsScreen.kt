@@ -206,7 +206,7 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
             Modifier
                 .fillMaxSize()
                 .padding(
-                    start = 56.dp + com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth,
+                    start = 56.dp,
                     end = 56.dp,
                     top = 28.dp,
                     bottom = 28.dp,
@@ -333,14 +333,19 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
             }
         }
 
-        // Disney+ left rail.
+        // Back-to-Home chip — non-Home hubs go full-screen.
         val railHomeFocus = remember { FocusRequester() }
-        com.hushtv.tv.ui.screens.home.TVHubRail(
-            activeKey = "requests",
-            playlistId = playlistId,
-            nav = nav,
-            homeFocus = railHomeFocus,
-        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 24.dp, top = 24.dp),
+        ) {
+            com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                nav = nav,
+                playlistId = playlistId,
+                focusRequester = railHomeFocus,
+            )
+        }
     }
 
     // ── New-request sheet (TMDB-aware) ──

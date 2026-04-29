@@ -1,10 +1,10 @@
 {
-  "versionCode": 273,
-  "versionName": "1.42.73",
+  "versionCode": 274,
+  "versionName": "1.42.74",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Disney+ style left-side navigation rail. Collapsed to 80 dp wide as a sleek icon strip with the Hush mark at the top. Press LEFT to enter the rail — it expands to 280 dp showing labels for Home, Live TV, Movies, Series, Hush+, Requests, and Settings, with a backdrop dim over the catalog. Press RIGHT to leave; focus returns to where you were."
+    "Disney+ rail polish: rail is now solid black with a cyan vertical divider — no more bleed-through when scrolling. Expanded width reduced from 280 dp → 220 dp. Rail only renders on Home now; every other hub (Live TV, Movies, Series, Hush+, Requests) goes full-screen with a clean ← Home back chip in the top-left."
   ]
 }

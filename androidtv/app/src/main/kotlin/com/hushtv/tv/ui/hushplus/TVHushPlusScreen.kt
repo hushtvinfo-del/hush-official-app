@@ -98,17 +98,11 @@ fun TVHushPlusScreen(nav: NavController, playlistId: String) {
             .fillMaxSize()
             .background(Color(0xFF05080F)),
     ) {
-        // ── Page content (offset by the rail width so the catalog
-        //    never sits behind the rail). ─────────────────────────
+        // ── Page content ─────────────────────────
         Row(
             Modifier
                 .fillMaxSize()
-                .padding(
-                    start = 56.dp + com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth,
-                    end = 56.dp,
-                    top = 36.dp,
-                    bottom = 36.dp,
-                ),
+                .padding(start = 56.dp, end = 56.dp, top = 88.dp, bottom = 36.dp),
         ) {
             HushPlusSidebar(
                 selectedKey = selectedKey,
@@ -128,17 +122,19 @@ fun TVHushPlusScreen(nav: NavController, playlistId: String) {
             }
         }
 
-        // ── Disney+ style left rail ─────────────────────────────
-        // Self-positions to the start edge with fillMaxHeight at
-        // its collapsed width. Expansion is handled internally
-        // and overlays content with a backdrop dim.
+        // ── Back-to-Home chip ─────────────────────
         val homeTabFocus = remember { FocusRequester() }
-        com.hushtv.tv.ui.screens.home.TVHubRail(
-            activeKey = "hushplus",
-            playlistId = playlistId,
-            nav = nav,
-            homeFocus = homeTabFocus,
-        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 24.dp, top = 24.dp),
+        ) {
+            com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                nav = nav,
+                playlistId = playlistId,
+                focusRequester = homeTabFocus,
+            )
+        }
     }
 }
 

@@ -613,7 +613,7 @@ fun TVBrowseScreen(
             Row(
                 Modifier
                     .fillMaxSize()
-                    .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth)
+                    .padding(start = 0.dp)
                     .onFocusChanged { gridHasFocus = it.hasFocus && focusedIdx >= 0 },
             ) {
                 com.hushtv.tv.ui.screens.home.CategorySidebar(
@@ -639,7 +639,7 @@ fun TVBrowseScreen(
             Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth) // room for the side rail
+                    .padding(start = 0.dp) // full-screen — back chip lives in corner
                     .onFocusChanged { gridHasFocus = it.hasFocus && focusedIdx >= 0 },
             ) {
                 // ── TOOLBAR — BROWSE dropdown on the LEFT, category
@@ -682,14 +682,20 @@ fun TVBrowseScreen(
             "search" -> "search"
             else -> "movies"
         }
-        // Disney+ left rail — replaces top nav bar on browse pages.
+        // Back-to-Home chip — non-Home hubs go full-screen with
+        // just this corner button.
         val homeTabFocus = remember { FocusRequester() }
-        com.hushtv.tv.ui.screens.home.TVHubRail(
-            activeKey = activeTabKey,
-            playlistId = playlistId,
-            nav = nav,
-            homeFocus = homeTabFocus,
-        )
+        androidx.compose.foundation.layout.Box(
+            modifier = androidx.compose.ui.Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 24.dp, top = 24.dp),
+        ) {
+            com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                nav = nav,
+                playlistId = playlistId,
+                focusRequester = homeTabFocus,
+            )
+        }
 
         // ── Category-picker overlay. Rendered at the ROOT Box so it
         // sits above EVERY other pane (grid, toolbar). Previously the
@@ -700,7 +706,7 @@ fun TVBrowseScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .padding(start = com.hushtv.tv.ui.screens.home.SideRailCollapsedWidth),
+                    .padding(start = 0.dp),
             ) {
                 CategoryDropdownPanel(
                     entries = sidebarEntries.filter { !it.isDivider && it.id != CAT_SEARCH },
