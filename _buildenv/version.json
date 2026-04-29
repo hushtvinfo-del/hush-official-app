@@ -1,10 +1,10 @@
 {
-  "versionCode": 282,
-  "versionName": "1.42.82",
+  "versionCode": 283,
+  "versionName": "1.42.83",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-29",
   "changelog": [
-    "Full-screen layout sweep — Collection Detail, Collections Browse and Unified Search no longer render the legacy top nav. They now match Movies / Series / Live TV / Hush+ with a small top-left Back-to-Home chip. Every inner page (besides Home) is now full-screen for maximum content real-estate."
+    "Fixed Years page card overflow — the 2024/2025/2026 release-year cards were being clipped on the right edge on narrower TV screens (the side rail's 80 dp + page paddings squeezed the available width below the 3 × 280 dp fixed cards). Cards now share the available row width via weight(1f) so they always fit perfectly regardless of screen width."
   ]
 }

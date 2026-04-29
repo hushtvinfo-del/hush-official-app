@@ -113,11 +113,15 @@ fun HomeYearsRow(
             )
         }
         Spacer(Modifier.height(14.dp))
-        // Plain Row — only 3 items so no need for LazyRow.
+        // Plain Row — only 3 items so no need for LazyRow. Cards
+        // share the available width via weight(1f) so they always
+        // fit regardless of how narrow the content area is (e.g.
+        // 960 dp TV screens with the side rail eating 80 dp).
         Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             years.forEachIndexed { _, year ->
                 YearCardView(
                     year = year,
+                    modifier = Modifier.weight(1f),
                     onFocus = { onFocusedYearChange(year) },
                     onClick = { onYearClick(year) },
                 )
@@ -129,6 +133,7 @@ fun HomeYearsRow(
 @Composable
 private fun YearCardView(
     year: MovieYear,
+    modifier: Modifier = Modifier,
     onFocus: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -136,8 +141,7 @@ private fun YearCardView(
     val cardShape = RoundedCornerShape(14.dp)
 
     Box(
-        Modifier
-            .width(280.dp)
+        modifier
             .height(170.dp)
             .onFocusChanged {
                 focused = it.isFocused
