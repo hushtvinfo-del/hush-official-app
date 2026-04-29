@@ -212,16 +212,15 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
                     bottom = 28.dp,
                 ),
         ) {
-            // Top row: back chip + REFRESH
+            // Top row: back-to-home chip + Refresh
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                IconChip(
-                    icon = Icons.Default.ArrowBack,
-                    label = "Back",
+                com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                    nav = nav,
+                    playlistId = playlistId,
                     focusRequester = backFocus,
-                    onClick = { nav.popBackStack() },
                 )
                 Spacer(Modifier.weight(1f))
                 IconChip(
@@ -333,19 +332,7 @@ fun TVRequestsScreen(nav: NavController, playlistId: String) {
             }
         }
 
-        // Back-to-Home chip — non-Home hubs go full-screen.
-        val railHomeFocus = remember { FocusRequester() }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 24.dp, top = 24.dp),
-        ) {
-            com.hushtv.tv.ui.screens.home.BackToHomeChip(
-                nav = nav,
-                playlistId = playlistId,
-                focusRequester = railHomeFocus,
-            )
-        }
+        // Back-to-Home is now embedded inline in the requests header.
     }
 
     // ── New-request sheet (TMDB-aware) ──

@@ -657,6 +657,12 @@ fun TVBrowseScreen(
                     searchQuery = searchQuery,
                     onSearchChange = { onSearchChange(it) },
                     searchPlaceholder = "Search ${title.lowercase()}…",
+                    backToHome = {
+                        com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                            nav = nav,
+                            playlistId = playlistId,
+                        )
+                    },
                 )
 
                 // Divider line under toolbar.
@@ -668,33 +674,12 @@ fun TVBrowseScreen(
             }
         }
 
-        // ── TOP NAV overlay ──────────────────────────────────────────
-        // Same nav as Home so Movies/Series/Live feel like siblings of
-        // Home instead of drill-down sub-screens. Active tab highlights
-        // based on the current screen kind.
-        val navTabs = com.hushtv.tv.ui.screens.home.topNavTabs(
-            playlistId = playlistId,
-            requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
-        )
+        // ── Top nav data (kept for navigation lookup) ───────────
         val activeTabKey = when (type) {
             "live" -> "live"
             "series" -> "series"
             "search" -> "search"
             else -> "movies"
-        }
-        // Back-to-Home chip — non-Home hubs go full-screen with
-        // just this corner button.
-        val homeTabFocus = remember { FocusRequester() }
-        androidx.compose.foundation.layout.Box(
-            modifier = androidx.compose.ui.Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 24.dp, top = 24.dp),
-        ) {
-            com.hushtv.tv.ui.screens.home.BackToHomeChip(
-                nav = nav,
-                playlistId = playlistId,
-                focusRequester = homeTabFocus,
-            )
         }
 
         // ── Category-picker overlay. Rendered at the ROOT Box so it
@@ -785,6 +770,7 @@ private fun CategoryToolbar(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
     searchPlaceholder: String,
+    backToHome: (@Composable () -> Unit)? = null,
 ) {
     Row(
         Modifier
@@ -792,7 +778,11 @@ private fun CategoryToolbar(
             .padding(horizontal = 40.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ── LEFT: Accent bar + Browse dropdown ──
+        // ── LEFT: Back-to-Home chip (when shown) + accent bar + Browse dropdown ──
+        if (backToHome != null) {
+            backToHome()
+            Spacer(Modifier.width(16.dp))
+        }
         Box(
             Modifier
                 .size(width = 3.dp, height = 22.dp)

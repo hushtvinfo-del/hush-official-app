@@ -98,42 +98,60 @@ fun TVHushPlusScreen(nav: NavController, playlistId: String) {
             .fillMaxSize()
             .background(Color(0xFF05080F)),
     ) {
-        // ── Page content ─────────────────────────
-        Row(
+        // Full screen layout with header strip + body row.
+        val homeTabFocus = remember { FocusRequester() }
+        Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = 56.dp, end = 56.dp, top = 88.dp, bottom = 36.dp),
+                .padding(start = 56.dp, end = 56.dp, top = 28.dp, bottom = 36.dp),
         ) {
-            HushPlusSidebar(
-                selectedKey = selectedKey,
-                onSelect = { selectedKey = it },
-                firstFocus = firstSidebarFocus,
-            )
-            Spacer(Modifier.width(36.dp))
-            Box(Modifier.weight(1f).fillMaxHeight()) {
-                if (selectedKey == HushPlusContent.OVERVIEW_KEY) {
-                    OverviewPane()
-                } else {
-                    val addon = HushPlusContent.findAddon(selectedKey)
-                    if (addon != null) {
-                        AddonDetailPane(addon = addon)
+            // ── Header strip with embedded Back-to-Home ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                    nav = nav,
+                    playlistId = playlistId,
+                    focusRequester = homeTabFocus,
+                )
+                Spacer(Modifier.width(24.dp))
+                Box(
+                    Modifier
+                        .size(width = 3.dp, height = 22.dp)
+                        .background(Cyan, RoundedCornerShape(2.dp)),
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "HUSH+",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.5.sp,
+                )
+            }
+
+            // ── Body row ──
+            Row(Modifier.fillMaxSize()) {
+                HushPlusSidebar(
+                    selectedKey = selectedKey,
+                    onSelect = { selectedKey = it },
+                    firstFocus = firstSidebarFocus,
+                )
+                Spacer(Modifier.width(36.dp))
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    if (selectedKey == HushPlusContent.OVERVIEW_KEY) {
+                        OverviewPane()
+                    } else {
+                        val addon = HushPlusContent.findAddon(selectedKey)
+                        if (addon != null) {
+                            AddonDetailPane(addon = addon)
+                        }
                     }
                 }
             }
-        }
-
-        // ── Back-to-Home chip ─────────────────────
-        val homeTabFocus = remember { FocusRequester() }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 24.dp, top = 24.dp),
-        ) {
-            com.hushtv.tv.ui.screens.home.BackToHomeChip(
-                nav = nav,
-                playlistId = playlistId,
-                focusRequester = homeTabFocus,
-            )
         }
     }
 }

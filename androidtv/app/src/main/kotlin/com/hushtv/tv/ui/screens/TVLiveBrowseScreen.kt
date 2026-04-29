@@ -579,6 +579,12 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
             searchFocus = searchFocusTB,
             guideFocus = guideFocus,
             downTarget = firstChannelFocus,
+            backToHome = {
+                com.hushtv.tv.ui.screens.home.BackToHomeChip(
+                    nav = nav,
+                    playlistId = playlistId,
+                )
+            },
         )
 
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
@@ -629,18 +635,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         playlistId = playlistId,
         requestsBadge = com.hushtv.tv.ui.screens.home.rememberRequestsBadge(),
     )
-    val navHomeFocus = remember { FocusRequester() }
-    androidx.compose.foundation.layout.Box(
-        modifier = androidx.compose.ui.Modifier
-            .align(Alignment.TopStart)
-            .padding(start = 24.dp, top = 24.dp),
-    ) {
-        com.hushtv.tv.ui.screens.home.BackToHomeChip(
-            nav = nav,
-            playlistId = playlistId,
-            focusRequester = navHomeFocus,
-        )
-    }
+    // Back-to-Home is now embedded into the LiveCategoryToolbar.
 
     // ── Category-picker overlay. Rendered at the ROOT Box so it sits
     // above every other pane (preview bar, channel list, toolbar) —
@@ -988,6 +983,7 @@ private fun LiveCategoryToolbar(
     searchFocus: FocusRequester,
     guideFocus: FocusRequester,
     downTarget: FocusRequester,
+    backToHome: (@Composable () -> Unit)? = null,
 ) {
     Row(
         Modifier
@@ -995,10 +991,10 @@ private fun LiveCategoryToolbar(
             .padding(horizontal = 40.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ── LEFT: Accent bar + Browse dropdown ──
-        // Search bar is gone per user request — Browse now sits on
-        // the left where the title used to be, and the title cluster
-        // is pushed to the right.
+        if (backToHome != null) {
+            backToHome()
+            Spacer(Modifier.width(16.dp))
+        }
         Box(
             Modifier
                 .size(width = 3.dp, height = 22.dp)

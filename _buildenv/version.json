@@ -1,10 +1,10 @@
 {
-  "versionCode": 274,
-  "versionName": "1.42.74",
+  "versionCode": 275,
+  "versionName": "1.42.75",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-28",
   "changelog": [
-    "Disney+ rail polish: rail is now solid black with a cyan vertical divider — no more bleed-through when scrolling. Expanded width reduced from 280 dp → 220 dp. Rail only renders on Home now; every other hub (Live TV, Movies, Series, Hush+, Requests) goes full-screen with a clean ← Home back chip in the top-left."
+    "Fix rail glitch when scrolling Home (transient focus flicker now debounced — no more logo/divider flash). Live TV, Movies, Series, Hush+ and Requests screens now go truly full-screen with the Back-to-Home chip integrated INTO each screen's existing top bar — no more floating overlays."
   ]
 }

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -169,7 +170,27 @@ fun TVSideRail(
     // moves between menu items (item N loses focus a frame before
     // item N+1 gains it).
     var focusedItemKey by remember { mutableStateOf<String?>(null) }
-    val expanded = focusedItemKey != null
+    // Debounced expansion. Compose's focus system can briefly route
+    // focus through the rail's first item during re-layout (e.g.
+    // when the home page lazy-loads new sections as the user scrolls
+    // down). Without a debounce, that transient focus event flashes
+    // the rail open and closed, producing the "glitch" the user
+    // sees as a logo/divider blink. The debounce requires focus to
+    // stick for [EXPAND_DELAY_MS] before we actually expand —
+    // long enough to ignore re-layout flicker, short enough that
+    // a deliberate LEFT-press still feels instant.
+    var expanded by remember { mutableStateOf(false) }
+    LaunchedEffect(focusedItemKey) {
+        if (focusedItemKey != null) {
+            kotlinx.coroutines.delay(140)
+            // Re-check — if focus is gone by the time the delay
+            // expires, this was a transient flicker; don't expand.
+            if (focusedItemKey != null) expanded = true
+        } else {
+            // Collapse immediately on focus leaving.
+            expanded = false
+        }
+    }
     val width by animateDpAsState(
         targetValue = if (expanded) EXPANDED_WIDTH else COLLAPSED_WIDTH,
         animationSpec = tween(durationMillis = 220),
