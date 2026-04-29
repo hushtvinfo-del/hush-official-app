@@ -299,7 +299,6 @@ drawable ic_call_answer_video
 drawable ic_call_answer_video_low
 drawable ic_call_decline
 drawable ic_call_decline_low
-drawable ic_hush_brand
 drawable ic_launcher_foreground
 drawable icon_background
 drawable media3_icon_album

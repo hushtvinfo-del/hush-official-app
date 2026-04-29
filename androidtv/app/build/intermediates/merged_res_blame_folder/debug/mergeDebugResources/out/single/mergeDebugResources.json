@@ -88,20 +88,20 @@
         "source": "com.hushtv.tv.app-main-6:/mipmap-mdpi/ic_launcher_round.png"
     },
     {
-        "merged": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-debug-4:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
-        "source": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-main-6:/mipmap-anydpi-v26/ic_launcher_round.xml"
-    },
-    {
         "merged": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-debug-4:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
         "source": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-main-6:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-debug-4:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-main-6:/mipmap-anydpi-v26/ic_launcher_round.xml"
     },
     {
         "merged": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-debug-4:/mipmap-xxhdpi_ic_launcher_round.png.flat",
         "source": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-main-6:/mipmap-xxhdpi/ic_launcher_round.png"
     },
     {
-        "merged": "com.hushtv.tv.app-debug-4:/drawable_ic_hush_brand.png.flat",
-        "source": "com.hushtv.tv.app-main-6:/drawable/ic_hush_brand.png"
+        "merged": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-debug-4:/drawable_ic_hush_brand.png.flat",
+        "source": "/root/.gradle/daemon/8.7/com.hushtv.tv.app-main-6:/drawable/ic_hush_brand.png"
     },
     {
         "merged": "com.hushtv.tv.app-debug-4:/mipmap-xxhdpi_ic_launcher.png.flat",

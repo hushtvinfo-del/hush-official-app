@@ -1,10 +1,10 @@
 {
-  "versionCode": 290,
-  "versionName": "1.42.90",
+  "versionCode": 291,
+  "versionName": "1.42.91",
   "apkUrl": "https://hushtv.xyz/hushtv.apk",
   "mandatory": false,
   "releasedAt": "2026-04-29",
   "changelog": [
-    "New launcher icon — installed the AI-generated 'screen + play' design as the official Android app icon, with full coverage across all densities (mdpi 48 → xxxhdpi 192), legacy round + adaptive (Android 8+) variants, dark-navy adaptive background to match the icon's outer tile, and a 1280×720 Leanback TV banner for Shield / Fire TV / Google TV launchers. The same artwork is now used in the side rail collapsed brand mark so the in-app and launcher marks match exactly."
+    "Reverted the launcher-icon swap from v1.42.90 — restored the previous Android launcher icons at all densities, the legacy adaptive-icon background colour, the original TV banner and the in-app side-rail brand mark."
   ]
 }
