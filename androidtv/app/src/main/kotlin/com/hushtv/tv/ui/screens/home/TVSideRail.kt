@@ -390,153 +390,22 @@ private fun BrandMark(expanded: Boolean) {
 }
 
 /**
- * Reusable HushTV brand tile — fully transparent, modelled on the
- * user-supplied "Screen + Play" reference.
- *
- * # Design
- * No solid backgrounds anywhere. The mark is a gradient-stroked
- * rounded-rectangle "screen frame" (cyan → indigo → violet,
- * top-left to bottom-right) with the chrome lowercase letter form
- * floating inside it, and a small blue triangular play glyph
- * hanging through the centre of the screen's bottom edge — the
- * triangle visually pierces the frame so the mark reads as
- * "TV + play" rather than just a bordered box.
- *
- * Visual elements (back-to-front):
- *   • Soft cyan halo behind the screen frame, kept low-alpha so
- *     it disappears on pure black but anchors the icon on busy
- *     backgrounds.
- *   • Gradient-stroked rounded-rectangle frame (the "screen").
- *     16:9-ish aspect ratio, inset from the outer tile to leave
- *     air around the edges.
- *   • Chrome "h" centred inside the screen.
- *   • Royal-blue play triangle anchored at the centre of the
- *     screen's bottom edge so it overlaps half-in / half-out —
- *     gives the mark its play affordance.
+ * Reusable HushTV brand tile — renders the official launcher icon
+ * (`R.drawable.ic_hush_brand`) inside a square slot of the given
+ * size. The PNG was AI-generated to the user's specification and
+ * baked into the app at install time, so the in-app brand mark
+ * is pixel-identical to the launcher icon — no per-component
+ * Compose code that could drift visually from the reference.
  */
 @Composable
 private fun HushBrandTile(size: androidx.compose.ui.unit.Dp) {
-    val cornerPercent = 22
-    // Diagonal cyan → indigo → violet stroke. Order matters —
-    // this is the cyan-on-the-left / violet-on-the-right diagonal
-    // shown in the reference image.
-    val ringStroke = Brush.linearGradient(
-        colors = listOf(
-            Color(0xFF22D3EE),
-            Color(0xFF6366F1),
-            Color(0xFF8B5CF6),
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(
+            id = com.hushtv.tv.R.drawable.ic_hush_brand,
         ),
+        contentDescription = "HushTV",
+        modifier = Modifier.size(size),
     )
-    // Royal-blue play-glyph gradient — slightly lighter at the
-    // top for depth. Matches the reference's blue triangle.
-    val playFill = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF60A5FA),
-            Color(0xFF2563EB),
-        ),
-    )
-    val haloRadiusPx = with(androidx.compose.ui.platform.LocalDensity.current) {
-        (size * 0.55f).toPx()
-    }
-
-    // Stroke width scales with size so it reads correctly at any
-    // dimension. Floor at 1.5dp so it never disappears on small
-    // collapsed-sidebar sizes.
-    val strokeWidth = (size.value * 0.04f).dp.coerceAtLeast(1.5.dp)
-
-    Box(
-        Modifier.size(size),
-        contentAlignment = Alignment.Center,
-    ) {
-        // Behind-the-frame cyan halo. Sits just inside the screen
-        // frame so it doesn't bloom past the gradient stroke.
-        Box(
-            Modifier
-                .size(size * 0.86f)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x2222D3EE),
-                            Color.Transparent,
-                        ),
-                        radius = haloRadiusPx,
-                    ),
-                ),
-        )
-
-        // Gradient-stroked "screen" rectangle. 16:9-ish so it reads
-        // as a TV screen, inset from the tile so the play triangle
-        // has room to overlap the bottom edge without being
-        // clipped by the parent.
-        Box(
-            Modifier
-                .fillMaxWidth(0.86f)
-                .fillMaxHeight(0.66f)
-                .border(
-                    width = strokeWidth,
-                    brush = ringStroke,
-                    shape = RoundedCornerShape(percent = cornerPercent),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            // Chrome "h" — vertical gradient (white → silver →
-            // muted) for polished-chrome depth at any size.
-            Text(
-                "h",
-                fontSize = (size.value * 0.42f).sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = com.hushtv.tv.ui.theme.Inter,
-                letterSpacing = (-1).sp,
-                color = Color.White,
-                style = androidx.compose.ui.text.TextStyle(
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color(0xFFFFFFFF),
-                            Color(0xFFE2E8F0),
-                            Color(0xFFB0B7C3),
-                        ),
-                    ),
-                ),
-            )
-        }
-
-        // Play triangle that pierces the screen's bottom edge.
-        // Positioned a little BELOW vertical-center so its top
-        // tip sits inside the screen and its bottom edge dangles
-        // outside, producing the half-in / half-out effect from
-        // the reference image. Drawn manually with `Canvas` so it
-        // can be sized independently of any text-style metrics.
-        val triSize = size * 0.22f
-        val triHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) {
-            triSize.toPx()
-        }
-        Box(
-            Modifier
-                .size(triSize)
-                // Anchor it relative to the parent: centred
-                // horizontally, dropped 33% below middle so it
-                // straddles the screen's bottom border.
-                .align(Alignment.Center)
-                .offset(y = size * 0.33f),
-            contentAlignment = Alignment.Center,
-        ) {
-            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                val w = this.size.width
-                val h = this.size.height
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    // Right-pointing equilateral triangle.
-                    moveTo(0f, 0f)
-                    lineTo(w, h * 0.5f)
-                    lineTo(0f, h)
-                    close()
-                }
-                drawPath(path, brush = playFill)
-            }
-            // Suppress unused-variable warning on triHeightPx by
-            // referencing it (lets the JIT inline this away).
-            @Suppress("UNUSED_EXPRESSION") triHeightPx
-        }
-    }
 }
 
 @Composable
