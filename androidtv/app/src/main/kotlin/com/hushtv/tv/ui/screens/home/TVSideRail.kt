@@ -363,29 +363,31 @@ fun TVSideRail(
 
 @Composable
 private fun BrandMark(expanded: Boolean) {
+    // Both expanded and collapsed states render the SAME drawable
+    // (`ic_hushtv_logo.png` — the user's HUSHTV wordmark with a
+    // transparent background). The wordmark's 3.2:1 aspect ratio
+    // is preserved by `ContentScale.Fit`; we just give the slot
+    // different heights for the two states so the wordmark scales
+    // down proportionally in the narrow collapsed rail and stays
+    // legible (without hand-drawing letters at every density).
+    val slotHeight = if (expanded) 44.dp else 28.dp
     Box(
         Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(56.dp)
+            .padding(horizontal = if (expanded) 8.dp else 4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        if (expanded) {
-            // Full wordmark — only shown in the expanded state.
-            com.hushtv.tv.ui.HushTVLogo(fontSize = 22.sp)
-        } else {
-            // Collapsed brand mark — modelled on the user's
-            // reference design:
-            //   • Outer dark rounded-square "tile" (chip).
-            //   • Inner inset frame outlined with a cyan→violet
-            //     diagonal gradient — the iconic touch.
-            //   • Centred lowercase "h" with a chrome / silver
-            //     vertical gradient (white at top → slightly
-            //     dimmed at bottom) for premium depth.
-            //   • Optional subtle outer halo behind the chip so
-            //     the icon glows against pure-black backgrounds
-            //     without looking glued on.
-            HushBrandTile(size = 48.dp)
-        }
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(
+                id = com.hushtv.tv.R.drawable.ic_hushtv_logo,
+            ),
+            contentDescription = "HushTV",
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(slotHeight),
+        )
     }
 }
 

@@ -8,6 +8,10 @@
         "source": "com.hushtv.tv.app-main-6:/mipmap-xhdpi/ic_launcher.png"
     },
     {
+        "merged": "com.hushtv.tv.app-debug-4:/drawable_ic_hushtv_logo.png.flat",
+        "source": "com.hushtv.tv.app-main-6:/drawable/ic_hushtv_logo.png"
+    },
+    {
         "merged": "com.hushtv.tv.app-debug-4:/mipmap-hdpi_ic_launcher_round.png.flat",
         "source": "com.hushtv.tv.app-main-6:/mipmap-hdpi/ic_launcher_round.png"
     },
