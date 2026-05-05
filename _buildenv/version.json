@@ -1,13 +1,12 @@
 {
-  "versionCode": 389,
-  "versionName": "1.43.89",
+  "versionCode": 390,
+  "versionName": "1.43.90",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-05",
   "channel": "dev",
   "changelog": [
-    "Fixed Decade cards rendering as portrait slivers with vertical stacked text on TVs that output at lower density (Shield 720p mode etc). Switched HomeYearsRow from `Row + weight(1f)` to `LazyRow` with fixed 240 dp width cards — they now render at intended size regardless of TV resolution and the user can scroll horizontally if there are more cards than fit.",
-    "Fixed clicking a Decade card on the home page going to the empty generic browse screen — now navigates to the curated decadeyears/{playlistId}/{startYear} screen (matching mobile behaviour).",
-    "Added maxLines=1 and softWrap=false on the year text + MOVIES chip as a belt-and-braces guard so the text never wraps into vertical letter stacks even if a parent constraint goes wrong."
+    "Themes & Moods is back as a top-nav tab on TV (between Series and Hush+). Routes to the existing TVThemedCatalogScreen with all 25+ curated mood/theme lists.",
+    "Decade cards on the home screen now render correctly at any TV resolution and route to the curated decade picker (carry-over from v1.43.89)."
   ]
 }
