@@ -1,6 +1,86 @@
 # HushTV — Product Requirements Document
 
-## v1.43.92 — Continue Watching home + side-rail right-arrow root-cause fix — 2026-05-06  ⬅ LATEST
+## v1.43.93 — REVERT side-rail focus to v1.43.87 working pattern — 2026-05-06  ⬅ LATEST
+
+User report (super frustrated, third attempt): *"Nope not working AGAIN
+the right side to first card it not working still it needs to go focus
+on first card in the section this was working fine before we rolled
+back. On version V 1.43.87 it was previously working. Why can't you
+get it working?? Can't you look at the version and apply the same
+navigation to this????"*
+
+### What I missed in v1.43.92
+
+I had attached a brand-new `onExitRight` callback on the rail and
+restructured every home row to use a "first-card direct-bind"
+pattern (mirroring `HomeContinueWatchingRow`). Both changes were
+NEW behaviour — neither was what v1.43.87 actually did. The user
+was right: the working code was sitting in git, untouched.
+
+### What v1.43.87 actually did (the truth)
+
+I checked out commit `1b4936bbc` (the byte-exact v1.43.87 build) and
+diffed against current code:
+
+1. **Rail callsite in `TVMainMenuScreen`**: TVHubRail was called WITHOUT
+   `onExitRight` — same as today. So the rail item's
+   `onPreviewKeyEvent` returned `false` on RIGHT, the event fell
+   through, and Compose's default 2D spatial focus search found the
+   nearest focusable card to the right.
+2. **All home rows** wrapped their outer Column in
+   `Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()`.
+   Cards received `focusRequester = null`. This focusGroup made
+   Compose's spatial search route the RIGHT-arrow into the group,
+   then `focusRestorer()` re-focused the last-focused card (or the
+   first focusable on cold-boot).
+3. **Rail wiring** (`TVSideRail.kt`) is BYTE-IDENTICAL to today
+   (`diff` showed zero changes).
+
+### What landed in v1.43.93
+
+#### 1. All 5 affected home rows reverted to v1.43.87 byte-for-byte
+- `HomeDiscoveryRow.kt`, `HomeStreamingServicesRow.kt`,
+  `HomeCollectionsRow.kt`, `HomeGenresRow.kt` → fully restored from
+  the `1b4936bbc` blob (`git show <sha>:<path> > <path>`).
+- `HomeYearsRow.kt` → focus pattern restored to v87, but the LazyRow
+  + fixed-width fix (the "decade cards rendered vertically" fix from
+  v1.43.90) was preserved so we don't reintroduce that bug.
+- `HomeThemedRow.kt` (new in v1.43.91) → switched from "first-card
+  direct-bind" to the v87 `focusMod` outer-Column pattern so it
+  behaves identically to its sibling rows.
+
+#### 2. Rail callsite reverted
+- `TVHubRail(...)` in `TVMainMenuScreen` no longer passes
+  `onExitRight`. Compose's default 2D spatial focus search handles
+  RIGHT exactly as it did in v1.43.87.
+
+#### 3. Continue Watching home row preserved (from v1.43.92)
+- `pageOrder` still prepends `"cw"` when `continueEntries.isNotEmpty()`.
+- Default `currentPage` flips to `"cw"` on launch when in-progress
+  exists.
+- `firstCwFocus` stays in the `LaunchedEffect(currentPage)` auto-focus
+  table.
+- Page indicator dot label `"cw" -> "RESUME"`.
+- Cross-device sync still runs every 30s via
+  `SyncEngine.kt:87` → `https://hushtv.xyz/api/sync/state`.
+
+### Build + deploy
+- versionCode 392 → 393, versionName 1.43.92 → 1.43.93.
+- `./gradlew assembleDevDebug` → BUILD SUCCESSFUL (45s).
+- APK + manifest scp'd to `root@66.163.113.147:/var/www/hushtv/`.
+- Live: `https://hushtv.xyz/version.json` reports 393 / 1.43.93,
+  APK ~21.7 MB.
+- Official channel still on 1.43.90 — held until user signs off on
+  Dev.
+
+### Lesson for next time
+- When the user references a working version number, IMMEDIATELY
+  `git show <sha-of-that-version>:<path>` and DIFF — don't try to
+  re-derive the fix. The user knew exactly what they wanted.
+
+---
+
+## v1.43.92 — Continue Watching home + first-attempt rail fix — 2026-05-06
 
 User report (frustrated): *"Themes is back BUT the menu navigation is
 NOT focusing on the 1st card in the section still. Look at our

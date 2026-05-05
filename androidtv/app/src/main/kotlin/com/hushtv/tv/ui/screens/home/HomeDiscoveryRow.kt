@@ -80,16 +80,15 @@ fun HomeDiscoveryRow(
 ) {
     if (cards.isEmpty()) return
 
-    // First-card direct-bind pattern (mirrors HomeContinueWatchingRow):
-    // we deliberately AVOID Modifier.focusRequester(...).focusRestorer()
-    // on the outer Column. Binding `firstItemFocus` to the first card
-    // itself is the only way the side-rail's RIGHT-exit callback's
-    // `requestFocus()` reliably lands on a real focusable card with a
-    // visible cyan ring. focusGroup() stays so intra-row LEFT/RIGHT
-    // doesn't escape into the rail.
+    // focusRestorer(): Column is a focus group remembering last-focused
+    // child. D-pad Down from Top Nav returns focus to exactly the card
+    // the user was on — never stuck in the nav.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
-            .focusGroup()
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -138,7 +137,7 @@ fun HomeDiscoveryRow(
                     card = card,
                     onFocus = { onFocusedCardChange(card) },
                     onClick = { onCardClick(card) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
+                    focusRequester = null,
                     onUpKey = if (idx == 0) onUpFromFirstItem else null,
                 )
             }

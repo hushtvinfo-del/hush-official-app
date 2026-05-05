@@ -80,14 +80,16 @@ fun HomeStreamingServicesRow(
 ) {
     if (services.isEmpty()) return
 
-    // First-card direct-bind pattern (mirrors HomeContinueWatchingRow):
-    // the rail's RIGHT-exit callback only lands reliably on a real
-    // focusable card when `firstItemFocus` is bound to that card
-    // directly. focusGroup() stays so intra-row LEFT/RIGHT doesn't
-    // escape into the rail.
+    // focusRestorer(): Column acts as a focus group that remembers the
+    // last-focused card. When the parent calls firstItemFocus.requestFocus()
+    // from the Top Nav D-pad-Down, focus returns to exactly where the
+    // user left off — not idx 0 — even if LazyRow has virtualised it out.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
-            .focusGroup()
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -129,12 +131,11 @@ fun HomeStreamingServicesRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(services, key = { _, s -> s.id }) { idx, service ->
+            itemsIndexed(services, key = { _, s -> s.id }) { _, service ->
                 ServiceCardView(
                     service = service,
                     onFocus = { onFocusedServiceChange(service) },
                     onClick = { onServiceClick(service) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -146,7 +147,6 @@ private fun ServiceCardView(
     service: StreamingService,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
@@ -156,10 +156,8 @@ private fun ServiceCardView(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // ── CARD ──  pure logo-on-gradient. Focus ring + glow live here.
-        val baseTop: Modifier = if (focusRequester != null)
-            Modifier.focusRequester(focusRequester) else Modifier
         Box(
-            baseTop
+            Modifier
                 .width(196.dp)
                 .height(118.dp)
                 .onFocusChanged {

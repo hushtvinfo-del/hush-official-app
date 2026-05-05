@@ -676,35 +676,20 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // its collapsed width; expands on focus and overlays content
         // with a backdrop dim.
         //
-        // Wire `onExitRight` so pressing RIGHT from any rail item
-        // jumps focus to the FIRST CARD of whichever home page is
-        // currently visible. Without this callback Compose's
-        // default 2D spatial focus search picks a card based on the
-        // rail item's vertical position, which lands on the wrong
-        // card (or nowhere at all when the page's row is pinned to
-        // the bottom of the screen and no card is vertically
-        // aligned with the rail row).
+        // v1.43.87 working pattern: do NOT pass `onExitRight`. Letting
+        // the rail item's onPreviewKeyEvent return false on RIGHT lets
+        // Compose's default 2D spatial focus search take over, which
+        // walks across the focusGroup-wrapped rows and lands on the
+        // last-focused card (or first focusable when none) inside the
+        // visible page. Wiring an explicit callback caused
+        // `requestFocus()` to fire against a focusGroup wrapper that
+        // had no current focus target, leaving the user with a "stuck"
+        // feeling — fixed in v1.43.93 by reverting to the v87 default.
         com.hushtv.tv.ui.screens.home.TVHubRail(
             activeKey = "home",
             playlistId = playlistId,
             nav = nav,
             homeFocus = homeTabFocus,
-            onExitRight = {
-                runCatching {
-                    when (currentPage) {
-                        "cw" -> if (hasCw) firstCwFocus.requestFocus()
-                        "discovery" -> firstDiscoveryFocus.requestFocus()
-                        "collections" -> firstCollectionsFocus.requestFocus()
-                        "ss_movies" -> firstSsMoviesFocus.requestFocus()
-                        "ss_series" -> firstSsSeriesFocus.requestFocus()
-                        "genres_movies" -> firstGenresMoviesFocus.requestFocus()
-                        "genres_series" -> firstGenresSeriesFocus.requestFocus()
-                        "themed" -> firstThemedFocus.requestFocus()
-                        "years_movies" -> firstYearsMoviesFocus.requestFocus()
-                        else -> firstDiscoveryFocus.requestFocus()
-                    }
-                }
-            },
         )
 
         // ── First-run / Settings layout chooser modal ──

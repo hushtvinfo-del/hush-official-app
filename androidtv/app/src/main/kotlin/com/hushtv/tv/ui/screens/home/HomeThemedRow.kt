@@ -152,7 +152,7 @@ fun HomeThemedRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(visible, key = { _, t -> t.id }) { idx, theme ->
+            itemsIndexed(visible, key = { _, t -> t.id }) { _, theme ->
                 val matches = matchSnapshot[theme.id]
                 ThemedCardView(
                     theme = theme,
@@ -160,7 +160,6 @@ fun HomeThemedRow(
                     libraryMatchCount = matches?.size ?: 0,
                     onFocus = { onFocusedThemeChange(theme) },
                     onClick = { onThemeClick(theme) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
             if (hasMore) {
@@ -182,16 +181,12 @@ private fun ThemedCardView(
     libraryMatchCount: Int,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
-    val baseTop: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
     Box(
-        baseTop
+        Modifier
             .width(260.dp)
             .height(156.dp)
             .onFocusChanged {

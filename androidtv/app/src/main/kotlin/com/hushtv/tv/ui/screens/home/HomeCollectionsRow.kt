@@ -74,14 +74,20 @@ fun HomeCollectionsRow(
     val visible = collections.take(maxVisible)
     val hasMore = collections.size > maxVisible
 
-    // First-card direct-bind pattern (mirrors HomeContinueWatchingRow):
-    // the rail's RIGHT-exit callback only lands reliably on a real
-    // focusable card when `firstItemFocus` is bound to that card
-    // directly. focusGroup() stays so intra-row LEFT/RIGHT doesn't
-    // escape into the rail.
+    // focusRestorer(): makes this Column a "focus group" that remembers
+    // which child card was last focused. When the parent calls
+    // `firstItemFocus.requestFocus()` (e.g. D-pad Down from the Top Nav),
+    // focus is routed to the LAST-focused card — not index 0 — so when
+    // the user leaves the row by D-padding RIGHT past the last item and
+    // lands in the nav, pressing DOWN reliably returns them to exactly
+    // where they were. Bulletproof against LazyRow virtualization
+    // (which can unmount idx 0 when the user scrolls far right).
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
-            .focusGroup()
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -135,12 +141,11 @@ fun HomeCollectionsRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(visible, key = { _, c -> c.id }) { idx, coll ->
+            itemsIndexed(visible, key = { _, c -> c.id }) { _, coll ->
                 CollectionCardView(
                     coll = coll,
                     onFocus = { onFocusedCollectionChange(coll) },
                     onClick = { onCollectionClick(coll) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
             if (hasMore) {
@@ -161,16 +166,12 @@ private fun CollectionCardView(
     coll: MovieCollection,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
-    val baseTop: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
     Box(
-        baseTop
+        Modifier
             .width(260.dp)
             .height(156.dp)
             .onFocusChanged {

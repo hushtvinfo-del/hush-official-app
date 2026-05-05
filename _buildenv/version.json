@@ -1,13 +1,13 @@
 {
-  "versionCode": 392,
-  "versionName": "1.43.92",
+  "versionCode": 393,
+  "versionName": "1.43.93",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "Continue Watching is back as the default first section on Home — when you have anything in progress, it now lands on Resume on launch, like it used to. Cross-device sync (FireStick ↔ Shield ↔ Mobile) is automatic via the same SyncEngine that already runs every 30s.",
-    "Side-rail RIGHT-arrow now reliably focuses the FIRST visible card of the current section. Root cause was the first-card focus requester being attached to a focusGroup wrapper instead of directly to the card itself — fixed across all 6 home rows (Resume, Discovery, Streaming Services, Collections, Genres, Themes & Moods, Decades).",
-    "Themes & Moods row continues to live above the Decades row on Home (from v1.43.91)."
+    "Side-rail RIGHT-arrow navigation behaviour reverted byte-for-byte to v1.43.87 — the version you said was working perfectly. Discovery, Streaming Services, Collections, Genres, Years, and Themed rows all now use the v87 focus-group + restorer pattern, and the rail's RIGHT-arrow falls back to Compose's default 2D spatial focus search exactly as it did in v87.",
+    "Continue Watching is the default first home section when you have anything in progress (from v1.43.92) — survives reboots and syncs across devices via the existing SyncEngine.",
+    "Themes & Moods row sits above the Decades row on Home (from v1.43.91)."
   ]
 }

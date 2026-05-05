@@ -79,15 +79,17 @@ fun HomeGenresRow(
 ) {
     if (genres.isEmpty()) return
 
-    // First-card direct-bind pattern (mirrors HomeContinueWatchingRow):
-    // we deliberately AVOID Modifier.focusRequester(...).focusRestorer()
-    // on the outer Column. The rail's RIGHT-exit callback only lands
-    // reliably on a real focusable card when the requester is bound
-    // to that card directly. focusGroup() stays so intra-row LEFT/RIGHT
-    // doesn't escape into the rail.
+    // focusRestorer(): Column acts as a focus group that remembers the
+    // last-focused child card. When the parent calls
+    // `firstItemFocus.requestFocus()` (e.g. D-pad Down from the Top Nav),
+    // focus is routed to the card the user was last on instead of idx 0.
+    // Bulletproof against LazyRow virtualisation.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
-            .focusGroup()
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -130,12 +132,11 @@ fun HomeGenresRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(genres, key = { _, g -> g.id }) { idx, genre ->
+            itemsIndexed(genres, key = { _, g -> g.id }) { _, genre ->
                 GenreCardView(
                     genre = genre,
                     onFocus = { onFocusedGenreChange(genre) },
                     onClick = { onGenreClick(genre) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -147,16 +148,12 @@ private fun GenreCardView(
     genre: Genre,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(12.dp)
 
-    val baseTop: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
     Box(
-        baseTop
+        Modifier
             .width(210.dp)
             .height(118.dp)
             .onFocusChanged {
