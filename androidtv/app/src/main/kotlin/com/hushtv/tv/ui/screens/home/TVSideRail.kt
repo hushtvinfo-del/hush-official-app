@@ -149,9 +149,28 @@ fun Modifier.tvHubContentFocus(
     firstRailItemFocus: FocusRequester,
 ): Modifier {
     val focusManager = LocalFocusManager.current
+    // v1.43.97 — DELIBERATELY no `.focusRestorer()` at this outer
+    // focusGroup level. Earlier versions had focusRestorer here, which
+    // saves the last-focused child of the group. The bug: when the
+    // user vertically slide-navigates between home pages (UP/DOWN
+    // within home content swaps the visible page via AnimatedContent),
+    // the OLD page's composables are removed but focusRestorer's
+    // saved pivot still points at the removed card. When the user
+    // later presses LEFT to enter the rail, then RIGHT to come back,
+    // focusRestorer hijacks the rail's onExitRight `requestFocus()`
+    // and tries to restore the stale pivot — focus ends up "out of
+    // sight" on a removed composable.
+    //
+    // Without focusRestorer here, the rail's onExitRight callback's
+    // explicit `firstFocus.requestFocus()` runs unimpeded and reliably
+    // lands on the visible page's first card.
+    //
+    // Each individual row still has its OWN focusMod (focusRequester +
+    // focusRestorer + focusGroup) on the Column wrapper, so intra-row
+    // LEFT/RIGHT focus memory ("come back to the last card I was on
+    // within this row") is preserved.
     return this
         .focusGroup()
-        .focusRestorer()
         .onPreviewKeyEvent { ev ->
             if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
             if (ev.key != Key.DirectionLeft) return@onPreviewKeyEvent false

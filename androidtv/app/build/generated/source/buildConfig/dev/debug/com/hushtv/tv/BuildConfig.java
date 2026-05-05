@@ -8,8 +8,8 @@ public final class BuildConfig {
   public static final String APPLICATION_ID = "com.hushtv.tv.debug";
   public static final String BUILD_TYPE = "debug";
   public static final String FLAVOR = "dev";
-  public static final int VERSION_CODE = 396;
-  public static final String VERSION_NAME = "1.43.96-debug";
+  public static final int VERSION_CODE = 397;
+  public static final String VERSION_NAME = "1.43.97-debug";
   // Field from product flavor: dev
   public static final String UPDATE_CHANNEL = "dev";
   // Field from product flavor: dev

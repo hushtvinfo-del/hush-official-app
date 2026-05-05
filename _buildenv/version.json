@@ -1,13 +1,13 @@
 {
-  "versionCode": 396,
-  "versionName": "1.43.96",
+  "versionCode": 397,
+  "versionName": "1.43.97",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "ROOT CAUSE FIX: tvFocusable internally adds its own .focusable() — when first-card focusRequester was bound BEFORE tvFocusable, requestFocus() was attaching to the inner focusable hidden inside tvFocusable, not the outer card. Discovery has always worked because it uses the focusGroup wrapper pattern (focusRequester on the COLUMN, not the cards). Every other home row now uses Discovery's exact pattern verbatim.",
-    "Cards have focusRequester=null. Column wrapper has focusRequester+focusRestorer+focusGroup. Rail's onExitRight calls firstFocus.requestFocus() which routes through focusRestorer to the first card.",
+    "ROOT CAUSE: tvHubContentFocus had a page-level focusRestorer that hijacked the rail's RIGHT-exit requestFocus() when the user had slide-navigated between home pages — the saved pivot pointed at a removed composable. Removed the page-level focusRestorer; intra-row focus memory still works via the row-level focusMod.",
+    "Discovery only worked before because it was the default landing page (no slide-navigation = pivot still valid). Every other page that you reached via UP/DOWN had a stale pivot, which is why ONLY Discovery worked.",
     "All previous features preserved: Continue Watching as default first home page, Themes & Moods row above Decades, Tag-based release rollback infrastructure."
   ]
 }

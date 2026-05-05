@@ -1,6 +1,78 @@
 # HushTV — Product Requirements Document
 
-## v1.43.96 — REAL ROOT CAUSE: tvFocusable inner-focusable swallows focusRequester — 2026-05-06  ⬅ LATEST
+## v1.43.97 — TRUE ROOT CAUSE: page-level focusRestorer hijacks requestFocus on slide-navigated pages — 2026-05-06  ⬅ LATEST
+
+User report: *"I am in first card of Genres series - I go left it
+opens left menu screen (search is selected) - I go right again and
+it does not go to first card in genres series screen - if I go up
+it goes to genres-movies first card - if I go down it goes to genres
+series first card. But never will it go to first card when menu is
+open and navigating right. Still not fixed."*
+
+That description was the unlock. **"Only Discovery works"** wasn't a
+coincidence — Discovery is the default landing page on app boot.
+Every other home page is reached via slide-navigation (UP/DOWN
+within home content swaps the visible page through `AnimatedContent`).
+
+### Root cause
+
+`tvHubContentFocus` (the modifier wrapping the home content Box) had:
+
+```kotlin
+return this
+    .focusGroup()
+    .focusRestorer()        // ← THE BUG
+    .onPreviewKeyEvent { ... LEFT handler ... }
+```
+
+`focusRestorer()` saves the last-focused child of the group. When
+the user slide-navigates between home pages, AnimatedContent removes
+the OLD page's composables, but focusRestorer's saved pivot still
+references the now-removed card.
+
+When the user later presses LEFT (focus goes to rail), then RIGHT,
+the rail's `onExitRight` callback fires `firstFocus.requestFocus()`.
+focus enters `tvHubContentFocus`'s focusGroup. focusRestorer
+intercepts and tries to restore the stale pivot — focus ends up
+"out of sight" on a removed composable. Discovery worked for the
+exact same reason it always did: it was the default landing page,
+so the pivot was first-Discovery-card and was still valid.
+
+### Fix
+
+Removed `.focusRestorer()` from `tvHubContentFocus`. Each individual
+home row's Column wrapper still has its OWN focusMod
+(focusRequester+focusRestorer+focusGroup), so intra-row "come back
+to the last card I was on within this row" memory is preserved.
+Only the cross-page pivot (which was always wrong after slide-nav)
+is gone.
+
+### Files changed
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TVSideRail.kt`
+  → `tvHubContentFocus` modifier — removed `.focusRestorer()`,
+  added a 24-line comment explaining why so a future agent doesn't
+  re-add it.
+
+### Build + deploy
+- versionCode 396 → 397, versionName 1.43.96 → 1.43.97.
+- BUILD SUCCESSFUL (45s).
+- Live: `https://hushtv.xyz/version.json` reports 397 / 1.43.97.
+- Auto-tagged via `/app/_buildenv/build-and-deploy-dev.sh` →
+  `v1.43.97-dev`.
+
+### Lesson permanently in PRD.md
+
+When a focus bug only affects pages reached via slide-navigation
+(but not the default page), suspect `focusRestorer` at the OUTER
+focus group. Compose's focusRestorer assumes its pivot composable
+stays alive — if the pivot composable is unmounted by an
+AnimatedContent / Crossfade between pages, focusRestorer holds a
+stale reference and silently hijacks any subsequent requestFocus()
+into the group.
+
+---
+
+## v1.43.96 — Made all rows use Discovery's focusMod pattern — 2026-05-06
 
 ### Found it. Genuinely. With proof.
 
