@@ -39,19 +39,16 @@ import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.TextPrimary
 
 /**
- * Back-to-Home chip used at the top-left of every non-Home hub
- * (Live TV, Movies, Series, Hush+, Requests).
+ * Back-to-Home chip used at the top-left of every non-Home hub.
  *
- * Replaces the side rail on those screens — they go full-screen with
- * just this chip in the corner. Pressing ENTER on the chip OR pressing
- * the device BACK button takes the user back to Home.
+ * ⚠ DISABLED in v1.43.38 by user request — the chip cluttered the
+ *   top-left corner on every detail screen and the device BACK
+ *   button already does the same job (`nav.popBackStack()`), so
+ *   the chip was redundant.
  *
- * Why a back button instead of the side rail everywhere?
- *   • Hub-of-hubs UX: Home is the actual landing experience; the
- *     other tabs are deep-link "go straight to my Movies" launchers
- *     and benefit from full-screen real estate.
- *   • Removes the perceived clutter of a permanent rail when the
- *     user has already chosen what they want to browse.
+ * The composable is intentionally kept as a no-op stub instead of
+ * being deleted: all 11 call-sites still compile, and re-enabling
+ * the visual is a single early-return removal away.
  */
 @Composable
 fun BackToHomeChip(
@@ -59,6 +56,11 @@ fun BackToHomeChip(
     playlistId: String,
     focusRequester: FocusRequester? = null,
 ) {
+    // No-op — the back chip is hidden globally.
+    @Suppress("UNUSED_PARAMETER") val unused = Triple(nav, playlistId, focusRequester)
+    return
+    // -- The original render (kept for reference, never executed) --
+    @Suppress("UNREACHABLE_CODE")
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(999.dp)
     val onBack = {

@@ -37,7 +37,14 @@ data class VersionInfo(
 
 object UpdateManager {
 
-    const val VERSION_JSON_URL = "https://hushtv.xyz/version.json"
+    /**
+     * Update manifest URL — comes from BuildConfig so each
+     * distribution channel pulls from its own version.json:
+     *   • "dev"      → https://hushtv.xyz/version.json
+     *   • "official" → https://hushtv.xyz/version-official.json
+     * See app/build.gradle.kts productFlavors for definitions.
+     */
+    val VERSION_JSON_URL: String = com.hushtv.tv.BuildConfig.UPDATE_MANIFEST_URL
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)

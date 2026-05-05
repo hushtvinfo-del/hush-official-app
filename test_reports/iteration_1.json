@@ -1,0 +1,51 @@
+{
+  "summary": "Comprehensive backend + frontend testing of HushTV multi-tenant admin panel. 13/13 pytest API tests pass; full frontend smoke (login → dashboard → devices → broadcasts → branding → config → resellers → audit → logout) passes on desktop and mobile viewport. Found and fixed one MongoDB ObjectId serialization bug that was causing 500s on POST /api/admin/resellers and GET /api/admin/audit-log.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/admin/resellers, GET /api/admin/audit-log",
+        "issue": "FIXED: insert_one mutated `rec` to add ObjectId `_id`; rec was then both returned (500 on resellers create) and embedded as nested ObjectId in audit_log payload (500 on audit-log read). Patched server.py to pop _id after insert; cleaned existing poisoned audit rows."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard at 390px mobile viewport",
+        "issues": ["Stat cards extend beyond 390px width forcing horizontal scroll; first-letter labels clipped (e.g., 'ONLI...' for ONLINE). Consider full-width stacked cards on small viewports."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_admin_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Tighten responsive layout for Dashboard stat cards at <=390px (single-column, full width).",
+    "Consider removing the dead `bulk_write([...]) if False else None` placeholder block in /api/messages/pending (server.py ~852–857) — confusing dead code.",
+    "Audit log GET should still defensively strip nested ObjectIds (e.g., projection or jsonable_encoder with custom_encoder) so any future audit payload bug doesn't 500 the page."
+  ],
+  "critical_code_review_comments": [
+    "ObjectId leak pattern: every endpoint that does insert_one(rec) and then returns/echoes rec must pop _id. Same root cause hit two endpoints — wrap in helper or always re-fetch with projection.",
+    "audit() payload accepts arbitrary dicts; if a caller passes a doc that came back from Mongo, _id will be embedded forever. Sanitize payload before insert.",
+    "/api/admin/audit-log uses {'_id': 0} projection but that does NOT recurse into nested fields — root cause of the 500. Either sanitize on write OR use a serializer that handles ObjectId.",
+    "scope_reseller falls back to user.reseller_id for super_admin — fine, but reseller-admin has no way to override reseller_id even when intentionally cross-tenant queries are needed (intentional, but document).",
+    "Dead/no-op block in messages_pending (`bulk_write([...]) if False else None`) should be removed.",
+    "JWT_SECRET, ADMIN_PASSWORD checked in to /app/backend/.env — fine for preview, flag for prod rotation.",
+    "/api/heartbeat has no rate-limit; an attacker who guesses any reseller_code can write unlimited device rows. Consider a per-reseller-code request budget."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (popped _id after resellers insert_one)",
+    "/app/backend/tests/test_admin_api.py (new pytest suite, 13 tests)"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (smoke flows incl. mobile)"},
+  "test_credentials": "admin@hushtv.xyz / HushTV2026! (super_admin). Default reseller slug 'hushtv'; activation_code is rotating — fetch via GET /api/admin/resellers.",
+  "seed_data_creation": "Tests created TEST-DEV-* devices and ACME * resellers; left in DB (no destructive cleanup) — harmless and useful for next agent.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green. The default reseller activation_code rotates on each regenerate test — always GET /api/admin/resellers fresh before public-API calls. Frontend has data-testids matching the spec. Mobile viewport (390px) horizontal overflow on Dashboard cards is the only design nit. /app/backend/tests/test_admin_api.py is the regression suite.",
+  "rca of the issue": "Root cause of two 500s: AsyncIOMotor's insert_one(rec) mutates the input dict in place to add a BSON ObjectId at key '_id'. (a) create_reseller returned the mutated rec → FastAPI/jsonable_encoder fails on ObjectId. (b) That same mutated rec was passed as `payload=rec` into audit() and persisted into audit_log; later GET /api/admin/audit-log used projection {'_id': 0} which only strips top-level _id, so the nested payload._id (still ObjectId) blew up serialization on every read. Fix: pop '_id' immediately after insert_one in create_reseller; cleaned existing audit rows via a one-off script. Re-running the 13-case pytest suite — all green."
+}

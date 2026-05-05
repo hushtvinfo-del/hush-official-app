@@ -149,10 +149,19 @@ fun MobilePlayerScreen(
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
 
-    // Auto-reconnect on transient IO errors — see TVPlayerScreen.kt.
-    DisposableEffect(player, currentTitle) {
-        com.hushtv.tv.data.PlayerBuilder.attachAutoReconnect(player, currentTitle)
-        onDispose { }
+    // Auto-reconnect on errors AND silent stalls — see PlayerBuilder.kt.
+    // Recovers from CDN hiccups, brief network drops, and stuck-decoder
+    // states. Preserves VOD position; rejoins live edge for live streams.
+    val recoveryToast = com.hushtv.tv.ui.player.rememberRecoveryToastState()
+    DisposableEffect(player, currentTitle, isLive) {
+        val recon = com.hushtv.tv.data.PlayerBuilder.attachAutoReconnect(
+            ctx = ctx,
+            player = player,
+            channelName = currentTitle,
+            isLive = isLive,
+            onRecovered = { recoveryToast.fire() },
+        )
+        onDispose { recon.dispose() }
     }
     // ─── Freeze monitor ─────────────────────────────────────────────
     DisposableEffect(player, currentStreamUrl) {
@@ -373,6 +382,28 @@ fun MobilePlayerScreen(
         }
     }
 
+    // Auto "Mark as watched" for DVR recordings on mobile. Same
+    // 95 % threshold as the TV player and Continue Watching's
+    // FINISH_THRESHOLD; fires once per playback session.
+    val dvrRef = remember(currentStreamUrl) {
+        com.hushtv.tv.data.DvrApi.parseRecordingUrl(currentStreamUrl)
+    }
+    if (!isLive && dvrRef != null) {
+        var firedWatched by remember(dvrRef) { mutableStateOf(false) }
+        LaunchedEffect(dvrRef) {
+            while (!firedWatched) {
+                kotlinx.coroutines.delay(4_000)
+                val pos = player.currentPosition
+                val dur = player.duration.coerceAtLeast(0)
+                if (dur > 60_000 && pos.toFloat() / dur.toFloat() >= 0.95f) {
+                    val (uid, recId) = dvrRef
+                    com.hushtv.tv.data.DvrApi.markWatched(uid, recId, true)
+                    firedWatched = true
+                }
+            }
+        }
+    }
+
     // Switching channels (or to a new movie) — swap the media item without
     // releasing the player so we don't blink the surface.
     LaunchedEffect(currentStreamUrl) {
@@ -476,11 +507,36 @@ fun MobilePlayerScreen(
             factory = {
                 PlayerView(it).apply {
                     useController = false
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     this.player = player
                 }
             },
             modifier = Modifier.fillMaxSize(),
             update = { pv -> pv.player = player },
+        )
+
+        // Branded buffering overlay (Mobile — movies + series).
+        com.hushtv.tv.ui.player.BufferingOverlay(
+            player = player,
+            content = com.hushtv.tv.ui.player.BufferingContent.MOVIE,
+            onRetry = {
+                runCatching {
+                    player.prepare()
+                    player.play()
+                }
+            },
+        )
+
+        // "Back online" recovery toast — auto-shows for ~2.5 s
+        // after a successful auto-reconnect. Top-center under the
+        // status bar so it never overlaps the back chevron or
+        // the bottom controls bar.
+        com.hushtv.tv.ui.player.ReconnectedToast(
+            visible = recoveryToast.visible.value,
+            onHide = { recoveryToast.hide() },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 24.dp),
         )
 
         // ── Controls overlay ──
@@ -541,6 +597,12 @@ fun MobilePlayerScreen(
                                 modifier = Modifier.padding(end = 8.dp),
                             )
                         }
+                        MobileRecordNowButton(
+                            playlistId = playlistId,
+                            channelName = currentTitle,
+                            channelUrl = currentStreamUrl,
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
                         Box(
                             Modifier
                                 .background(Cyan, RoundedCornerShape(4.dp))

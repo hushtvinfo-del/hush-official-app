@@ -2,6 +2,7 @@ package com.hushtv.tv.ui.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,8 +30,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.C
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
@@ -73,68 +72,96 @@ fun PlayerOptionsMenu(
         )
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            // BACK key and tap-outside both route through onDismissRequest
-            // so we don't need an onClick on the backdrop — which was
-            // firing on EVERY OK press inside the dialog and closing the
-            // menu before any track/speed/subtitle selection could take
-            // effect. (1.20.4 bug.)
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true,
-        ),
+    // ── Same-window overlay (NOT a Dialog) ──────────────────
+    //
+    // Originally this menu used `androidx.compose.ui.window.Dialog`
+    // which creates a SEPARATE Android window. The new window
+    // briefly steals window-focus from the activity, and on some
+    // OEM implementations (Fire TV, certain TV boxes) ExoPlayer's
+    // companion `MediaSession` interprets that focus-loss as a
+    // "go-to-background" hint and auto-pauses the playback.
+    // The user noticed the side effect: opening the CC or Audio
+    // track menu paused the movie.
+    //
+    // Switching to an in-window overlay (a regular Box composed
+    // inside the same player screen) avoids the second window
+    // entirely. No window-focus change → no auto-pause → playback
+    // continues uninterrupted while the user toggles tracks.
+    //
+    // We re-implement the dialog's behaviours manually:
+    //   • dismissOnBackPress  → BackHandler with our own onDismiss
+    //   • dismissOnClickOutside → tap-detector on the scrim
+    //   • full-screen modal blackout → fillMaxSize + scrim alpha
+    androidx.activity.compose.BackHandler(enabled = true) { onDismiss() }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xCC000000))
+            // Tap-outside dismissal — we anchor the dialog to the
+            // bottom so anything ABOVE the surface is "outside".
+            .clickableNoRipple { onDismiss() },
+        contentAlignment = Alignment.BottomCenter,
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color(0xCC000000)),
-            contentAlignment = Alignment.BottomCenter
+        Surface(
+            color = Color(0xFF0B111D),
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.75f)
+                // Eat clicks here so taps INSIDE the surface don't
+                // bubble up to the scrim's dismiss handler.
+                .clickableNoRipple { /* swallow */ }
+                .border(
+                    1.dp, Color(0x3306B6D4),
+                    RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                ),
         ) {
-            Surface(
-                color = Color(0xFF0B111D),
-                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                modifier = Modifier
-                    .fillMaxWidth(0.75f)
-                    .border(
-                        1.dp, Color(0x3306B6D4),
-                        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+            Column(Modifier.padding(28.dp)) {
+                when (pane) {
+                    Pane.MAIN -> MainPane(
+                        aspectMode = aspectMode,
+                        sleepMinutesLeft = sleepMinutesLeft,
+                        playbackSpeed = playbackSpeed,
+                        onAudio = { pane = Pane.AUDIO },
+                        onSubtitle = { pane = Pane.SUBTITLE },
+                        onAspect = { pane = Pane.ASPECT },
+                        onSpeed = { pane = Pane.SPEED },
+                        onSleep = { pane = Pane.SLEEP },
+                        onInfo = { onDismiss(); onShowInfo() },
                     )
-            ) {
-                Column(Modifier.padding(28.dp)) {
-                    when (pane) {
-                        Pane.MAIN -> MainPane(
-                            aspectMode = aspectMode,
-                            sleepMinutesLeft = sleepMinutesLeft,
-                            playbackSpeed = playbackSpeed,
-                            onAudio = { pane = Pane.AUDIO },
-                            onSubtitle = { pane = Pane.SUBTITLE },
-                            onAspect = { pane = Pane.ASPECT },
-                            onSpeed = { pane = Pane.SPEED },
-                            onSleep = { pane = Pane.SLEEP },
-                            onInfo = { onDismiss(); onShowInfo() }
-                        )
-                        Pane.AUDIO -> TrackPicker(
-                            title = "Audio track",
-                            player = player,
-                            trackType = C.TRACK_TYPE_AUDIO,
-                            onBack = { pane = Pane.MAIN }
-                        )
-                        Pane.SUBTITLE -> SubtitlePane(
-                            player = player,
-                            onBack = { pane = Pane.MAIN },
-                            onDownload = onDownloadSubtitles,
-                        )
-                        Pane.ASPECT -> AspectPicker(aspectMode, onAspectChange, onBack = { pane = Pane.MAIN })
-                        Pane.SPEED -> SpeedPicker(playbackSpeed, onPlaybackSpeedChange, onBack = { pane = Pane.MAIN })
-                        Pane.SLEEP -> SleepPicker(sleepMinutesLeft, onSleepChange, onBack = { pane = Pane.MAIN })
-                    }
+                    Pane.AUDIO -> TrackPicker(
+                        title = "Audio track",
+                        player = player,
+                        trackType = C.TRACK_TYPE_AUDIO,
+                        onBack = { pane = Pane.MAIN },
+                    )
+                    Pane.SUBTITLE -> SubtitlePane(
+                        player = player,
+                        onBack = { pane = Pane.MAIN },
+                        onDownload = onDownloadSubtitles,
+                    )
+                    Pane.ASPECT -> AspectPicker(aspectMode, onAspectChange, onBack = { pane = Pane.MAIN })
+                    Pane.SPEED -> SpeedPicker(playbackSpeed, onPlaybackSpeedChange, onBack = { pane = Pane.MAIN })
+                    Pane.SLEEP -> SleepPicker(sleepMinutesLeft, onSleepChange, onBack = { pane = Pane.MAIN })
                 }
             }
         }
     }
 }
+
+/**
+ * Tap handler with no ripple effect, no min-touch-target hit-slop
+ * inflation. Used for scrim + surface tap-detection so we never
+ * see a flash of cyan under the user's finger when they dismiss.
+ */
+@Composable
+private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
+    this.then(
+        Modifier.clickable(
+            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+            indication = null,
+            onClick = onClick,
+        ),
+    )
 
 @Composable
 private fun MainPane(

@@ -384,12 +384,6 @@ private fun BrowseCollectionCard(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .shadow(
-                    elevation = if (focused) 22.dp else 4.dp,
-                    shape = cardShape,
-                    ambientColor = coll.accent,
-                    spotColor = coll.accent,
-                )
                 .clip(cardShape)
                 .background(
                     Brush.verticalGradient(

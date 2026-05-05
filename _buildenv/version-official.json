@@ -1,0 +1,12 @@
+{
+  "versionCode": 385,
+  "versionName": "1.43.85",
+  "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
+  "mandatory": false,
+  "releasedAt": "2026-05-05",
+  "channel": "official",
+  "changelog": [
+    "Snappier navigation across the whole app — removed the focus zoom (cards growing on focus) and the colored glow around focused cards. These effects were causing sluggish scrolling on Fire Sticks and lower-end devices, and the zoom was clipping the leftmost card off the screen.",
+    "Focus is now a clean cyan border + subtle background tint. Same look-and-feel direction, dramatically more responsive."
+  ]
+}

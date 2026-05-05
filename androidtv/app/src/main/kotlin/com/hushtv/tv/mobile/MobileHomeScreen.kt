@@ -77,6 +77,10 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
     val ctx = LocalContext.current
     val playlist = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
 
+    // Hardware BACK on the home screen prompts before exit so an
+    // accidental back press doesn't drop the user out of the app.
+    com.hushtv.tv.ui.ExitConfirmBackHandler()
+
     // ── Shared data for all pages (reused from TV) ──
     val ssMovies = rememberStreamingServices("movie")
     val ssSeries = rememberStreamingServices("series")
@@ -141,12 +145,13 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
     val pages = buildList {
         if (hasHub) add(PageDef("hub", "WELCOME BACK", "For You", Cyan))
         add(PageDef("discovery", "CURATED FOR YOU", "Discover", Cyan))
+        add(PageDef("themes", "MOODS & THEMES", "Themes", Color(0xFFEC4899)))
         add(PageDef("ss_movies", "STREAMING SERVICES", "Movies", Color(0xFFEF4444)))
         add(PageDef("ss_series", "STREAMING SERVICES", "Series", Color(0xFF22D3EE)))
         add(PageDef("collections", "FRANCHISES & SAGAS", "Collections", Color(0xFFA855F7)))
         add(PageDef("genres_movies", "GENRES", "Movies by genre", Color(0xFFF97316)))
         add(PageDef("genres_series", "GENRES", "Series by genre", Color(0xFF14B8A6)))
-        add(PageDef("years_movies", "BY YEAR", "Movies", Color(0xFF3B82F6)))
+        add(PageDef("years_movies", "BROWSE BY DECADE", "Decades", Color(0xFF1E90FF)))
     }
 
     val pagerState = rememberPagerState { pages.size }
@@ -272,6 +277,7 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
                     },
                 )
                 "discovery" -> DiscoveryPageMobile(nav, playlistId, discoveryCards, titleBlock)
+                "themes" -> ThemesPageMobile(nav, playlistId, titleBlock)
                 "ss_movies" -> StreamingServicesPage(nav, playlistId, ssMovies, "movie", titleBlock)
                 "ss_series" -> StreamingServicesPage(nav, playlistId, ssSeries, "series", titleBlock)
                 "collections" -> CollectionsPageMobile(nav, playlistId, collections, titleBlock)
@@ -1290,16 +1296,46 @@ private fun YearsPageMobile(
         item { titleBlock() }
         items(years, key = { it.year }) { y ->
             BackdropCard(
-                title = y.year.toString(),
-                tagline = y.tagline,
+                title = y.searchKeyword,            // "1990s"
+                tagline = y.tagline,                // decade subtitle
                 backdropUrl = y.backdropUrl,
                 accent = y.accent,
                 onClick = {
-                    val catId = y.xtreamCategoryId
-                    if (!catId.isNullOrBlank())
-                        nav.navigate("mbrowse/$playlistId/movie?catId=$catId")
-                    else
-                        nav.navigate("mbrowse/$playlistId/movie")
+                    // y.year holds the decade's start year (e.g. 1990).
+                    // Goes into the decade-years drilldown screen
+                    // shared with TV.
+                    nav.navigate("decadeyears/$playlistId/${y.year}")
+                },
+            )
+        }
+        item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PAGE: Themes  —  Mobile-friendly list of all curated themed lists
+// ══════════════════════════════════════════════════════════════════
+
+@Composable
+private fun ThemesPageMobile(
+    nav: NavController,
+    playlistId: String,
+    titleBlock: @Composable () -> Unit,
+) {
+    val themes = remember { com.hushtv.tv.data.HushThemedLists.all }
+    androidx.compose.foundation.lazy.LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 4.dp),
+    ) {
+        item { titleBlock() }
+        items(themes, key = { it.id }) { theme ->
+            BackdropCard(
+                title = theme.title,
+                tagline = theme.subtitle,
+                backdropUrl = theme.heroBackdropUrl,
+                accent = theme.accent,
+                onClick = {
+                    nav.navigate("themedetail/$playlistId/${theme.id}")
                 },
             )
         }

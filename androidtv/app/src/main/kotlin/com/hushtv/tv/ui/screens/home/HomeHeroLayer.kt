@@ -97,7 +97,7 @@ fun HomeHeroLayer(entry: ContinueEntry?, contentStartPadding: androidx.compose.u
 private fun HeroTextBlock(entry: ContinueEntry) {
     Column(Modifier.fillMaxWidth(0.58f)) {
         Text(
-            entry.progress.title,
+            entry.effectiveTitle,
             color = Color.White,
             fontSize = 44.sp,
             fontWeight = FontWeight.Black,
@@ -109,7 +109,7 @@ private fun HeroTextBlock(entry: ContinueEntry) {
         Spacer(Modifier.height(10.dp))
 
         val metaParts = buildList {
-            if (entry.progress.kind == "series") add("Series")
+            if (entry.effectiveKind == "series") add("Series")
             else add("Movie")
             entry.genre?.let { add(it) }
             entry.year?.let { add(it) }
@@ -157,7 +157,7 @@ private fun HeroTextBlock(entry: ContinueEntry) {
             }
         }
 
-        val overview = entry.tmdb?.overview
+        val overview = entry.overview
         if (!overview.isNullOrBlank()) {
             Spacer(Modifier.height(14.dp))
             Text(

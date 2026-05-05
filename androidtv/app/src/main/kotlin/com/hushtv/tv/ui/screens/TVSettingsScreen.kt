@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -160,6 +161,20 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                     subtitle = "See the status of your missing-content requests",
                     icon = { Icon(Icons.Default.Inbox, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                     onClick = { nav.navigate("myrequests/$playlistId") },
+                )
+            }
+            item {
+                SettingsCard(
+                    title = "My recordings",
+                    subtitle = "Cloud DVR — Live TV captures, 20 hours per profile",
+                    icon = {
+                        Icon(
+                            Icons.Default.FiberManualRecord, null,
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(24.dp),
+                        )
+                    },
+                    onClick = { nav.navigate("recordings/$playlistId") },
                 )
             }
             item {

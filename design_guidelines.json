@@ -1,80 +1,130 @@
 {
-  "app_context": {
-    "platform": "TV (Android TV / Fire TV / Google TV)",
-    "framework": "Kotlin / Jetpack Compose",
-    "interaction": "10-foot UI, D-pad navigation only",
-    "brand_colors": {
-      "primary": "#06B6D4",
-      "background": "#05080F",
-      "text_main": "#FFFFFF",
-      "text_secondary": "#9CA3AF"
+  "theme": "Dark",
+  "archetype": "5 (Jewel & Luxury)",
+  "vibe": "Beautiful, sexy, modern, clean, premium adult, vibrant",
+  "typography": {
+    "headings": {
+      "font": "Outfit",
+      "weights": ["Medium", "SemiBold", "Bold"],
+      "usage": "Large clean typography for high legibility from 10 feet away. Avoid ultra-thin or black weights."
     },
-    "testing_guidelines": "All interactive elements (cards, tabs, nav items) MUST include a data-testid attribute based on role (e.g., data-testid='continue-watching-card-0')."
+    "body": {
+      "font": "Manrope",
+      "weights": ["Regular", "Medium"],
+      "usage": "Highly legible geometric sans for metadata, tags, and descriptions."
+    },
+    "scale": {
+      "h1": "text-5xl md:text-6xl tracking-tight leading-tight",
+      "h2": "text-3xl md:text-4xl tracking-tight",
+      "h3": "text-2xl md:text-3xl",
+      "h4": "text-xl",
+      "body_large": "text-lg md:text-xl",
+      "body": "text-base md:text-lg text-gray-300",
+      "small": "text-sm text-gray-400 uppercase tracking-widest"
+    }
   },
-  "design_directions": [
-    {
-      "direction_id": 1,
-      "concept_name": "The Cinematic Stage (Netflix-Style Pushing Rails)",
-      "pitch": "A highly immersive, backdrop-led experience where the bottom 40% holds dynamic rails that 'push' up into the focal slot, eliminating awkward deep vertical scrolling and UI overlap.",
-      "wireframe_ascii": "[Top Nav: Hub \u2022 Discovery \u2022 Movies]\n+-------------------------------------------------+\n|                                                 |\n|  [Dynamic Cinematic Backdrop from focused card] |\n|                                                 |\n|  [Title of Focused Item]                        |\n|  Subtitle / Progress / Status                   |\n|  [Hold OK to Remove] (appears only on focus)    |\n+-------------------------------------------------+\nContinue Watching >\n[  Poster  ] [  Poster  ] [  Poster  ] [  Poster  ]\n\n(Off-screen: Channel History rail pushes up when Down is pressed)",
-      "card_specs": {
-        "channel_history": "16:9 ratio (240x135dp). Solid near-black card (#111827). Center-aligned channel logo. Title hidden unless focused.",
-        "continue_watching": "2:3 Poster ratio (180x270dp). TMDB Poster image. 4dp high progress strip at the absolute bottom (#06B6D4). Circular play badge overlay on focus.",
-        "my_requests": "16:9 ratio (240x135dp). TMDB Backdrop. Dark gradient overlay at bottom for title. Status pill anchored top-right."
-      },
-      "focus_treatment": "Card scales to 1.1x. Thick 4dp solid Cyan border (#06B6D4). Ambient cyan drop-shadow glow. Unfocused sibling cards dim to 60% opacity to ensure the focused card pops from 3 meters away.",
-      "color_typography": "Text relies heavily on white (#FFFFFF) for focused metadata in the hero area. Cyan is used exclusively for the focused border, progress bars, and active navigation. Typography uses condensed bold weights for Hero titles to fit long movie names.",
-      "empty_states": {
-        "individual": "If a rail has 0 items, it simply doesn't render. The user only sees populated rails.",
-        "global": "If all 3 are empty, the entire screen becomes an onboarding hero: 'Welcome to HushTV. Discover Live Channels and VODs from the Top Nav to build your Hub.' - accompanied by a generic cinematic abstract backdrop."
-      },
-      "trade_offs": {
-        "pros": "Extremely cinematic and premium. Solves vertical scroll overlap by only showing one interactive rail at a time. Backdrop feels natively 'TV'.",
-        "cons": "Hides 2 of the 3 data sources off-screen initially. Lower information density."
+  "colors": {
+    "background": {
+      "primary": "#050505",
+      "secondary": "#0A0A0A",
+      "surface": "#141414",
+      "surface_glass": "rgba(20, 20, 20, 0.6)"
+    },
+    "accent": {
+      "primary": "#FF2A6D",
+      "primary_hover": "#FF5285",
+      "glow": "rgba(255, 42, 109, 0.5)"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A3A3A3",
+      "muted": "#737373"
+    }
+  },
+  "tv_focus_system": {
+    "philosophy": "D-pad navigation requires highly prominent focus states. The currently focused item must be instantly recognizable from 10 feet away.",
+    "rest_state": {
+      "classes": "transform scale-100 transition-all duration-300 ease-out opacity-80"
+    },
+    "focus_state": {
+      "classes": "transform scale-105 md:scale-110 opacity-100 z-50 ring-4 ring-[#FF2A6D] ring-offset-4 ring-offset-[#050505] shadow-[0_0_30px_rgba(255,42,109,0.5)] bg-[#141414]"
+    },
+    "active_state": {
+      "classes": "transform scale-95 md:scale-100 opacity-80 ring-2"
+    },
+    "disabled_state": {
+      "classes": "opacity-30 grayscale cursor-not-allowed"
+    }
+  },
+  "layout_and_spacing": {
+    "tv_overscan_padding": "px-8 md:px-16 py-6 md:py-12",
+    "rail_spacing": "gap-6 md:gap-8",
+    "section_spacing": "py-12 md:py-20",
+    "card_radii": "rounded-xl md:rounded-2xl"
+  },
+  "components": {
+    "hero_carousel": {
+      "layout": "70vh height, full bleed. Left-aligned content block with 50% width on desktop. Strong gradient overlay.",
+      "background": "bg-gradient-to-r from-[#050505] via-[#050505]/70 to-transparent",
+      "bottom_gradient": "bg-gradient-to-t from-[#050505] h-32 absolute bottom-0 w-full",
+      "focus": "The active hero item gets a primary accent glow on its associated CTA button."
+    },
+    "horizontal_rails": {
+      "title": "text-2xl font-semibold mb-6 uppercase tracking-widest text-[#FFFFFF]",
+      "container": "flex overflow-x-auto pb-8 hide-scrollbar scroll-smooth gap-4 md:gap-6",
+      "card_scene": "aspect-video w-64 md:w-80 rounded-xl relative overflow-hidden group bg-[#141414]",
+      "card_poster": "aspect-[2/3] w-48 md:w-60 rounded-xl relative overflow-hidden group bg-[#141414]",
+      "card_performer": "aspect-square w-32 md:w-48 rounded-full relative overflow-hidden group bg-[#141414]",
+      "card_studio": "aspect-[3/1] w-56 md:w-72 rounded-xl flex items-center justify-center bg-[#141414] border border-white/10"
+    },
+    "detail_screen": {
+      "backdrop": "Full bleed with 50% opacity and heavy bottom/left gradient mask.",
+      "layout": "Grid layout. Left: Metadata, Actions. Right/Bottom: Related rails.",
+      "metadata": "Title (H1), Year/Duration/Rating (inline list, small), Tags (glassmorphism chips), Synopsis (body large).",
+      "auto_focus": "The 'Play' button must receive auto-focus when the screen mounts.",
+      "buttons": {
+        "play": "bg-[#FF2A6D] text-white px-8 py-4 rounded-full font-bold uppercase tracking-wider focus:outline-none focus:ring-4 focus:ring-white focus:scale-110 focus:shadow-[0_0_20px_rgba(255,42,109,0.8)]",
+        "secondary": "bg-white/10 text-white px-8 py-4 rounded-full font-bold focus:outline-none focus:bg-white/20 focus:ring-4 focus:ring-[#FF2A6D] focus:scale-110"
       }
     },
-    {
-      "direction_id": 2,
-      "concept_name": "The Command Dashboard (Bento Grid Layout)",
-      "pitch": "A zero-scroll, high-density bento box that fits everything on one 1920x1080 canvas, treating the TV like a mission control center.",
-      "wireframe_ascii": "[Top Nav: Hub \u2022 Discovery \u2022 Movies]\n+-------------------------+-----------------------+\n| Continue Watching       | Channel History       |\n| +-------+ +-------+     | +----+ +----+ +----+  |\n| |       | |       |     | | CH | | CH | | CH |  |\n| | Poster| | Poster|     | +----+ +----+ +----+  |\n| |  80%  | |  10%  |     +-----------------------+\n| +-------+ +-------+     | My Requests           |\n| [Hold OK to remove]     | [! PENDING] Title 1   |\n|                         | [V ADDED  ] Title 2   |\n+-------------------------+-----------------------+",
-      "card_specs": {
-        "channel_history": "1:1 Square tiles (120x120dp). Minimalist. Logo perfectly centered on #111827 background.",
-        "continue_watching": "2:3 Poster ratio (200x300dp). Standard poster. Embedded cyan progress bar.",
-        "my_requests": "List-item style, NOT heavy backdrop cards. 320x60dp rows. Solid background. Colored status pill on the left, title text on the right. Reduces visual clutter."
-      },
-      "focus_treatment": "No borders. Instead, pure background color inversion. When focused, the card's background or title-area injects solid Cyan (#06B6D4), and the text/logo flips to Near Black (#05080F). Unmistakable contrast from 10 feet away. Slight 1.05x scale.",
-      "color_typography": "Monochromatic dark gray interface where Cyan acts purely as a 'laser pointer' for the D-pad location. Requests use strict utilitarian colors for pills (Amber, Green, Blue, Red).",
-      "empty_states": {
-        "individual": "Grid cells remain rigid. An empty cell displays a ghosted icon and text inside its bento box (e.g., 'No recent channels').",
-        "global": "The bento grid becomes a tutorial: cell 1 suggests tuning into Live TV, cell 2 explains VOD, cell 3 explains the Request system."
-      },
-      "trade_offs": {
-        "pros": "Zero vertical scrolling. User sees all 3 categories instantly. Solves the 'Requests backdrop visual weight' complaint completely by converting them to list items.",
-        "cons": "Can feel slightly utilitarian or 'IT dashboard' rather than a relaxed, cinematic streaming vibe. Truncates long titles aggressively."
-      }
+    "age_gate": {
+      "overlay": "backdrop-blur-3xl bg-[#050505]/90 fixed inset-0 z-[100] flex items-center justify-center",
+      "dialog": "max-w-xl w-full bg-[#141414]/90 border border-white/10 rounded-3xl p-12 text-center shadow-2xl",
+      "actions": "Flex column or row gap-4. Primary 'I am 18+' button must be distinct, huge, and auto-focused.",
+      "buttons": "Focus states must use the standard TV focus system (scale + ring + glow)."
     },
-    {
-      "direction_id": 3,
-      "concept_name": "The Focused Deck (Pill-Tabbed Sections)",
-      "pitch": "A clean, layered approach using horizontal tabs to separate categories completely, giving each data source its own uncrowded 'deck' of massive cards.",
-      "wireframe_ascii": "[Top Nav: Hub \u2022 Discovery \u2022 Movies]\n\n   ( History )   [ Continue Watching ]   ( Requests )\n\n+-------------------------------------------------+\n|                                                 |\n|  +--------+   +--------+   +--------+           |\n|  | Poster |   | Poster |   | Poster |           |\n|  | ------ |   | -      |   | ---    |           |\n|  +--------+   +--------+   +--------+           |\n|     Title 1      Title 2      Title 3           |\n|  [Hold OK to remove]                            |\n+-------------------------------------------------+",
-      "card_specs": {
-        "channel_history": "16:9 Landscape cards (320x180dp). Frosted glass background over app background, sharp logos.",
-        "continue_watching": "16:9 Landscape cards (320x180dp) using the VOD Backdrop (not poster) to keep geometry uniform across the tab. Bottom progress bar.",
-        "my_requests": "16:9 Landscape cards (320x180dp). VOD Backdrop. Corner status badge."
+    "dmca_form": {
+      "layout": "Clean, structured form using Shadcn inputs with dark theme overrides.",
+      "focus": "Inputs must have strong focus-visible rings (ring-[#FF2A6D]) for D-pad users."
+    }
+  },
+  "media": {
+    "image_urls": {
+      "hero_background": {
+        "url": "https://images.pexels.com/photos/6648497/pexels-photo-6648497.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080&w=1920",
+        "description": "Silhouette of man and woman in studio with neon pink lighting. Use as the main hero carousel background."
       },
-      "focus_treatment": "Card lifts aggressively via 24dp drop-shadow. 3dp stark White (#FFFFFF) border (Cyan is reserved for the active Tab indicator above). 1.08x scale. Sibling items do not dim, keeping the deck bright.",
-      "color_typography": "Tabs use unselected text as #9CA3AF, selected tab gets a Cyan (#06B6D4) pill background with #05080F text. Uniform geometric sizing makes it feel heavily structured and 'Apple TV' like.",
-      "empty_states": {
-        "individual": "If a user clicks an empty tab, the 16:9 card row is replaced by a single, centered, beautifully illustrated 'Empty Box' icon and friendly prompt.",
-        "global": "The 3 tabs still exist, but all 3 show their respective empty-state illustrations."
+      "performer_avatar": {
+        "url": "https://images.pexels.com/photos/7194458/pexels-photo-7194458.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Stylish female model in neon lights. Use for performer circular cards."
       },
-      "trade_offs": {
-        "pros": "Completely eliminates vertical overlapping and visual competition between sections. Enforces total geometric consistency (everything is 16:9). Highly legible.",
-        "cons": "Adds navigational friction. Requires the user to D-pad UP to the tabs, Left/Right to change category, and Down into the cards. Not 'glanceable' all at once."
+      "abstract_cover": {
+        "url": "https://images.unsplash.com/photo-1759885697855-52d11c41b19b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxNzV8MHwxfHNlYXJjaHwxfHxuZW9uJTIwbGlnaHRpbmclMjBkYXJrJTIwc3R1ZGlvfGVufDB8fHx8MTc3Nzk0NDczOHww&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract illuminated shapes. Use as fallback for scene posters/thumbnails."
       }
     }
-  ],
-  "instructions_to_main_agent": "Use this JSON as the source of truth for the Hub TV UI redesign. Wait for the user to select one of the three directions (1: Cinematic Stage, 2: Command Dashboard, or 3: Focused Deck) before generating Jetpack Compose code. Ensure you heavily utilize Compose's FocusRequester, Modifier.focusable(), and proper interaction sources to achieve the listed focus treatments. Implement hold-to-remove using Modifier.pointerInput or combinedClickable. Output MUST apply proper TV overscan margins (typically 58dp horizontal, 27dp vertical)."
+  },
+  "accessibility_and_testing": {
+    "contrast": "All text must pass WCAG AA against the dark backgrounds. Avoid gray-on-gray.",
+    "test_ids": "Every focusable card, button, and input MUST have a data-testid attribute (e.g., data-testid='rail-card-1', data-testid='play-button').",
+    "motion": "Use prefers-reduced-motion queries to disable scaling if necessary, but keep the ring and color changes."
+  },
+  "instructions_to_main_agent": [
+    "Ensure Shadcn components (if used) are heavily customized to match the Dark/Jewel archetype. Strip away standard Vercel borders.",
+    "Implement the TV focus system explicitly using Tailwind's focus-visible or custom state classes tailored for D-pad navigation.",
+    "The Home screen needs a full-bleed Hero section that fades gracefully into the horizontal rails below.",
+    "Horizontal rails must allow smooth scrolling. Hide standard scrollbars. Provide sufficient right-padding so the last item isn't cut off abruptly.",
+    "Detail screen must overlay the backdrop image properly using bg-black/60 masks.",
+    "Do NOT use 'Inter'. Apply 'Outfit' for headings and 'Manrope' for body text."
+  ]
 }

@@ -25,8 +25,10 @@ import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,7 +62,7 @@ import com.hushtv.tv.ui.theme.TextSecondary
  * the layout never breaks at narrow widths.
  */
 @Composable
-fun MobileHushPlusScreen() {
+fun MobileHushPlusScreen(nav: androidx.navigation.NavController? = null) {
     var selectedKey by rememberSaveable {
         mutableStateOf(HushPlusContent.OVERVIEW_KEY)
     }
@@ -112,6 +114,14 @@ fun MobileHushPlusScreen() {
             if (addon != null) {
                 AddonDetailMobile(addon = addon)
             }
+        }
+    }
+
+    // HushXXX is its own full-screen experience — same pattern as TV.
+    LaunchedEffect(selectedKey) {
+        if (selectedKey == "xxx" && nav != null) {
+            selectedKey = HushPlusContent.OVERVIEW_KEY
+            nav.navigate("mhushxxx/${HushPlusContent.OVERVIEW_KEY}")
         }
     }
 }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 293
-        versionName = "1.42.93"
+        versionCode = 385
+        versionName = "1.43.85"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -57,15 +57,63 @@ android {
         }
     }
 
+    // ── Distribution channels (dev vs official) ──────────────────
+    // Two flavors of the SAME app:
+    //   • "dev"      → bleeding-edge development drop. Pulls update
+    //                  manifest from /version.json, downloads the APK
+    //                  from /hushtv.apk. This is what the agent ships
+    //                  on every build.
+    //   • "official" → curated stable channel for end users. Pulls
+    //                  manifest from /version-official.json, APK from
+    //                  /hushtv-official.apk. Only updated when the
+    //                  user explicitly says "push to official".
+    //
+    // Both flavors keep the SAME applicationId (com.hushtv.tv) so an
+    // existing user upgrading from dev → official just gets a normal
+    // signature-matched OTA install (no uninstall required), and the
+    // signing certificate is identical (signingConfig "hushtv"). The
+    // only thing that differs at runtime is the URL constants in
+    // BuildConfig — see UpdateManager.kt.
+    flavorDimensions += "channel"
+    productFlavors {
+        create("dev") {
+            dimension = "channel"
+            buildConfigField(
+                "String",
+                "UPDATE_MANIFEST_URL",
+                "\"https://hushtv.xyz/version.json\"",
+            )
+            buildConfigField(
+                "String",
+                "UPDATE_CHANNEL",
+                "\"dev\"",
+            )
+        }
+        create("official") {
+            dimension = "channel"
+            buildConfigField(
+                "String",
+                "UPDATE_MANIFEST_URL",
+                "\"https://hushtv.xyz/version-official.json\"",
+            )
+            buildConfigField(
+                "String",
+                "UPDATE_CHANNEL",
+                "\"official\"",
+            )
+        }
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
         jvmTarget = "17"
-    }
-    buildFeatures {
-        compose = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"

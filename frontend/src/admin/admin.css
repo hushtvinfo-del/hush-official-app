@@ -1,0 +1,603 @@
+/*
+  HushTV Admin styles — handcrafted CSS (not Tailwind classes
+  inline) so the layout primitives are explicit and the
+  responsive breakpoints are obvious.
+
+  Design tokens — match the Android app:
+    --hush-bg-0       deep navy (page background)
+    --hush-bg-1       elevated panel
+    --hush-bg-2       hover / focus surface
+    --hush-stroke     hairline borders
+    --hush-text       primary text
+    --hush-text-dim   secondary text
+    --hush-cyan       brand cyan accent (matches splash)
+    --hush-violet     secondary accent
+    --hush-amber      warnings
+    --hush-green      success / online
+    --hush-red        critical / blocked
+*/
+
+:root {
+  --hush-bg-0:     #05080F;
+  --hush-bg-1:     #0B1424;
+  --hush-bg-2:     #14213A;
+  --hush-stroke:   rgba(255,255,255,0.08);
+  --hush-stroke-2: rgba(255,255,255,0.16);
+  --hush-text:     #ECEFF5;
+  --hush-text-dim: #8B93A8;
+  --hush-cyan:     #06B6D4;
+  --hush-cyan-2:   #22D3EE;
+  --hush-violet:   #8B5CF6;
+  --hush-amber:    #F59E0B;
+  --hush-green:    #10B981;
+  --hush-red:      #EF4444;
+  --hush-radius:   12px;
+  --hush-radius-sm: 8px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  background: var(--hush-bg-0);
+  color: var(--hush-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* Defend against unintended horizontal scroll on phones — any
+     descendant whose intrinsic min-width exceeds the viewport
+     gets visually clipped instead of forcing a horizontal
+     scrollbar that wrecks the entire layout. The trade-off is
+     that wide tables wrap their OWN scroll container (.hush-
+     table-wrap), so legitimate horizontal scrolling still works
+     where it should. */
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }
+
+.hush-bg-screen {
+  background: radial-gradient(circle at 50% 0%, #0F1A36 0%, #05080F 60%);
+}
+
+/* ── Top bar ─────────────────────────────────────── */
+.hush-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--hush-bg-0);
+}
+
+.hush-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(5,8,15,0.95);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--hush-stroke);
+}
+
+.hush-topbar-left, .hush-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hush-brand {
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: -0.5px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.hush-brand-h    { color: #fff; }
+.hush-brand-tv   { color: var(--hush-cyan); }
+.hush-brand-tag  {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--hush-text-dim);
+  text-transform: uppercase;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--hush-stroke);
+}
+
+.hush-icon-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--hush-radius-sm);
+  background: transparent;
+  color: var(--hush-text);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.hush-icon-btn:hover, .hush-icon-btn:focus-visible {
+  background: var(--hush-bg-2);
+  border-color: var(--hush-stroke-2);
+  outline: none;
+}
+
+.hush-user-chip {
+  font-size: 12px;
+  color: var(--hush-text-dim);
+  padding: 6px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--hush-stroke);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+/* ── Reseller switcher ───────────────────────────── */
+.hush-switcher { position: relative; }
+.hush-switcher-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--hush-bg-2);
+  border: 1px solid var(--hush-stroke);
+  color: var(--hush-text);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 99px;
+  cursor: pointer;
+  max-width: 180px;
+}
+.hush-switcher-trigger:hover { border-color: var(--hush-cyan); }
+.hush-switcher-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hush-switcher-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 280px;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--hush-bg-1);
+  border: 1px solid var(--hush-stroke-2);
+  border-radius: var(--hush-radius);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+  padding: 6px;
+  z-index: 40;
+}
+.hush-switcher-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--hush-radius-sm);
+  background: transparent;
+  color: var(--hush-text);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+.hush-switcher-option:hover  { background: var(--hush-bg-2); }
+.hush-switcher-option.is-active { background: rgba(6,182,212,0.1); color: var(--hush-cyan-2); }
+.hush-switcher-meta { font-size: 11px; color: var(--hush-text-dim); }
+
+/* ── Layout grid ─────────────────────────────────── */
+.hush-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+.hush-layout.is-collapsed { grid-template-columns: 64px 1fr; }
+.hush-layout.is-collapsed .hush-rail-label { display: none; }
+.hush-layout.is-collapsed .hush-rail-item  { justify-content: center; padding: 0; }
+
+@media (max-width: 1023px) {
+  /* Below desktop, the rail is `display: none`. We MUST also
+     collapse the grid to a single track — otherwise grid still
+     reserves the rail's 64-px / 240-px track and main ends up
+     squeezed into ~64 px wide regardless of viewport. */
+  .hush-layout,
+  .hush-layout.is-expanded,
+  .hush-layout.is-collapsed {
+    grid-template-columns: 1fr;
+  }
+  .hush-desktop-only { display: none !important; }
+}
+@media (min-width: 1024px) {
+  .hush-mobile-only { display: none !important; }
+}
+
+/* ── Left rail ──────────────────────────────────── */
+.hush-rail {
+  position: sticky;
+  top: 56px;
+  align-self: start;
+  height: calc(100vh - 56px);
+  background: var(--hush-bg-1);
+  border-right: 1px solid var(--hush-stroke);
+  padding: 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+.hush-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--hush-radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--hush-text-dim);
+  border: 1px solid transparent;
+  height: 40px;
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.hush-rail-item:hover {
+  background: var(--hush-bg-2);
+  color: var(--hush-text);
+}
+.hush-rail-item.is-active {
+  background: rgba(6,182,212,0.1);
+  color: var(--hush-cyan-2);
+  border-color: rgba(6,182,212,0.32);
+}
+.hush-rail-icon { flex-shrink: 0; }
+
+/* ── Mobile drawer ──────────────────────────────── */
+.hush-drawer-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 49;
+  animation: hush-fade-in 160ms ease-out;
+}
+.hush-drawer {
+  position: fixed;
+  top: 0; bottom: 0; left: 0;
+  width: min(280px, 80vw);
+  background: var(--hush-bg-1);
+  border-right: 1px solid var(--hush-stroke-2);
+  z-index: 50;
+  padding: 12px;
+  overflow-y: auto;
+  animation: hush-slide-in 220ms ease-out;
+}
+.hush-drawer-head {
+  padding: 8px 12px 16px;
+  border-bottom: 1px solid var(--hush-stroke);
+  margin-bottom: 12px;
+}
+
+@keyframes hush-fade-in {
+  from { opacity: 0; } to { opacity: 1; }
+}
+@keyframes hush-slide-in {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+/* ── Main content area ──────────────────────────── */
+.hush-main {
+  padding: 24px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+@media (max-width: 600px) {
+  .hush-main { padding: 16px; }
+}
+
+.hush-page-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 20px;
+  flex-wrap: wrap;
+}
+.hush-page-title h1 {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+.hush-page-title p {
+  font-size: 13px;
+  color: var(--hush-text-dim);
+  margin: 4px 0 0;
+}
+
+/* ── Cards / panels ─────────────────────────────── */
+.hush-card {
+  background: var(--hush-bg-1);
+  border: 1px solid var(--hush-stroke);
+  border-radius: var(--hush-radius);
+  padding: 18px;
+}
+.hush-card + .hush-card { margin-top: 16px; }
+
+.hush-grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  /* Phones (and tablets in desktop-site mode) get a single
+     full-width column so the stat labels never clip mid-word.
+     Bumped the breakpoint from 480 → 768 to also cover larger
+     Android phones (412 dp) and small tablets in portrait. */
+  .hush-grid-cards { grid-template-columns: 1fr; }
+}
+
+.hush-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  background: var(--hush-bg-1);
+  border: 1px solid var(--hush-stroke);
+  border-radius: var(--hush-radius);
+}
+.hush-stat-label {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--hush-text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  /* Allow uppercase tracked-out labels to wrap to a second line
+     on very narrow cards instead of clipping. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.hush-stat-value {
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.hush-stat-sub  { font-size: 12px; color: var(--hush-text-dim); }
+.hush-stat.is-online .hush-stat-value  { color: var(--hush-green); }
+.hush-stat.is-warn   .hush-stat-value  { color: var(--hush-amber); }
+
+/* ── Buttons ────────────────────────────────────── */
+.hush-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--hush-radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 100ms, transform 60ms;
+  white-space: nowrap;
+}
+.hush-btn-primary {
+  background: var(--hush-cyan);
+  color: #000;
+}
+.hush-btn-primary:hover  { background: var(--hush-cyan-2); }
+.hush-btn-primary:active { transform: scale(0.98); }
+.hush-btn-secondary {
+  background: var(--hush-bg-2);
+  color: var(--hush-text);
+  border-color: var(--hush-stroke-2);
+}
+.hush-btn-secondary:hover { background: #1A2B4A; }
+.hush-btn-danger {
+  background: rgba(239,68,68,0.16);
+  color: #FECACA;
+  border-color: rgba(239,68,68,0.36);
+}
+.hush-btn-danger:hover { background: rgba(239,68,68,0.24); }
+.hush-btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Forms ──────────────────────────────────────── */
+.hush-field { display: flex; flex-direction: column; gap: 6px; }
+.hush-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hush-text-dim);
+  letter-spacing: 0.3px;
+}
+.hush-input, .hush-textarea, .hush-select {
+  width: 100%;
+  background: var(--hush-bg-0);
+  color: var(--hush-text);
+  border: 1px solid var(--hush-stroke-2);
+  border-radius: var(--hush-radius-sm);
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 100ms;
+}
+.hush-input:focus, .hush-textarea:focus, .hush-select:focus {
+  border-color: var(--hush-cyan);
+}
+.hush-textarea { min-height: 100px; resize: vertical; }
+.hush-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.hush-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.hush-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.hush-toggle-track {
+  width: 36px;
+  height: 20px;
+  border-radius: 99px;
+  background: var(--hush-bg-2);
+  border: 1px solid var(--hush-stroke-2);
+  position: relative;
+  transition: background 100ms;
+}
+.hush-toggle-thumb {
+  position: absolute;
+  top: 1px; left: 1px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--hush-text-dim);
+  transition: transform 120ms, background 120ms;
+}
+.hush-toggle input:checked + .hush-toggle-track {
+  background: rgba(6,182,212,0.32);
+  border-color: var(--hush-cyan);
+}
+.hush-toggle input:checked + .hush-toggle-track .hush-toggle-thumb {
+  transform: translateX(16px);
+  background: var(--hush-cyan);
+}
+
+/* ── Tables ─────────────────────────────────────── */
+.hush-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--hush-stroke);
+  border-radius: var(--hush-radius);
+  background: var(--hush-bg-1);
+}
+.hush-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.hush-table th, .hush-table td {
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 13px;
+  border-bottom: 1px solid var(--hush-stroke);
+}
+.hush-table th {
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  color: var(--hush-text-dim);
+  font-weight: 700;
+  text-transform: uppercase;
+  background: var(--hush-bg-1);
+  position: sticky;
+  top: 0;
+}
+.hush-table tr:last-child td { border-bottom: none; }
+.hush-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* Mobile: collapse table cells to stacked rows. */
+@media (max-width: 600px) {
+  .hush-table-wrap { border: none; background: transparent; overflow: visible; }
+  .hush-table, .hush-table tbody, .hush-table tr, .hush-table td, .hush-table th {
+    display: block;
+    width: 100%;
+    /* Override the desktop min-width: 640px we use to keep the
+       columns from cramping on desktop — on mobile we need the
+       table to live within the viewport, not force a horizontal
+       scroll. */
+    min-width: 0;
+  }
+  .hush-table thead { display: none; }
+  .hush-table tr {
+    background: var(--hush-bg-1);
+    border: 1px solid var(--hush-stroke);
+    border-radius: var(--hush-radius);
+    margin-bottom: 12px;
+    padding: 12px;
+  }
+  .hush-table td {
+    border: none;
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .hush-table td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    color: var(--hush-text-dim);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+}
+
+/* ── Badges + status pills ───────────────────────── */
+.hush-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: 1px solid var(--hush-stroke-2);
+}
+.hush-pill.is-online   { background: rgba(16,185,129,0.16); color: #6EE7B7; border-color: rgba(16,185,129,0.45); }
+.hush-pill.is-offline  { background: var(--hush-bg-2);     color: var(--hush-text-dim); }
+.hush-pill.is-blocked  { background: rgba(239,68,68,0.16); color: #FCA5A5; border-color: rgba(239,68,68,0.45); }
+.hush-pill.is-info     { background: rgba(6,182,212,0.16); color: var(--hush-cyan-2); border-color: rgba(6,182,212,0.45); }
+.hush-pill.is-warning  { background: rgba(245,158,11,0.16); color: #FCD34D; border-color: rgba(245,158,11,0.45); }
+.hush-pill.is-critical { background: rgba(239,68,68,0.16); color: #FCA5A5; border-color: rgba(239,68,68,0.45); }
+
+/* ── Empty / loading states ──────────────────────── */
+.hush-empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--hush-text-dim);
+  font-size: 14px;
+}
+.hush-skeleton {
+  height: 14px;
+  background: linear-gradient(90deg, var(--hush-bg-2), #1f2c4a, var(--hush-bg-2));
+  background-size: 200% 100%;
+  animation: hush-shimmer 1.4s linear infinite;
+  border-radius: 6px;
+}
+@keyframes hush-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: -200% 50%; }
+}
+
+/* ── Toast theme ─────────────────────────────────── */
+.hush-toast {
+  background: var(--hush-bg-1) !important;
+  border: 1px solid var(--hush-stroke-2) !important;
+  color: var(--hush-text) !important;
+}
+
+/* ── Scrollbar (subtle) ──────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--hush-bg-2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: #2A3A5A; }

@@ -1,10 +1,14 @@
 {
-  "versionCode": 293,
-  "versionName": "1.42.93",
-  "apkUrl": "https://hushtv.xyz/hushtv.apk",
+  "versionCode": 385,
+  "versionName": "1.43.85",
+  "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
-  "releasedAt": "2026-04-29",
+  "releasedAt": "2026-05-05",
+  "channel": "dev",
   "changelog": [
-    "Unified the brand wordmark across the entire app — same 'hush' (white) + 'tv.' (cyan) recipe used in the cinematic splash screen now drives the Android launcher icon (all densities, legacy + adaptive), the Leanback TV banner, and both the expanded and collapsed states of the TV side rail. The wordmark is rendered into a single drawable resource (ic_hushtv_logo.png) so every surface is pixel-identical and scales responsively from 48 dp collapsed-rail through 192 dp xxxhdpi launcher to 1280 × 720 TV banner with no hand-tuned per-context code."
+    "Performance: removed the focus magnify (cards growing 1.05–1.10x on focus) and colored glow shadows app-wide. Even though graphicsLayer is hardware-accelerated, every animating card triggered a layer composition pass and a redraw of the surrounding rail every focus change — on Fire Sticks and lower-end Google TV that stacked across visible cards and tanked scroll framerate.",
+    "Reduced the central tvFocusable Modifier (used by every screen) to: 2dp cyan border on focus + cyan tint background fill. No GPU layer, no animation timeline, no scale clipping the screen edge.",
+    "Fixed magnify-clip bug: the leftmost card in every rail no longer bleeds past x=0 on focus.",
+    "Stripped 26 scale animations + 17 graphicsLayer scaleX/Y blocks + 5 colored shadow glow blocks across home rows, browse, collections, decade years, themed catalog/detail."
   ]
 }

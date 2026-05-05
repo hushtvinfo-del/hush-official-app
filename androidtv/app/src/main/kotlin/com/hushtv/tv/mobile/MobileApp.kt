@@ -100,6 +100,30 @@ fun MobileApp() {
             composable("msearch/{playlistId}") { bs ->
                 MobileSearchScreen(nav, bs.arguments?.getString("playlistId") ?: "")
             }
+            // HushXXX full-screen takeover, mirrors the TV route.
+            composable("mhushxxx/{playlistId}") { bs ->
+                val playlistId = bs.arguments?.getString("playlistId") ?: ""
+                var showDmca by remember { mutableStateOf(false) }
+                com.hushtv.tv.ui.hushxxx.HushXxxScreen(
+                    onPlayScene = { url, title ->
+                        nav.navigate(
+                            mobilePlayerRoute(
+                                playlistId = playlistId,
+                                streamUrl = url,
+                                channelName = title,
+                                isLive = false,
+                            ),
+                        )
+                    },
+                    onDmcaOpen = { showDmca = true },
+                    onDismiss = { nav.popBackStack() },
+                )
+                if (showDmca) {
+                    com.hushtv.tv.ui.hushxxx.HushXxxDmcaDialog(
+                        onDismiss = { showDmca = false },
+                    )
+                }
+            }
             composable("mdiag") { MobileDiagnosticsScreen(nav) }
             composable("mspeed") { MobileSpeedTestScreen(nav) }
             composable("mrequests/{playlistId}") { bs ->
@@ -112,6 +136,12 @@ fun MobileApp() {
                 com.hushtv.tv.ui.requests.MobileRequestDetailScreen(
                     nav = nav,
                     requestId = bs.arguments?.getString("requestId") ?: "",
+                    playlistId = bs.arguments?.getString("playlistId") ?: "",
+                )
+            }
+            composable("mrecordings/{playlistId}") { bs ->
+                MobileMyRecordingsScreen(
+                    nav = nav,
                     playlistId = bs.arguments?.getString("playlistId") ?: "",
                 )
             }
@@ -178,6 +208,31 @@ fun MobileApp() {
                     vodStreamId = bs.arguments?.getString("vodId")?.toIntOrNull(),
                     vodKind = bs.arguments?.getString("vodKind"),
                     vodPoster = bs.arguments?.getString("vodPoster")?.let(Uri::decode),
+                )
+            }
+
+            // ── Themed list detail (mobile-optimized) ──
+            composable("themedetail/{playlistId}/{themeId}") { bs ->
+                MobileThemedDetailScreen(
+                    nav = nav,
+                    playlistId = bs.arguments?.getString("playlistId") ?: "",
+                    themeId = bs.arguments?.getString("themeId") ?: "",
+                )
+            }
+            // ── Decade → year picker (mobile-optimized) ──
+            composable("decadeyears/{playlistId}/{startYear}") { bs ->
+                MobileDecadeYearsScreen(
+                    nav = nav,
+                    playlistId = bs.arguments?.getString("playlistId") ?: "",
+                    decadeStartYear = bs.arguments?.getString("startYear")?.toIntOrNull() ?: 0,
+                )
+            }
+            // ── Year movies grid (mobile-optimized) ──
+            composable("yearmovies/{playlistId}/{year}") { bs ->
+                MobileYearMoviesScreen(
+                    nav = nav,
+                    playlistId = bs.arguments?.getString("playlistId") ?: "",
+                    year = bs.arguments?.getString("year")?.toIntOrNull() ?: 0,
                 )
             }
         }

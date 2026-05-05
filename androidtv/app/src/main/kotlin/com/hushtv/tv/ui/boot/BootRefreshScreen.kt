@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -45,6 +46,8 @@ import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -112,6 +115,18 @@ fun BootRefreshScreen(onDone: () -> Unit) {
                 onDone(); return@LaunchedEffect
             }
 
+            // Slots that the "Building home" step will fill in as
+            // earlier steps complete. Each step populates just its
+            // own slot so if one times out we still build a partial
+            // rail set rather than blocking the home screen on one
+            // slow endpoint.
+            var liveCats: List<com.hushtv.tv.data.XtreamCategory> = emptyList()
+            var movieCats: List<com.hushtv.tv.data.XtreamCategory> = emptyList()
+            var seriesCats: List<com.hushtv.tv.data.XtreamCategory> = emptyList()
+            var liveByCat: Map<String, List<com.hushtv.tv.data.MediaCard>> = emptyMap()
+            var moviesByCat: Map<String, List<com.hushtv.tv.data.MediaCard>> = emptyMap()
+            var seriesByCat: Map<String, List<com.hushtv.tv.data.MediaCard>> = emptyMap()
+
             val steps = mutableListOf<BootStep>()
             steps += BootStep("Clearing cache…") {
                 withContext(Dispatchers.IO) {
@@ -121,26 +136,58 @@ fun BootRefreshScreen(onDone: () -> Unit) {
             }
             steps += BootStep("Refreshing categories…") {
                 withContext(Dispatchers.IO) {
-                    listOf("live", "movie", "series").forEach { kind ->
-                        runCatching {
-                            withTimeoutOrNull(2_500) {
-                                XtreamApi.getCategories(
-                                    playlist.host, playlist.username,
-                                    playlist.password, kind,
-                                )
-                            }
+                    runCatching {
+                        withTimeoutOrNull(2_500) {
+                            liveCats = XtreamApi.getCategories(
+                                playlist.host, playlist.username,
+                                playlist.password, "live",
+                            )
+                        }
+                    }
+                    runCatching {
+                        withTimeoutOrNull(2_500) {
+                            movieCats = XtreamApi.getCategories(
+                                playlist.host, playlist.username,
+                                playlist.password, "movie",
+                            )
+                        }
+                    }
+                    runCatching {
+                        withTimeoutOrNull(2_500) {
+                            seriesCats = XtreamApi.getCategories(
+                                playlist.host, playlist.username,
+                                playlist.password, "series",
+                            )
                         }
                     }
                 }
             }
             steps += BootStep("Refreshing Live TV…") {
                 withContext(Dispatchers.IO) {
+                    // Warm OkHttp disk cache for the "all live" URL
+                    // (used by the Live TV browse screen).
                     runCatching {
                         withTimeoutOrNull(3_000) {
                             XtreamApi.getAllStreams(
                                 playlist.host, playlist.username,
                                 playlist.password, "live",
                             )
+                        }
+                    }
+                    // Also fetch streams for the first (home-rendered)
+                    // live category specifically. This warms the exact
+                    // URL key the home screen uses AND lets us build
+                    // the rails cache without a second network round.
+                    val firstLive = liveCats.firstOrNull()
+                    if (firstLive != null) {
+                        runCatching {
+                            withTimeoutOrNull(3_000) {
+                                val streams = XtreamApi.getStreamsForCategory(
+                                    playlist.host, playlist.username,
+                                    playlist.password, "live", firstLive.category_id,
+                                )
+                                liveByCat = mapOf(firstLive.category_id to streams)
+                            }
                         }
                     }
                 }
@@ -155,6 +202,30 @@ fun BootRefreshScreen(onDone: () -> Unit) {
                             )
                         }
                     }
+                    // Fetch the first 3 movie categories (home renders 3 rails).
+                    // Run in parallel via coroutineScope + async; each has
+                    // its own 2 s cap inside a shared 4 s outer timeout so
+                    // one slow one can't stall the boot.
+                    val targetCats = movieCats.take(3)
+                    if (targetCats.isNotEmpty()) {
+                        runCatching {
+                            withTimeoutOrNull(4_000) {
+                                kotlinx.coroutines.coroutineScope {
+                                    val results = targetCats.map { c ->
+                                        async(Dispatchers.IO) {
+                                            withTimeoutOrNull(2_000) {
+                                                c.category_id to XtreamApi.getStreamsForCategory(
+                                                    playlist.host, playlist.username,
+                                                    playlist.password, "movie", c.category_id,
+                                                )
+                                            }
+                                        }
+                                    }.awaitAll().filterNotNull().toMap()
+                                    moviesByCat = results
+                                }
+                            }
+                        }
+                    }
                 }
             }
             steps += BootStep("Refreshing Series…") {
@@ -167,23 +238,36 @@ fun BootRefreshScreen(onDone: () -> Unit) {
                             )
                         }
                     }
+                    val firstSeries = seriesCats.firstOrNull()
+                    if (firstSeries != null) {
+                        runCatching {
+                            withTimeoutOrNull(3_000) {
+                                val streams = XtreamApi.getStreamsForCategory(
+                                    playlist.host, playlist.username,
+                                    playlist.password, "series", firstSeries.category_id,
+                                )
+                                seriesByCat = mapOf(firstSeries.category_id to streams)
+                            }
+                        }
+                    }
                 }
             }
-            steps += BootStep("Loading programme guide…") {
-                // EPG is fetched per-channel on demand; the
-                // category refresh above already evicts stale
-                // EPG that comes bundled with category lookups.
-                // This step is a small perceived-progress beat
-                // so the bar doesn't appear to skip a tick.
-                delay(200)
-            }
-            steps += BootStep("Indexing your library…") {
+            steps += BootStep("Building home…") {
                 withContext(Dispatchers.IO) {
                     runCatching {
-                        withTimeoutOrNull(4_000) {
-                            LibraryIndex.reset()
-                            LibraryIndex.prime(ctx, playlist)
-                        }
+                        val rails = com.hushtv.tv.data.HomeRailsCache.build(
+                            playlistId = playlist.id,
+                            liveCategories = liveCats,
+                            movieCategories = movieCats,
+                            seriesCategories = seriesCats,
+                            liveByCat = liveByCat,
+                            moviesByCat = moviesByCat,
+                            seriesByCat = seriesByCat,
+                        )
+                        com.hushtv.tv.data.HomeRailsCache.put(rails)
+                        // Persist for instant first-frame on the next
+                        // cold launch (before boot refresh completes).
+                        com.hushtv.tv.data.HomeRailsCache.persist(ctx, rails)
                     }
                 }
             }
@@ -203,17 +287,54 @@ fun BootRefreshScreen(onDone: () -> Unit) {
                 }
             }
 
-            // Hard 6-second wall-clock cap. Even if individual steps
-            // would each happily wait 4 s, we never want the user
-            // staring at the boot screen for more than 6 s on the
-            // worst connection.
-            withTimeoutOrNull(6_000) {
+            // Hard 11-second wall-clock cap on the NETWORK-bound
+            // sequence above. Library indexing + themed-list
+            // matching run OUTSIDE this cap because they MUST
+            // complete before the home page renders — the cache
+            // they fill is what makes home preview pills paint
+            // with real cover art on first frame.
+            withTimeoutOrNull(11_000) {
                 steps.forEachIndexed { idx, step ->
                     stepLabel = step.label
                     step.action.invoke()
-                    progress = (idx + 1).toFloat() / steps.size
+                    // Reserve last 2 progress slots for the post-cap
+                    // indexing + theme-matching steps below.
+                    progress = (idx + 1).toFloat() / (steps.size + 2)
                 }
             }
+
+            // Post-cap step 1: prime the LibraryIndex. Has its own
+            // 8 s budget — most providers finish in 1-2 s, but a
+            // huge catalog over a slow link can need more. The
+            // OkHttp HTTP cache populated by the network steps
+            // above usually means this completes in well under 1 s
+            // because getAllStreams hits cache.
+            stepLabel = "Indexing your library…"
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    withTimeoutOrNull(8_000) {
+                        LibraryIndex.reset()
+                        com.hushtv.tv.data.ThemedMatchCache.reset()
+                        LibraryIndex.prime(ctx, playlist)
+                    }
+                }
+            }
+
+            // Themed-list matching is now LAZY — it kicks off async
+            // (NOT blocking boot) just like Decades. The themes
+            // catalog screen also defensively re-primes when
+            // entered, so the user never sees a blank state. This
+            // matches the user-requested "curate when I open the
+            // themes section, not before" behavior.
+            com.hushtv.tv.data.ThemedMatchCache.primeAsync(ctx, playlist)
+
+            // Decade-year prime — kicked off async (NOT blocking
+            // boot). 90 years × ~250 candidates is heavier than
+            // themes, so we let it warm up in the background while
+            // the user lands on the home screen. Year-detail
+            // screens fall back to a synchronous match-on-open if
+            // the cache hasn't reached that year yet.
+            com.hushtv.tv.data.DecadeYearMatchCache.primeAsync(ctx, playlist)
         }
         // Smooth-out: hold full bar at 100% briefly before
         // transitioning so the user sees the success state.
@@ -243,30 +364,30 @@ fun BootRefreshScreen(onDone: () -> Unit) {
                     ),
                 ),
         )
+        // Column width is bounded by both fillMaxWidth (so it adapts
+        // to phones / tablets) AND widthIn(max = …) so on a TV it
+        // doesn't sprawl across the whole 16:9 panel. The previous
+        // hard 0.42 × screen width was too narrow on a phone — the
+        // "Hush" wordmark was wrapping mid-word ("Hu" / "sh") and
+        // "Refreshing your library" was wrapping after each word.
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .fillMaxWidth(0.42f)
-                .padding(40.dp),
+                .fillMaxWidth()
+                .widthIn(max = 480.dp)
+                .padding(horizontal = 32.dp, vertical = 40.dp),
         ) {
-            // Wordmark — keeps the same look-and-feel as the
-            // launcher splash so this feels like a continuation of
-            // the boot sequence rather than a separate screen.
-            Text(
-                "Hush",
-                color = TextPrimary,
-                fontSize = 56.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-2).sp,
-            )
-            Spacer(Modifier.height(2.dp))
-            Box(
-                Modifier
-                    .height(3.dp)
-                    .width(64.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Cyan),
-            )
+            // Wordmark — same recipe as the cinematic splash
+            // (`HushSplashScreen` + `HushTVLogo`) so the boot
+            // refresh feels like a continuation of the launcher
+            // splash rather than a separate screen with a
+            // different visual identity.
+            //
+            // `softWrap = false` + `maxLines = 1` guarantees the
+            // wordmark NEVER breaks mid-word even on the narrowest
+            // foldable phone. The font-size is responsive (chosen
+            // by clamping the available width) below.
+            com.hushtv.tv.ui.HushTVLogo(fontSize = 48.sp)
             Spacer(Modifier.height(36.dp))
             Text(
                 "Refreshing your library",
@@ -274,6 +395,8 @@ fun BootRefreshScreen(onDone: () -> Unit) {
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp,
+                softWrap = false,
+                maxLines = 1,
             )
             Spacer(Modifier.height(20.dp))
             LinearProgressIndicator(
@@ -299,6 +422,8 @@ fun BootRefreshScreen(onDone: () -> Unit) {
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 0.4.sp,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }

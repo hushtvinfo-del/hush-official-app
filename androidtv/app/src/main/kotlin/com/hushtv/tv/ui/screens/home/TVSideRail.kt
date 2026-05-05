@@ -196,6 +196,7 @@ fun TVHubRail(
     playlistId: String,
     nav: androidx.navigation.NavController,
     homeFocus: FocusRequester,
+    onExitRight: (() -> Unit)? = null,
 ) {
     val tabs = topNavTabs(
         playlistId = playlistId,
@@ -215,6 +216,7 @@ fun TVHubRail(
             }
         },
         onSettings = { nav.navigate("settings/$playlistId") },
+        onExitRight = onExitRight,
     )
 }
 
@@ -243,6 +245,7 @@ fun TVSideRail(
     firstItemFocus: FocusRequester,
     onSelect: (SideRailItem) -> Unit,
     onSettings: () -> Unit,
+    onExitRight: (() -> Unit)? = null,
 ) {
     // Track WHICH item currently has focus and WHEN it gained focus
     // — we only act on focus that has been stable for [HOLD_MS] ms.
@@ -321,6 +324,7 @@ fun TVSideRail(
                                 else focusedItemKey
                             },
                             onSelect = { onSelect(item) },
+                            onExitRight = onExitRight,
                         )
                     }
                 }
@@ -342,6 +346,7 @@ fun TVSideRail(
                         else focusedItemKey
                     },
                     onSelect = { onSettings() },
+                    onExitRight = onExitRight,
                 )
             }
             // Solid opaque divider — fully opaque dark grey so the
@@ -433,8 +438,8 @@ private fun HushBrandTile(size: androidx.compose.ui.unit.Dp) {
     // top for depth. Matches the reference's blue triangle.
     val playFill = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF60A5FA),
-            Color(0xFF2563EB),
+            Color(0xFF59BFF2),
+            Color(0xFF1E90FF),
         ),
     )
     val haloRadiusPx = with(androidx.compose.ui.platform.LocalDensity.current) {
@@ -550,6 +555,7 @@ private fun RailItem(
     focusRequester: FocusRequester?,
     onFocusChanged: (Boolean) -> Unit,
     onSelect: () -> Unit,
+    onExitRight: (() -> Unit)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     // Focus-driven visuals only render once the rail has actually
@@ -583,6 +589,24 @@ private fun RailItem(
             .onFocusChanged {
                 focused = it.isFocused
                 onFocusChanged(it.isFocused)
+            }
+            // Intercept RIGHT (and dpad-Center is unrelated). When
+            // the user is on this rail item and presses RIGHT, jump
+            // focus back into the content area's first card via the
+            // explicit callback wired by the parent screen. This is
+            // the ONLY reliable way out of the rail because Compose's
+            // default 2D spatial-focus search picks a card based on
+            // the item's vertical position — meaning it would land
+            // on a different card than the one the user came from
+            // (or skip the page entirely if no card is vertically
+            // aligned with the rail row). The callback resolves the
+            // page's first focus requester explicitly.
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (ev.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                val cb = onExitRight ?: return@onPreviewKeyEvent false
+                cb()
+                true
             }
             .focusable()
             .clickable(onClick = onSelect)

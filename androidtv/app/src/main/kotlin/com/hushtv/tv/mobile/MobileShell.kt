@@ -60,7 +60,7 @@ fun MobileShell(nav: NavController, playlistId: String) {
                 "movies" -> MobileBrowseScreen(nav, playlistId, "movie", inline = true)
                 "series" -> MobileBrowseScreen(nav, playlistId, "series", inline = true)
                 "live" -> MobileLiveHubScreen(nav, playlistId)
-                "hushplus" -> com.hushtv.tv.ui.hushplus.MobileHushPlusScreen()
+                "hushplus" -> com.hushtv.tv.ui.hushplus.MobileHushPlusScreen(nav)
                 "settings" -> MobileSettingsScreen(nav, playlistId)
                 else -> MobileHomeScreen(nav, playlistId)
             }

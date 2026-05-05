@@ -35,8 +35,11 @@ data class HushAddon(
 
 object HushPlusContent {
 
-    /** Cyan — same primary accent as the rest of the app. */
-    private val Cyan = Color(0xFF22D3EE)
+    /** Brand accent — same primary accent as the rest of the app
+     *  (DodgerBlue post-v1.43 rebrand). Variable name kept as "Cyan"
+     *  so we don't have to touch every callsite in this object's
+     *  pillar definitions. */
+    private val Cyan = Color(0xFF1E90FF)
     private val Amber = Color(0xFFF59E0B)
     private val Magenta = Color(0xFFC026D3)
     private val Crimson = Color(0xFFEF4444)
@@ -130,6 +133,21 @@ object HushPlusContent {
             heroImageUrl = null,
             accent = Crimson,
             eyebrow = "INCLUDED",
+        ),
+        HushAddon(
+            key = "xxx",
+            name = "HushXXX",
+            tagline = "Adult-only. For 18+ members.",
+            description = "A dedicated adult library — curated scenes, full cast & studio info, and a fast modern interface. Adults only. Included in Hush+.",
+            features = listOf(
+                "Curated scene library with full metadata",
+                "Performer & studio profiles",
+                "Rich categories, search & discovery",
+                "Age-gated — 18+ required",
+            ),
+            heroImageUrl = null,
+            accent = Color(0xFFE91E63),       // Hot pink — distinct from the rest of the suite.
+            eyebrow = "18+ ONLY",
         ),
     )
 

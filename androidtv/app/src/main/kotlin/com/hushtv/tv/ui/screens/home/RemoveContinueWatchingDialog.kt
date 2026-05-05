@@ -39,6 +39,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.hushtv.tv.ui.screens.clickableWithEnter
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.Inter
@@ -72,26 +74,26 @@ fun RemoveContinueWatchingDialog(
         ready = true
     }
 
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            // Full-screen dialog: we draw our own dim layer. Without
+            // this, Compose caps the dialog window at ~280dp wide and
+            // our Surface gets clipped.
+            usePlatformDefaultWidth = false,
+        ),
+    ) {
+    // Dim-scrim Box. Crucially this is NOT focusable() and has NO key
+    // handler — otherwise focus latches onto the scrim instead of the
+    // Remove button and every key gets swallowed (the bug fixed in
+    // v1.43.36). The Dialog window above already isolates focus from
+    // the home pager behind us, so no key-eating is needed here.
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xE6000000))
-            .focusable()
-            .onKeyEvent { ev ->
-                // Eat all Enter/OK events during the debounce window so the
-                // leftover KeyUp from the long-press can't auto-confirm.
-                if (!ready &&
-                    (ev.key == Key.Enter || ev.key == Key.DirectionCenter ||
-                        ev.key == Key.NumPadEnter)
-                ) {
-                    return@onKeyEvent true
-                }
-                if (ev.type == KeyEventType.KeyDown &&
-                    (ev.key == Key.Back || ev.key == Key.Escape)
-                ) {
-                    onDismiss(); true
-                } else false
-            },
+            .background(Color(0xE6000000)),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
@@ -153,7 +155,9 @@ fun RemoveContinueWatchingDialog(
                         label = "Remove",
                         primary = true,
                         focusRequester = removeFocus,
-                        onClick = onConfirm,
+                        // Debounce: ignore the leftover OK press from
+                        // the long-press that opened this dialog.
+                        onClick = { if (ready) onConfirm() },
                     )
                     DialogButton(
                         label = "Cancel",
@@ -163,6 +167,7 @@ fun RemoveContinueWatchingDialog(
                 }
             }
         }
+    }
     }
 }
 

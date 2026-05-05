@@ -163,12 +163,6 @@ private fun GenreCardView(
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()
             .clickableWithEnter(onClick)
-            .shadow(
-                elevation = if (focused) 20.dp else 4.dp,
-                shape = cardShape,
-                ambientColor = genre.accent,
-                spotColor = genre.accent,
-            )
             .clip(cardShape)
             .background(
                 // Fallback gradient (also shows through if the backdrop

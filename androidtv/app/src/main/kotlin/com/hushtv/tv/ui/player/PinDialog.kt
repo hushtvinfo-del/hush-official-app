@@ -153,7 +153,7 @@ fun PinDialog(
                                         androidx.compose.foundation.shape.CircleShape
                                     )
                                     .border(
-                                        1.dp, Color(0x5506B6D4),
+                                        1.dp, Cyan.copy(alpha = 0.33f),
                                         androidx.compose.foundation.shape.CircleShape
                                     )
                             )

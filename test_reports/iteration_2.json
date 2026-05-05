@@ -1,0 +1,53 @@
+{
+  "summary": "Second-opinion black-box pytest suite (20 tests) against the public HushTV Cloud DVR host at http://216.152.148.150/ and the OTA deploy host at https://hushtv.xyz/. 19 passed, 1 intentionally skipped (quota-402 path cannot be exercised black-box without pre-seeding 20 h of metadata on the remote fs). All 9 endpoints in the contract (health, quota, recordings list, record-now, delete-one, delete-all, stream 404, OTA version.json, APK download) respond as specified; nginx -> FastAPI reverse-proxy is transparent (422/200/404 pass through untouched).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/dvr/recordings/{rec_id}/stream (before mp4 content exists)",
+        "issue": "Returned 404 in all probed cases (acceptable per spec). Could not verify the positive-path 'nginx serves the mp4 once content exists' branch black-box because ffmpeg on the remote host cannot reach the unreachable test channel_url and auto-deletes the 0-byte file. A real channel would prove this; left unverified."
+      },
+      {
+        "endpoint": "POST /api/dvr/record-now (quota clamp 402)",
+        "issue": "The 402 'quota exhausted' path is not reachable black-box (would need to pre-seed 72000 s of metadata on the remote DVR fs). Code inspection of /tmp/dvr_service.py lines 356-367 shows the path is correctly wired: _user_seconds_used() >= DEFAULT_QUOTA_S raises HTTPException(402). Skipped test documents this."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_dvr_service.py",
+    "/app/test_reports/pytest/dvr_results.xml"
+  ],
+  "action_items": [
+    "(Optional, not a regression) Add an internal admin helper to pre-seed metadata for black-box quota-402 tests, OR expose a dry-run `?simulate_used_s=72000` query param gated to local-only.",
+    "(Code-review, low priority) /tmp/dvr_service.py uses deprecated @app.on_event('startup') — switch to FastAPI lifespan context manager before the next FastAPI major.",
+    "(Code-review, low priority) _list_user_recordings() re-reads every JSON file on every list/quota call — O(N) per user per request. Fine at hundreds of recordings; revisit if a power user ever hits quota.",
+    "(Code-review, low priority) /api/dvr/recordings/{rec_id}/stream walks every user dir to resolve rec_id — O(users). Not a security issue (no user_id auth on stream) but is O(users) per byte-range seek; consider a small in-memory index or require user_id on stream.",
+    "(Security note, explicit) Stream + thumb endpoints do NOT require user_id, so any client that learns a 16-hex rec_id can read another user's recording. Document this as intentional (rec_ids are 64-bit random) or scope them by user_id like delete does."
+  ],
+  "critical_code_review_comments": [
+    "record-now immediately writes metadata before verifying ffmpeg actually opened the stream — an unreachable URL produces a phantom 'recording' row that only disappears when _watch_recording sees the process exit (+2 s polling). Consumers listing right after a failed record-now will briefly see a status='recording' row that 30-60 s later vanishes. Acceptable per spec ('must not crash — mark failed/auto-delete') but worth noting for UI.",
+    "Stream / thumb endpoints expose any recording by rec_id with no user_id check — see action item.",
+    "_watch_recording polls proc.poll() every 2 s in the asyncio loop; for 120 concurrent recordings that is 60 RPS of syscalls. Negligible, but prefer asyncio.create_subprocess_exec + proc.wait() to avoid the polling tax.",
+    "Quota accounting uses meta['duration_s'] which is the REQUESTED duration, not actual duration. A user who records 10 h and stops at 1 min still has 10 h counted against quota until _watch_recording rewrites the meta on completion — and the current code does NOT update duration_s at completion (only ended_at_epoch, status, exit_code, size_bytes). So quota is over-counted for stopped/failed recordings. RECOMMEND: on completion, set meta['duration_s'] = ended_at_epoch - started_at_epoch when the recording ran shorter than requested.",
+    "delete_one accepts any 16-hex rec_id but does not verify the meta's user_id matches the caller — if an attacker guesses another user's rec_id they can delete it (the meta is looked up in the caller's dir so this is actually safe; just noting the implicit coupling).",
+    "No rate-limit on record-now; a malicious client could spawn MAX_CONCURRENT=120 ffmpeg processes and DoS the host. Consider per-user concurrency cap (e.g., 3)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_dvr_service.py (new, 20 tests)"
+  ],
+  "success_rate": {
+    "backend": "100% of runnable tests (19/19 passed, 1 skipped by design)",
+    "frontend": "N/A (testing_type: backend only)"
+  },
+  "test_credentials": "No credentials — user_id is a client-derived 16-hex. Tests generate fresh user_ids per run via secrets.token_hex(8) so they cannot collide with real users.",
+  "seed_data_creation": "Each record-now test created 1-2 short-lived 'recording' rows for a fresh user_id, then deleted them via DELETE /api/dvr/recordings/{rec_id} or the delete-all endpoint. Nothing left on the remote DVR host.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use /app/backend/tests/test_dvr_service.py as the DVR regression suite. It is fully self-contained (no DB fixtures, no auth) and targets the PUBLIC host http://216.152.148.150. Override DVR_BASE / DEPLOY_BASE env vars to point at a staging host. The two black-box gaps are (a) stream-serves-mp4 positive path (needs a real reachable channel_url) and (b) quota=0 clamp 402 (needs seeded metadata). Everything else including the OTA manifest on https://hushtv.xyz is green as of this run.",
+  "rca of the issue": "No live bug. Main agent's manual validation matched — all 9 endpoints + OTA are correct. Two soft findings worth the main agent's attention: (1) quota over-counts duration_s for stopped/failed recordings because _watch_recording never rewrites meta['duration_s'] to the ACTUAL elapsed seconds on exit; and (2) /stream + /thumb have no user_id guard, so any leaked rec_id exposes another user's mp4. Both are design-level; neither is blocking the current release."
+}

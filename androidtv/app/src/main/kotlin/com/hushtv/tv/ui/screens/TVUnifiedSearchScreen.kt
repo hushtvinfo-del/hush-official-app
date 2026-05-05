@@ -891,8 +891,17 @@ private fun UnifiedSearchBar(
                     .focusRequester(focusRequester)
                     .onFocusChanged { focused = it.isFocused }
                     .onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
-                            runCatching { downTarget.requestFocus() }
+                        // Google TV's IME dispatches KeyDown + KeyUp pairs;
+                        // consuming only KeyDown leaves the matching KeyUp
+                        // unconsumed which has crashed FocusOwnerImpl
+                        // .focusSearch on some hardware. Consume both
+                        // halves of the DPAD-Down event so the matching
+                        // KeyUp never reaches the framework's focus
+                        // search at all.
+                        if (ev.key == Key.DirectionDown) {
+                            if (ev.type == KeyEventType.KeyDown) {
+                                runCatching { downTarget.requestFocus() }
+                            }
                             true
                         } else false
                     },

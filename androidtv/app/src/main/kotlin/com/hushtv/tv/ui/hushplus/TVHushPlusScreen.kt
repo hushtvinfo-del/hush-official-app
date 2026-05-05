@@ -154,6 +154,18 @@ fun TVHushPlusScreen(nav: NavController, playlistId: String) {
             }
         }
     }
+
+    // HushXXX is its own full-screen experience — when the user
+    // confirms the addon detail pane (or just hits Enter on the
+    // sidebar entry) we navigate out of this screen entirely.
+    LaunchedEffect(selectedKey) {
+        if (selectedKey == "xxx") {
+            // Reset the sidebar selection so coming back lands on
+            // the overview, not back into HushXXX.
+            selectedKey = HushPlusContent.OVERVIEW_KEY
+            nav.navigate("hushxxx/$playlistId")
+        }
+    }
 }
 
 /* ───────────────────────── Sidebar ───────────────────────── */
@@ -225,6 +237,7 @@ private fun iconFor(key: String): ImageVector = when (key) {
     "books" -> Icons.Outlined.AutoStories
     "arcade" -> Icons.Outlined.SportsEsports
     "tube" -> Icons.Outlined.Subscriptions
+    "xxx" -> Icons.Outlined.Star   // pink accent differentiates it on the sidebar
     else -> Icons.Outlined.Star
 }
 

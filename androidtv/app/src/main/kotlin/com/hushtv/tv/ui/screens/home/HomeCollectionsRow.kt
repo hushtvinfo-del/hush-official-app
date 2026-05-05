@@ -181,12 +181,6 @@ private fun CollectionCardView(
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()
             .clickableWithEnter(onClick)
-            .shadow(
-                elevation = if (focused) 22.dp else 5.dp,
-                shape = cardShape,
-                ambientColor = coll.accent,
-                spotColor = coll.accent,
-            )
             .clip(cardShape)
             .background(
                 Brush.verticalGradient(
@@ -310,12 +304,6 @@ private fun SeeAllCardView(
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()
             .clickableWithEnter(onClick)
-            .shadow(
-                elevation = if (focused) 22.dp else 5.dp,
-                shape = cardShape,
-                ambientColor = Cyan,
-                spotColor = Cyan,
-            )
             .clip(cardShape)
             .background(
                 Brush.linearGradient(

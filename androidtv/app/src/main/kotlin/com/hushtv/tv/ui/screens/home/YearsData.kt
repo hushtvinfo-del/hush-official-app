@@ -1,24 +1,25 @@
 package com.hushtv.tv.ui.screens.home
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import coil.imageLoader
-import coil.request.ImageRequest
-import com.hushtv.tv.data.DiscoveryCache
-import com.hushtv.tv.data.TmdbService
+import com.hushtv.tv.data.HushDecadeYears
 
 /**
- * A single movie-release-year card.
+ * A single decade card on the home rail.
  *
- * [searchKeyword] matches the Xtream category exactly (`MOVIES - 2026`
- * etc). [backdropUrl] is populated async from TMDB using
- * `/discover/movie?primary_release_year=YYYY&sort_by=popularity.desc`.
+ * Field names are kept as the legacy "MovieYear" shape so the
+ * existing [HomeYearsRow] / [HomeYearsHeroLayer] composables can
+ * consume it without renaming hundreds of call-sites:
+ *
+ *   • [year]            → decade start year, e.g. 1990
+ *   • [searchKeyword]   → display label, e.g. "1990s"
+ *   • [tagline]         → decade subtitle, e.g. "Tarantino, Coens..."
+ *   • [accent]          → decade accent colour
+ *   • [gradientTop]     → fallback gradient when no backdrop loaded
+ *   • [gradientBottom]  → fallback gradient bottom
+ *   • [backdropUrl]     → hardcoded TMDB CDN URL of decade hero
+ *   • [xtreamCategoryId]→ unused for decades, kept for compat (null)
  */
 data class MovieYear(
     val year: Int,
@@ -28,78 +29,35 @@ data class MovieYear(
     val gradientTop: Color,
     val gradientBottom: Color,
     val backdropUrl: String? = null,
-    // Exact Xtream category ID on the user's primary provider.
     val xtreamCategoryId: String? = null,
-)
-
-// Hand-curated palette + copy per year. Three entries matches exactly
-// what the user's Xtream library has: MOVIES - 2026 / 2025 / 2024.
-private val MOVIE_YEARS_BASE = listOf(
-    MovieYear(
-        year = 2026,
-        searchKeyword = "MOVIES - 2026",
-        tagline = "Fresh releases from the current year.",
-        accent = Color(0xFF22D3EE),
-        gradientTop = Color(0xFF051B2E),
-        gradientBottom = Color(0xFF083A5E),
-        xtreamCategoryId = "475",
-    ),
-    MovieYear(
-        year = 2025,
-        searchKeyword = "MOVIES - 2025",
-        tagline = "The biggest blockbusters of 2025.",
-        accent = Color(0xFFF97316),
-        gradientTop = Color(0xFF2A1204),
-        gradientBottom = Color(0xFF5A2908),
-        xtreamCategoryId = "414",
-    ),
-    MovieYear(
-        year = 2024,
-        searchKeyword = "MOVIES - 2024",
-        tagline = "A year of hits and instant classics.",
-        accent = Color(0xFFC084FC),
-        gradientTop = Color(0xFF1B0B3A),
-        gradientBottom = Color(0xFF3D1769),
-        xtreamCategoryId = "325",
-    ),
+    /** Decade marketing title — "The Independent Boom" etc. */
+    val title: String = searchKeyword,
 )
 
 /**
- * Loads year cards with TMDB backdrops fetched async. Same
- * cache-first strategy as Discovery + Genres: read last-known-good
- * backdrops from SharedPreferences synchronously for instant cold
- * start, refresh in background.
+ * Ordered list of the 9 decade cards shown on the home page rail.
+ * Source of truth = [HushDecadeYears.all]. Pure mapping, no network,
+ * no caching needed — paints synchronously on the first frame.
+ *
+ * Order: NEWEST decade first (2020s → 1940s) so the first card
+ * focused on entry is the most recent / most relevant era for
+ * a typical library.
  */
 @Composable
-fun rememberMovieYears(): List<MovieYear> {
-    val ctx = LocalContext.current
-
-    var years by remember {
-        mutableStateOf(
-            MOVIE_YEARS_BASE.map { y ->
-                y.copy(backdropUrl = DiscoveryCache.loadYearBackdrop(ctx, y.year))
-            }
+fun rememberMovieYears(): List<MovieYear> = remember {
+    HushDecadeYears.all.reversed().map { decade ->
+        MovieYear(
+            year = decade.startYear,
+            searchKeyword = decade.label,                  // "1990s"
+            tagline = decade.subtitle,
+            title = decade.title,
+            accent = decade.accent,
+            // Subtle dark gradient fallback derived from the decade
+            // accent; only visible while the TMDB backdrop loads.
+            gradientTop = Color(0xFF0B1220),
+            gradientBottom = Color(0xFF05080F),
+            backdropUrl = decade.heroBackdropUrl,
+            xtreamCategoryId = null,
         )
     }
-
-    LaunchedEffect(Unit) {
-        val freshMap = runCatching {
-            TmdbService.backdropsForYears(MOVIE_YEARS_BASE.map { it.year })
-        }.getOrDefault(emptyMap())
-
-        if (freshMap.isEmpty()) return@LaunchedEffect
-
-        freshMap.forEach { (yr, url) -> DiscoveryCache.saveYearBackdrop(ctx, yr, url) }
-
-        years = MOVIE_YEARS_BASE.map { y ->
-            y.copy(backdropUrl = freshMap[y.year] ?: y.backdropUrl)
-        }
-
-        val loader = ctx.imageLoader
-        years.mapNotNull { it.backdropUrl }.forEach { url ->
-            loader.enqueue(ImageRequest.Builder(ctx).data(url).build())
-        }
-    }
-
-    return years
 }

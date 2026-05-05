@@ -125,6 +125,9 @@ fun MobileLiveHubScreen(
     var epgVersion by remember { mutableStateOf(0) }   // force recompose after EPG fetch
     var favVersion by remember { mutableStateOf(0) }   // force recompose after favorites toggle
     var recentVersion by remember { mutableStateOf(0) } // force recompose after recent update
+    // Bumps every ~8 s when the DVR reports a change in which channels
+    // are being recorded. Drives the pulsing red pill on each channel row.
+    val recVersion = com.hushtv.tv.data.rememberActiveRecordingVersion(playlistId)
     // Long-press quick-action sheet. Holds the target card or null.
     var actionCard by remember { mutableStateOf<MediaCard?>(null) }
     // Secondary sheet for "Set reminder…" chosen from the action menu.
@@ -464,11 +467,15 @@ fun MobileLiveHubScreen(
                 }
                 items(orderedChannels.withIndex().toList(), key = { "ch-${it.value.id}" }) { (idx, card) ->
                     val isFav = card.streamId in favSet
+                    val isRec = remember(recVersion, card.title) {
+                        com.hushtv.tv.data.DvrActiveState.isRecording(card.title)
+                    }
                     MobileLiveHubRow(
                         number = idx + 1,
                         card = card,
                         selected = card.streamId == selectedStreamId,
                         isFavorite = isFav,
+                        isRecording = isRec,
                         epgVersion = epgVersion,
                         onClick = {
                             selectedStreamId = card.streamId
@@ -863,6 +870,7 @@ private fun MobileLiveHubRow(
     card: MediaCard,
     selected: Boolean,
     isFavorite: Boolean,
+    isRecording: Boolean,
     epgVersion: Int,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -939,6 +947,10 @@ private fun MobileLiveHubRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                if (isRecording) {
+                    Spacer(Modifier.width(6.dp))
+                    MobileRecBadge()
+                }
                 if (isFavorite) {
                     Spacer(Modifier.width(6.dp))
                     Icon(
@@ -984,7 +996,7 @@ private fun RecentChannelChip(card: MediaCard, onClick: () -> Unit) {
         Modifier
             .clip(RoundedCornerShape(18.dp))
             .background(Color(0xFF112035))
-            .border(1.dp, Color(0x5506B6D4), RoundedCornerShape(18.dp))
+            .border(1.dp, Cyan.copy(alpha = 0.33f), RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1246,11 +1258,23 @@ private fun MobilePreviewSurface(
                 factory = {
                     PlayerView(it).apply {
                         useController = false
+                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                         this.player = player
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
                 update = { pv -> pv.player = player },
+            )
+            // Branded buffering overlay — Mobile Live TV hub.
+            com.hushtv.tv.ui.player.BufferingOverlay(
+                player = player,
+                content = com.hushtv.tv.ui.player.BufferingContent.LIVE_TV,
+                onRetry = {
+                    runCatching {
+                        player.prepare()
+                        player.play()
+                    }
+                },
             )
             // Fullscreen affordance pill (top-right).
             Row(
@@ -1613,3 +1637,32 @@ private fun EpgTimelineChip(
         }
     }
 }
+
+/**
+ * Small "● REC" pill reused by every channel row in the mobile live
+ * hub when that channel has an in-flight Cloud-DVR recording. Sized
+ * to sit flush next to the 13.sp channel title without dominating.
+ */
+@Composable
+private fun MobileRecBadge() {
+    val red = Color(0xFFEF4444)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(14.dp)
+            .background(Color(0x1FEF4444), RoundedCornerShape(3.dp))
+            .border(1.dp, red.copy(alpha = 0.55f), RoundedCornerShape(3.dp))
+            .padding(horizontal = 3.dp),
+    ) {
+        Box(Modifier.size(4.dp).background(red, CircleShape))
+        Spacer(Modifier.width(2.dp))
+        Text(
+            "REC",
+            color = red,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 0.6.sp,
+        )
+    }
+}
+

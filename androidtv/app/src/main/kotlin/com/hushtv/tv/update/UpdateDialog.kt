@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.hushtv.tv.ui.theme.Blue
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.Red
 import com.hushtv.tv.ui.theme.TextSecondary
@@ -160,7 +161,7 @@ fun UpdateDialog(
                             Modifier
                                 .size(44.dp)
                                 .background(
-                                    Brush.linearGradient(listOf(Color(0xFF3B82F6), Cyan)),
+                                    Brush.linearGradient(listOf(Blue, Cyan)),
                                     RoundedCornerShape(10.dp),
                                 ),
                             contentAlignment = Alignment.Center,
@@ -335,7 +336,7 @@ private fun DownloadingBody(pct: Float, bytesDownloaded: Long, bytesTotal: Long)
                 .fillMaxWidth(pct.coerceIn(0f, 1f))
                 .height(8.dp)
                 .background(
-                    Brush.horizontalGradient(listOf(Color(0xFF3B82F6), Cyan)),
+                    Brush.horizontalGradient(listOf(Blue, Cyan)),
                     RoundedCornerShape(4.dp),
                 )
         )
@@ -506,7 +507,7 @@ private fun FlatButton(
             brush = if (focused)
                 Brush.linearGradient(listOf(Cyan, Cyan))
             else
-                Brush.linearGradient(listOf(Color(0xFF3B82F6), Cyan)),
+                Brush.linearGradient(listOf(Blue, Cyan)),
             shape = RoundedCornerShape(12.dp),
         ).border(
             width = 2.dp,

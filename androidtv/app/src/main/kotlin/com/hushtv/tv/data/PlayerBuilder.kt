@@ -1,6 +1,12 @@
 package com.hushtv.tv.data
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -99,6 +105,41 @@ object PlayerBuilder {
             .setLoadControl(loadControl)
             .setRenderersFactory(renderers)
             .setMediaSourceFactory(msFactory)
+            // ── AudioAttributes for Dolby Digital + DTS auto-passthrough ──
+            // Tagging the player as USAGE_MEDIA + CONTENT_TYPE_MOVIE
+            // tells the platform's AudioPolicy this stream may carry
+            // surround content. Combined with `handleAudioFocus = true`
+            // this:
+            //   • Enables automatic Dolby Digital (AC-3), Dolby
+            //     Digital Plus (E-AC-3), and DTS passthrough over
+            //     HDMI when the connected AVR/soundbar advertises
+            //     support via EDID. ExoPlayer's `DefaultAudioSink`
+            //     queries `AudioCapabilities.getCapabilities(ctx)`
+            //     at build time and on every audio-output change,
+            //     so plugging in a surround receiver mid-session
+            //     automatically switches from PCM downmix to
+            //     bitstream passthrough — no app-level config.
+            //   • Falls back to PCM stereo / 5.1 downmix via the
+            //     device's hardware MediaCodec AC-3/EAC-3 decoder
+            //     when the output is just TV speakers — every Fire
+            //     TV stick from the 4K era onward ships with this
+            //     built in, so no FFmpeg extension is needed.
+            //   • Honours the system's "Surround Sound: Best
+            //     Available" toggle so users on Auto get Dolby
+            //     when their setup supports it and silent fallback
+            //     to stereo otherwise.
+            //
+            // We do NOT need to set `experimentalSetOffloadEnabled`
+            // (that's a power-saving / deep-buffer codepath, not
+            // related to surround). The simple AudioAttributes
+            // hint above is what unlocks the Dolby pipeline.
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
             .build()
             .apply {
                 setWakeMode(C.WAKE_MODE_NETWORK)
@@ -192,73 +233,357 @@ object PlayerBuilder {
             .joinToString("\n")
 
     /**
-     * Wire automatic reconnect on transient IO errors. Call ONCE per
-     * player. Returned `Player.Listener` is also added internally —
-     * pass it back to `player.removeListener(...)` if you want to
-     * detach early (otherwise the listener is GCed with the player).
+     * Wire automatic reconnect for both error AND silent-stall cases.
+     * Call ONCE per player after [setMediaItem] + [prepare].
      *
-     * Strategy:
-     *   1. Track an attempt counter, capped at MAX_AUTO_RETRIES.
-     *   2. On every `onPlayerError`, if the error is in the IO /
-     *      live-window family AND we're under the cap, log the event
-     *      and call `prepare()` immediately (ExoPlayer's
-     *      recommended recovery path).
-     *   3. On every `onPlaybackStateChanged(STATE_READY)`, reset
-     *      the counter — we're back in business.
+     * What it recovers from
+     * ─────────────────────
+     *   1. `onPlayerError` with any IO / parsing / live-window code.
+     *      ExoPlayer's "stream broke, give up" path. We re-prepare.
+     *   2. STATE_BUFFERING that lasts > [STALL_BUFFER_MS] while the
+     *      user wants playback. Often happens when a CDN edge stops
+     *      sending bytes without ever closing the socket — ExoPlayer
+     *      sits there politely waiting forever. We force a re-prepare.
+     *   3. STATE_READY but `currentPosition` not advancing for >
+     *      [STALL_FROZEN_MS]. The decoder thinks it's healthy but
+     *      isn't actually rendering — hardware decoder can wedge in
+     *      this state. Same fix: re-prepare.
+     *   4. ConnectivityManager reports network is back. If we're
+     *      stuck IDLE / errored at that moment (Wi-Fi just came back
+     *      from a 2-minute outage), kick a fresh prepare immediately
+     *      instead of waiting for the next backoff tick.
+     *
+     * Recovery strategy
+     * ─────────────────
+     *   • Track current position. For VOD, save it before re-prepare
+     *     and seekTo() it once the next STATE_READY arrives. For LIVE,
+     *     don't seek — the HLS source will rejoin at the live edge.
+     *   • Backoff between consecutive recovery attempts: 1 s, 2 s,
+     *     4 s, 8 s, capped at [MAX_BACKOFF_MS]. Avoids hammering a
+     *     downed CDN.
+     *   • Cap at [MAX_AUTO_RETRIES]. We pick a high cap on purpose:
+     *     a 5-retry cap exhausted in 5 seconds was the bug we saw
+     *     before, where users came back from a 30-second cable hiccup
+     *     to a permanently dead player.
+     *   • Reset the attempt counter only after [STABLE_PLAYBACK_MS]
+     *     of clean ready-state playback, NOT on the first STATE_READY
+     *     after recovery (which can flap right back into errors).
+     *
+     * Returned [Disposable] MUST be disposed when the caller's
+     * lifetime ends — it unregisters the network callback and the
+     * player listener.
      */
     fun attachAutoReconnect(
+        ctx: Context,
         player: ExoPlayer,
         channelName: String,
+        isLive: Boolean,
+        onRecovered: (() -> Unit)? = null,
         onMaxRetriesExceeded: (() -> Unit)? = null,
-    ): Player.Listener {
-        val ioErrorCodes = setOf(
-            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-            PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
-            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
-            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
-            PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
-            PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,
-            PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE,
-            PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
-        )
-        var attempts = 0
+    ): Disposable {
+        val handler = Handler(Looper.getMainLooper())
+        val state = ReconnectState()
+
+        fun scheduleRecovery(reason: String) {
+            // Already a recovery in flight? Skip — we'll get another
+            // signal if it failed.
+            if (state.recoveryInFlight) return
+            if (state.attempts >= MAX_AUTO_RETRIES) {
+                EventLog.log(
+                    "auto-reconnect",
+                    "$channelName GIVE UP after ${state.attempts} (${reason})",
+                )
+                onMaxRetriesExceeded?.invoke()
+                return
+            }
+            state.recoveryInFlight = true
+            state.attempts += 1
+            val backoff = backoffMsFor(state.attempts)
+            // Save the current position so we can seek back after
+            // re-prepare for VOD. For live, this is effectively a
+            // no-op — we never re-seek.
+            state.savedPositionMs = if (!isLive) {
+                runCatching { player.currentPosition }.getOrDefault(0L)
+            } else 0L
+            EventLog.log(
+                "auto-reconnect",
+                "$channelName retry=${state.attempts} reason=$reason " +
+                    "backoff=${backoff}ms savedPos=${state.savedPositionMs}ms",
+            )
+            handler.postDelayed({
+                if (state.disposed) return@postDelayed
+                runCatching {
+                    player.prepare()
+                    if (!isLive && state.savedPositionMs > 0L) {
+                        // Set a flag — actual seek happens on next
+                        // STATE_READY so the buffer is ready first.
+                        state.pendingSeek = true
+                    }
+                    if (!player.playWhenReady) player.playWhenReady = true
+                }
+            }, backoff)
+        }
+
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                if (error.errorCode in ioErrorCodes) {
-                    if (attempts < MAX_AUTO_RETRIES) {
-                        attempts++
-                        EventLog.log(
-                            "auto-reconnect",
-                            "$channelName attempt=$attempts code=${error.errorCodeName}",
-                        )
-                        // Re-prepare from the current MediaItem.
-                        // Default-MediaSource.SeekParameters means the
-                        // live source will rejoin at the live edge.
-                        runCatching { player.prepare() }
-                    } else {
-                        EventLog.log(
-                            "auto-reconnect",
-                            "$channelName GIVE UP after $attempts retries (${error.errorCodeName})",
-                        )
-                        onMaxRetriesExceeded?.invoke()
-                    }
-                }
-            }
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY && attempts > 0) {
+                if (state.disposed) return
+                if (error.errorCode in RECOVERABLE_ERRORS) {
+                    scheduleRecovery("err=${error.errorCodeName}")
+                } else {
                     EventLog.log(
                         "auto-reconnect",
-                        "$channelName recovered after $attempts attempt(s)",
+                        "$channelName non-recoverable code=${error.errorCodeName}",
                     )
-                    attempts = 0
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (state.disposed) return
+                when (playbackState) {
+                    Player.STATE_BUFFERING -> {
+                        if (state.bufferingSinceMs == 0L) {
+                            state.bufferingSinceMs = System.currentTimeMillis()
+                        }
+                        // Stop counting "stable playback" while buffering.
+                        state.readySinceMs = 0L
+                    }
+                    Player.STATE_READY -> {
+                        state.bufferingSinceMs = 0L
+                        state.recoveryInFlight = false
+                        if (state.pendingSeek) {
+                            // Restore VOD position now that the stream
+                            // is buffered enough to seek into.
+                            val pos = state.savedPositionMs
+                            state.pendingSeek = false
+                            if (pos > 0L) {
+                                runCatching { player.seekTo(pos) }
+                            }
+                        }
+                        // Fire the "we just recovered" signal exactly
+                        // once per recovery cycle. Triggered the first
+                        // time we hit STATE_READY after at least one
+                        // recovery attempt — the moment the picture
+                        // comes back. The flag is reset by the
+                        // watchdog when attempts drops back to 0
+                        // (after STABLE_PLAYBACK_MS of clean playback).
+                        if (state.attempts > 0 && !state.recoveryNotified) {
+                            state.recoveryNotified = true
+                            handler.post { onRecovered?.invoke() }
+                        }
+                        if (state.readySinceMs == 0L) {
+                            state.readySinceMs = System.currentTimeMillis()
+                        }
+                    }
+                    Player.STATE_IDLE -> {
+                        // Player gave up. If we're online, try right
+                        // away (subject to backoff); if we're offline,
+                        // the network callback will pick it up when we
+                        // come back.
+                        if (state.recoveryInFlight) return
+                        if (isOnline(ctx)) {
+                            scheduleRecovery("state=IDLE")
+                        } else {
+                            EventLog.log(
+                                "auto-reconnect",
+                                "$channelName IDLE while offline — waiting for network",
+                            )
+                        }
+                    }
+                    Player.STATE_ENDED -> { /* normal VOD end — ignore */ }
                 }
             }
         }
         player.addListener(listener)
-        return listener
+
+        // ── Stall watchdog ───────────────────────────────────────
+        // Polls every second on the main thread. Looks for two
+        // patterns the Player.Listener can't catch:
+        //   1. STATE_BUFFERING for too long with no error
+        //   2. STATE_READY but currentPosition isn't advancing
+        // and triggers a recovery in either case.
+        val watchdog = object : Runnable {
+            override fun run() {
+                if (state.disposed) return
+                val now = System.currentTimeMillis()
+
+                // 1. Long-buffer stall
+                val bufStart = state.bufferingSinceMs
+                if (bufStart != 0L && player.playWhenReady &&
+                    !state.recoveryInFlight &&
+                    now - bufStart > STALL_BUFFER_MS
+                ) {
+                    state.bufferingSinceMs = 0L
+                    scheduleRecovery("stall=buffer ${now - bufStart}ms")
+                }
+
+                // 2. Frozen position in READY
+                if (player.playbackState == Player.STATE_READY &&
+                    player.playWhenReady &&
+                    !state.recoveryInFlight &&
+                    state.bufferingSinceMs == 0L
+                ) {
+                    val pos = runCatching { player.currentPosition }.getOrDefault(0L)
+                    if (pos != state.lastPosMs) {
+                        state.lastPosMs = pos
+                        state.lastPosCheckMs = now
+                    } else if (state.lastPosCheckMs != 0L &&
+                        now - state.lastPosCheckMs > STALL_FROZEN_MS
+                    ) {
+                        state.lastPosCheckMs = now
+                        scheduleRecovery("stall=frozen pos=${pos}ms")
+                    }
+                } else {
+                    // Reset frozen-position tracker when not playing.
+                    state.lastPosMs = runCatching { player.currentPosition }
+                        .getOrDefault(0L)
+                    state.lastPosCheckMs = now
+                }
+
+                // 3. Reset attempts after sustained clean playback
+                val readyStart = state.readySinceMs
+                if (readyStart != 0L &&
+                    state.attempts > 0 &&
+                    now - readyStart > STABLE_PLAYBACK_MS
+                ) {
+                    EventLog.log(
+                        "auto-reconnect",
+                        "$channelName recovered (clean for ${(now - readyStart) / 1000}s)",
+                    )
+                    state.attempts = 0
+                    state.recoveryNotified = false
+                    state.readySinceMs = now // keep ticking, don't reset to 0
+                }
+
+                handler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+            }
+        }
+        handler.postDelayed(watchdog, WATCHDOG_INTERVAL_MS)
+
+        // ── Network callback ─────────────────────────────────────
+        // When connectivity returns AND we're not currently playing
+        // happily, immediately retry. Critical for "Wi-Fi was off
+        // for 2 minutes, came back, stream should resume".
+        val cm = ctx.applicationContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val netCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                if (state.disposed) return
+                handler.post {
+                    if (state.disposed) return@post
+                    val ps = player.playbackState
+                    val needsKick = ps == Player.STATE_IDLE ||
+                        (ps == Player.STATE_BUFFERING && player.playWhenReady) ||
+                        state.attempts > 0 // mid-recovery, accelerate it
+                    if (needsKick && !state.recoveryInFlight) {
+                        EventLog.log(
+                            "auto-reconnect",
+                            "$channelName network restored — kicking recovery",
+                        )
+                        // Reset backoff so we retry immediately.
+                        state.attempts = (state.attempts - 1).coerceAtLeast(0)
+                        scheduleRecovery("network=available")
+                    }
+                }
+            }
+            override fun onLost(network: Network) {
+                EventLog.log(
+                    "auto-reconnect",
+                    "$channelName network lost — staying calm, waiting for return",
+                )
+            }
+        }
+        runCatching {
+            val req = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            cm?.registerNetworkCallback(req, netCallback)
+        }
+
+        return object : Disposable {
+            override fun dispose() {
+                state.disposed = true
+                handler.removeCallbacks(watchdog)
+                runCatching { player.removeListener(listener) }
+                runCatching { cm?.unregisterNetworkCallback(netCallback) }
+            }
+        }
     }
 
-    private const val MAX_AUTO_RETRIES = 5
+    /** Lightweight cleanup contract — caller invokes [dispose] on
+     *  the same thread the listener was registered on. */
+    interface Disposable {
+        fun dispose()
+    }
+
+    private class ReconnectState {
+        var attempts = 0
+        var recoveryInFlight = false
+        var disposed = false
+        var bufferingSinceMs = 0L
+        var lastPosMs = 0L
+        var lastPosCheckMs = 0L
+        var readySinceMs = 0L
+        var savedPositionMs = 0L
+        var pendingSeek = false
+        var recoveryNotified = false
+    }
+
+    /** 1 s → 2 s → 4 s → 8 s, capped at [MAX_BACKOFF_MS]. */
+    private fun backoffMsFor(attempt: Int): Long {
+        val raw = 1_000L shl (attempt - 1).coerceAtLeast(0).coerceAtMost(6)
+        return raw.coerceAtMost(MAX_BACKOFF_MS)
+    }
+
+    private fun isOnline(ctx: Context): Boolean {
+        val cm = ctx.applicationContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return true // assume online if we can't tell
+        val net = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(net) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
+    /** ExoPlayer error codes we treat as worth a re-prepare attempt.
+     *  Excludes `ERROR_CODE_DRM_*`, decoder-init failures, and
+     *  unsupported-format errors — those don't get better with
+     *  retry. Includes the obvious IO + parsing + live-window set
+     *  plus the catch-all `ERROR_CODE_UNSPECIFIED` because some
+     *  providers wrap their errors and we'd rather try than not. */
+    private val RECOVERABLE_ERRORS = setOf(
+        PlaybackException.ERROR_CODE_UNSPECIFIED,
+        PlaybackException.ERROR_CODE_REMOTE_ERROR,
+        PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
+        PlaybackException.ERROR_CODE_TIMEOUT,
+        PlaybackException.ERROR_CODE_FAILED_RUNTIME_CHECK,
+        PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+        PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+        PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+        PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
+        PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,
+        PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE,
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+        PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
+    )
+
+    /** Stall thresholds — empirically chosen.
+     *  • 5 s buffer is long enough to cover a normal ad-break
+     *    bumper or HLS playlist refresh, but short enough that
+     *    the user hasn't yet decided to channel-zap.
+     *  • 5 s of frozen position covers most stuck-decoder cases
+     *    without false-positive on legitimate live pauses.
+     *  • 15 s of clean playback before we trust the recovery and
+     *    reset the attempt counter — anything shorter and we keep
+     *    bouncing between failure and success. */
+    private const val STALL_BUFFER_MS = 5_000L
+    private const val STALL_FROZEN_MS = 5_000L
+    private const val STABLE_PLAYBACK_MS = 15_000L
+    private const val WATCHDOG_INTERVAL_MS = 1_000L
+    private const val MAX_BACKOFF_MS = 10_000L
+    private const val MAX_AUTO_RETRIES = 50
 }

@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.hushtv.tv.data.OpenSubtitlesApi
 import com.hushtv.tv.data.SubtitleLangPrefStore
 import com.hushtv.tv.data.SubtitleSearchContext
@@ -105,6 +107,14 @@ fun SubtitleDownloadDialog(
         }
     }
 
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+        ),
+    ) {
     Box(
         Modifier
             .fillMaxSize()
@@ -240,7 +250,7 @@ fun SubtitleDownloadDialog(
                                     )
                                     if (hit.hd) {
                                         Spacer(Modifier.width(8.dp))
-                                        Text("HD", color = Color(0xFF22D3EE), fontSize = 11.sp)
+                                        Text("HD", color = Cyan, fontSize = 11.sp)
                                     }
                                     if (hit.fromTrusted) {
                                         Spacer(Modifier.width(8.dp))
@@ -290,5 +300,6 @@ fun SubtitleDownloadDialog(
                 )
             }
         }
+    }
     }
 }

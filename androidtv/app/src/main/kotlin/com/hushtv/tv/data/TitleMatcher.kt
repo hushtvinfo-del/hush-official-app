@@ -78,28 +78,35 @@ object TitleMatcher {
     ): Boolean {
         val tn = normalize(tmdbTitle)
         val ln = normalize(libTitle)
+        return isStrongMatchNormalized(
+            tn = tn,
+            tnYear = tmdbYear ?: extractYear(tmdbTitle),
+            ln = ln,
+            lnYear = libYear ?: extractYear(libTitle),
+        )
+    }
+
+    /**
+     * Hot-path overload — caller passes already-normalised strings on
+     * BOTH sides plus their already-extracted years. Avoids redoing
+     * the 6-regex normalize() and the year-extract on every entry of
+     * a library scan; with a 5 000-entry library and 90 lookups
+     * that's ~3M regex evaluations saved per scan.
+     */
+    fun isStrongMatchNormalized(
+        tn: String,
+        tnYear: Int?,
+        ln: String,
+        lnYear: Int?,
+    ): Boolean {
         if (tn.isBlank() || ln.isBlank()) return false
 
-        val effectiveLibYear = libYear ?: extractYear(libTitle)
-        val effectiveTmdbYear = tmdbYear ?: extractYear(tmdbTitle)
-
-        // 1. EXACT normalized match — strongest signal. Still honour
-        //    the year gate when both sides report years (prevents a
-        //    2003 remake library entry from matching a 1969 TMDB part
-        //    that happens to share the name).
         if (tn == ln) {
-            return if (effectiveTmdbYear != null && effectiveLibYear != null) {
-                abs(effectiveTmdbYear - effectiveLibYear) <= 1
+            return if (tnYear != null && lnYear != null) {
+                abs(tnYear - lnYear) <= 1
             } else true
         }
 
-        // 2. Containment check — shorter side's phrase must appear as a
-        //    contiguous substring inside the longer side. Require BOTH
-        //    sides to have ≥ 3 real words — this alone is strong enough
-        //    to prevent junk library titles like "Ed", "Star", "Plastic
-        //    Galaxy" from matching long TMDB titles via coincidental
-        //    substrings, because those library titles all fail the
-        //    word-count bar.
         val tWords = tn.split(" ").filter { it.isNotBlank() }
         val lWords = ln.split(" ").filter { it.isNotBlank() }
         if (tWords.size < 3 || lWords.size < 3) return false
@@ -112,12 +119,8 @@ object TitleMatcher {
         val longerPhrase = longer.joinToString(" ")
         if (!longerPhrase.contains(shorterPhrase)) return false
 
-        // 3. Year gate — when BOTH sides report a year and they disagree
-        //    by more than 1, reject (defends against franchise remakes
-        //    or numbered sequels sharing a phrase). When either side is
-        //    unknown, trust the contiguous-phrase + word-count bar.
-        if (effectiveTmdbYear != null && effectiveLibYear != null) {
-            if (abs(effectiveTmdbYear - effectiveLibYear) > 1) return false
+        if (tnYear != null && lnYear != null) {
+            if (abs(tnYear - lnYear) > 1) return false
         }
         return true
     }
@@ -133,17 +136,28 @@ object TitleMatcher {
         tmdbYear: Int?,
         libraryIndex: List<LibraryEntry<T>>,
     ): T? {
+        // Pre-normalise the TMDB side ONCE — the loop below scans the
+        // entire library, so paying the regex cost per entry would be
+        // catastrophic on the themed-list catalog (90 titles × 5k+
+        // entries × 6 regexes = ~2.7M regex hits). The library side
+        // is already pre-normalised at index-build time.
+        val tn = normalize(tmdbTitle)
+        if (tn.isBlank()) return null
+
         // Prefer exact normalized matches first — they're always
         // unambiguously correct.
-        val tn = normalize(tmdbTitle)
         libraryIndex.firstOrNull { it.normalized == tn }?.let { return it.payload }
-        // Then fall back to the strong-containment matcher.
+
+        // Strong-containment matcher fallback. Uses the pre-normalised
+        // [LibraryEntry.normalized] directly via [isStrongMatchNormalized]
+        // so we avoid re-running normalize() on every library entry.
+        val effectiveTmdbYear = tmdbYear ?: extractYear(tmdbTitle)
         return libraryIndex.firstOrNull { entry ->
-            isStrongMatch(
-                tmdbTitle = tmdbTitle,
-                tmdbYear = tmdbYear,
-                libTitle = entry.raw,
-                libYear = entry.year,
+            isStrongMatchNormalized(
+                tn = tn,
+                tnYear = effectiveTmdbYear,
+                ln = entry.normalized,
+                lnYear = entry.year,
             )
         }?.payload
     }

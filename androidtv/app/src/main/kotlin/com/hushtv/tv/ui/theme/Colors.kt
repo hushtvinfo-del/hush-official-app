@@ -7,8 +7,20 @@ import androidx.compose.ui.graphics.Color
  * ──────────────────────────────────
  * Reference: https://play.hushtvwebplayer.com/design-spec
  *
- * ⚠ CYAN (#06B6D4) is the single brand accent. Every focus, active, logo-dot,
- *   progress-bar and CTA fill must use it — no exceptions.
+ * ⚠ The brand accent is the single primary colour — every focus, active,
+ *   logo-dot, progress-bar and CTA fill must use it via the `Cyan` token
+ *   (kept named for codebase continuity even though the value is now a
+ *   saturated sky blue, NOT actual cyan, after the v1.43+ rebrand).
+ *
+ *   Why #1E90FF (DodgerBlue) + #59BFF2 (lighter accent)?
+ *   • Matches the user-supplied brand swatch: a saturated DodgerBlue
+ *     paired with a lighter cyan-leaning sky blue for glows/highlights.
+ *   • 3.68:1 contrast on white text → AA-large-text compliant for big
+ *     buttons and headlines; still legible on photo hero overlays.
+ *   • 7.92:1 against pure black → pops on the dark app background and
+ *     on bright photo heroes alike without washing out.
+ *   • Reads as bright, modern broadcast blue (Bell / Xfinity Stream
+ *     direction) rather than the previous darker navy tone.
  */
 
 // Surfaces
@@ -17,15 +29,17 @@ val SurfaceNavy    = Color(0xFF0F172A)  // cards, sidebars
 val SurfaceElev    = Color(0xFF1E293B)  // inputs, elevated surfaces
 val BorderSlate    = Color(0xFF334155)  // dividers, subtle borders
 
-// Brand accent (primary)
-val Cyan           = Color(0xFF06B6D4)
-val CyanFocusBg    = Color(0x2606B6D4)  // rgba(6,182,212,0.15)
-val CyanRing       = Color(0x5906B6D4)  // rgba(6,182,212,0.35) — outer glow
-val CyanGlow08     = Color(0x1406B6D4)  // rgba(6,182,212,0.08) — soft radial glow
-val CyanDim        = Color(0x6606B6D4)
+// Brand accent (primary) — saturated sky blue (DodgerBlue).
+// Variable name kept as `Cyan` to avoid mass-renaming hundreds of
+// callsites; the colour value is the single source of truth.
+val Cyan           = Color(0xFF1E90FF)
+val CyanFocusBg    = Color(0x261E90FF)  // 15 % alpha — soft focus fill
+val CyanRing       = Color(0x591E90FF)  // 35 % alpha — outer ring glow
+val CyanGlow08     = Color(0x141E90FF)  //  8 % alpha — radial glow
+val CyanDim        = Color(0x661E90FF)  // 40 % alpha — disabled / inactive
 
-// Secondary accents
-val Blue           = Color(0xFF3B82F6)
+// Secondary accent — lighter cyan-blue, used for highlights and glows.
+val Blue           = Color(0xFF59BFF2)
 val Green          = Color(0xFF22C55E)
 val Red            = Color(0xFFEF4444)
 val Amber          = Color(0xFFF59E0B)

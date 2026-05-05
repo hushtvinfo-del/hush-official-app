@@ -113,13 +113,42 @@ fun TVPlayerScreen(
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
 
-    // Auto-reconnect on transient IO errors — see PlayerBuilder.kt for
-    // why this exists. Without this, a single CDN hiccup on a live
-    // HLS stream emits ERROR_CODE_IO_UNSPECIFIED and the channel is
-    // stuck IDLE until the user manually channel-zaps.
-    DisposableEffect(player, currentName) {
-        com.hushtv.tv.data.PlayerBuilder.attachAutoReconnect(player, currentName)
-        onDispose { /* listener GCs with the player */ }
+    // ── Keep the screen awake while playback is on screen. ─────
+    // Fire Stick / Android TV screensaver fires after inactivity
+    // measured by user input — playing video alone doesn't count
+    // unless the window itself is flagged. Set FLAG_KEEP_SCREEN_ON
+    // on the activity's window for the lifetime of this player
+    // screen, then clear it on dispose so other screens (browse,
+    // home) revert to normal idle behaviour. This is the canonical
+    // Android approach for video apps and matches what
+    // MobilePlayerScreen already does (line 113 there).
+    DisposableEffect(Unit) {
+        val activity = ctx as? android.app.Activity
+        activity?.window?.addFlags(
+            android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+        )
+        onDispose {
+            activity?.window?.clearFlags(
+                android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+            )
+        }
+    }
+
+    // Auto-reconnect on transient IO errors AND silent stalls — see
+    // PlayerBuilder.kt for the full strategy. Critical for IPTV
+    // streams where CDN hiccups, brief Wi-Fi drops, and stuck-decoder
+    // states happen routinely. Reconnects with backoff, listens for
+    // network re-availability, and preserves VOD position.
+    val recoveryToast = com.hushtv.tv.ui.player.rememberRecoveryToastState()
+    DisposableEffect(player, currentName, isLive) {
+        val recon = com.hushtv.tv.data.PlayerBuilder.attachAutoReconnect(
+            ctx = ctx,
+            player = player,
+            channelName = currentName,
+            isLive = isLive,
+            onRecovered = { recoveryToast.fire() },
+        )
+        onDispose { recon.dispose() }
     }
 
     // ─── Freeze monitor ─────────────────────────────────────────────
@@ -202,11 +231,15 @@ fun TVPlayerScreen(
     //
     // "User-relevant" means:
     //   • the user has explicitly side-loaded an SRT (downloadedSrt), OR
-    //   • the stream has an embedded English text track.
-    // Embedded foreign-language tracks (e.g. Dutch / Danish baked into
-    // the HLS stream) are ignored here so a tap on CC routes to the
-    // download dialog instead of silently toggling on a track the user
-    // can't read.
+    //   • the stream has an embedded English text track, OR
+    //   • the stream is LIVE TV and carries any CEA-608/708 captions
+    //     baked into the MPEG-TS (most US live channels do — and they
+    //     usually leave the language tag unset, which is why we don't
+    //     filter by "en" for live).
+    // Embedded foreign-language tracks on VOD (e.g. Dutch / Danish
+    // baked into an HLS series stream) are ignored here so a tap on
+    // CC routes to the download dialog instead of silently toggling
+    // on a track the user can't read.
     var subsAvailable by remember { mutableStateOf(false) }
     var subsEnabled by remember { mutableStateOf(false) }
     DisposableEffect(player) {
@@ -221,7 +254,8 @@ fun TVPlayerScreen(
                         grp.getTrackFormat(i).language?.lowercase()?.startsWith("en") == true
                     }
                 }
-                subsAvailable = hasUserSrt || hasEnglishEmbedded
+                val hasAnyLiveCaptions = isLive && textGroups.any { it.length > 0 }
+                subsAvailable = hasUserSrt || hasEnglishEmbedded || hasAnyLiveCaptions
                 subsEnabled = textGroups.any { grp ->
                     (0 until grp.length).any { i -> grp.isTrackSelected(i) }
                 }
@@ -239,10 +273,20 @@ fun TVPlayerScreen(
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
                 .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
                 .build()
+        } else if (isLive) {
+            // Live TV: just enable text tracks across-the-board so
+            // CEA-608/708 captions baked into the MPEG-TS surface.
+            // We don't filter by language because most US live
+            // channels leave the language tag unset.
+            player.trackSelectionParameters = params.buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+                .build()
         } else {
-            // Re-enable. Strongly prefer the language of the user-loaded
-            // SRT (or "en" if none) so ExoPlayer doesn't fall through
-            // to a foreign embedded track baked into the IPTV stream.
+            // VOD: re-enable. Strongly prefer the language of the
+            // user-loaded SRT (or "en" if none) so ExoPlayer doesn't
+            // fall through to a foreign embedded track baked into
+            // the HLS stream.
             val preferredLang = downloadedSrtLang ?: "en"
             player.trackSelectionParameters = params.buildUpon()
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
@@ -448,19 +492,20 @@ fun TVPlayerScreen(
         }
     }
 
-    // VOD focus target — when the OSD becomes visible, we move focus to the
-    // Play/Pause button. This is the core UX fix for Android TV remotes:
-    // if we landed on the scrubber, LEFT/RIGHT get swallowed as seek and
-    // users can never reach the CC / Audio / Speed / More chips. Starting
-    // on Play/Pause means LEFT/RIGHT naturally walks the button row
-    // (thanks to focusGroup) and UP reaches the scrubber when the user
-    // actually wants to seek. When the OSD hides, focus returns to the
-    // root Box so key events still get captured.
+    // Focus target — when the OSD becomes visible, move focus to the
+    // Play/Pause button on BOTH VOD and Live. This is the core UX fix for
+    // Android TV remotes: if we landed on the root Box, OK/Enter is
+    // swallowed by the Box's onKeyEvent (toggle-info on live, noop on
+    // VOD) and users can never reach the Mute / Record / CC buttons.
+    // Starting on Play/Pause means LEFT/RIGHT naturally walks the
+    // button row (via focusGroup), OK fires the focused button, and
+    // UP/DOWN still work for scrubbing on VOD or channel-zap on Live
+    // because the focus handler falls through to the root onKeyEvent
+    // when no button consumes the key.
     val playPauseFocus = remember { FocusRequester() }
     val scrubberFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
     LaunchedEffect(showControls, isLive) {
-        if (isLive) return@LaunchedEffect
         if (showControls) {
             delay(50)
             runCatching { playPauseFocus.requestFocus() }
@@ -477,6 +522,23 @@ fun TVPlayerScreen(
         currentUrl.substringAfterLast('/').substringBeforeLast('.').toIntOrNull()
     }
 
+    // Detect content kind from the URL path (Xtream always builds
+    // `.../series/...` for episodes and `.../movie/...` for movies).
+    // PlaybackMeta from the detail screen takes precedence when set
+    // (more reliable; also gives us the parent-series title for
+    // episodes, which is what TMDB Tv search needs to find a match).
+    val playbackMeta = remember { com.hushtv.tv.data.PlaybackMeta.consume() }
+    val playbackKind = playbackMeta?.kind
+        ?: when {
+            "/series/" in currentUrl -> "series"
+            else -> "movie"
+        }
+    // For episodes: save the SERIES title (e.g. "Gold Rush"), not
+    // the per-episode title (e.g. "Gold Rush S15E03"). That's what
+    // TMDB hydration on the home CW row uses to look up the show.
+    val saveTitle = playbackMeta?.displayTitle?.takeIf { it.isNotBlank() }
+        ?: currentName
+
     // ─── Resume prompt ────────────────────────────────────────────────
     // On cold launch, if the user has meaningful saved progress for this
     // VOD title (more than 30s in, less than 30s from the end), show a
@@ -484,15 +546,23 @@ fun TVPlayerScreen(
     var resumePromptMs by remember { mutableStateOf<Long?>(null) }
     var resumePromptHandled by remember { mutableStateOf(false) }
     LaunchedEffect(vodStreamId) {
-        if (isLive || vodStreamId == null || resumePromptHandled) return@LaunchedEffect
-        val saved = WatchProgressStore.get(ctx, vodStreamId, "movie") ?: run {
+        if (isLive || resumePromptHandled) return@LaunchedEffect
+        if (vodStreamId == null) {
+            // DVR recordings, direct-URL playback, and any other VOD
+            // source without an Xtream streamId — there's no saved
+            // progress to look up, so just start playing immediately.
+            player.playWhenReady = true
+            resumePromptHandled = true
+            return@LaunchedEffect
+        }
+        val saved = WatchProgressStore.get(ctx, vodStreamId, playbackKind) ?: run {
             // No saved progress — auto-play.
             player.playWhenReady = true
             resumePromptHandled = true
             return@LaunchedEffect
         }
         val eligible = saved.durationMs > 0 &&
-            saved.positionMs > 30_000L &&
+            saved.positionMs > 5_000L &&
             saved.positionMs < saved.durationMs - 30_000L
         if (eligible) {
             resumePromptMs = saved.positionMs
@@ -503,38 +573,103 @@ fun TVPlayerScreen(
     }
 
     if (!isLive && vodStreamId != null) {
+        // Periodic save so Continue Watching reflects the user's
+        // current position even if they kill the app without backing
+        // out cleanly. 4-second cadence matches the mobile player and
+        // is cheap (single SharedPreferences write per tick). We also
+        // save immediately on seek (below) so skips are persisted the
+        // moment they happen.
         LaunchedEffect(vodStreamId) {
             while (true) {
-                delay(15_000)
+                delay(4_000)
                 val pos = player.currentPosition
                 val dur = player.duration.coerceAtLeast(0)
-                if (dur > 0 && pos > 5_000) {
+                if (dur > 0 && pos > 2_000) {
                     WatchProgressStore.save(
                         ctx,
                         streamId = vodStreamId,
-                        kind = "movie",
-                        title = currentName,
-                        poster = null,
+                        kind = playbackKind,
+                        title = saveTitle,
+                        // Prefer the backdrop (16:9 still) over the
+                        // poster (2:3 portrait) — the home CW row
+                        // displays cards in 16:9 so the backdrop
+                        // fills cleanly and the poster would crop
+                        // ugly.
+                        poster = playbackMeta?.backdrop ?: playbackMeta?.poster,
                         positionMs = pos,
                         durationMs = dur,
                     )
                 }
             }
         }
+        // Save on seek so a fast-forward / rewind is persisted
+        // instantly — before the user might get up and walk away.
+        DisposableEffect(vodStreamId) {
+            val listener = object : androidx.media3.common.Player.Listener {
+                override fun onPositionDiscontinuity(
+                    oldPosition: androidx.media3.common.Player.PositionInfo,
+                    newPosition: androidx.media3.common.Player.PositionInfo,
+                    reason: Int,
+                ) {
+                    if (reason == androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK) {
+                        val pos = player.currentPosition
+                        val dur = player.duration.coerceAtLeast(0)
+                        if (dur > 0 && pos > 2_000) {
+                            WatchProgressStore.save(
+                                ctx,
+                                streamId = vodStreamId,
+                                kind = playbackKind,
+                                title = saveTitle,
+                                poster = playbackMeta?.backdrop ?: playbackMeta?.poster,
+                                positionMs = pos,
+                                durationMs = dur,
+                            )
+                        }
+                    }
+                }
+            }
+            player.addListener(listener)
+            onDispose { player.removeListener(listener) }
+        }
         DisposableEffect(vodStreamId) {
             onDispose {
                 val pos = player.currentPosition
                 val dur = player.duration.coerceAtLeast(0)
-                if (dur > 0 && pos > 5_000) {
+                if (dur > 0 && pos > 2_000) {
                     WatchProgressStore.save(
                         ctx,
                         streamId = vodStreamId,
-                        kind = "movie",
-                        title = currentName,
-                        poster = null,
+                        kind = playbackKind,
+                        title = saveTitle,
+                        poster = playbackMeta?.backdrop ?: playbackMeta?.poster,
                         positionMs = pos,
                         durationMs = dur,
                     )
+                }
+            }
+        }
+    }
+
+    // Auto "Mark as watched" for DVR recordings. When the user
+    // crosses the 95 % threshold the server flag flips, the row
+    // dims, and a ✓ WATCHED pill appears in My Recordings — same
+    // semantics as a Continue Watching entry "completing". One-
+    // shot per playback session; if the user manually un-marks
+    // it later, that wins until they hit 95 % again.
+    val dvrRef = remember(currentUrl) {
+        com.hushtv.tv.data.DvrApi.parseRecordingUrl(currentUrl)
+    }
+    if (!isLive && dvrRef != null) {
+        var firedWatched by remember(dvrRef) { mutableStateOf(false) }
+        LaunchedEffect(dvrRef) {
+            while (!firedWatched) {
+                delay(4_000)
+                val pos = player.currentPosition
+                val dur = player.duration.coerceAtLeast(0)
+                if (dur > 60_000 && pos.toFloat() / dur.toFloat() >= 0.95f) {
+                    val (uid, recId) = dvrRef
+                    com.hushtv.tv.data.DvrApi.markWatched(uid, recId, true)
+                    firedWatched = true
                 }
             }
         }
@@ -797,6 +932,19 @@ fun TVPlayerScreen(
             factory = { c ->
                 PlayerView(c).apply {
                     useController = false
+                    // Belt-and-braces — PlayerView automatically syncs
+                    // its keepScreenOn state with the player's playback
+                    // state when this is true. The activity-level flag
+                    // above handles the buffering / paused-with-overlay
+                    // case; this view-level flag handles edge cases
+                    // where the activity flag races with screen-off.
+                    keepScreenOn = true
+                    // Hide the stock PlayerView spinner — we render
+                    // the branded `BufferingOverlay` composed below
+                    // instead. SHOW_BUFFERING_NEVER keeps the built-
+                    // in one from flashing in for a few ms during
+                    // state transitions.
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     this.player = player
                 }
             },
@@ -809,6 +957,36 @@ fun TVPlayerScreen(
                 }
             },
             modifier = Modifier.fillMaxSize()
+        )
+
+        // Branded buffering overlay (replaces ExoPlayer's default
+        // spinner on TV Movie/Series playback). Uses the MOVIE
+        // copy variant since the phrasing stays warm/generic
+        // enough for both movies and series; a dedicated SERIES
+        // variant is opt-in via a future parameter if we want
+        // episode-specific wording later.
+        com.hushtv.tv.ui.player.BufferingOverlay(
+            player = player,
+            content = com.hushtv.tv.ui.player.BufferingContent.MOVIE,
+            onRetry = {
+                runCatching {
+                    player.prepare()
+                    player.play()
+                }
+            },
+        )
+
+        // "Back online" recovery toast — surfaces for ~2.5 s the
+        // first time STATE_READY arrives after an auto-reconnect.
+        // Anchored top-center so it never collides with the channel
+        // zap chip (top-left), the controls bar (bottom) or the
+        // channel-number dialer (bottom-center).
+        com.hushtv.tv.ui.player.ReconnectedToast(
+            visible = recoveryToast.visible.value,
+            onHide = { recoveryToast.hide() },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 36.dp),
         )
 
         // Channel-zap toast
@@ -973,7 +1151,10 @@ fun TVPlayerScreen(
             ) {
                 // Top bar
                 Row(
-                    Modifier.align(Alignment.TopStart).padding(horizontal = 48.dp, vertical = 32.dp),
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth()
+                        .padding(horizontal = 48.dp, vertical = 32.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
@@ -987,7 +1168,7 @@ fun TVPlayerScreen(
                         }
                     }
                     Spacer(Modifier.width(16.dp))
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (currentNumber > 0) {
                                 Text(
@@ -1178,11 +1359,19 @@ fun TVPlayerScreen(
                     }
 
                     if (isLive) {
-                        // Legacy live OSD — unchanged
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Live OSD — focus-group so 2D traversal walks
+                        // between Play/Pause → Mute → REC cleanly. The
+                        // first button carries `playPauseFocus` so the
+                        // OSD auto-focus lands here when the user presses
+                        // OK to summon the controls.
+                        Row(
+                            Modifier.focusGroup(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             OsdCircleButton(
                                 icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 size = 64.dp,
+                                focusRequester = playPauseFocus,
                                 onClick = togglePlayPause,
                                 onInteract = { controlsTick++ },
                             )
@@ -1196,9 +1385,16 @@ fun TVPlayerScreen(
                                 },
                                 onInteract = { controlsTick++ },
                             )
+                            Spacer(Modifier.width(20.dp))
+                            com.hushtv.tv.ui.player.RecordNowChip(
+                                playlistId = playlistId,
+                                channelName = currentName,
+                                channelUrl = currentUrl,
+                                onInteract = { controlsTick++ },
+                            )
                             Spacer(Modifier.weight(1f))
                             Text(
-                                "↑↓ Channel   0-9 Dial   OK Info   MENU Options   Back×2 Last",
+                                "OK Play/Pause   ← → Controls   ↑↓ Channel   INFO Guide",
                                 color = Color(0xFFD1D5DB), fontSize = 14.sp,
                             )
                         }
@@ -1305,6 +1501,13 @@ fun TVPlayerScreen(
                                     when {
                                         autoLoading -> Unit
                                         subsAvailable -> toggleSubtitles()
+                                        // Live TV with no embedded captions
+                                        // → there's nothing to toggle on
+                                        // (channel doesn't carry CCs). Show
+                                        // a brief toast-style nothing rather
+                                        // than triggering OpenSubtitles
+                                        // (which doesn't apply to live).
+                                        isLive -> Unit
                                         // No SRT yet — try silent auto-download
                                         // first. User can still hit Player
                                         // Options → Subtitles for the picker.

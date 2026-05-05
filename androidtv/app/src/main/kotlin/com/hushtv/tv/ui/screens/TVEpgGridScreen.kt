@@ -53,6 +53,7 @@ fun TVEpgGridScreen(nav: NavController, playlistId: String) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val playlist = remember { PlaylistStore.find(ctx, playlistId) }
+    val userId = remember(playlist) { playlist?.let { com.hushtv.tv.data.DvrApi.userIdFor(it) } }
 
     // Take up to 50 channels from the last-browsed category so the grid
     // loads in a reasonable time. Scrolling down loads more lazily.
@@ -66,6 +67,17 @@ fun TVEpgGridScreen(nav: NavController, playlistId: String) {
     val timelineStart = remember { nowMs - 30L * 60 * 1000 }
     val timelineEnd = remember { timelineStart + 8L * 60 * 60 * 1000 }
 
+    // Phase 2 — list of currently-pending scheduled recordings for
+    // this user. Painted as a ⏰ badge on matching EPG cells. Refreshes
+    // when the user schedules / cancels via the dialog.
+    var scheduled by remember { mutableStateOf<List<com.hushtv.tv.data.DvrApi.Scheduled>>(emptyList()) }
+    var refreshTick by remember { mutableStateOf(0) }
+    LaunchedEffect(refreshTick) {
+        val uid = userId ?: return@LaunchedEffect
+        scheduled = com.hushtv.tv.data.DvrApi.listScheduled(uid)
+            .filter { it.status == "pending" }
+    }
+
     // Lazy-fetch EPG for all visible channels.
     LaunchedEffect(channels) {
         val p = playlist ?: return@LaunchedEffect
@@ -74,6 +86,17 @@ fun TVEpgGridScreen(nav: NavController, playlistId: String) {
                 val list = EpgService.fetchShortEpg(p.host, p.username, p.password, ch.streamId)
                 channelPrograms[ch.streamId] = list
             }
+        }
+    }
+
+    // Dialog state
+    var dialogChannel by remember { mutableStateOf<MediaCard?>(null) }
+    var dialogProgram by remember { mutableStateOf<EpgProgram?>(null) }
+    var toast by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(toast) {
+        if (toast != null) {
+            kotlinx.coroutines.delay(3_000)
+            toast = null
         }
     }
 
@@ -113,12 +136,18 @@ fun TVEpgGridScreen(nav: NavController, playlistId: String) {
             ) {
                 // Spacer matches the time-ruler row height
                 Box(Modifier.height(32.dp).fillMaxWidth().background(Color(0x33000000)))
+                // Live DVR state — ticks when any channel starts/stops recording.
+                val recVersion = com.hushtv.tv.data.rememberActiveRecordingVersion(playlistId)
                 LazyColumn(state = rememberLazyListState()) {
                     items(channels.size, key = { channels[it].id }) { idx ->
                         val ch = channels[idx]
+                        val recording = remember(recVersion, ch.title) {
+                            com.hushtv.tv.data.DvrActiveState.isRecording(ch.title)
+                        }
                         ChannelRowCell(
                             number = idx + 1,
                             channel = ch,
+                            isRecording = recording,
                             onClick = {
                                 val p = playlist ?: return@ChannelRowCell
                                 NavState.liveChannels = channels
@@ -142,13 +171,107 @@ fun TVEpgGridScreen(nav: NavController, playlistId: String) {
                     items(channels.size, key = { "prog-${channels[it].id}" }) { idx ->
                         val ch = channels[idx]
                         val progs = channelPrograms[ch.streamId] ?: emptyList()
+                        val schedForChannel = remember(scheduled, ch.streamId) {
+                            scheduled.filter { sched ->
+                                sched.epg_id.startsWith("ch${ch.streamId}-")
+                            }.map { it.epg_id }.toSet()
+                        }
                         ProgramsRow(
                             programs = progs,
                             timelineStart = timelineStart,
-                            timelineEnd = timelineEnd
+                            timelineEnd = timelineEnd,
+                            channelStreamId = ch.streamId,
+                            scheduledEpgIds = schedForChannel,
+                            onProgramClick = { p ->
+                                dialogChannel = ch
+                                dialogProgram = p
+                            },
                         )
                     }
                 }
+            }
+        }
+    }
+
+    // Phase 2 / 3 — EPG program info dialog with Schedule chips.
+    val dlgCh = dialogChannel
+    val dlgPr = dialogProgram
+    if (dlgCh != null && dlgPr != null) {
+        com.hushtv.tv.ui.player.EpgProgramDialog(
+            playlistId = playlistId,
+            channel = dlgCh,
+            program = dlgPr,
+            upcomingProgramsOnChannel = channelPrograms[dlgCh.streamId] ?: emptyList(),
+            existingScheduled = scheduled,
+            isCurrentlyRecording = com.hushtv.tv.data.DvrActiveState.isRecording(dlgCh.title),
+            onDismiss = { dialogChannel = null; dialogProgram = null },
+            onWatchLive = {
+                val p = playlist ?: return@EpgProgramDialog
+                val url = XtreamApi.liveUrl(p.host, p.username, p.password, dlgCh.streamId)
+                NavState.liveChannels = channels
+                NavState.rememberPlayback(channels.indexOf(dlgCh).coerceAtLeast(0))
+                NavState.browsePlaylistId = playlistId
+                nav.navigate(
+                    "player/$playlistId/${Uri.encode(url)}/${Uri.encode(dlgCh.title)}/true"
+                )
+            },
+            onRecordNow = {
+                val uid = userId ?: return@EpgProgramDialog
+                val p = playlist ?: return@EpgProgramDialog
+                val url = XtreamApi.liveUrl(p.host, p.username, p.password, dlgCh.streamId)
+                scope.launch {
+                    val res = com.hushtv.tv.data.DvrApi.recordNow(
+                        userId = uid,
+                        channelUrl = url,
+                        channelName = dlgCh.title,
+                        showTitle = dlgPr.title,
+                        showEndsAtEpoch = dlgPr.stopMs / 1000L,
+                    )
+                    when (res) {
+                        is com.hushtv.tv.data.DvrApi.RecordNowResult.Success -> {
+                            toast = "Recording started — ${dlgPr.title}"
+                        }
+                        is com.hushtv.tv.data.DvrApi.RecordNowResult.Error ->
+                            toast = res.message
+                    }
+                }
+            },
+            onStopRecording = {
+                val uid = userId ?: return@EpgProgramDialog
+                scope.launch {
+                    val active = com.hushtv.tv.data.DvrApi.findActive(uid, dlgCh.title)
+                    if (active != null) {
+                        com.hushtv.tv.data.DvrApi.delete(uid, active.rec_id)
+                    }
+                    toast = "Recording stopped."
+                }
+            },
+            onToast = { toast = it },
+            onSchedulingChanged = { refreshTick++ },
+        )
+    }
+
+    // Floating toast overlay (3 s auto-dismiss) for record-now and
+    // schedule errors that come back from the server (concurrency
+    // limit, quota, network failure, etc).
+    val toastMsg = toast
+    if (toastMsg != null) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(bottom = 60.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            Surface(
+                color = Color(0xEE0A101D),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Cyan.copy(alpha = 0.55f)),
+            ) {
+                Text(
+                    toastMsg,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                )
             }
         }
     }
@@ -203,7 +326,10 @@ private fun TimeRuler(start: Long, end: Long) {
 private fun ProgramsRow(
     programs: List<EpgProgram>,
     timelineStart: Long,
-    timelineEnd: Long
+    timelineEnd: Long,
+    channelStreamId: Int,
+    scheduledEpgIds: Set<String>,
+    onProgramClick: (EpgProgram) -> Unit,
 ) {
     val totalMin = ((timelineEnd - timelineStart) / 60_000L).toInt()
     val pxPerMin = 8.dp
@@ -222,6 +348,9 @@ private fun ProgramsRow(
             val durMin = ((prog.stopMs.coerceAtMost(timelineEnd) - prog.startMs.coerceAtLeast(timelineStart)) / 60_000L)
                 .toInt().coerceAtLeast(1)
             if (prog.stopMs <= timelineStart || prog.startMs >= timelineEnd) return@forEach
+            val epgId = "ch${channelStreamId}-s${prog.startMs / 1000L}"
+            val isScheduled = epgId in scheduledEpgIds
+            var focused by remember { mutableStateOf(false) }
             Box(
                 Modifier
                     .offset(x = pxPerMin * startMin)
@@ -229,20 +358,30 @@ private fun ProgramsRow(
                     .fillMaxHeight()
                     .padding(horizontal = 1.dp)
                     .background(
-                        if (prog.isLive) Color(0x4406B6D4) else Color(0x14FFFFFF),
+                        when {
+                            focused -> Color(0x55FACC15)
+                            prog.isLive -> Color(0x4406B6D4)
+                            isScheduled -> Color(0x2206B6D4)
+                            else -> Color(0x14FFFFFF)
+                        },
                         RoundedCornerShape(6.dp)
                     )
                     .border(
-                        if (prog.isLive) 1.dp else 0.dp,
-                        if (prog.isLive) Cyan else Color.Transparent,
-                        RoundedCornerShape(6.dp)
+                        width = if (focused) 2.dp else if (prog.isLive || isScheduled) 1.dp else 0.dp,
+                        color = when {
+                            focused -> Color(0xFFFACC15)
+                            prog.isLive -> Cyan
+                            isScheduled -> Cyan
+                            else -> Color.Transparent
+                        },
+                        shape = RoundedCornerShape(6.dp),
                     )
                     .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .focusable()
+                    .onFocusChanged { focused = it.isFocused }
+                    .clickableWithEnter { onProgramClick(prog) }
             ) {
                 Column {
-                    // Start time + LIVE pip — only shown when the block
-                    // is wide enough to fit it without squeezing the
-                    // title (≥ 25 min of airtime on this screen).
                     if (durMin >= 25) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
@@ -255,11 +394,11 @@ private fun ProgramsRow(
                             )
                             if (prog.isLive) {
                                 Spacer(Modifier.width(4.dp))
-                                Box(
-                                    Modifier
-                                        .size(5.dp)
-                                        .background(Cyan, CircleShape)
-                                )
+                                Box(Modifier.size(5.dp).background(Cyan, CircleShape))
+                            }
+                            if (isScheduled) {
+                                Spacer(Modifier.width(6.dp))
+                                ScheduledChip()
                             }
                         }
                         Spacer(Modifier.height(1.dp))
@@ -270,6 +409,10 @@ private fun ProgramsRow(
                         fontWeight = FontWeight.SemiBold,
                         maxLines = if (durMin >= 25) 1 else 2,
                     )
+                    if (durMin < 25 && isScheduled) {
+                        Spacer(Modifier.height(1.dp))
+                        ScheduledChip()
+                    }
                 }
             }
         }
@@ -277,9 +420,29 @@ private fun ProgramsRow(
 }
 
 @Composable
+private fun ScheduledChip() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .background(Color(0x2206B6D4), RoundedCornerShape(3.dp))
+            .border(1.dp, Cyan.copy(alpha = 0.55f), RoundedCornerShape(3.dp))
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+    ) {
+        Text(
+            "⏰ SCHED",
+            color = Cyan,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 0.5.sp,
+        )
+    }
+}
+
+@Composable
 private fun ChannelRowCell(
     number: Int,
     channel: MediaCard,
+    isRecording: Boolean,
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -312,7 +475,41 @@ private fun ChannelRowCell(
         Text(
             channel.title,
             color = Color.White, fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold, maxLines = 2
+            fontWeight = FontWeight.SemiBold, maxLines = 2,
+            modifier = Modifier.weight(1f, false)
+        )
+        if (isRecording) {
+            Spacer(Modifier.width(6.dp))
+            EpgGridRecBadge()
+        }
+    }
+}
+
+/**
+ * Compact "● REC" pill rendered beside the channel title in the EPG
+ * grid's left rail. Matches the Live Browse screen's badge style so
+ * the two screens feel like one product, just smaller to fit the
+ * 62.dp row height.
+ */
+@Composable
+private fun EpgGridRecBadge() {
+    val red = Color(0xFFEF4444)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(16.dp)
+            .background(Color(0x1FEF4444), RoundedCornerShape(3.dp))
+            .border(1.dp, red.copy(alpha = 0.55f), RoundedCornerShape(3.dp))
+            .padding(horizontal = 4.dp),
+    ) {
+        Box(Modifier.size(5.dp).background(red, CircleShape))
+        Spacer(Modifier.width(3.dp))
+        Text(
+            "REC",
+            color = red,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 0.8.sp,
         )
     }
 }

@@ -150,12 +150,6 @@ private fun YearCardView(
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()
             .clickableWithEnter(onClick)
-            .shadow(
-                elevation = if (focused) 24.dp else 6.dp,
-                shape = cardShape,
-                ambientColor = year.accent,
-                spotColor = year.accent,
-            )
             .clip(cardShape)
             .background(
                 Brush.verticalGradient(listOf(year.gradientTop, year.gradientBottom))

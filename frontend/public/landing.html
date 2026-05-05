@@ -1,0 +1,972 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#050914"/>
+<title>HushTV — What's inside your new app</title>
+<meta name="description" content="Your new HushTV is here. A tour of every section, every feature, and Hush+ — all integrated, all ready the moment you install v1.43.59."/>
+<meta property="og:title" content="HushTV — What's inside your new app"/>
+<meta property="og:description" content="A tour of every section, every feature, and the integrated Hush+ add-on suite."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://hushtv.xyz/"/>
+<meta name="twitter:card" content="summary_large_image"/>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink: { 950: '#050914', 900: '#0A101D', 800: '#121C2D' },
+          brand: { cyan: '#59BFF2', cyanHi: '#80CFF5', blue: '#1E90FF' },
+        },
+        fontFamily: {
+          display: ['Outfit', 'system-ui', 'sans-serif'],
+          body:    ['Manrope', 'system-ui', 'sans-serif'],
+          mono:    ['JetBrains Mono', 'ui-monospace', 'monospace'],
+        },
+      }
+    }
+  }
+</script>
+<style>
+  html, body { background: #050914; color: #fff; font-family: 'Manrope', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  body { overflow-x: hidden; }
+  .font-display { font-family: 'Outfit', system-ui, sans-serif; }
+  .font-mono    { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  ::selection   { background: rgba(89,191,242,0.35); color: #fff; }
+
+  /* Backgrounds */
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.75 0 0 0 0 0.95 0 0 0 0.14 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.35; mix-blend-mode: overlay;
+  }
+  .mesh {
+    position: absolute; inset: -10%; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(60% 50% at 18% 30%, rgba(30,144,255,0.35), transparent 60%),
+      radial-gradient(55% 55% at 82% 22%, rgba(89,191,242,0.40), transparent 60%),
+      radial-gradient(45% 70% at 50% 100%, rgba(89,191,242,0.18), transparent 70%);
+    filter: blur(16px);
+    animation: meshDrift 18s ease-in-out infinite alternate;
+  }
+  @keyframes meshDrift { 0%{ transform: translate3d(0,0,0) scale(1);} 100%{ transform: translate3d(2%,-1.5%,0) scale(1.06);} }
+
+  /* Surfaces */
+  .glass {
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .glass-nav {
+    background: rgba(5,9,20,0.66);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* Buttons */
+  .btn-primary {
+    background: linear-gradient(180deg, #59BFF2 0%, #1E90FF 100%);
+    color: #05101B;
+    box-shadow: 0 0 30px rgba(89,191,242,0.45), 0 0 70px rgba(89,191,242,0.22), inset 0 1px 0 rgba(255,255,255,0.35);
+    transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+  }
+  .btn-primary:hover { transform: scale(1.03); filter: brightness(1.05); box-shadow: 0 0 44px rgba(89,191,242,0.65), 0 0 100px rgba(89,191,242,0.30), inset 0 1px 0 rgba(255,255,255,0.5); }
+  .btn-ghost {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: #E2E8F0;
+    transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+  }
+  .btn-ghost:hover { transform: scale(1.02); border-color: rgba(89,191,242,0.55); background: rgba(89,191,242,0.08); }
+
+  /* Bezels */
+  .tv-bezel {
+    border-radius: 20px; border: 1px solid rgba(255,255,255,0.10);
+    box-shadow: 0 40px 120px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 0 60px rgba(89,191,242,0.10);
+    overflow: hidden; background: #05080F; position: relative;
+  }
+  .tv-bezel iframe { display: block; border: 0; }
+  .tv-bezel::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 20%, rgba(0,0,0,0) 80%, rgba(0,0,0,0.15) 100%);
+  }
+  .phone-bezel {
+    border-radius: 38px; padding: 8px;
+    background: linear-gradient(180deg, #1a2436 0%, #0b121f 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+    position: relative;
+  }
+  .phone-bezel .screen { border-radius: 30px; overflow: hidden; background: #05080F; position: relative; }
+  .phone-notch { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: 110px; height: 18px; background: #05080F; border-radius: 12px; z-index: 3; }
+
+  /* Motion */
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity 700ms ease, transform 700ms ease; }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+  .stagger > * { opacity: 0; transform: translateY(14px); transition: opacity 550ms ease, transform 550ms ease; }
+  .stagger.in > * { opacity: 1; transform: translateY(0); }
+  .stagger.in > *:nth-child(1){ transition-delay: 40ms; }
+  .stagger.in > *:nth-child(2){ transition-delay: 80ms; }
+  .stagger.in > *:nth-child(3){ transition-delay: 120ms; }
+  .stagger.in > *:nth-child(4){ transition-delay: 160ms; }
+  .stagger.in > *:nth-child(5){ transition-delay: 200ms; }
+  .stagger.in > *:nth-child(6){ transition-delay: 240ms; }
+  .stagger.in > *:nth-child(7){ transition-delay: 280ms; }
+  .stagger.in > *:nth-child(8){ transition-delay: 320ms; }
+  .stagger.in > *:nth-child(9){ transition-delay: 360ms; }
+
+  .section-card { transition: transform 260ms cubic-bezier(.2,.6,.2,1), border-color 260ms ease; }
+  .section-card:hover { transform: translateY(-4px); border-color: rgba(89,191,242,0.42); }
+
+  /* Accordion */
+  details[open] .chev { transform: rotate(45deg); }
+  .chev { transition: transform 220ms ease; }
+
+  /* Pulse */
+  @keyframes livePulse { 0%,100%{ box-shadow: 0 0 0 0 rgba(239,68,68,0.7);} 50%{ box-shadow: 0 0 0 8px rgba(239,68,68,0);} }
+  .rec-dot { animation: livePulse 1.6s infinite; }
+
+  /* Gradient text */
+  .text-grad-cyan { background: linear-gradient(135deg, #80CFF5 0%, #59BFF2 40%, #1E90FF 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  /* Kicker eyebrow */
+  .kicker { color:#59BFF2; font-size:12px; letter-spacing:0.2em; text-transform:uppercase; font-weight:800; }
+
+  /* Scroll-snap rail for sections preview */
+  .hrail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .hrail::-webkit-scrollbar { display: none; }
+  .hrail > * { scroll-snap-align: start; }
+
+  /* Cursor ring */
+  @media (pointer: fine) {
+    .cursor-ring { position: fixed; top:0; left:0; width: 22px; height: 22px; border-radius: 99px; border: 1px solid rgba(89,191,242,0.8); pointer-events: none; z-index: 9999; transform: translate(-50%,-50%); transition: width 180ms ease, height 180ms ease, background 180ms ease, opacity 200ms ease; opacity: 0; mix-blend-mode: screen; }
+    .cursor-ring.active { opacity: 1; }
+    .cursor-ring.hover { width: 44px; height: 44px; background: rgba(89,191,242,0.08); }
+  }
+
+  /* Hush+ addon tint helpers — match the app's per-addon accents */
+  .addon-vod    { --addon: #1E90FF; }
+  .addon-books  { --addon: #F59E0B; }
+  .addon-arcade { --addon: #C026D3; }
+  .addon-tube   { --addon: #EF4444; }
+  .addon-card { border-color: color-mix(in srgb, var(--addon) 30%, rgba(255,255,255,0.08)); }
+  .addon-card .addon-eyebrow { color: var(--addon); }
+  .addon-card .addon-dot { background: var(--addon); box-shadow: 0 0 16px color-mix(in srgb, var(--addon) 60%, transparent); }
+  .addon-card .addon-ring { box-shadow: 0 0 0 1px color-mix(in srgb, var(--addon) 35%, transparent), 0 0 30px color-mix(in srgb, var(--addon) 25%, transparent); }
+
+  /* Responsive hides */
+  @media (max-width: 768px) {
+    .hero-tv { display: none; }
+  }
+</style>
+</head>
+<body class="font-body text-slate-200 bg-ink-950">
+
+<div class="grain" aria-hidden="true"></div>
+<div class="cursor-ring" id="cursorRing" aria-hidden="true"></div>
+
+<!-- ==================== HEADER ==================== -->
+<header class="glass-nav fixed top-0 inset-x-0 z-50" data-testid="site-header">
+  <div class="max-w-7xl mx-auto px-6 lg:px-8 h-16 flex items-center justify-between">
+    <a href="#top" class="flex items-center gap-2" data-testid="header-logo">
+      <span class="font-display font-black text-xl tracking-tight text-white">hushtv<span class="text-brand-cyan">.</span></span>
+    </a>
+    <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300" data-testid="header-nav">
+      <a href="#sections" class="hover:text-white transition" data-testid="nav-sections">Sections</a>
+      <a href="#dvr" class="hover:text-white transition" data-testid="nav-dvr">Cloud DVR</a>
+      <a href="#vault" class="hover:text-white transition" data-testid="nav-vault">The Vault</a>
+      <a href="#hushplus" class="hover:text-white transition" data-testid="nav-hushplus">Hush<span class="text-brand-cyan">+</span></a>
+      <a href="#whatsnew" class="hover:text-white transition" data-testid="nav-whatsnew">What's New</a>
+    </nav>
+    <a href="https://hushtv.xyz/hushtv-official.apk" class="btn-primary font-display font-bold text-sm px-4 py-2 rounded-full inline-flex items-center gap-2" data-testid="header-install-button">
+      <span class="w-1.5 h-1.5 rounded-full bg-[#05101B]"></span>
+      Install v1.43.59
+    </a>
+  </div>
+</header>
+
+<!-- ==================== HERO ==================== -->
+<section id="top" class="relative pt-40 pb-20 md:pt-56 md:pb-32 overflow-hidden" data-testid="hero-section">
+  <div class="mesh" aria-hidden="true"></div>
+  <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-ink-950" aria-hidden="true"></div>
+
+  <div class="relative z-10 max-w-7xl mx-auto px-6 lg:px-8">
+    <div class="text-center max-w-4xl mx-auto reveal">
+      <div class="kicker mb-6 inline-flex items-center gap-2 font-mono">
+        <span class="w-1.5 h-1.5 rounded-full bg-brand-cyan"></span>
+        Version 1.43.59 · Cloud DVR Phase 1
+      </div>
+      <h1 class="font-display font-black text-5xl md:text-6xl lg:text-7xl leading-[0.95] tracking-tight">
+        Your new HushTV<br/>
+        <span class="text-grad-cyan">is ready.</span>
+      </h1>
+      <p class="mt-6 md:mt-8 text-base md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
+        Install the latest build, then scroll down for a full tour of every section, every feature, and the Hush<span class="text-brand-cyan font-semibold">+</span> add-on suite baked into the app.
+      </p>
+
+      <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="https://hushtv.xyz/hushtv-official.apk" class="btn-primary font-display font-bold text-base px-8 py-4 rounded-full inline-flex items-center gap-3" data-testid="hero-install-button">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install / Update Now
+        </a>
+        <a href="#whatsnew" class="btn-ghost font-display font-semibold text-base px-8 py-4 rounded-full inline-flex items-center gap-2" data-testid="hero-whatsnew-button">
+          What's new in this build
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+      </div>
+
+      <div class="mt-6 text-xs text-slate-500 font-mono tracking-wider" data-testid="hero-version-tag">
+        v1.43.59 · 18 MB · signed APK · updates automatically after first install
+      </div>
+    </div>
+
+    <!-- Hero visual: TV mockup -->
+    <div class="relative mt-16 md:mt-24 reveal" data-testid="hero-visual">
+      <div class="hero-tv relative mx-auto" style="width: min(1080px, 100%);">
+        <div class="tv-bezel" style="aspect-ratio: 16/9;">
+          <iframe src="tv-mock-1.html" loading="lazy" title="HushTV Home"
+                  style="width:1920px; height:1080px; transform-origin: 0 0;"
+                  onload="fitIframe(this)"></iframe>
+        </div>
+        <div class="hidden lg:block absolute -right-6 -bottom-16 w-[220px]">
+          <div class="phone-bezel">
+            <div class="phone-notch"></div>
+            <div class="screen" style="aspect-ratio: 9/19.5; padding: 28px 10px 10px;">
+              <div class="px-2">
+                <div class="flex items-center justify-between mb-3">
+                  <span class="font-display font-black text-white text-sm">hushtv<span class="text-brand-cyan">.</span></span>
+                  <span class="rec-dot w-2 h-2 rounded-full bg-red-500"></span>
+                </div>
+                <div class="text-[9px] tracking-[0.2em] text-brand-cyan font-black uppercase mb-2">Live Now</div>
+                <div class="space-y-1.5">
+                  <div class="flex items-center gap-2 p-2 rounded-lg bg-brand-cyan/10 border border-brand-cyan/30"><div class="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black text-[#05101B]" style="background:#E63946;">FX</div><div class="flex-1 text-[10px] font-semibold truncate">Shōgun S2</div><span class="text-[8px] text-brand-cyan font-mono">HD</span></div>
+                  <div class="flex items-center gap-2 p-2 rounded-lg bg-white/[0.04] border border-white/5"><div class="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black text-[#05101B]" style="background:#2A9D8F;">ESP</div><div class="flex-1 text-[10px] font-semibold truncate">NBA Finals</div><span class="text-[8px] text-slate-400 font-mono">4K</span></div>
+                  <div class="flex items-center gap-2 p-2 rounded-lg bg-white/[0.04] border border-white/5"><div class="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black text-[#05101B]" style="background:#F4A261;">HBO</div><div class="flex-1 text-[10px] font-semibold truncate">Last of Us</div><span class="text-[8px] text-slate-400 font-mono">HD</span></div>
+                  <div class="flex items-center gap-2 p-2 rounded-lg bg-white/[0.04] border border-white/5"><div class="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black text-[#05101B]" style="background:#457B9D;">BBC</div><div class="flex-1 text-[10px] font-semibold truncate">News at Ten</div><span class="text-[8px] text-slate-400 font-mono">HD</span></div>
+                </div>
+                <div class="mt-3 rounded-lg border border-white/5 bg-white/[0.03] p-2">
+                  <div class="text-[8px] text-slate-500 uppercase tracking-[0.2em] font-black">Continue Watching</div>
+                  <div class="mt-1.5 h-1 bg-white/10 rounded overflow-hidden"><div class="h-full bg-brand-cyan" style="width: 64%"></div></div>
+                  <div class="mt-1 text-[9px] text-slate-300 font-semibold">Dune: Part Two</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SECTIONS OVERVIEW (pageOrder) ==================== -->
+<section id="sections" class="relative py-20 md:py-28 z-10" data-testid="sections-overview">
+  <div class="max-w-7xl mx-auto px-6 lg:px-8">
+    <div class="max-w-3xl mb-12 reveal">
+      <div class="kicker mb-4">The Home Screen</div>
+      <h2 class="font-display font-bold text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tight">
+        Nine pages of content.<br/>
+        <span class="text-slate-500">Scroll up & down with Channel Up/Down or swipe.</span>
+      </h2>
+      <p class="mt-5 text-slate-400 text-base md:text-lg max-w-2xl">
+        Every page below is already on your home screen. Use the remote, or swipe vertically on touch devices — HushTV auto-jumps straight to Continue Watching on cold launch, just like Netflix.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 reveal stagger" data-testid="home-sections-grid">
+
+      <!-- 1. Continue Watching -->
+      <div class="section-card glass rounded-2xl p-6" data-testid="section-cw">
+        <div class="flex items-start justify-between mb-3">
+          <span class="font-mono text-xs text-slate-500">01 · CW</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+        </div>
+        <div class="kicker mb-1">Continue Watching</div>
+        <h3 class="font-display font-bold text-lg text-white">Pick up exactly where you left off.</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">Auto-saves every 4 seconds. Syncs across TV and mobile. The app jumps here the moment you open it.</p>
+      </div>
+
+      <!-- 2. Discover -->
+      <div class="section-card glass rounded-2xl p-6" data-testid="section-discover">
+        <div class="flex items-start justify-between mb-3">
+          <span class="font-mono text-xs text-slate-500">02 · DISCOVER</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M16 8l-2 6-6 2 2-6 6-2z"/></svg>
+        </div>
+        <div class="kicker mb-1">Discover</div>
+        <h3 class="font-display font-bold text-lg text-white">Latest movies and series, side by side.</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">A focused landing lane with newly added titles from your provider, plus Trending Now powered by your top-10 movie rail.</p>
+      </div>
+
+      <!-- 3. Streaming Services · Movies -->
+      <div class="section-card glass rounded-2xl p-6" data-testid="section-ss-movies">
+        <div class="flex items-start justify-between mb-3">
+          <span class="font-mono text-xs text-slate-500">03 · SS·MOVIES</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg>
+        </div>
+        <div class="kicker mb-1">Streaming Services · Movies</div>
+        <h3 class="font-display font-bold text-lg text-white">Netflix, Disney+, HBO, Prime — grouped.</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">Filter movies by streaming provider. Only see the titles your playlist has on a specific platform.</p>
+      </div>
+
+      <!-- 4. Streaming Services · Series -->
+      <div class="section-card glass rounded-2xl p-6" data-testid="section-ss-series">
+        <div class="flex items-start justify-between mb-3">
+          <span class="font-mono text-xs text-slate-500">04 · SS·SERIES</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="kicker mb-1">Streaming Services · Series</div>
+        <h3 class="font-display font-bold text-lg text-white">Every show, sorted by home platform.</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">Same idea as Movies — full TV show lineups grouped by the streamer that owns them.</p>
+      </div>
+
+      <!-- 5. Collections -->
+      <div class="section-card glass rounded-2xl p-6" data-testid="section-collections">
+        <div class="flex items-start justify-between mb-3">
+          <span class="font-mono text-xs text-slate-500">05 · COLLECTIONS</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2" stroke-linecap="round"><path d="M4 19h16M6 15h12M8 11h8M10 7h4"/></svg>
+        </div>
+        <div class="kicker mb-1">Movie Collections</div>
+        <h3 class="font-display font-bold text-lg text-white">Marvel, James Bond, Star Wars, Rocky…</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">Franchises and sagas auto-grouped from TMDB and your library. Curated picks plus auto-discovered ones.</p>
+      </div>
+
+      <!-- 6. Moods & Themes -->
+      <div class="section-card glass rounded-2xl p-6" data-testid="section-themes">
+        <div class="flex items-start justify-between mb-3">
+          <span class="font-mono text-xs text-slate-500">06 · MOODS</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </div>
+        <div class="kicker mb-1">Moods & Themes</div>
+        <h3 class="font-display font-bold text-lg text-white">25 hand-curated lists. 1,750+ titles.</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">Plot twists, mind-benders, feel-good comfort, survival, revenge, WTF did I just watch — matched live against what's in your library.</p>
+      </div>
+
+      <!-- 7. Genres · Movies -->
+      <div class="section-card glass rounded-2xl p-6" data-testid="section-genres-movies">
+        <div class="flex items-start justify-between mb-3">
+          <span class="font-mono text-xs text-slate-500">07 · GENRES·MOVIES</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2" stroke-linecap="round"><path d="M4 4h16v4H4zM4 12h10v8H4zM18 12h2v8h-2z"/></svg>
+        </div>
+        <div class="kicker mb-1">Genres · Movies</div>
+        <h3 class="font-display font-bold text-lg text-white">Horror. Comedy. Sci-fi. All of them.</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">Every TMDB genre as a row, with the movies from your playlist that actually match — no dead tiles.</p>
+      </div>
+
+      <!-- 8. Genres · Series -->
+      <div class="section-card glass rounded-2xl p-6" data-testid="section-genres-series">
+        <div class="flex items-start justify-between mb-3">
+          <span class="font-mono text-xs text-slate-500">08 · GENRES·SERIES</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/></svg>
+        </div>
+        <div class="kicker mb-1">Genres · Series</div>
+        <h3 class="font-display font-bold text-lg text-white">Same genre grid for TV shows.</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">Drama, Crime, Animation, Reality — every genre lane filtered to only the shows you can actually watch.</p>
+      </div>
+
+      <!-- 9. Decades -->
+      <div class="section-card glass rounded-2xl p-6" data-testid="section-decades">
+        <div class="flex items-start justify-between mb-3">
+          <span class="font-mono text-xs text-slate-500">09 · DECADES</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="kicker mb-1">Decades (1940s → 2020s)</div>
+        <h3 class="font-display font-bold text-lg text-white">Nine decades of cinema. One swipe apart.</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">From noir classics to 2020s blockbusters — every movie in your library, bucketed by its release decade.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== DEEP DIVE: LIVE TV & EPG ==================== -->
+<section id="livetv" class="relative py-24 md:py-32 z-10" data-testid="livetv-section">
+  <div class="max-w-7xl mx-auto px-6 lg:px-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-14 lg:gap-20 items-center">
+      <div class="reveal">
+        <div class="kicker mb-4">Live TV · EPG</div>
+        <h2 class="font-display font-bold text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tight">
+          The guide. Finally.
+        </h2>
+        <p class="mt-5 text-slate-400 text-base md:text-lg leading-relaxed max-w-lg">
+          A real program guide — horizontal timeline, 14 days of data, now-playing ribbon, and a Record button one click away on every show.
+        </p>
+        <ul class="mt-8 space-y-4 stagger">
+          <li class="flex items-start gap-4" data-testid="livetv-feature-now-playing">
+            <div class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <div class="font-display font-semibold text-white">Red "now-playing" ribbon</div>
+              <div class="text-slate-400 text-sm">Scroll the timeline and the live moment moves with you. No more "wait, is this even live?"</div>
+            </div>
+          </li>
+          <li class="flex items-start gap-4" data-testid="livetv-feature-record">
+            <div class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <div class="font-display font-semibold text-white">One-click record</div>
+              <div class="text-slate-400 text-sm">A red Record chip sits in every live-player OSD. Press OK — it's queued to the cloud.</div>
+            </div>
+          </li>
+          <li class="flex items-start gap-4" data-testid="livetv-feature-channel-logos">
+            <div class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <div class="font-display font-semibold text-white">Real channel logos, everywhere</div>
+              <div class="text-slate-400 text-sm">Logos in the EPG, mini-EPG, now-playing chip and channel picker. No placeholder grey squares.</div>
+            </div>
+          </li>
+          <li class="flex items-start gap-4" data-testid="livetv-feature-reconnect">
+            <div class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <div class="font-display font-semibold text-white">Auto-reconnect + "Back online" toast</div>
+              <div class="text-slate-400 text-sm">CDN hiccup, Wi-Fi drop, stalled decoder — the player self-heals and tells you when it's back.</div>
+            </div>
+          </li>
+        </ul>
+      </div>
+      <div class="reveal">
+        <div class="tv-bezel" style="aspect-ratio: 16/9;">
+          <iframe src="tv-mock-2.html" loading="lazy" title="Live TV EPG"
+                  style="width:1920px; height:1080px; transform-origin: 0 0;"
+                  onload="fitIframe(this)"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== DEEP DIVE: CLOUD DVR ==================== -->
+<section id="dvr" class="relative py-24 md:py-32 z-10" data-testid="dvr-section">
+  <div class="max-w-7xl mx-auto px-6 lg:px-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-14 lg:gap-20 items-center">
+      <div class="order-1 lg:order-2 reveal">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-cyan/40 bg-brand-cyan/10 mb-5" data-testid="dvr-badge">
+          <span class="rec-dot w-2 h-2 rounded-full bg-red-500"></span>
+          <span class="text-brand-cyan font-mono font-bold text-xs tracking-wider">20 HOURS · FREE · INCLUDED</span>
+        </div>
+        <h2 class="font-display font-bold text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tight">
+          Cloud DVR,<br/>
+          <span class="text-slate-500">built in.</span>
+        </h2>
+        <p class="mt-5 text-slate-400 text-base md:text-lg leading-relaxed max-w-lg">
+          Every profile gets 20 hours of rolling cloud recording on a dedicated RAID-0 server. No disk to manage, no NAS to configure.
+        </p>
+        <ul class="mt-8 space-y-4 stagger">
+          <li class="flex items-start gap-4" data-testid="dvr-feature-one-click"><div class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="font-display font-semibold text-white">One-click Record from the EPG</div><div class="text-slate-400 text-sm">Tap the red chip on any live channel. Show ends? So does the recording — we read the EPG for you.</div></div></li>
+          <li class="flex items-start gap-4" data-testid="dvr-feature-scrubber"><div class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="font-display font-semibold text-white">Full scrubber — rewind, fast-forward, seek</div><div class="text-slate-400 text-sm">MP4 moov-atom remuxed for instant seek. Completed recordings auto-play on open instead of pausing.</div></div></li>
+          <li class="flex items-start gap-4" data-testid="dvr-feature-my-recordings"><div class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="font-display font-semibold text-white">"My Recordings" on TV and mobile</div><div class="text-slate-400 text-sm">Settings → My Content → My Recordings. Quota bar, newest-first list, tap to play, long-press to delete.</div></div></li>
+          <li class="flex items-start gap-4" data-testid="dvr-feature-red-rec"><div class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="font-display font-semibold text-white">Red "● REC" badges on live lists</div><div class="text-slate-400 text-sm">Glance at the EPG or browse screen and you know instantly what's recording right now.</div></div></li>
+          <li class="flex items-start gap-4" data-testid="dvr-feature-private"><div class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="font-display font-semibold text-white">Private by design</div><div class="text-slate-400 text-sm">Pseudonymous device hashes only — your IPTV credentials never leave the app. 14-day auto-retention.</div></div></li>
+        </ul>
+      </div>
+
+      <div class="order-2 lg:order-1 reveal">
+        <div class="tv-bezel" style="aspect-ratio: 16/9;">
+          <iframe src="tv-mock-3.html" loading="lazy" title="My Recordings"
+                  style="width:1920px; height:1080px; transform-origin: 0 0;"
+                  onload="fitIframe(this)"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== THE VAULT: MOVIES · SERIES ==================== -->
+<section id="vault" class="relative py-24 md:py-32 z-10" data-testid="vault-section">
+  <div class="max-w-7xl mx-auto px-6 lg:px-8">
+    <div class="text-center max-w-3xl mx-auto mb-14 reveal">
+      <div class="kicker mb-4">The Vault</div>
+      <h2 class="font-display font-bold text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tight">
+        Your library, <span class="text-grad-cyan">hand-curated.</span>
+      </h2>
+      <p class="mt-5 text-slate-400 text-base md:text-lg">
+        25 themed lists. 9 decades. Real collections. TMDB-powered detail screens with cast, plot, ratings and YouTube trailers.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 reveal stagger mb-8" data-testid="vault-stats">
+      <div class="glass rounded-2xl p-5"><div class="text-3xl md:text-4xl font-display font-black text-white">1,750<span class="text-brand-cyan">+</span></div><div class="mt-1 text-xs text-slate-400 uppercase tracking-[0.15em] font-semibold">Curated Titles</div></div>
+      <div class="glass rounded-2xl p-5"><div class="text-3xl md:text-4xl font-display font-black text-white">25</div><div class="mt-1 text-xs text-slate-400 uppercase tracking-[0.15em] font-semibold">Mood Lists</div></div>
+      <div class="glass rounded-2xl p-5"><div class="text-3xl md:text-4xl font-display font-black text-white">9</div><div class="mt-1 text-xs text-slate-400 uppercase tracking-[0.15em] font-semibold">Decades</div></div>
+      <div class="glass rounded-2xl p-5"><div class="text-3xl md:text-4xl font-display font-black text-white">&lt; 25 <span class="text-brand-cyan text-base">ms</span></div><div class="mt-1 text-xs text-slate-400 uppercase tracking-[0.15em] font-semibold">Match Speed</div></div>
+    </div>
+
+    <!-- Theme chips horizontal rail -->
+    <div class="reveal">
+      <div class="kicker mb-3">A taste of what's inside Moods & Themes</div>
+      <div class="hrail flex gap-3 overflow-x-auto pb-4" data-testid="vault-themes-rail">
+        <!-- 25 theme chips -->
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Based on True Stories</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Plot Twist Endings</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Mind-Bending Movies</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Underrated Hidden Gems</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Movies That Will Make You Cry</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Feel-Good Comfort Movies</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Coming-of-Age Classics</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Revenge Stories</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Survival Against All Odds</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Movies That Mess With Time</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Action-Comedy Hits</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Dark Comedy Picks</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Psychological Thrillers</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Epic Fantasy Worlds</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Crime Masterpieces</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Late Night Movies</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Watch With Friends</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Turn Your Brain Off</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Visually Stunning Films</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Soundtrack-Driven Movies</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Didn't Understand First Time</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Better Than the Book</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">One Location Movies</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">Minimal Dialogue Movies</span>
+        <span class="flex-shrink-0 glass rounded-full px-5 py-2.5 text-sm font-medium text-slate-200">WTF Did I Just Watch</span>
+      </div>
+      <p class="mt-2 text-xs text-slate-500 font-mono">← scroll →  · 25 lists · ~1,750 hand-picked films, matched to YOUR library</p>
+    </div>
+
+    <div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-5 reveal stagger" data-testid="vault-details">
+      <div class="glass rounded-2xl p-6">
+        <div class="kicker mb-2">TMDB-Powered</div>
+        <h3 class="font-display font-bold text-lg text-white">Posters · cast · plot · ratings</h3>
+        <p class="mt-2 text-sm text-slate-400">Every detail page pulls live from TMDB so you get accurate synopses, runtime, and crew.</p>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="kicker mb-2">YouTube Trailers</div>
+        <h3 class="font-display font-bold text-lg text-white">In-app trailer playback</h3>
+        <p class="mt-2 text-sm text-slate-400">Preview any movie or series with the official trailer, streamed right inside the detail screen.</p>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="kicker mb-2">My List</div>
+        <h3 class="font-display font-bold text-lg text-white">Save for later with one button</h3>
+        <p class="mt-2 text-sm text-slate-400">Watchlist lives alongside Continue Watching — two presses and a title is saved for the next session.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== HUSH+ ==================== -->
+<section id="hushplus" class="relative py-24 md:py-32 z-10 overflow-hidden" data-testid="hushplus-section">
+  <div class="absolute inset-0" aria-hidden="true" style="background:
+    radial-gradient(60% 50% at 50% 20%, rgba(89,191,242,0.18), transparent 60%),
+    radial-gradient(50% 60% at 50% 100%, rgba(30,144,255,0.18), transparent 60%);"></div>
+
+  <div class="max-w-7xl mx-auto px-6 lg:px-8 relative">
+    <div class="text-center max-w-4xl mx-auto mb-14 reveal">
+      <div class="kicker mb-4" data-testid="hushplus-eyebrow">Premium Add-On Suite · Integrated</div>
+      <h2 class="font-display font-bold text-4xl md:text-6xl lg:text-7xl leading-[0.95] tracking-tight">
+        Introducing <span class="text-grad-cyan">Hush+</span>
+      </h2>
+      <p class="mt-6 text-slate-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+        The ultimate HushTV add-on suite — premium streaming, millions of books & audiobooks, and thousands of retro games. Already wired into the Hush+ tab in your new app.
+      </p>
+    </div>
+
+    <!-- Trial / Access banner -->
+    <div class="max-w-4xl mx-auto mb-14 glass rounded-3xl p-6 md:p-8 reveal" data-testid="hushplus-access-banner">
+      <div class="flex flex-col md:flex-row gap-6 md:items-center">
+        <div class="flex-shrink-0 flex items-center gap-3">
+          <span class="w-12 h-12 rounded-2xl bg-brand-cyan/15 border border-brand-cyan/40 flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#59BFF2" stroke-width="2.2" stroke-linecap="round"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+          </span>
+          <div class="md:hidden">
+            <div class="text-brand-cyan font-mono text-xs tracking-wider font-bold">FREE FOR EVERYONE</div>
+            <div class="font-display font-bold text-white text-lg">30-day trial</div>
+          </div>
+        </div>
+        <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+          <div data-testid="hushplus-access-existing">
+            <div class="kicker mb-1.5">Existing Hush+ customers</div>
+            <div class="font-display font-semibold text-white text-base md:text-lg leading-snug">
+              Full access to every addon — VOD, Books, Arcade, Tube — unlocked automatically, forever.
+            </div>
+          </div>
+          <div data-testid="hushplus-access-trial">
+            <div class="kicker mb-1.5">Everyone else</div>
+            <div class="font-display font-semibold text-white text-base md:text-lg leading-snug">
+              <span class="text-brand-cyan">30-day free trial.</span> Open the Hush<span class="text-brand-cyan">+</span> tab in the app to start — no card required.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6 Hush+ pillars -->
+    <div class="mb-16 reveal" data-testid="hushplus-pillars">
+      <div class="kicker mb-4">Why Hush+</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger">
+        <div class="glass rounded-2xl p-6 section-card" data-testid="pillar-library"><h3 class="font-display font-bold text-lg text-white mb-2">Massive Content Library</h3><p class="text-sm text-slate-400 leading-relaxed">30,000+ live channels in 4K, plus 250,000+ movies and 30,000+ series in every language.</p></div>
+        <div class="glass rounded-2xl p-6 section-card" data-testid="pillar-buffering"><h3 class="font-display font-bold text-lg text-white mb-2">No Buffering, Netflix-Style Tech</h3><p class="text-sm text-slate-400 leading-relaxed">VOD quality auto-adjusts on the fly so playback stays smooth — just like Netflix.</p></div>
+        <div class="glass rounded-2xl p-6 section-card" data-testid="pillar-ui"><h3 class="font-display font-bold text-lg text-white mb-2">Sleek, Familiar Interface</h3><p class="text-sm text-slate-400 leading-relaxed">Netflix-inspired browse and detail screens with ad-free YouTube built right in.</p></div>
+        <div class="glass rounded-2xl p-6 section-card" data-testid="pillar-global"><h3 class="font-display font-bold text-lg text-white mb-2">Global Access, No VPN Needed</h3><p class="text-sm text-slate-400 leading-relaxed">International streams, zero geo restrictions, buffer-free playback from anywhere.</p></div>
+        <div class="glass rounded-2xl p-6 section-card" data-testid="pillar-backup"><h3 class="font-display font-bold text-lg text-white mb-2">Backup for HushTV</h3><p class="text-sm text-slate-400 leading-relaxed">Different servers. If a HushTV stream is down, Hush+ almost always has it.</p></div>
+        <div class="glass rounded-2xl p-6 section-card" data-testid="pillar-exclusive"><h3 class="font-display font-bold text-lg text-white mb-2">Exclusive to HushTV Users</h3><p class="text-sm text-slate-400 leading-relaxed">Available only inside the HushTV app — a reward for being part of the community.</p></div>
+      </div>
+    </div>
+
+    <!-- 4 Addons -->
+    <div class="reveal" data-testid="hushplus-addons">
+      <div class="kicker mb-4">The four add-ons, one tab</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 stagger">
+        <!-- VOD -->
+        <div class="addon-vod glass section-card addon-card rounded-3xl p-6 md:p-8" data-testid="addon-vod">
+          <div class="flex items-start justify-between mb-4">
+            <span class="addon-eyebrow font-mono text-xs font-bold tracking-wider uppercase">Flagship Streaming</span>
+            <span class="addon-ring w-10 h-10 rounded-2xl bg-white/[0.04] flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1E90FF" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </span>
+          </div>
+          <h3 class="font-display font-black text-2xl md:text-3xl text-white tracking-tight">HushVOD+</h3>
+          <p class="mt-1 font-display font-medium text-slate-300">The internet's entire movie & TV library. One app.</p>
+          <p class="mt-4 text-sm text-slate-400 leading-relaxed">Powered by Nuvio. Taps into every movie and series available on the internet — not just a curated list. If it exists, Nuvio can find it and stream it.</p>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Millions of movies & series</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">720p · 1080p · 4K</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Every language</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">No VPN required</span>
+          </div>
+        </div>
+
+        <!-- Books -->
+        <div class="addon-books glass section-card addon-card rounded-3xl p-6 md:p-8" data-testid="addon-books">
+          <div class="flex items-start justify-between mb-4">
+            <span class="addon-eyebrow font-mono text-xs font-bold tracking-wider uppercase">New Add-On</span>
+            <span class="addon-ring w-10 h-10 rounded-2xl bg-white/[0.04] flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+            </span>
+          </div>
+          <h3 class="font-display font-black text-2xl md:text-3xl text-white tracking-tight">HushBooks+</h3>
+          <p class="mt-1 font-display font-medium text-slate-300">Your entire imagination, unlocked.</p>
+          <p class="mt-4 text-sm text-slate-400 leading-relaxed">Read any eBook or listen to any audiobook in the world — from bestsellers to classics, in every genre and every language. Stephen King to Harry Potter — if it exists, it's here.</p>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Millions of eBooks</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Full audiobook library</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Every language & genre</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Instant access</span>
+          </div>
+        </div>
+
+        <!-- Arcade -->
+        <div class="addon-arcade glass section-card addon-card rounded-3xl p-6 md:p-8" data-testid="addon-arcade">
+          <div class="flex items-start justify-between mb-4">
+            <span class="addon-eyebrow font-mono text-xs font-bold tracking-wider uppercase">New Add-On</span>
+            <span class="addon-ring w-10 h-10 rounded-2xl bg-white/[0.04] flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C026D3" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="12" rx="3"/><line x1="7" y1="12" x2="11" y2="12"/><line x1="9" y1="10" x2="9" y2="14"/><circle cx="16" cy="11" r="1"/><circle cx="18" cy="13" r="1"/></svg>
+            </span>
+          </div>
+          <h3 class="font-display font-black text-2xl md:text-3xl text-white tracking-tight">HushArcade+</h3>
+          <p class="mt-1 font-display font-medium text-slate-300">The ultimate retro gaming vault.</p>
+          <p class="mt-4 text-sm text-slate-400 leading-relaxed">Thousands of classic games from every legendary console — no downloads, no cartridges, no limits. From Super Mario to Crash Bandicoot, every golden-era title.</p>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">NES</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">SNES</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Sega Genesis</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">PS1 · PS2</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Game Boy · N64</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Atari & more</span>
+          </div>
+        </div>
+
+        <!-- Tube -->
+        <div class="addon-tube glass section-card addon-card rounded-3xl p-6 md:p-8" data-testid="addon-tube">
+          <div class="flex items-start justify-between mb-4">
+            <span class="addon-eyebrow font-mono text-xs font-bold tracking-wider uppercase">Included</span>
+            <span class="addon-ring w-10 h-10 rounded-2xl bg-white/[0.04] flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" stroke-linecap="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.33 29 29 0 0 0-.46-5.25z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>
+            </span>
+          </div>
+          <h3 class="font-display font-black text-2xl md:text-3xl text-white tracking-tight">HushTube+</h3>
+          <p class="mt-1 font-display font-medium text-slate-300">YouTube. Without the ads.</p>
+          <p class="mt-4 text-sm text-slate-400 leading-relaxed">Built-in YouTube Premium experience — all the videos, none of the interruptions. Background play, offline downloads, 4K streaming. No subscription juggling.</p>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Ad-free</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Background play</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">Offline downloads</span>
+            <span class="text-xs font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300">4K streaming</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== LITTLE THINGS ==================== -->
+<section id="polish" class="relative py-24 md:py-32 z-10" data-testid="polish-section">
+  <div class="max-w-7xl mx-auto px-6 lg:px-8">
+    <div class="max-w-3xl mb-14 reveal">
+      <div class="kicker mb-4">The quiet wins</div>
+      <h2 class="font-display font-bold text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tight">
+        Little things<br/>
+        <span class="text-slate-500">you'll notice every session.</span>
+      </h2>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 reveal stagger" data-testid="polish-grid">
+      <div class="section-card glass rounded-2xl p-6" data-testid="polish-reconnect">
+        <h3 class="font-display font-bold text-lg text-white">Player auto-reconnect</h3>
+        <p class="mt-2 text-sm text-slate-400">Handles CDN hiccups, Wi-Fi drops and stalled decoders with exponential backoff. A "Back online" pill tells you when it's healed.</p>
+      </div>
+      <div class="section-card glass rounded-2xl p-6" data-testid="polish-sync">
+        <h3 class="font-display font-bold text-lg text-white">Continue Watching sync</h3>
+        <p class="mt-2 text-sm text-slate-400">Position saves every 4 seconds and on seek events — pause on the phone, resume on the Fire Stick, to the second.</p>
+      </div>
+      <div class="section-card glass rounded-2xl p-6" data-testid="polish-pin">
+        <h3 class="font-display font-bold text-lg text-white">Parental PIN</h3>
+        <p class="mt-2 text-sm text-slate-400">Gate adult categories and hide them from the home screen. Settings → Parental → PIN.</p>
+      </div>
+      <div class="section-card glass rounded-2xl p-6" data-testid="polish-subs">
+        <h3 class="font-display font-bold text-lg text-white">Subtitle download</h3>
+        <p class="mt-2 text-sm text-slate-400">Search and download subtitles for movies and series right from the player — no external tools, no fiddling.</p>
+      </div>
+      <div class="section-card glass rounded-2xl p-6" data-testid="polish-layout">
+        <h3 class="font-display font-bold text-lg text-white">Layout chooser (Sidebar default)</h3>
+        <p class="mt-2 text-sm text-slate-400">First run asks you: Tivimate-style left rail or classic top bar. Swap any time from Settings.</p>
+      </div>
+      <div class="section-card glass rounded-2xl p-6" data-testid="polish-touch">
+        <h3 class="font-display font-bold text-lg text-white">Tablet touch navigation</h3>
+        <p class="mt-2 text-sm text-slate-400">On tablets and foldables, swipe vertically or tap the floating chevrons to move between home pages.</p>
+      </div>
+      <div class="section-card glass rounded-2xl p-6" data-testid="polish-ota">
+        <h3 class="font-display font-bold text-lg text-white">In-app OTA updates</h3>
+        <p class="mt-2 text-sm text-slate-400">The app checks for new versions on launch and prompts to install with one click. No Play Store roundtrips.</p>
+      </div>
+      <div class="section-card glass rounded-2xl p-6" data-testid="polish-xtream">
+        <h3 class="font-display font-bold text-lg text-white">Xtream + M3U support</h3>
+        <p class="mt-2 text-sm text-slate-400">Bring your own Xtream Codes login or M3U URL. Full EPG, VOD and series categories for any compatible provider.</p>
+      </div>
+      <div class="section-card glass rounded-2xl p-6" data-testid="polish-perf">
+        <h3 class="font-display font-bold text-lg text-white">Fire Stick performance pass</h3>
+        <p class="mt-2 text-sm text-slate-400">Home rails pre-build at boot, RGB_565 bitmap decoding, memoised prefs reads. Scroll lag is gone on Gen 1/2.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== WHAT'S NEW ==================== -->
+<section id="whatsnew" class="relative py-24 md:py-32 z-10" data-testid="whatsnew-section">
+  <div class="max-w-5xl mx-auto px-6 lg:px-8">
+    <div class="mb-14 reveal text-center">
+      <div class="kicker mb-4 font-mono" data-testid="whatsnew-version">v1.43.59 · Released 2026-05-04</div>
+      <h2 class="font-display font-bold text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tight">What's new in this build.</h2>
+    </div>
+
+    <div class="space-y-4 reveal stagger" data-testid="whatsnew-list">
+      <div class="glass rounded-2xl p-5 md:p-6 flex gap-5" data-testid="changelog-dvr">
+        <span class="flex-shrink-0 font-mono text-xs text-brand-cyan tracking-wider pt-1">NEW</span>
+        <div>
+          <h3 class="font-display font-semibold text-white text-base md:text-lg">Cloud DVR is live</h3>
+          <p class="mt-1 text-sm text-slate-400">20 hours free per profile. One-click record from the EPG, auto-stops at show end, 14-day retention, My Recordings on both TV and mobile.</p>
+        </div>
+      </div>
+      <div class="glass rounded-2xl p-5 md:p-6 flex gap-5" data-testid="changelog-scrubber">
+        <span class="flex-shrink-0 font-mono text-xs text-brand-cyan tracking-wider pt-1">NEW</span>
+        <div>
+          <h3 class="font-display font-semibold text-white text-base md:text-lg">Scrubber on completed recordings</h3>
+          <p class="mt-1 text-sm text-slate-400">Rewind, fast-forward and seek to any frame. MP4 moov-atom post-remux means seek is instant.</p>
+        </div>
+      </div>
+      <div class="glass rounded-2xl p-5 md:p-6 flex gap-5" data-testid="changelog-rec-badges">
+        <span class="flex-shrink-0 font-mono text-xs text-brand-cyan tracking-wider pt-1">NEW</span>
+        <div>
+          <h3 class="font-display font-semibold text-white text-base md:text-lg">Red "● REC" badges on live lists</h3>
+          <p class="mt-1 text-sm text-slate-400">Instantly see what's recording right now from the EPG, channel browser, or mini-EPG.</p>
+        </div>
+      </div>
+      <div class="glass rounded-2xl p-5 md:p-6 flex gap-5" data-testid="changelog-cw">
+        <span class="flex-shrink-0 font-mono text-xs text-slate-300 tracking-wider pt-1">FIXED</span>
+        <div>
+          <h3 class="font-display font-semibold text-white text-base md:text-lg">"Continue Watching" VOD resume</h3>
+          <p class="mt-1 text-sm text-slate-400">Save cadence dropped to 4 s and seeks now trigger a save — resumes are frame-accurate instead of "eh, close enough".</p>
+        </div>
+      </div>
+      <div class="glass rounded-2xl p-5 md:p-6 flex gap-5" data-testid="changelog-focus">
+        <span class="flex-shrink-0 font-mono text-xs text-slate-300 tracking-wider pt-1">FIXED</span>
+        <div>
+          <h3 class="font-display font-semibold text-white text-base md:text-lg">Live TV OSD focus loop</h3>
+          <p class="mt-1 text-sm text-slate-400">D-pad now correctly reaches the bottom player controls instead of getting stuck on the channel strip.</p>
+        </div>
+      </div>
+      <div class="glass rounded-2xl p-5 md:p-6 flex gap-5" data-testid="changelog-brand">
+        <span class="flex-shrink-0 font-mono text-xs text-slate-300 tracking-wider pt-1">POLISH</span>
+        <div>
+          <h3 class="font-display font-semibold text-white text-base md:text-lg">Brand recolor · Decades (1940s → 2020s)</h3>
+          <p class="mt-1 text-sm text-slate-400">Fresh DodgerBlue / SkyBlue palette across the whole app, plus a new Decades home page spanning 9 decades of cinema.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FAQ ==================== -->
+<section id="faq" class="relative py-20 md:py-24 z-10" data-testid="faq-section">
+  <div class="max-w-3xl mx-auto px-6 lg:px-8">
+    <div class="text-center mb-12 reveal">
+      <div class="kicker mb-4">Install & Update</div>
+      <h2 class="font-display font-bold text-3xl md:text-5xl leading-tight tracking-tight">Common questions.</h2>
+    </div>
+    <div class="space-y-3 reveal stagger" data-testid="faq-list">
+      <details class="glass rounded-2xl p-5 md:p-6" data-testid="faq-accordion-item">
+        <summary class="cursor-pointer list-none flex items-center justify-between gap-6">
+          <span class="font-display font-semibold text-base md:text-lg text-white">How do I update if I'm already on HushTV?</span>
+          <span class="chev flex-shrink-0 w-8 h-8 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </summary>
+        <div class="mt-4 pt-4 border-t border-white/5 text-slate-400 text-sm md:text-base leading-relaxed">
+          Open the app — it'll detect v1.43.59 and offer an in-app update. Accept, and it reinstalls itself. If you miss the prompt, tap Install above and sideload manually.
+        </div>
+      </details>
+      <details class="glass rounded-2xl p-5 md:p-6" data-testid="faq-accordion-item">
+        <summary class="cursor-pointer list-none flex items-center justify-between gap-6">
+          <span class="font-display font-semibold text-base md:text-lg text-white">Will my playlists and Continue Watching survive the update?</span>
+          <span class="chev flex-shrink-0 w-8 h-8 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </summary>
+        <div class="mt-4 pt-4 border-t border-white/5 text-slate-400 text-sm md:text-base leading-relaxed">
+          Yes. Updates preserve every playlist, PIN setting, layout preference, Continue Watching entry and My List pick.
+        </div>
+      </details>
+      <details class="glass rounded-2xl p-5 md:p-6" data-testid="faq-accordion-item">
+        <summary class="cursor-pointer list-none flex items-center justify-between gap-6">
+          <span class="font-display font-semibold text-base md:text-lg text-white">How do I start my 30-day Hush+ trial?</span>
+          <span class="chev flex-shrink-0 w-8 h-8 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </summary>
+        <div class="mt-4 pt-4 border-t border-white/5 text-slate-400 text-sm md:text-base leading-relaxed">
+          Open the Hush+ tab inside the app. The trial starts automatically on your first visit — no card, no form. Existing Hush+ customers skip the trial and unlock full access instantly.
+        </div>
+      </details>
+      <details class="glass rounded-2xl p-5 md:p-6" data-testid="faq-accordion-item">
+        <summary class="cursor-pointer list-none flex items-center justify-between gap-6">
+          <span class="font-display font-semibold text-base md:text-lg text-white">Do I need a separate subscription for Hush+?</span>
+          <span class="chev flex-shrink-0 w-8 h-8 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </summary>
+        <div class="mt-4 pt-4 border-t border-white/5 text-slate-400 text-sm md:text-base leading-relaxed">
+          Current Hush+ customers are already unlocked for life. Everyone else gets a full 30 days free — after that, Hush+ continues as a one-time add-on tied to your HushTV account.
+        </div>
+      </details>
+      <details class="glass rounded-2xl p-5 md:p-6" data-testid="faq-accordion-item">
+        <summary class="cursor-pointer list-none flex items-center justify-between gap-6">
+          <span class="font-display font-semibold text-base md:text-lg text-white">Does Cloud DVR count against any usage quota?</span>
+          <span class="chev flex-shrink-0 w-8 h-8 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </summary>
+        <div class="mt-4 pt-4 border-t border-white/5 text-slate-400 text-sm md:text-base leading-relaxed">
+          20 hours of rolling cloud storage per profile, auto-trimmed at 14 days. Stopping early only counts the actual recorded seconds against your quota.
+        </div>
+      </details>
+      <details class="glass rounded-2xl p-5 md:p-6" data-testid="faq-accordion-item">
+        <summary class="cursor-pointer list-none flex items-center justify-between gap-6">
+          <span class="font-display font-semibold text-base md:text-lg text-white">Which devices are supported?</span>
+          <span class="chev flex-shrink-0 w-8 h-8 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </summary>
+        <div class="mt-4 pt-4 border-t border-white/5 text-slate-400 text-sm md:text-base leading-relaxed">
+          Fire TV (all generations), Android TV, Nvidia Shield, Chromecast with Google TV, Android phones and tablets, foldables. One sideload, sign in once, pick up across every device.
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FOOTER / FINAL CTA ==================== -->
+<footer class="relative pt-20 md:pt-28 pb-12 border-t border-white/5 z-10" data-testid="footer-section">
+  <div class="max-w-7xl mx-auto px-6 lg:px-8">
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-12 lg:gap-16">
+      <div class="lg:col-span-3 reveal">
+        <h2 class="font-display font-black text-4xl md:text-6xl lg:text-7xl leading-[0.95] tracking-tight">
+          Ready?<br/>
+          <span class="text-grad-cyan">Install the update.</span>
+        </h2>
+        <p class="mt-6 text-slate-400 text-base md:text-lg max-w-xl">
+          v1.43.59 · 18 MB · signed APK. Works alongside your current install — your playlists and progress carry over.
+        </p>
+        <div class="mt-8 flex flex-col sm:flex-row items-start gap-4">
+          <a href="https://hushtv.xyz/hushtv-official.apk" class="btn-primary font-display font-bold text-base px-8 py-4 rounded-full inline-flex items-center gap-3" data-testid="footer-install-button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Install v1.43.59
+          </a>
+          <a href="#hushplus" class="btn-ghost font-display font-semibold text-base px-8 py-4 rounded-full inline-flex items-center gap-2" data-testid="footer-hushplus-button">
+            Learn about Hush<span class="text-brand-cyan">+</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="lg:col-span-2 grid grid-cols-2 gap-8 reveal">
+        <div>
+          <div class="kicker mb-4">The App</div>
+          <ul class="space-y-2 text-sm text-slate-400">
+            <li><a href="#sections" class="hover:text-white transition" data-testid="footer-link-sections">Home Sections</a></li>
+            <li><a href="#livetv" class="hover:text-white transition" data-testid="footer-link-livetv">Live TV · EPG</a></li>
+            <li><a href="#dvr" class="hover:text-white transition" data-testid="footer-link-dvr">Cloud DVR</a></li>
+            <li><a href="#vault" class="hover:text-white transition" data-testid="footer-link-vault">The Vault</a></li>
+            <li><a href="#hushplus" class="hover:text-white transition" data-testid="footer-link-hushplus">Hush+</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="kicker mb-4">Support</div>
+          <ul class="space-y-2 text-sm text-slate-400">
+            <li><a href="#" class="hover:text-white transition" data-testid="footer-link-email">Contact (coming soon)</a></li>
+            <li><a href="#" class="hover:text-white transition" data-testid="footer-link-telegram">Telegram (coming soon)</a></li>
+            <li><a href="#whatsnew" class="hover:text-white transition" data-testid="footer-link-changelog">Changelog</a></li>
+            <li><a href="https://hushtv.xyz/version.json" class="hover:text-white transition font-mono text-brand-cyan" data-testid="footer-link-version-manifest">version.json</a></li>
+            <li><a href="https://hushtv.xyz/install.html" class="hover:text-white transition" data-testid="footer-link-install-guide">Install guide</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-16 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="font-display font-black text-lg tracking-tight text-white">hushtv<span class="text-brand-cyan">.</span></span>
+        <span class="text-xs text-slate-500 font-mono">© 2026 HushTV</span>
+      </div>
+      <div class="text-xs text-slate-500 font-mono">
+        HushTV is a media player. Bring your own subscription.
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  function fitIframe(iframe) {
+    const parent = iframe.parentElement;
+    const resize = () => {
+      const w = parent.clientWidth;
+      const scale = w / 1920;
+      iframe.style.transform = 'scale(' + scale + ')';
+      iframe.style.width = '1920px';
+      iframe.style.height = '1080px';
+    };
+    resize();
+    new ResizeObserver(resize).observe(parent);
+  }
+
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal, .stagger').forEach(el => io.observe(el));
+
+  const ring = document.getElementById('cursorRing');
+  if (ring && window.matchMedia('(pointer: fine)').matches) {
+    window.addEventListener('mousemove', (e) => {
+      ring.classList.add('active');
+      ring.style.transform = 'translate(' + e.clientX + 'px, ' + e.clientY + 'px) translate(-50%,-50%)';
+    });
+    window.addEventListener('mouseleave', () => ring.classList.remove('active'));
+    document.querySelectorAll('a, button, summary, .section-card').forEach(el => {
+      el.addEventListener('mouseenter', () => ring.classList.add('hover'));
+      el.addEventListener('mouseleave', () => ring.classList.remove('hover'));
+    });
+  }
+</script>
+</body>
+</html>

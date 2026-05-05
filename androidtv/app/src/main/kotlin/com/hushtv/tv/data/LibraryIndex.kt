@@ -47,6 +47,16 @@ object LibraryIndex {
     @Volatile private var movieIdx: List<TitleMatcher.LibraryEntry<Entry>> = emptyList()
     @Volatile private var seriesIdx: List<TitleMatcher.LibraryEntry<Entry>> = emptyList()
 
+    /** True if the library has been primed at least once for any
+     *  playlist. Used by UIs that need to gate work behind a primed
+     *  index without re-priming themselves. */
+    fun isPrimed(): Boolean = primedKey != null && allEntries.isNotEmpty()
+
+    /** Read-only snapshot of every library entry, both kinds. Used
+     *  by Continue Watching to cross-reference streamId → kind for
+     *  legacy entries saved before v1.43.31. */
+    fun allEntries(): List<Entry> = allEntries
+
     /** Drop the cache, e.g. when user switches profile. */
     fun reset() {
         primedKey = null

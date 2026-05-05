@@ -46,6 +46,11 @@ data class AuthResponse(
     val server_info: ServerInfo? = null
 )
 
+/** Live channel / movie / series category from Xtream's
+ *  `get_*_categories` endpoint. Marked `@Stable` so Compose can
+ *  skip recomposition of category-keyed composables (chip rows,
+ *  category headers) when the reference hasn't changed. */
+@androidx.compose.runtime.Stable
 @JsonClass(generateAdapter = true)
 data class XtreamCategory(
     val category_id: String,
@@ -164,7 +169,16 @@ data class XtreamVodInfo(
     val movie_data: XtreamVodMovieData? = null,
 )
 
-/** Unified "card" item the UI uses. */
+/** Unified "card" item the UI uses.
+ *
+ *  Marked `@Stable` so Compose's smart-recomposition can skip
+ *  composables that take a `MediaCard` arg when the reference
+ *  didn't change. All fields are immutable `val`s so the contract
+ *  Compose relies on (equals/hashCode are stable, no mutable
+ *  observable state) holds. Without this annotation Compose
+ *  conservatively recomposes every poster on every focus move
+ *  through a LazyRow — visible as scroll lag on Fire TV 4K. */
+@androidx.compose.runtime.Stable
 data class MediaCard(
     val id: String,
     val title: String,

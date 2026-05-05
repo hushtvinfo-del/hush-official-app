@@ -8,10 +8,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,8 +63,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
+import com.hushtv.tv.data.LibraryIndex
 import com.hushtv.tv.data.TmdbMovie
 import com.hushtv.tv.data.TmdbService
+import com.hushtv.tv.data.TmdbTv
 import com.hushtv.tv.data.WatchProgressStore
 import com.hushtv.tv.ui.screens.clickableWithEnter
 import com.hushtv.tv.ui.theme.Cyan
@@ -76,16 +80,63 @@ import kotlinx.coroutines.withContext
  * Hydrated Continue Watching entry — raw progress + resolved TMDB metadata.
  * Built on the Home screen so the hero panel can render rich artwork and
  * copy even though the local store only knows (streamId, title, position).
+ *
+ * Carries TMDB metadata for BOTH content kinds. The accessors below
+ * resolve to the right field set based on which one is non-null —
+ * for an entry of `kind = "series"`, only [tv] is populated; for
+ * `kind = "movie"`, only [tmdb] is. This keeps a single uniform
+ * type for the home row to render without splitting it into a
+ * sealed hierarchy.
  */
 data class ContinueEntry(
     val progress: WatchProgressStore.Entry,
-    val tmdb: TmdbMovie?,
+    val tmdb: TmdbMovie? = null,
+    val tv: TmdbTv? = null,
+    /**
+     * Effective content kind — may differ from [progress.kind]
+     * for legacy entries that were incorrectly saved as "movie"
+     * before v1.43.31. Recomputed at hydration time by
+     * cross-referencing the streamId against the movie library
+     * and/or detecting an episode marker (SxxExx) in the title.
+     */
+    val effectiveKind: String = progress.kind,
+    /**
+     * Effective display title — strips trailing episode markers
+     * (" S01E05", " - S01 E05", " 1x05", etc.) from legacy
+     * series entries so the card shows the parent show's name.
+     */
+    val effectiveTitle: String = progress.title,
 ) {
-    val backdropUrl: String? get() = tmdb?.backdrop_path?.let { "https://image.tmdb.org/t/p/original$it" }
-    val posterUrl: String? get() = tmdb?.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" }
-    val year: String? get() = tmdb?.release_date?.take(4)?.takeIf { it.length == 4 }
-    val genre: String? get() = tmdb?.genres?.firstOrNull()?.name
-    val ratingText: String? get() = tmdb?.vote_average?.takeIf { it > 0 }?.let { String.format("%.1f", it) }
+    val backdropUrl: String? get() {
+        // Stored poster from the player save site wins — it's the
+        // canonical artwork the user already saw on the detail
+        // screen and matches what they'd expect for "the show I
+        // was watching". TMDB hydration is a fallback for older
+        // CW entries saved before posters were tracked.
+        progress.poster?.takeIf { it.isNotBlank() }?.let { return it }
+        tmdb?.backdrop_path?.let { return "https://image.tmdb.org/t/p/original$it" }
+        tv?.backdrop_path?.let { return "https://image.tmdb.org/t/p/original$it" }
+        return null
+    }
+    val posterUrl: String? get() {
+        progress.poster?.takeIf { it.isNotBlank() }?.let { return it }
+        tmdb?.poster_path?.let { return "https://image.tmdb.org/t/p/w500$it" }
+        tv?.poster_path?.let { return "https://image.tmdb.org/t/p/w500$it" }
+        return null
+    }
+    val year: String? get() =
+        tmdb?.release_date?.take(4)?.takeIf { it.length == 4 }
+            ?: tv?.first_air_date?.take(4)?.takeIf { it.length == 4 }
+    val genre: String? get() =
+        tmdb?.genres?.firstOrNull()?.name
+            ?: tv?.genres?.firstOrNull()?.name
+    val ratingText: String? get() =
+        (tmdb?.vote_average ?: tv?.vote_average)
+            ?.takeIf { it > 0 }
+            ?.let { String.format("%.1f", it) }
+    val overview: String? get() =
+        tmdb?.overview?.takeIf { it.isNotBlank() }
+            ?: tv?.overview?.takeIf { it.isNotBlank() }
     val minutesLeft: Int get() {
         val remainingMs = (progress.durationMs - progress.positionMs).coerceAtLeast(0)
         return (remainingMs / 60_000L).toInt()
@@ -117,21 +168,14 @@ fun HomeContinueWatchingRow(
 
     // NOTE: we deliberately do NOT use Modifier.focusRestorer() here.
     // Continue Watching is the only row on the home page whose items
-    // get removed at runtime (long-press → Remove). When the focused
-    // card is removed, focusRestorer()'s LazyLayoutPinnableItem gets
-    // released twice on the next D-pad press and throws
-    // IllegalStateException("Release should only be called once"),
-    // killing the app. Report:
-    // https://issuetracker.google.com/issues/322811857 (same signature).
-    // Trade-off: focus returns to the first CW card rather than the
-    // previously-focused one when the user Ups out and comes back.
-    // That's a minor UX regression vs the crash.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusGroup()
-    else Modifier
+    // get removed at runtime (long-press → Remove). The focusRequester
+    // is bound directly to the first ContinueCard (not to this outer
+    // Column) so the sidebar's RIGHT-exit callback's requestFocus()
+    // lands on a real focusable card with a visible cyan ring.
 
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(start = contentStartPadding, end = 48.dp, top = 20.dp, bottom = 20.dp)
             // Row-level D-pad Down → fires onDownFromRow (used by Home to
@@ -147,25 +191,53 @@ fun HomeContinueWatchingRow(
                 } else false
             },
     ) {
-        Text(
-            "Continue Watching",
-            color = Color.White,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = Inter,
-        )
-        Spacer(Modifier.height(12.dp))
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        // Section header — matches the "DISCOVER" style used elsewhere on
+        // the home page: small cyan accent bar + uppercase, heavy-tracking
+        // label so Continue Watching reads as a proper section, not a card.
+        //
+        // start = 12.dp mirrors the LazyRow's horizontal contentPadding
+        // below so the accent bar lines up with the first card's left
+        // edge (otherwise the label sits 12dp further left than the row
+        // of cards — the exact bug the user flagged in v1.43.33).
+        Row(
+            modifier = Modifier.padding(start = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            itemsIndexed(entries, key = { _, it -> "cw-${it.progress.kind}-${it.progress.streamId}" }) { idx, e ->
+            Box(
+                Modifier
+                    .size(width = 4.dp, height = 16.dp)
+                    .background(Cyan, RoundedCornerShape(2.dp))
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "CONTINUE WATCHING",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.sp,
+                fontFamily = Inter,
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        // Plain Row + horizontalScroll — see HomeYearsRow comment
+        // for the full reasoning. Inline composition is required
+        // for the outer-Column focusRequester to land on the first
+        // CW card from the sidebar's RIGHT-exit callback.
+        val scrollState = androidx.compose.foundation.rememberScrollState()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            entries.forEachIndexed { idx, e ->
                 ContinueCard(
                     entry = e,
                     onFocus = { onFocusedEntryChange(e) },
                     onClick = { onCardClick(e) },
                     onLongPress = { onLongPressRemove(e) },
-                    focusRequester = null,
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                     onUpKey = if (idx == 0) onUpFromFirstItem else null,
                 )
             }
@@ -190,6 +262,100 @@ class ContinueEntriesHandle internal constructor(
  * entry — the list recomputes immediately and the section will hide itself
  * if it becomes empty (parent guards with `.isNotEmpty()`).
  */
+
+/**
+ * Matches trailing episode markers in a saved title so we can
+ * recover the parent series title from a legacy entry.
+ *
+ * Covers the common Xtream / TMDB title formats in the wild:
+ *   "Gold Rush S15E03"
+ *   "Gold Rush - S15 E03 - Title"
+ *   "Gold Rush 15x03"
+ *   "Gold Rush Season 15 Episode 3"
+ *
+ * Matches at the LAST occurrence so a movie literally named
+ * "7x7" doesn't get chopped.
+ */
+private val EPISODE_MARKER_REGEX = Regex(
+    """\s*[-–—:]?\s*(?:S\d{1,2}\s*E\d{1,3}|\d{1,2}x\d{1,3}|Season\s+\d{1,2}\s*(?:Episode\s*\d{1,3})?).*$""",
+    RegexOption.IGNORE_CASE,
+)
+
+/**
+ * Strips episode/season markers from a saved CW title. Leaves the
+ * title unchanged when no marker is present (movies or already-
+ * cleaned series entries from v1.43.31+).
+ */
+private fun stripEpisodeMarker(title: String): String =
+    EPISODE_MARKER_REGEX.replace(title.trim(), "").trim().trim('-', '–', '—', ':').trim()
+
+/**
+ * Reclassifies a raw [WatchProgressStore.Entry] by consulting the
+ * LibraryIndex as the source of truth. Fixes legacy entries that
+ * were saved with `kind="movie"` for everything (the pre-v1.43.31
+ * bug) by:
+ *
+ *   1. If the LibraryIndex isn't primed yet, we trust the stored
+ *      kind and DO NOT relabel. (Previously this branch would flip
+ *      every movie to "series" — a destructive rewrite that hid
+ *      legitimate movie entries from Continue Watching forever.)
+ *   2. If the streamId is in the movie library → keep as movie.
+ *   3. If the streamId is in the series library (as a flat episode
+ *      stream lookup) → relabel to series.
+ *   4. Otherwise — provider may have removed the title from the
+ *      playlist. Trust the stored kind; do NOT relabel.
+ *
+ * Genuinely new entries saved after v1.43.31 already carry the
+ * correct kind + parent title from [PlaybackMeta], so the
+ * reclassification is a no-op for them.
+ */
+private fun reclassify(p: WatchProgressStore.Entry): ContinueEntry {
+    // If the stored kind is already "series", trust it — only new
+    // entries from v1.43.31+ take this branch, and they already
+    // have the right parent-series title baked in.
+    if (p.kind == "series") {
+        return ContinueEntry(
+            progress = p,
+            effectiveKind = "series",
+            effectiveTitle = stripEpisodeMarker(p.title),
+        )
+    }
+
+    // kind == "movie" — might be a legitimate movie OR a legacy
+    // misclassified series episode. Only the LibraryIndex can tell
+    // us, and only if it's primed. If the index is empty (boot
+    // refresh in flight, profile freshly switched, network hiccup
+    // during prime) we MUST trust the stored kind — relabeling
+    // every movie as "series" used to permanently hide them from
+    // Continue Watching, which is the v1.43.59 user-reported bug.
+    if (!LibraryIndex.isPrimed()) {
+        return ContinueEntry(progress = p, effectiveKind = "movie", effectiveTitle = p.title)
+    }
+
+    val isInMovieLib = LibraryIndex.allEntries()
+        .any { it.kind == "movie" && it.streamId == p.streamId }
+    if (isInMovieLib) {
+        return ContinueEntry(progress = p, effectiveKind = "movie", effectiveTitle = p.title)
+    }
+
+    // Not in the movie library. Could be a legacy misclassified
+    // series episode OR a movie the provider has since removed.
+    // Only relabel as series if the title shows clear episode
+    // markers (S##E##, NxN, "Season N Episode M"). Otherwise trust
+    // the stored kind so deleted-from-playlist movies still resume.
+    val hasEpisodeMarker = EPISODE_MARKER_REGEX.containsMatchIn(p.title)
+    return if (hasEpisodeMarker) {
+        ContinueEntry(
+            progress = p,
+            effectiveKind = "series",
+            effectiveTitle = stripEpisodeMarker(p.title),
+        )
+    } else {
+        ContinueEntry(progress = p, effectiveKind = "movie", effectiveTitle = p.title)
+    }
+}
+
+
 @Composable
 fun rememberContinueEntries(playlistId: String): ContinueEntriesHandle {
     val ctx = LocalContext.current
@@ -227,27 +393,63 @@ fun rememberContinueEntries(playlistId: String): ContinueEntriesHandle {
                 entries = emptyList()
                 return@runCatching
             }
-            // Render shells instantly.
-            entries = raw.map { ContinueEntry(it, null) }
-            // Hydrate each entry on this scope (auto-cancelled on restart).
-            // Key by (kind, streamId) so a stale completion after removal
-            // silently no-ops instead of writing to a different row.
-            raw.forEach { progress ->
+
+            // Reclassify each raw entry. Legacy entries saved before
+            // v1.43.31 have kind="movie" for EVERYTHING, so we can't
+            // trust the stored kind alone. Use the library as the
+            // authority: if the streamId is in the movie catalog
+            // it's a movie, otherwise it's a series episode whose
+            // title needs stripping.
+            val reclassified = raw.map { p -> reclassify(p) }
+
+            // Write-through migration: for any entry whose stored
+            // kind was "movie" but reclassify() concluded it's a
+            // "series", permanently heal the data in
+            // SharedPreferences. Next boot the entry is already
+            // correctly classified — no re-reclassification work.
+            reclassified.forEach { e ->
+                if (e.progress.kind == "movie" && e.effectiveKind == "series") {
+                    runCatching {
+                        WatchProgressStore.relabelMovieToSeries(
+                            ctx = ctx,
+                            streamId = e.progress.streamId,
+                            correctedTitle = e.effectiveTitle,
+                        )
+                    }
+                }
+            }
+            // Render shells instantly — with the corrected kind and
+            // title already applied so the card never flashes the
+            // wrong label.
+            entries = reclassified
+
+            // Hydrate each entry.
+            reclassified.forEach { shell ->
                 launch {
-                    val tmdb = runCatching {
-                        withContext(Dispatchers.IO) {
-                            val id = TmdbService.searchMovie(progress.title, null)
-                            id?.let { TmdbService.getMovie(it) }
+                    if (shell.effectiveKind == "series") {
+                        val tv = runCatching {
+                            withContext(Dispatchers.IO) {
+                                val id = TmdbService.searchTv(shell.effectiveTitle)
+                                id?.let { TmdbService.getTv(it) }
+                            }
+                        }.getOrNull()
+                        entries = entries.map { e ->
+                            if (e.progress.streamId == shell.progress.streamId &&
+                                e.progress.kind == shell.progress.kind
+                            ) e.copy(tv = tv) else e
                         }
-                    }.getOrNull()
-                    // Defensive write: look up the slot BY KEY in the
-                    // current list, copy in the tmdb, publish. If the
-                    // entry is gone (removed mid-flight) this is a
-                    // no-op.
-                    entries = entries.map { e ->
-                        if (e.progress.streamId == progress.streamId &&
-                            e.progress.kind == progress.kind
-                        ) e.copy(tmdb = tmdb) else e
+                    } else {
+                        val tmdb = runCatching {
+                            withContext(Dispatchers.IO) {
+                                val id = TmdbService.searchMovie(shell.effectiveTitle, null)
+                                id?.let { TmdbService.getMovie(it) }
+                            }
+                        }.getOrNull()
+                        entries = entries.map { e ->
+                            if (e.progress.streamId == shell.progress.streamId &&
+                                e.progress.kind == shell.progress.kind
+                            ) e.copy(tmdb = tmdb) else e
+                        }
                     }
                 }
             }
@@ -299,13 +501,13 @@ private fun ContinueCard(
     // fired onClick — removing the item without the user clicking "Remove".
     var keyDownAtMs by remember { mutableStateOf(0L) }
 
-    // focusRequester MUST come BEFORE .focusable() — the requester
-    // attaches to the next focusable in the chain, not the previous one.
-    val baseTop: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
-    val base = baseTop
+    // Themes-pattern modifier chain — see HomeYearsRow for full
+    // explanation. focusRequester is now applied DIRECTLY without
+    // tvFocusable in the way, and bound right before .focusable()
+    // so requestFocus lands on a real focusable card with cyan ring.
+    val base = Modifier
         .width(240.dp)
+        .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
         .onFocusChanged {
             focused = it.isFocused
             if (it.isFocused) onFocus()
@@ -343,7 +545,6 @@ private fun ContinueCard(
                 else -> false
             }
         }
-        .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
         .focusable()
         .clickableWithEnter(onClick)
 
@@ -443,7 +644,7 @@ private fun ContinueCard(
             ) {
                 // Meta (Movie / Series · Genre) — small caps style
                 val metaParts = buildList {
-                    add(if (entry.progress.kind == "series") "SERIES" else "MOVIE")
+                    add(if (entry.effectiveKind == "series") "SERIES" else "MOVIE")
                     entry.genre?.uppercase()?.let { add(it) }
                 }
                 Text(
@@ -458,7 +659,7 @@ private fun ContinueCard(
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
-                    entry.progress.title,
+                    entry.effectiveTitle,
                     color = Color.White,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Black,
@@ -485,8 +686,16 @@ private fun ContinueCard(
                         .fillMaxHeight()
                         .background(
                             Brush.horizontalGradient(
-                                0.0f to Color(0xFF06B6D4),
-                                1.0f to Color(0xFF22D3EE),
+                                // Continue-watching progress fill —
+                                // brand-blue gradient. Goes from the
+                                // darker DodgerBlue → lighter sky blue
+                                // so the bar still has the "edge
+                                // highlight" depth feel. Both ends are
+                                // within the new brand blue family
+                                // (#1E90FF → #59BFF2) so the gradient
+                                // stays hue-coherent.
+                                0.0f to Cyan,
+                                1.0f to Color(0xFF59BFF2),
                             )
                         ),
                 )

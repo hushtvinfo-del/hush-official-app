@@ -167,12 +167,6 @@ private fun ServiceCardView(
                 .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
                 .focusable()
                 .clickableWithEnter(onClick)
-                .shadow(
-                    elevation = if (focused) 22.dp else 6.dp,
-                    shape = cardShape,
-                    ambientColor = service.accent,
-                    spotColor = service.accent,
-                )
                 .clip(cardShape)
                 .background(
                     Brush.verticalGradient(
