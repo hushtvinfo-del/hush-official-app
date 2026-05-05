@@ -1,0 +1,78 @@
+[
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/font_inter.ttf.flat",
+        "source": "com.hushtv.tv.app-main-5:/font/inter.ttf"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/drawable-xxxhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/drawable-xxxhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/xml_network_security_config.xml.flat",
+        "source": "com.hushtv.tv.app-main-5:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/drawable_ic_hushtv_logo.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/drawable/ic_hushtv_logo.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/drawable_splash_empty.xml.flat",
+        "source": "com.hushtv.tv.app-main-5:/drawable/splash_empty.xml"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/drawable-xxxhdpi_tv_banner.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/drawable-xxxhdpi/tv_banner.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/xml_file_paths.xml.flat",
+        "source": "com.hushtv.tv.app-main-5:/xml/file_paths.xml"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.hushtv.tv.app-officialRelease-4:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.hushtv.tv.app-main-5:/mipmap-xxxhdpi/ic_launcher_round.png"
+    }
+]

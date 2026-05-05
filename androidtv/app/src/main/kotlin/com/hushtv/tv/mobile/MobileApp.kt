@@ -100,28 +100,12 @@ fun MobileApp() {
             composable("msearch/{playlistId}") { bs ->
                 MobileSearchScreen(nav, bs.arguments?.getString("playlistId") ?: "")
             }
-            // HushXXX full-screen takeover, mirrors the TV route.
-            composable("mhushxxx/{playlistId}") { bs ->
-                val playlistId = bs.arguments?.getString("playlistId") ?: ""
-                var showDmca by remember { mutableStateOf(false) }
-                com.hushtv.tv.ui.hushxxx.HushXxxScreen(
-                    onPlayScene = { url, title ->
-                        nav.navigate(
-                            mobilePlayerRoute(
-                                playlistId = playlistId,
-                                streamUrl = url,
-                                channelName = title,
-                                isLive = false,
-                            ),
-                        )
-                    },
-                    onDmcaOpen = { showDmca = true },
-                    onDismiss = { nav.popBackStack() },
-                )
-                if (showDmca) {
-                    com.hushtv.tv.ui.hushxxx.HushXxxDmcaDialog(
-                        onDismiss = { showDmca = false },
-                    )
+            // mhushxxx route — DISABLED in v1.43.99 (mobile twin of
+            // the TV-side disable). Anyone who hits this route is
+            // silently popped back to the previous screen.
+            composable("mhushxxx/{playlistId}") {
+                LaunchedEffect(Unit) {
+                    nav.popBackStack()
                 }
             }
             composable("mdiag") { MobileDiagnosticsScreen(nav) }

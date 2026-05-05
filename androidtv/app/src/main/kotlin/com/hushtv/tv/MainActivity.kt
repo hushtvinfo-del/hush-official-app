@@ -278,26 +278,17 @@ private fun AppContent() {
                 bs.arguments?.getString("playlistId") ?: "",
             )
         }
-        // HushXXX runs full-screen, outside the Hush+ sidebar layout —
-        // it's effectively its own mini-app. The Hush+ addon card
-        // navigates to this route instead of rendering the screen
-        // inside the side-panel content area.
-        composable("hushxxx/{playlistId}") { bs ->
-            val playlistId = bs.arguments?.getString("playlistId") ?: ""
-            var showDmca by remember { mutableStateOf(false) }
-            com.hushtv.tv.ui.hushxxx.HushXxxScreen(
-                onPlayScene = { url, title ->
-                    val encUrl = android.net.Uri.encode(url)
-                    val encTitle = android.net.Uri.encode(title)
-                    nav.navigate("player/$playlistId/$encUrl/$encTitle/false")
-                },
-                onDmcaOpen = { showDmca = true },
-                onDismiss = { nav.popBackStack() },
-            )
-            if (showDmca) {
-                com.hushtv.tv.ui.hushxxx.HushXxxDmcaDialog(
-                    onDismiss = { showDmca = false },
-                )
+        // ────────────────────────────────────────────────────────
+        //  HushXXX route — DISABLED in v1.43.99 per user request.
+        //  The Hush+ Coming Soon teaser already removes the user-
+        //  facing entry point, but we ALSO disable the route itself
+        //  as a defense-in-depth so deep-links / back-stack-navigate
+        //  hacks can't reach the addon. Anyone who hits this route
+        //  is silently popped back to the previous screen.
+        // ────────────────────────────────────────────────────────
+        composable("hushxxx/{playlistId}") {
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                nav.popBackStack()
             }
         }
         composable("themes/{playlistId}") { bs ->

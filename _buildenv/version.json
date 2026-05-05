@@ -1,12 +1,14 @@
 {
-  "versionCode": 398,
-  "versionName": "1.43.98",
+  "versionCode": 399,
+  "versionName": "1.43.99",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "TWO-PART FIX for the rail-RIGHT focus bug. Part 1: tvFocusable now accepts an optional focusRequester parameter that's bound INSIDE its composed{} block right before its internal .focusable(). This guarantees requestFocus() lands on the EXACT focusable that draws the cyan ring, instead of binding to the wrong (outer redundant) focusable. Part 2: the rail's RIGHT-arrow now defers requestFocus() through a state ticker + 320 ms LaunchedEffect — exactly the same path as the user's discovered workaround 'press UP then DOWN within home', which always worked because of the 320 ms settle delay.",
-    "All home rows (Discovery, SS, Genres, Collections, Years, Themes & Moods) now use the same first-card-direct-bind pattern via the new tvFocusable focusRequester parameter."
+    "Side-rail RIGHT-arrow → first card focus is now LOCKED IN with a strong cautionary code comment in tvFocusable so future changes don't reintroduce the bug.",
+    "BACK on the TV main home screen now pops the exit-confirm dialog (was accidentally lost during a refactor — restored).",
+    "Hush+ rolled back to a 'Coming Soon' teaser — users can scroll the pillars / addon preview but cannot launch any addon. HushXXX, HushVOD+, HushBooks, HushArcade, HushTube are all gated.",
+    "HushXXX deep-link routes (hushxxx/, mhushxxx/) are also blocked at the navigation layer as a defense-in-depth — anyone who hits those routes is silently popped back."
   ]
 }

@@ -31,17 +31,68 @@ import com.hushtv.tv.ui.theme.UnfocusedBorder
 /**
  * Focus modifier — v1.43.98 edition.
  *
+ * ╔═══════════════════════════════════════════════════════════════╗
+ * ║  ⚠️  RAIL-RIGHT-EXIT FOCUS RULE — DO NOT REMOVE OR REWORK     ║
+ * ║      WITHOUT READING THIS FIRST. We spent multiple painful   ║
+ * ║      iterations finding this bug.                            ║
+ * ║                                                              ║
+ * ║  WHEN ADDING A NEW HOME ROW (or any LEFT-rail-exit target),  ║
+ * ║  the first card MUST follow this exact pattern:              ║
+ * ║                                                              ║
+ * ║    @Composable                                               ║
+ * ║    private fun MyCardView(                                   ║
+ * ║        ...                                                   ║
+ * ║        focusRequester: FocusRequester? = null,  // ← REQUIRED║
+ * ║    ) {                                                       ║
+ * ║        Box(                                                  ║
+ * ║            Modifier                                          ║
+ * ║                .width(...).height(...)                       ║
+ * ║                .onFocusChanged { focused = it.isFocused }    ║
+ * ║                .tvFocusable(                                 ║
+ * ║                    shape = cardShape,                        ║
+ * ║                    focusRequester = focusRequester, // ← KEY ║
+ * ║                )                                             ║
+ * ║                .clickableWithEnter(onClick)                  ║
+ * ║                ...                                           ║
+ * ║        )                                                     ║
+ * ║    }                                                         ║
+ * ║                                                              ║
+ * ║  And at the call-site:                                       ║
+ * ║                                                              ║
+ * ║    items.forEachIndexed { idx, item ->                       ║
+ * ║        MyCardView(                                           ║
+ * ║            ...                                               ║
+ * ║            focusRequester = if (idx == 0) firstItemFocus     ║
+ * ║                              else null,                      ║
+ * ║        )                                                     ║
+ * ║    }                                                         ║
+ * ║                                                              ║
+ * ║  And in TVMainMenuScreen, register a `firstXxxFocus`         ║
+ * ║  FocusRequester, route it through the page, AND add it to    ║
+ * ║  BOTH the `LaunchedEffect(currentPage)` auto-focus table AND ║
+ * ║  the `LaunchedEffect(railExitTick)` rail-exit table.         ║
+ * ║                                                              ║
+ * ║  DO NOT:                                                     ║
+ * ║   • Place `Modifier.focusRequester(req)` BEFORE `tvFocusable`║
+ * ║     in the chain — the requester would attach to the wrong   ║
+ * ║     focusable (we proved this with screenshots in v1.43.94+).║
+ * ║   • Add a redundant `.focusable()` after `tvFocusable` —     ║
+ * ║     `tvFocusable` already adds one. Two focusables create    ║
+ * ║     ambiguous focus targets.                                 ║
+ * ║   • Call `firstFocus.requestFocus()` SYNCHRONOUSLY from a    ║
+ * ║     rail-RIGHT key handler — it races the rail-collapse      ║
+ * ║     animation. Use the `railExitTick` deferred path with a   ║
+ * ║     320 ms LaunchedEffect delay (see TVMainMenuScreen.kt).   ║
+ * ║   • Add `.focusRestorer()` at any OUTER focus-group level    ║
+ * ║     that crosses pages (e.g. `tvHubContentFocus`). It saves a║
+ * ║     stale pivot when AnimatedContent unmounts a page.        ║
+ * ╚═══════════════════════════════════════════════════════════════╝
+ *
  * What changed in v1.43.98:
  *   • Optional `focusRequester` parameter — when supplied, the
  *     requester is wired DIRECTLY to the inner `.focusable()` so
  *     `requestFocus()` lands on the EXACT same focusable that
- *     draws the cyan ring. Earlier attempts wrapped the
- *     focusRequester on an OUTER Modifier (cardBase) which bound
- *     it to a *different* focusable than the one tvFocusable
- *     itself adds — focus landed somewhere invisible. This is the
- *     root cause of "Discovery works but other rows don't" because
- *     Discovery used the focusGroup-wrapper pattern that happened
- *     to dodge the bug.
+ *     draws the cyan ring.
  *
  * Removed in earlier builds:
  *   • Scale on focus + shadow glow → tanked Fire Stick framerate.

@@ -159,6 +159,12 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
 
     val lastChannel = remember { LastChannelStore.load(ctx) }
 
+    // BACK on the TV home screen pops the exit-confirm dialog
+    // (instead of silently quitting). Mirrors the mobile home BACK
+    // behaviour added in v1.43.0+ and re-introduced for TV in
+    // v1.43.99 after a refactor accidentally removed it.
+    com.hushtv.tv.ui.ExitConfirmBackHandler()
+
     // Fetch
     LaunchedEffect(playlistId) {
         val p = playlist ?: return@LaunchedEffect

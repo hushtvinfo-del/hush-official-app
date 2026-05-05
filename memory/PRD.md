@@ -1,6 +1,109 @@
 # HushTV — Product Requirements Document
 
-## v1.43.98 — TWO-PART FIX: requester-into-tvFocusable + 320 ms settle delay — 2026-05-06  ⬅ LATEST
+## v1.43.99 — Exit dialog + Hush+ Coming Soon + Dev/Official sync — 2026-05-06  ⬅ LATEST
+
+User said v1.43.98's rail-RIGHT focus fix was working ("OK WORKING
+FINALLY"). They asked for three things:
+
+1. Add a strong cautionary code comment so future agents don't
+   reintroduce the rail-RIGHT focus bug.
+2. Restore the BACK-on-home → exit-confirm dialog (regressed during
+   a refactor).
+3. Roll Hush+ back to a "Coming Soon" teaser — users can scroll the
+   pillars and addon preview but can't actually launch any addon
+   (HushVOD+, HushBooks, HushArcade, HushTube, HushXXX).
+4. Deploy BOTH Dev and Official.
+
+### What landed
+
+#### 1. Rail-RIGHT focus rule, locked in
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/TvComponents.kt`
+now has a 60-line cautionary box-drawing comment at the top of
+`tvFocusable` that documents:
+   • The exact card-composable + call-site pattern future authors
+     MUST follow when adding a new home row.
+   • Three "DO NOT" rules: don't place focusRequester before
+     tvFocusable, don't add a redundant outer .focusable(), don't
+     call requestFocus synchronously from a key-event handler, don't
+     add focusRestorer at any cross-page outer focusGroup.
+   • A reference to the deferred-via-state pattern in
+     TVMainMenuScreen (`railExitTick` + LaunchedEffect with 320 ms
+     delay).
+
+#### 2. Exit-confirm dialog restored on TV main home
+Wired `com.hushtv.tv.ui.ExitConfirmBackHandler()` into
+`TVMainMenuScreen` right under the `lastChannel` initializer.
+Mobile already had it via `MobileHomeScreen.kt`. TV regression came
+from a refactor that moved BackHandler logic but didn't include the
+exit prompt.
+
+#### 3. Hush+ → "Coming Soon" teaser
+
+Both screens fully rewritten as scrollable read-only teasers:
+
+- `TVHushPlusScreen.kt` — LazyColumn of:
+  ‹ Home back chip | HUSH+ header
+  → big "✦ COMING SOON ✦" hero panel (180 dp)
+  → "WHAT'S COMING" section header + 6 pillars from
+    `HushPlusContent.pillars`
+  → "THE ADD-ONS (PREVIEW)" section header + 4 addon teaser rows
+    from `HushPlusContent.addons` — each with a subtle accent bar
+    and a "SOON" pill chip
+  → footer reassurance copy: "Hush+ is being rebuilt. Existing
+    HushTV members will get access automatically the moment it
+    goes live."
+
+- `MobileHushPlusScreen.kt` — same shape, mobile-tuned padding /
+  type sizes.
+
+Neither screen has any clickable addon entry. The only focusable on
+TV is the back-home chip. No route out to HushXXX, HushVOD+, or
+anything else.
+
+#### 4. HushXXX deep-link routes blocked at the nav-graph level
+Defense-in-depth — even if a stale shortcut, deep-link, or back-stack
+hack reaches `hushxxx/{playlistId}` (TV) or `mhushxxx/{playlistId}`
+(mobile), the composable's `LaunchedEffect(Unit) { nav.popBackStack() }`
+silently pops it. Comments in MainActivity.kt + MobileApp.kt explain
+why and reference this PRD entry.
+
+### Files changed
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/TvComponents.kt`
+  — long cautionary comment at top of `tvFocusable`.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVMainMenuScreen.kt`
+  — added `ExitConfirmBackHandler()` invocation.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/hushplus/TVHushPlusScreen.kt`
+  — full rewrite: ~330 lines → Coming Soon teaser.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/hushplus/MobileHushPlusScreen.kt`
+  — full rewrite: Coming Soon teaser.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/MainActivity.kt`
+  — `hushxxx/{playlistId}` route → silent popBackStack.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/mobile/MobileApp.kt`
+  — `mhushxxx/{playlistId}` route → silent popBackStack.
+
+### Build + deploy
+- versionCode 398 → 399, versionName 1.43.98 → 1.43.99.
+- BUILD SUCCESSFUL (2m 20s for both `assembleDevDebug` and
+  `assembleOfficialRelease`).
+- Dev APK + manifest uploaded to OTA server. Live:
+  `https://hushtv.xyz/version.json` reports 399 / 1.43.99.
+- Official APK + manifest uploaded to OTA server (both filename
+  variants `hushtv-official.apk` and `HushTV-Official.apk`). Live:
+  `https://hushtv.xyz/version-official.json` reports 399 / 1.43.99.
+- Auto-tagged: `v1.43.99-dev` AND `v1.43.99-official`. Both point
+  at the same commit (21b9e77e4) — first time both channels are in
+  lock-step since the v1.43.69 rollback chain.
+
+### Lessons preserved in code
+- Rail-RIGHT focus pattern (TvComponents.kt cautionary block).
+- Hush+ Coming Soon scope (header comments in both Hush+ screen
+  files).
+- Defense-in-depth for hushxxx routes (header comments in
+  MainActivity.kt + MobileApp.kt).
+
+---
+
+## v1.43.98 — TWO-PART FIX: requester-into-tvFocusable + 320 ms settle delay — 2026-05-06
 
 User screenshots showed conclusively: pressing RIGHT from the rail
 caused the rail to collapse, but no card showed the cyan focus ring.

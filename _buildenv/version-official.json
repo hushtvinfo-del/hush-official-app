@@ -1,12 +1,14 @@
 {
-  "versionCode": 390,
-  "versionName": "1.43.90",
+  "versionCode": 399,
+  "versionName": "1.43.99",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": false,
-  "releasedAt": "2026-05-05",
+  "releasedAt": "2026-05-06",
   "channel": "official",
   "changelog": [
-    "Themes & Moods is back on the TV — added as a top-nav tab between Series and Hush+. The full curated catalog of mood/theme lists is one click away from the home screen.",
-    "Decade tiles render correctly at any TV resolution and open the curated year picker."
+    "Side-rail RIGHT-arrow → first card focus is now reliably fixed across every home section (Discovery, Streaming Services, Collections, Genres, Years, Themes & Moods, and Continue Watching).",
+    "BACK button on the home screen now shows the exit-confirm dialog (restored after an accidental regression).",
+    "Hush+ premium add-on suite is in a 'Coming Soon' teaser state — scroll through the pillars and the upcoming addon preview, but addons aren't launchable yet. They'll unlock automatically for existing members the moment Hush+ goes live.",
+    "Continue Watching is the default first home section when there's anything in progress — survives reboots, syncs across devices."
   ]
 }
