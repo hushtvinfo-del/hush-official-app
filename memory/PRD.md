@@ -1,6 +1,64 @@
 # HushTV — Product Requirements Document
 
-## v1.43.87 — EMERGENCY ROLLBACK of v1.43.86 — 2026-05-05  ⬅ LATEST
+## v1.43.88 — Removed installMainLooperResilience — 2026-05-05  ⬅ LATEST
+
+User report: *"ITS STILL NOT WORKING !!! ITS CRASHING AS SOO. AS
+YOU OPEN IT WE NEED THIS FIXED SERIOUSLY NOW!! NOBODY CAN GET IN
+THE APP"*
+
+### Why v1.43.87 didn't fix it
+v1.43.87 disabled the bundled-asset Coil mapper but kept the
+`installMainLooperResilience` from v1.43.83. Diagnosis path:
+
+- **Zero crash reports from any v1.43.83+ user** (38 from
+  v1.43.79, 6 from v1.43.81, 2 from v1.43.82, 0 from .83, .84,
+  .85, .86, .87).
+- That was the smoking gun. The resilience layer wraps every
+  message-dispatch in `Looper.loop()` re-entry. On Android 12+
+  (Google TV recent + Fire OS 12+), nested `Looper.loop()` from
+  inside a posted `Runnable` is NOT safe — it can hang the
+  outer message dispatcher OR throw `IllegalStateException` from
+  the platform's own anti-recursion checks. Both modes
+  blackhole the JVM uncaught-exception handler so crash logs
+  never get written / uploaded.
+- The user's "crashes as soon as you open it / can't update" is
+  consistent with the resilience layer hanging on the very first
+  message dispatch (which would be the Application init or the
+  splash composable's first frame).
+
+### Fix
+Removed `installMainLooperResilience()` entirely from
+`HushTVApp.onCreate`. Standard Android crash dialog + JVM
+uncaught-exception handler are restored. The 3 framework races
+that the resilience was suppressing
+(`FocusRequester is not initialized` ×10,
+`Release should only be called once` ×4,
+`Navigation destination cannot be found` ×3 over 7 days) will
+once again kill the process — but they're rare, well-known
+framework bugs, and dying loudly with a crash log is better than
+hanging silently and blocking ALL crash reports + the OTA system.
+
+### Build + deploy
+- `assembleDevDebug` ✅ (1m) + `assembleOfficialDebug` ✅ (45s)
+- APKs SCP'd, verified md5 match between local + live.
+- Both manifests live at `versionCode 388 / versionName 1.43.88`,
+  `mandatory: true`.
+- Verified v1.43.88 dex contains NEITHER `BundleOverrides` /
+  `HushBundleMapper` (R8-eliminated) NOR
+  `installMainLooperResilience` (deleted from source).
+
+### User recovery instructions
+For users currently stuck in the v1.43.86/87 hang:
+1. **Fire Stick**: Settings → Applications → Manage Installed
+   Applications → HushTV → Force Stop, then reopen.
+2. **Google TV / Onn**: Settings → Apps → See all apps →
+   HushTV → Force Stop, then reopen.
+3. If the app still hangs on cold start: uninstall → reinstall
+   from the official APK link.
+
+---
+
+## v1.43.87 — EMERGENCY ROLLBACK of v1.43.86 — 2026-05-05
 
 User report: *"THE APP ISN'T EVEN LOADING NOW IT CRASHES AS SOON
 AS YOU OPEN IT AND IT GOES TO THE REFRESHING SCREEN, CAN'T UPDATE

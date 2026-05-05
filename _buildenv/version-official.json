@@ -1,12 +1,12 @@
 {
-  "versionCode": 387,
-  "versionName": "1.43.87",
+  "versionCode": 388,
+  "versionName": "1.43.88",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": true,
   "releasedAt": "2026-05-05",
   "channel": "official",
   "changelog": [
-    "Emergency fix: rolled back the bundled-asset speed-up that shipped in v1.43.86. That build crashed for some users on launch. Mandatory update so anyone stuck on v1.43.86 gets pulled out of the crash automatically.",
-    "All other recent improvements remain — magnify and glow effects gone, screensaver fix, cross-device sync, the layout modal that kept popping up. We'll re-enable the bundled-asset speed-up safely in a follow-up build."
+    "Emergency stability fix — fully reverted the experimental crash-suppression layer that may have been causing apps to hang or crash on launch on some TVs. Standard Android error handling restored.",
+    "If your app was stuck not loading, please force-stop it once and reopen — this update will install automatically."
   ]
 }

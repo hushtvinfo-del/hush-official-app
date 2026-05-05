@@ -26,10 +26,16 @@ class HushTVApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         installCrashHandler()
-        // Phase 1.43.83 — survive known Compose / Navigation race
-        // conditions on Google TV + Fire TV without killing the
-        // process. See [installMainLooperResilience].
-        installMainLooperResilience()
+        // v1.43.83 → v1.43.88: REMOVED installMainLooperResilience.
+        // The re-entrant `Looper.loop()` posted as a runnable was
+        // suspected of preventing crash-log uploads on Google TV /
+        // Fire OS 12+ (the platforms throw on nested looper entry).
+        // We're better off letting Android's default crash dialog
+        // fire — the JVM uncaught-exception handler installed
+        // above persists the trace to disk for next-boot upload,
+        // and unknown framework races (FocusRequester, LazyLayout
+        // pinnable, Navigation destination) happen rarely enough
+        // that swallowing them isn't worth the diagnostic blackout.
         com.hushtv.tv.data.EventLog.log(
             "app",
             "onCreate v${BuildConfig.VERSION_NAME}#${BuildConfig.VERSION_CODE}",

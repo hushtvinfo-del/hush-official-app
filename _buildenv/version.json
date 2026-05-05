@@ -1,13 +1,13 @@
 {
-  "versionCode": 387,
-  "versionName": "1.43.87",
+  "versionCode": 388,
+  "versionName": "1.43.88",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-05",
   "channel": "dev",
   "changelog": [
-    "EMERGENCY ROLLBACK of v1.43.86 — that build crashed immediately on launch on user devices. Disabled the Coil bundled-asset mapper and the BundleOverrides on-launch load. Bundled assets are still in the APK but are not yet wired up. Effective behaviour matches v1.43.85 — i.e. the focus magnify + glow are still gone, sync still works, screensaver fix still works, layout-modal fix still works, but the streaming-services row still hits the TMDB CDN as before.",
-    "Mandatory upgrade so users stuck in the v1.43.86 crash loop get pulled out automatically.",
-    "Re-enabling the bundled mapper requires safer Coil registration with explicit type form (add(mapper, Class.java)) plus exhaustive runCatching in the mapper — will ship in a follow-up after we can reproduce the crash."
+    "EMERGENCY ROLLBACK #2: removed installMainLooperResilience entirely. The re-entrant Looper.loop() pattern was a likely cause of the recent app-startup crashes on Google TV / Fire OS 12+, and was also blackholing crash reports (none of v1.43.83+ uploaded). Standard Android crash dialog will now fire normally for unknown crashes.",
+    "Bundled-asset Coil mapper still disabled (v1.43.87 rollback retained).",
+    "If your app has been stuck in a crash loop, force-stop the app once after this update installs."
   ]
 }
