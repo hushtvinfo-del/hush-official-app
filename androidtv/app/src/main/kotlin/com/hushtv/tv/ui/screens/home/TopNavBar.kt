@@ -101,10 +101,6 @@ fun topNavTabs(
     TopNavTab("live",     "Live TV",  Icons.Default.Tv,         "browse/$playlistId/live"),
     TopNavTab("movies",   "Movies",   Icons.Default.Movie,      "browse/$playlistId/movie"),
     TopNavTab("series",   "Series",   Icons.Outlined.Slideshow, "browse/$playlistId/series"),
-    // v1.43.90 — Themes & Moods curated catalog. Routes to
-    // TVThemedCatalogScreen which has been in the codebase but
-    // unreachable from TV until now.
-    TopNavTab("themes",   "Themes",   Icons.Default.AutoAwesome, "themes/$playlistId"),
     TopNavTab("hushplus", "Hush+",    Icons.Default.Star,       "hushplus/$playlistId"),
     TopNavTab("requests", "Requests", Icons.Default.Inbox,      "requests/$playlistId", showBadge = requestsBadge),
     TopNavTab("search",   "Search",   Icons.Default.Search,     "search/$playlistId"),

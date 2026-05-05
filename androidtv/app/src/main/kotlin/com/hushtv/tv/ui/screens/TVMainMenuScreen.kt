@@ -275,6 +275,11 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             add("collections")
             add("genres_movies")
             add("genres_series")
+            // v1.43.91 — Themes & Moods restored to its original
+            // home position above Decades, per user request. Was
+            // briefly added as a top-nav tab in v1.43.90, but the
+            // user clarified it always lived as a home page section.
+            add("themed")
             add("years_movies")
         }
     }
