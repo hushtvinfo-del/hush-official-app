@@ -60,12 +60,10 @@ class MainActivity : ComponentActivity() {
         // recordings, completions, and skipped-due-to-conflict events
         // surface as Android system notifications.
         com.hushtv.tv.data.DvrEventPoller.start(this)
-        // v1.43.82 — start cross-device sync engine. Uploads any
-        // dirty Continue Watching / favorites / my list / etc.
-        // every 30 s (silently no-ops until the user has at least
-        // one Xtream playlist configured — auto-pair via
-        // sha256(host|username)).
+        // v1.43.82 — start cross-device sync engine.
         com.hushtv.tv.data.SyncEngine.start(this, lifecycleScope)
+        // v1.43.86 — refresh server-side bundle overrides every 6 h.
+        com.hushtv.tv.data.BundleOverrides.startRefresh(this, lifecycleScope)
         setContent {
             HushTVTheme {
                 Surface(

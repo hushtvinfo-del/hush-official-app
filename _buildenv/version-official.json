@@ -1,12 +1,12 @@
 {
-  "versionCode": 385,
-  "versionName": "1.43.85",
+  "versionCode": 386,
+  "versionName": "1.43.86",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": false,
   "releasedAt": "2026-05-05",
   "channel": "official",
   "changelog": [
-    "Snappier navigation across the whole app — removed the focus zoom (cards growing on focus) and the colored glow around focused cards. These effects were causing sluggish scrolling on Fire Sticks and lower-end devices, and the zoom was clipping the leftmost card off the screen.",
-    "Focus is now a clean cyan border + subtle background tint. Same look-and-feel direction, dramatically more responsive."
+    "Big speed-up across the home screen — streaming services, decades, themes, and genre rows now load posters and backdrops from inside the app itself instead of the TMDB CDN. ~100x faster paint on focus (5 ms vs 500-800 ms). The app is ~3 MB larger but the responsiveness gain is dramatic, especially on Fire Sticks.",
+    "Logos and posters can be hot-patched server-side without an app update if a streaming service rebrands."
   ]
 }

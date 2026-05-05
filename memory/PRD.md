@@ -1,6 +1,92 @@
 # HushTV — Product Requirements Document
 
-## v1.43.85 — Focus magnify + colored glow removed app-wide — 2026-05-05  ⬅ LATEST
+## v1.43.86 — Bundled assets + hot-patch override layer — 2026-05-05  ⬅ LATEST
+
+User ask: *"Bundle posters in APK — yes everything possible that
+will reduce load times. I don't care if we make the APK bigger.
+Hybrid override system so wrong logos can be fixed same-day
+without an APK update."*
+
+### What ships in the APK now
+41 WebP-encoded assets totalling ~3.0 MB
+(`app/src/main/assets/bundled/...`):
+
+| Category | Count | Source |
+|---|---|---|
+| Streaming service logos | 7 | Hardcoded URLs from `StreamingServicesData.kt` (Netflix + Prime sourced from TMDB stable logo paths because the original vecteezy URLs return HTTP 403 to scrapers) |
+| Decade hero backdrops | 9 | `HushDecadeYears.kt` (1940s–2020s) |
+| Theme hero backdrops | 22 | `HushThemedLists.kt` HERO_BACKDROPS map |
+| Genre preferred-movie backdrops | 3 | `GenresData.kt` `preferredMovieId` hooks |
+
+APK size: 18 MB → 21 MB. Within the user's "I don't care" budget.
+
+### Build pipeline (`/tmp/build_bundle.py`)
+1. Parse `StreamingServicesData.kt` for `CUSTOM_LOGO_URLS` map.
+2. Parse `HushDecadeYears.kt` for `label = "1940s"` …
+   `heroBackdropUrl = "$TMDB_BASE/foo.jpg"` blocks.
+3. Parse `HushThemedLists.kt` for `HERO_BACKDROPS` map.
+4. Parse `GenresData.kt` for `Genre(...)` blocks with
+   `preferredMovieId` set; resolve each to a backdrop_path via
+   `GET /3/movie/{id}` (TMDB v3 API key from `ApiKeys.kt`).
+5. For each (url, category, key, kind):
+   - Download the bytes with a User-Agent header.
+   - For known-403 streaming sources, fall back to a stable
+     TMDB-hosted logo URL.
+   - `convert <input> -resize 1280x <png>` (640×360 for logos
+     would be enough but 1280 looks crisp on 4K hero).
+   - `cwebp -q 75 <png> -o app/src/main/assets/bundled/<cat>/<key>.webp`
+6. Generate `BundledAssets.kt` — a Kotlin object whose `MAP`
+   contains every `(originalUrl → "bundled/cat/key.webp")` pair.
+   `resolve(url)` returns `file:///android_asset/bundled/...` or
+   null. `ENTRY_COUNT = 41`.
+
+Re-running the script regenerates the bundle from scratch.
+
+### Coil mapper (`HushBundleMapper.kt`)
+A `Mapper<String, String>` registered in
+`HushTVApp.newImageLoader().components { add(HushBundleMapper) }`.
+Every URL goes through:
+```
+HushBundleMapper.map(url, options)
+  → BundleOverrides.resolve(url)
+      ├── 1. Server override blob (hushtv.xyz/bundle_overrides.json)
+      ├── 2. BundledAssets.resolve(url) → file:///android_asset/...
+      └── 3. Pass-through — original url
+```
+Pass-through case returns the same `String` reference so Coil's
+existing cache-key path is undisturbed.
+
+### Hybrid override (`BundleOverrides.kt`)
+- Cached in `hushtv_bundle_overrides` SharedPreferences.
+- Loaded on disk synchronously during `HushTVApp.onCreate` so the
+  first frame already has a populated override map.
+- Refreshed every 6 h on the IO dispatcher from
+  `MainActivity.onCreate` via `BundleOverrides.startRefresh(...)`.
+- Endpoint shape: `{ "<src-url>": "<replacement-url>" }`. Both
+  bundled and non-bundled URLs can be overridden.
+
+### Upload
+- Both APKs SCP'd to `66.163.113.147:/var/www/hushtv/`.
+  Sizes: dev = 21.7 MB, official = 21.7 MB (debug builds, both
+  flavors).
+- Both manifests bumped to `versionCode 386 / versionName 1.43.86`.
+
+### Followup ideas (parked)
+- **`bundle_overrides.json` admin UI** — let non-developers
+  (CSR/support) edit the override blob via the React admin panel
+  rather than SSH.
+- **Bundle expansion**: collection backdrops (~20), curated
+  request-suggestion thumbs, default profile avatars.
+- **Genre row needs a code change** to actually USE the bundled
+  preferred-movie backdrop. Currently the row hits TMDB
+  `discover` and renders posters from the response; only a hero
+  layer (if any) would benefit. Will revisit once user reports
+  whether the v1.43.86 win is enough on the streaming-services
+  row alone.
+
+---
+
+## v1.43.85 — Focus magnify + colored glow removed app-wide — 2026-05-05
 
 User report: *"Remove the glowing effect and the magnifying effect
 throughout the whole app. It's causing sluggish response on Fire

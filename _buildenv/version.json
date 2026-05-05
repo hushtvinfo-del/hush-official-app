@@ -1,14 +1,13 @@
 {
-  "versionCode": 385,
-  "versionName": "1.43.85",
+  "versionCode": 386,
+  "versionName": "1.43.86",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-05",
   "channel": "dev",
   "changelog": [
-    "Performance: removed the focus magnify (cards growing 1.05–1.10x on focus) and colored glow shadows app-wide. Even though graphicsLayer is hardware-accelerated, every animating card triggered a layer composition pass and a redraw of the surrounding rail every focus change — on Fire Sticks and lower-end Google TV that stacked across visible cards and tanked scroll framerate.",
-    "Reduced the central tvFocusable Modifier (used by every screen) to: 2dp cyan border on focus + cyan tint background fill. No GPU layer, no animation timeline, no scale clipping the screen edge.",
-    "Fixed magnify-clip bug: the leftmost card in every rail no longer bleeds past x=0 on focus.",
-    "Stripped 26 scale animations + 17 graphicsLayer scaleX/Y blocks + 5 colored shadow glow blocks across home rows, browse, collections, decade years, themed catalog/detail."
+    "Performance: bundled 41 streaming logos / decade backdrops / theme backdrops / genre backdrops directly into the APK. Hits to the streaming services, decades, themes, and select genre rows now paint from local APK assets in ~5 ms instead of ~500-800 ms via TMDB CDN. Adds ~3 MB to the APK (now 21 MB).",
+    "Coil mapper installed in HushTVApp.newImageLoader resolves every URL through BundleOverrides → BundledAssets → fall-through. Pass-through URLs (movie posters, series posters, channel logos) work exactly as before.",
+    "Hybrid override system: a hot-patchable bundle_overrides.json on the deploy server lets us replace any bundled or non-bundled URL on the fly without an APK update — same-day fix path for wrong logos, rebrands, etc. Refreshed once every 6 h, cached on disk for instant first-frame on boot."
   ]
 }
