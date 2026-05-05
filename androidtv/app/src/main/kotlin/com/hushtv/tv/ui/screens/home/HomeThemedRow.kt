@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -148,11 +149,18 @@ fun HomeThemedRow(
             }
         }
         Spacer(Modifier.height(14.dp))
-        LazyRow(
+        // CW pattern (mirrors HomeContinueWatchingRow line 222-244):
+        // Plain Row + horizontalScroll, NOT LazyRow — see other home rows
+        // for the full reasoning.
+        val scrollState = androidx.compose.foundation.rememberScrollState()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(visible, key = { _, t -> t.id }) { _, theme ->
+            visible.forEachIndexed { idx, theme ->
                 val matches = matchSnapshot[theme.id]
                 ThemedCardView(
                     theme = theme,
@@ -160,15 +168,14 @@ fun HomeThemedRow(
                     libraryMatchCount = matches?.size ?: 0,
                     onFocus = { onFocusedThemeChange(theme) },
                     onClick = { onThemeClick(theme) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
             if (hasMore) {
-                item(key = "themed_see_all") {
-                    ThemedSeeAllCardView(
-                        totalCount = themes.size,
-                        onClick = onSeeAllClick,
-                    )
-                }
+                ThemedSeeAllCardView(
+                    totalCount = themes.size,
+                    onClick = onSeeAllClick,
+                )
             }
         }
     }
@@ -181,12 +188,16 @@ private fun ThemedCardView(
     libraryMatchCount: Int,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
+    val cardBase: Modifier = if (focusRequester != null)
+        Modifier.focusRequester(focusRequester) else Modifier
+
     Box(
-        Modifier
+        cardBase
             .width(260.dp)
             .height(156.dp)
             .onFocusChanged {

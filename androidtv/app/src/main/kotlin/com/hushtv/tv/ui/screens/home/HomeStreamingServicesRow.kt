@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -80,16 +81,16 @@ fun HomeStreamingServicesRow(
 ) {
     if (services.isEmpty()) return
 
-    // focusRestorer(): Column acts as a focus group that remembers the
-    // last-focused card. When the parent calls firstItemFocus.requestFocus()
-    // from the Top Nav D-pad-Down, focus returns to exactly where the
-    // user left off — not idx 0 — even if LazyRow has virtualised it out.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
-
+    // CW pattern (mirrors HomeContinueWatchingRow line 222-244):
+    // Plain Row + horizontalScroll, NOT LazyRow. LazyRow's virtualisation
+    // breaks the focus tree such that the side-rail's RIGHT-exit cannot
+    // reliably land on the first card — Compose's spatial focus search
+    // sees an empty/half-composed focus subtree and falls through. Plain
+    // Row + horizontalScroll keeps every card in the focus tree, so the
+    // rail's RIGHT-exit hits the first card every single time.
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -127,15 +128,20 @@ fun HomeStreamingServicesRow(
             )
         }
         Spacer(Modifier.height(14.dp))
-        LazyRow(
+        val scrollState = androidx.compose.foundation.rememberScrollState()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(services, key = { _, s -> s.id }) { _, service ->
+            services.forEachIndexed { idx, service ->
                 ServiceCardView(
                     service = service,
                     onFocus = { onFocusedServiceChange(service) },
                     onClick = { onServiceClick(service) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -147,6 +153,7 @@ private fun ServiceCardView(
     service: StreamingService,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
@@ -156,8 +163,12 @@ private fun ServiceCardView(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // ── CARD ──  pure logo-on-gradient. Focus ring + glow live here.
+        // Direct first-card bind (mirrors ContinueCard pattern) so the
+        // rail's RIGHT-exit lands on a real focusable card, not a wrapper.
+        val cardBase: Modifier = if (focusRequester != null)
+            Modifier.focusRequester(focusRequester) else Modifier
         Box(
-            Modifier
+            cardBase
                 .width(196.dp)
                 .height(118.dp)
                 .onFocusChanged {

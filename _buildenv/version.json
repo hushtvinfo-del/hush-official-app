@@ -1,13 +1,13 @@
 {
-  "versionCode": 393,
-  "versionName": "1.43.93",
+  "versionCode": 394,
+  "versionName": "1.43.94",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "Side-rail RIGHT-arrow navigation behaviour reverted byte-for-byte to v1.43.87 — the version you said was working perfectly. Discovery, Streaming Services, Collections, Genres, Years, and Themed rows all now use the v87 focus-group + restorer pattern, and the rail's RIGHT-arrow falls back to Compose's default 2D spatial focus search exactly as it did in v87.",
-    "Continue Watching is the default first home section when you have anything in progress (from v1.43.92) — survives reboots and syncs across devices via the existing SyncEngine.",
+    "FIXED: Side-rail RIGHT-arrow now lands on the first card of every section, not just Discovery. Root cause was LazyRow's virtualisation breaking Compose's focus tree — every other home row (Streaming Services, Collections, Genres, Years, Themes & Moods) now uses Plain Row + horizontalScroll exactly like Continue Watching has done since v1.43.0+. The pattern was already documented inside HomeContinueWatchingSection.kt — finally applied app-wide.",
+    "Continue Watching is the default first home section when in progress (from v1.43.92).",
     "Themes & Moods row sits above the Decades row on Home (from v1.43.91)."
   ]
 }

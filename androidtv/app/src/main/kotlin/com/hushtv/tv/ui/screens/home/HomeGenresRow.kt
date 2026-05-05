@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,17 +80,14 @@ fun HomeGenresRow(
 ) {
     if (genres.isEmpty()) return
 
-    // focusRestorer(): Column acts as a focus group that remembers the
-    // last-focused child card. When the parent calls
-    // `firstItemFocus.requestFocus()` (e.g. D-pad Down from the Top Nav),
-    // focus is routed to the card the user was last on instead of idx 0.
-    // Bulletproof against LazyRow virtualisation.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
-
+    // CW pattern (mirrors HomeContinueWatchingRow line 222-244):
+    // Plain Row + horizontalScroll, NOT LazyRow. LazyRow's virtualisation
+    // breaks the focus tree such that the side-rail's RIGHT-exit cannot
+    // reliably land on the first card — Compose's spatial focus search
+    // sees an empty/half-composed focus subtree and falls through.
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -128,15 +126,20 @@ fun HomeGenresRow(
             )
         }
         Spacer(Modifier.height(14.dp))
-        LazyRow(
+        val scrollState = androidx.compose.foundation.rememberScrollState()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(genres, key = { _, g -> g.id }) { _, genre ->
+            genres.forEachIndexed { idx, genre ->
                 GenreCardView(
                     genre = genre,
                     onFocus = { onFocusedGenreChange(genre) },
                     onClick = { onGenreClick(genre) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -148,12 +151,16 @@ private fun GenreCardView(
     genre: Genre,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(12.dp)
 
+    val cardBase: Modifier = if (focusRequester != null)
+        Modifier.focusRequester(focusRequester) else Modifier
+
     Box(
-        Modifier
+        cardBase
             .width(210.dp)
             .height(118.dp)
             .onFocusChanged {

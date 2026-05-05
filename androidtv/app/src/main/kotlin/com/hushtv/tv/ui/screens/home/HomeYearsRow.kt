@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,15 +69,14 @@ fun HomeYearsRow(
 ) {
     if (years.isEmpty()) return
 
-    // focusRestorer(): Column acts as a focus group remembering the
-    // last-focused card. Ensures D-pad Down from the Top Nav returns
-    // the user to the exact card they were on — not just idx 0.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
-
+    // CW pattern (mirrors HomeContinueWatchingRow line 222-244):
+    // Plain Row + horizontalScroll, NOT LazyRow. LazyRow's virtualisation
+    // breaks the focus tree such that the side-rail's RIGHT-exit cannot
+    // reliably land on the first card. Fixed-width cards (240 dp) keep
+    // the v1.43.90 fix for the 720p decade-vertical-text bug.
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -115,28 +115,21 @@ fun HomeYearsRow(
             )
         }
         Spacer(Modifier.height(14.dp))
-        // LazyRow with fixed-width cards so they look right
-        // regardless of TV output resolution. Previous `Row +
-        // weight(1f)` design assumed 1080p+ density — on Shield
-        // output at 720p each card shrunk to ~80 dp wide which
-        // forced the 48 sp year text + "MOVIES" chip to wrap
-        // character-by-character (the rendering the user reported
-        // as "decade cards corrupt"). With LazyRow + fixed width
-        // they always render at intended size and the user can
-        // scroll horizontally if there are more cards than fit.
-        LazyRow(
+        val scrollState = androidx.compose.foundation.rememberScrollState()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState)
+                .padding(end = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 32.dp),
         ) {
-            items(
-                items = years,
-                key = { it.year },
-            ) { year ->
+            years.forEachIndexed { idx, year ->
                 YearCardView(
                     year = year,
                     modifier = Modifier.width(240.dp),
                     onFocus = { onFocusedYearChange(year) },
                     onClick = { onYearClick(year) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -149,12 +142,17 @@ private fun YearCardView(
     modifier: Modifier = Modifier,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
+    val cardBase: Modifier = if (focusRequester != null)
+        Modifier.focusRequester(focusRequester) else Modifier
+
     Box(
-        modifier
+        cardBase
+            .then(modifier)
             .height(170.dp)
             .onFocusChanged {
                 focused = it.isFocused

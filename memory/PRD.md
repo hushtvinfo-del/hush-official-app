@@ -1,6 +1,88 @@
 # HushTV — Product Requirements Document
 
-## v1.43.93+ — Build/release tagging infrastructure — 2026-05-06  ⬅ LATEST
+## v1.43.94 — REAL ROOT CAUSE: LazyRow virtualisation breaks rail RIGHT-exit — 2026-05-06  ⬅ LATEST
+
+User report (third frustration in a row): *"Stop wasting our time and
+credits. The only home screen that's working currently is Discovery.
+When you move from left to right on Discovery, it focuses on the
+first card. You need to fix this."*
+
+### What I finally figured out
+
+The pattern was **documented inline** inside
+`HomeContinueWatchingSection.kt:222-225`:
+
+> *"// Plain Row + horizontalScroll — see HomeYearsRow comment for
+> the full reasoning. Inline composition is required for the
+> outer-Column focusRequester to land on the first CW card from
+> the sidebar's RIGHT-exit callback."*
+
+**The actual root cause**: `LazyRow` virtualises items. When the
+side-rail's RIGHT-arrow event tries to land focus on the first card
+of a home page row, Compose's spatial focus search sees a
+half-composed / virtualised focus subtree and can't land on the
+first card. Discovery worked because it was a plain `Row` with only
+2 cards (always composed). CW worked because it deliberately uses
+`Row + horizontalScroll`. EVERY OTHER home row used `LazyRow` —
+hence the "only Discovery works" symptom.
+
+### What landed in v1.43.94
+
+Five home rows converted from `LazyRow + items/itemsIndexed` to
+`Row + horizontalScroll + forEachIndexed`, mirroring the CW pattern
+verbatim:
+
+- `HomeStreamingServicesRow.kt`
+- `HomeGenresRow.kt`
+- `HomeCollectionsRow.kt`
+- `HomeYearsRow.kt` (kept the v1.43.90 fixed-width 240 dp cards
+  for the 720p decade-vertical-text fix)
+- `HomeThemedRow.kt`
+
+Each card composable (`ServiceCardView`, `GenreCardView`,
+`CollectionCardView`, `YearCardView`, `ThemedCardView`) now accepts
+`focusRequester: FocusRequester? = null`, applied as the FIRST
+modifier in the chain (before `.tvFocusable.focusable()`), bound
+ONLY to `idx == 0` from the parent. Direct first-card bind, just
+like `ContinueCard`.
+
+Outer Column wraps with `Modifier.focusGroup()` only — no
+`focusRestorer`, no `focusRequester` on the wrapper. That way
+`firstItemFocus.requestFocus()` always lands on a real focusable
+card with a visible cyan ring, and Compose's spatial-search RIGHT
+from the rail walks into the focusGroup and lands on the first
+focusable child.
+
+### Build + deploy
+
+- versionCode 393 → 394, versionName 1.43.93 → 1.43.94.
+- `./gradlew assembleDevDebug` → BUILD SUCCESSFUL (1m 40s).
+- APK + manifest scp'd to `root@66.163.113.147:/var/www/hushtv/`.
+- Live: `https://hushtv.xyz/version.json` reports 394 / 1.43.94,
+  APK ~21.7 MB.
+- Auto-tagged via `/app/_buildenv/tag-release.sh` →
+  `v1.43.94-dev` → 383e8dd5f.
+- Official channel still on 1.43.90 — held until user signs off.
+
+### Build environment note
+
+The kubernetes container ate `/app/_buildenv/jdk` again (the
+recurring JVM-wipe bug). Workaround applied:
+`apt-get install openjdk-17-jdk-headless qemu-user-static sshpass`
++ `JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64`. AAPT2 wrapper
+needs `qemu-x86_64-static` which isn't installed by default.
+
+### Lesson for future agents
+
+When the user says "go back to v1.43.87", `git checkout v1.43.87-dev`
+is the FIRST move. When the user says "this used to work", read
+the inline comments in code that's KNOWN to work (CW worked the
+whole time — its file's comments were a step-by-step explanation
+of the fix the user needed).
+
+---
+
+## v1.43.93 — REVERT side-rail focus to v1.43.87 working pattern — 2026-05-06
 
 User explicitly approved the suggestion: "Want me to bump every Dev
 release to also auto-tag the git commit so future 'go back to
