@@ -1,13 +1,13 @@
 {
-  "versionCode": 386,
-  "versionName": "1.43.86",
+  "versionCode": 387,
+  "versionName": "1.43.87",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": false,
+  "mandatory": true,
   "releasedAt": "2026-05-05",
   "channel": "dev",
   "changelog": [
-    "Performance: bundled 41 streaming logos / decade backdrops / theme backdrops / genre backdrops directly into the APK. Hits to the streaming services, decades, themes, and select genre rows now paint from local APK assets in ~5 ms instead of ~500-800 ms via TMDB CDN. Adds ~3 MB to the APK (now 21 MB).",
-    "Coil mapper installed in HushTVApp.newImageLoader resolves every URL through BundleOverrides → BundledAssets → fall-through. Pass-through URLs (movie posters, series posters, channel logos) work exactly as before.",
-    "Hybrid override system: a hot-patchable bundle_overrides.json on the deploy server lets us replace any bundled or non-bundled URL on the fly without an APK update — same-day fix path for wrong logos, rebrands, etc. Refreshed once every 6 h, cached on disk for instant first-frame on boot."
+    "EMERGENCY ROLLBACK of v1.43.86 — that build crashed immediately on launch on user devices. Disabled the Coil bundled-asset mapper and the BundleOverrides on-launch load. Bundled assets are still in the APK but are not yet wired up. Effective behaviour matches v1.43.85 — i.e. the focus magnify + glow are still gone, sync still works, screensaver fix still works, layout-modal fix still works, but the streaming-services row still hits the TMDB CDN as before.",
+    "Mandatory upgrade so users stuck in the v1.43.86 crash loop get pulled out automatically.",
+    "Re-enabling the bundled mapper requires safer Coil registration with explicit type form (add(mapper, Class.java)) plus exhaustive runCatching in the mapper — will ship in a follow-up after we can reproduce the crash."
   ]
 }

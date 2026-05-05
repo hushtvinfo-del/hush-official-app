@@ -1,12 +1,12 @@
 {
-  "versionCode": 386,
-  "versionName": "1.43.86",
+  "versionCode": 387,
+  "versionName": "1.43.87",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
-  "mandatory": false,
+  "mandatory": true,
   "releasedAt": "2026-05-05",
   "channel": "official",
   "changelog": [
-    "Big speed-up across the home screen — streaming services, decades, themes, and genre rows now load posters and backdrops from inside the app itself instead of the TMDB CDN. ~100x faster paint on focus (5 ms vs 500-800 ms). The app is ~3 MB larger but the responsiveness gain is dramatic, especially on Fire Sticks.",
-    "Logos and posters can be hot-patched server-side without an app update if a streaming service rebrands."
+    "Emergency fix: rolled back the bundled-asset speed-up that shipped in v1.43.86. That build crashed for some users on launch. Mandatory update so anyone stuck on v1.43.86 gets pulled out of the crash automatically.",
+    "All other recent improvements remain — magnify and glow effects gone, screensaver fix, cross-device sync, the layout modal that kept popping up. We'll re-enable the bundled-asset speed-up safely in a follow-up build."
   ]
 }

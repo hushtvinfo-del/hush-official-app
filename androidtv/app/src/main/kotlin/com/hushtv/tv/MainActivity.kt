@@ -63,7 +63,8 @@ class MainActivity : ComponentActivity() {
         // v1.43.82 — start cross-device sync engine.
         com.hushtv.tv.data.SyncEngine.start(this, lifecycleScope)
         // v1.43.86 — refresh server-side bundle overrides every 6 h.
-        com.hushtv.tv.data.BundleOverrides.startRefresh(this, lifecycleScope)
+        // **DISABLED in v1.43.87** — see HushTVApp.newImageLoader().
+        // com.hushtv.tv.data.BundleOverrides.startRefresh(this, lifecycleScope)
         setContent {
             HushTVTheme {
                 Surface(

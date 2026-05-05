@@ -1,6 +1,63 @@
 # HushTV — Product Requirements Document
 
-## v1.43.86 — Bundled assets + hot-patch override layer — 2026-05-05  ⬅ LATEST
+## v1.43.87 — EMERGENCY ROLLBACK of v1.43.86 — 2026-05-05  ⬅ LATEST
+
+User report: *"THE APP ISN'T EVEN LOADING NOW IT CRASHES AS SOON
+AS YOU OPEN IT AND IT GOES TO THE REFRESHING SCREEN, CAN'T UPDATE
+OR ANYTHING."*
+
+### Action taken
+**Mandatory rollback published in ~5 minutes.**
+
+- Commented out the v1.43.86 Coil mapper registration (`add(HushBundleMapper)` in `HushTVApp.newImageLoader`).
+- Commented out `BundleOverrides.load(ctx)` in `HushTVApp.onCreate`.
+- Commented out `BundleOverrides.startRefresh(ctx, lifecycleScope)` in `MainActivity.onCreate`.
+- The 41 bundled WebP assets remain in the APK (`assets/bundled/...`) — they're just not referenced by the running code anymore. Functional behaviour matches v1.43.85.
+- `mandatory: true` so users on the broken v1.43.86 get force-updated out of the crash loop.
+
+### Diagnosis
+**Zero crash reports came in for v1.43.86** in the period it was
+live. That's the key data point — it means the app didn't crash
+in a way the JVM-level `Thread.setDefaultUncaughtExceptionHandler`
+catches. Most likely scenarios:
+
+1. **Coil mapper registration error**. Coil 2.7's
+   `add(mapper: Mapper<*, *>)` overload uses reified type
+   inspection that R8 / ART debug-mode lazily resolves. If the
+   resolution gets `Any` instead of `String`, the mapper is
+   registered as `Mapper<Any, *>` and called for every input
+   type — `data as String` (implicit in our `map(data: String)`
+   override after type erasure) would `ClassCastException`
+   immediately on first non-String image data.
+2. **Native ART crash inside `Looper.loop()` re-entry from
+   `installMainLooperResilience`**. If a re-entrant looper hits
+   a native-side issue (e.g. invalid InputDispatcher state), the
+   crash bypasses the JVM uncaught-exception handler entirely.
+3. **Memory pressure on Fire Stick gen-1/2 from the +3 MB
+   bundle**. Less likely but possible — older Fire Sticks have
+   strict APK install size budgets.
+
+The fact that we got **zero** uploads narrows it to scenarios 1
+or 2 — both circumvent CrashReporter.
+
+### Path forward (planned for v1.43.88+)
+- Switch Coil mapper registration to the explicit-type form:
+  `add(HushBundleMapper, String::class.java)`.
+- Wrap `HushBundleMapper.map` in `runCatching { … }.getOrElse { data }`
+  so a buggy resolve never propagates.
+- Defer `BundleOverrides.load` to a background thread; main
+  thread shouldn't read prefs synchronously during onCreate.
+- Test on a Fire Stick before shipping anywhere else.
+
+### Build + deploy (recovery)
+- `assembleDevDebug` ✅ + `assembleOfficialDebug` ✅
+- APKs SCP'd to `66.163.113.147:/var/www/hushtv/`
+- Both manifests live at `versionCode 387 / versionName 1.43.87`
+- `mandatory: true` on both channels
+
+---
+
+## v1.43.86 — Bundled assets + hot-patch override layer — 2026-05-05  (BROKEN — rolled back)
 
 User ask: *"Bundle posters in APK — yes everything possible that
 will reduce load times. I don't care if we make the APK bigger.
