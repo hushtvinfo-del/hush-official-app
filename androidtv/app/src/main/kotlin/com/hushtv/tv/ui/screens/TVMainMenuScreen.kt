@@ -231,6 +231,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val firstGenresSeriesFocus = remember { FocusRequester() }
     val firstYearsMoviesFocus = remember { FocusRequester() }
     val firstCollectionsFocus = remember { FocusRequester() }
+    val firstThemedFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { topNavHomeFocus.requestFocus() } }
 
     val onCardSelect: (MediaCard) -> Unit = sel@{ item ->
@@ -427,6 +428,18 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             if (focusedCollection == null) focusedCollection = movieCollections.firstOrNull()
         }
 
+        // Themes & Moods state — sourced directly from the static
+        // [HushThemedLists.all] catalog. Every item ships with a
+        // hand-picked TMDB hero backdrop so the hero paints on the
+        // first frame even before the library matcher has run.
+        val themedLists = remember { com.hushtv.tv.data.HushThemedLists.all }
+        var focusedTheme by remember {
+            mutableStateOf<com.hushtv.tv.data.ThemedList?>(null)
+        }
+        LaunchedEffect(themedLists.firstOrNull()) {
+            if (focusedTheme == null) focusedTheme = themedLists.firstOrNull()
+        }
+
         // Nav-Down target — follows the CURRENTLY VISIBLE page so the
         // requestFocus() call always hits a composable that's actually
         // attached to the tree.
@@ -516,6 +529,16 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         kind = "series",
                         firstItemFocus = firstGenresSeriesFocus,
                         onUpFromRow = { currentPage = "genres_movies" },
+                        onDownFromRow = { currentPage = "themed" },
+                    )
+                    "themed" -> ThemedPage(
+                        playlistId = playlistId,
+                        nav = nav,
+                        themes = themedLists,
+                        focused = focusedTheme,
+                        onFocusedChange = { focusedTheme = it },
+                        firstItemFocus = firstThemedFocus,
+                        onUpFromRow = { currentPage = "genres_series" },
                         onDownFromRow = { currentPage = "years_movies" },
                     )
                     "years_movies" -> YearsPage(
@@ -525,7 +548,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         focused = focusedMovieYear,
                         onFocusedChange = { focusedMovieYear = it },
                         firstItemFocus = firstYearsMoviesFocus,
-                        onUpFromRow = { currentPage = "genres_series" },
+                        onUpFromRow = { currentPage = "themed" },
                         onDownFromRow = null,
                     )
                     "collections" -> CollectionsPage(
@@ -568,6 +591,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         "ss_series" -> firstSsSeriesFocus.requestFocus()
                         "genres_movies" -> firstGenresMoviesFocus.requestFocus()
                         "genres_series" -> firstGenresSeriesFocus.requestFocus()
+                        "themed" -> firstThemedFocus.requestFocus()
                         "years_movies" -> firstYearsMoviesFocus.requestFocus()
                     }
                 }
@@ -602,6 +626,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         "ss_series" -> "SERIES"
                         "genres_movies" -> "G·MOV"
                         "genres_series" -> "G·SER"
+                        "themed" -> "MOODS"
                         "years_movies" -> "YEARS"
                         else -> k.uppercase()
                     },
@@ -629,11 +654,35 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // Self-positions to the start edge with fillMaxHeight at
         // its collapsed width; expands on focus and overlays content
         // with a backdrop dim.
+        //
+        // Wire `onExitRight` so pressing RIGHT from any rail item
+        // jumps focus to the FIRST CARD of whichever home page is
+        // currently visible. Without this callback Compose's
+        // default 2D spatial focus search picks a card based on the
+        // rail item's vertical position, which lands on the wrong
+        // card (or nowhere at all when the page's row is pinned to
+        // the bottom of the screen and no card is vertically
+        // aligned with the rail row).
         com.hushtv.tv.ui.screens.home.TVHubRail(
             activeKey = "home",
             playlistId = playlistId,
             nav = nav,
             homeFocus = homeTabFocus,
+            onExitRight = {
+                runCatching {
+                    when (currentPage) {
+                        "discovery" -> firstDiscoveryFocus.requestFocus()
+                        "collections" -> firstCollectionsFocus.requestFocus()
+                        "ss_movies" -> firstSsMoviesFocus.requestFocus()
+                        "ss_series" -> firstSsSeriesFocus.requestFocus()
+                        "genres_movies" -> firstGenresMoviesFocus.requestFocus()
+                        "genres_series" -> firstGenresSeriesFocus.requestFocus()
+                        "themed" -> firstThemedFocus.requestFocus()
+                        "years_movies" -> firstYearsMoviesFocus.requestFocus()
+                        else -> firstDiscoveryFocus.requestFocus()
+                    }
+                }
+            },
         )
 
         // ── First-run / Settings layout chooser modal ──
@@ -1512,6 +1561,47 @@ private fun GenresPage(
                         val encoded = Uri.encode(g.searchKeyword)
                         val catParam = g.xtreamCategoryId?.let { "&catId=$it" }.orEmpty()
                         nav.navigate("browse/$playlistId/$kind?category=$encoded$catParam")
+                    },
+                    firstItemFocus = firstItemFocus,
+                    onUpFromRow = onUpFromRow,
+                    onDownFromRow = onDownFromRow,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemedPage(
+    playlistId: String,
+    nav: NavController,
+    themes: List<com.hushtv.tv.data.ThemedList>,
+    focused: com.hushtv.tv.data.ThemedList?,
+    onFocusedChange: (com.hushtv.tv.data.ThemedList) -> Unit,
+    firstItemFocus: FocusRequester,
+    onUpFromRow: () -> Unit,
+    onDownFromRow: (() -> Unit)?,
+) {
+    Box(Modifier.fillMaxSize()) {
+        com.hushtv.tv.ui.screens.home.HomeThemedHeroLayer(
+            theme = focused,
+            contentStartPadding = 80.dp,
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(start = 48.dp, end = 32.dp),
+        ) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
+                com.hushtv.tv.ui.screens.home.HomeThemedRow(
+                    themes = themes,
+                    contentStartPadding = 0.dp,
+                    onFocusedThemeChange = onFocusedChange,
+                    onThemeClick = { t ->
+                        nav.navigate("themedetail/$playlistId/${t.id}")
+                    },
+                    onSeeAllClick = {
+                        nav.navigate("themes/$playlistId")
                     },
                     firstItemFocus = firstItemFocus,
                     onUpFromRow = onUpFromRow,

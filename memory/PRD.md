@@ -1,6 +1,95 @@
 # HushTV — Product Requirements Document
 
-## v1.43.88 — Removed installMainLooperResilience — 2026-05-05  ⬅ LATEST
+## v1.43.91 — Themes & Moods home row + side-rail right-arrow fix — 2026-05-06  ⬅ LATEST
+
+User reports across two messages:
+
+1. *"THEMES IS SUPPOSED TO BE BUILT INTO THE ACTUAL HOME SCREEN
+   SECTION… ABOVE DECADES. AND FIX THE MENU NAVIGATION AGAIN SO
+   WE CAN SCROLL OUT OF IT RIGHT INTO THE FIRST CARD."*
+2. *"WHEN IN LEFT SIDE MENU AND TRY TO NAVIGATE RIGHT IT'S NOT
+   FOCUSING ON THE FIRST CARD OF SECTION — WE HAD THIS ISSUE
+   BEFORE, MAKE SURE IT'S FIXED."*
+
+### What landed
+
+#### 1. Themes & Moods home row (above Decades)
+- New Composables `HomeThemedRow` + `HomeThemedHeroLayer` in
+  `app/src/main/kotlin/com/hushtv/tv/ui/screens/home/`. Mirror
+  the focus contract of `HomeCollectionsRow` /
+  `HomeCollectionsHeroLayer` so they slot into the existing home
+  pager unchanged.
+- `TVMainMenuScreen.kt`:
+  - Adds `firstThemedFocus` FocusRequester + `focusedTheme`
+    state.
+  - New `"themed" -> ThemedPage(...)` branch in the home `when
+    (page)` pager.
+  - Genres-Series flows DOWN → `themed`; Themed flows UP →
+    `genres_series` and DOWN → `years_movies` (Decades). So the
+    final home page order is now exactly what the user asked
+    for: Discovery → Streaming Services → Collections →
+    Genres → **Themes & Moods → Decades**.
+  - Page indicator on the right edge gets a "MOODS" dot.
+- Each themed tile preloads the curator-picked TMDB hero
+  backdrop on the first frame, then upgrades to the user's
+  matched library poster the moment `ThemedMatchCache`
+  resolves — so tiles never render as a gradient placeholder.
+- Tile click → `themedetail/{playlistId}/{themeId}` (existing
+  TVThemedDetailScreen). Trailing "All Themes" tile →
+  `themes/{playlistId}` (existing TVThemedCatalogScreen).
+
+#### 2. Side-rail right-arrow focus fix
+- Root cause: `TVMainMenuScreen` was calling `TVHubRail(...)`
+  WITHOUT passing the `onExitRight` callback. So when the user
+  pressed RIGHT inside any rail item, the per-item
+  `onPreviewKeyEvent` fell through (`val cb = onExitRight ?:
+  return@onPreviewKeyEvent false`) and Compose's default 2D
+  spatial focus search took over — landing focus on whichever
+  card happened to be vertically aligned with the rail row,
+  which was usually the wrong card or nothing at all when the
+  page's row was pinned to the bottom of the screen.
+- Fix: wired `onExitRight` to a callback that `requestFocus()`s
+  the FIRST CARD of whichever home page is currently visible
+  (`when (currentPage) { ... }` over every page's
+  `firstFocus` requester). Pressing RIGHT from any rail item
+  now reliably lands on the first card of the active page.
+
+### Files changed
+- NEW `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/HomeThemedRow.kt`
+- NEW `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/HomeThemedHeroLayer.kt`
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVMainMenuScreen.kt`
+  - Added `firstThemedFocus`, `themedLists`, `focusedTheme`
+    state.
+  - Added `"themed" -> ThemedPage(...)` page branch + matching
+    `ThemedPage` private composable.
+  - Re-wired `genres_series` ↔ `themed` ↔ `years_movies`
+    vertical traversal.
+  - Added "MOODS" label to indicator.
+  - Wired `onExitRight` on `TVHubRail`.
+- `/app/androidtv/app/build.gradle.kts` — bumped versionCode
+  390 → 391, versionName 1.43.90 → 1.43.91.
+- `/app/_buildenv/version.json` — dev manifest 1.43.91 with
+  user-facing changelog.
+
+### Build + deploy
+- `./gradlew assembleDevDebug` → BUILD SUCCESSFUL (1m 3s).
+- APK + manifest scp'd to `root@66.163.113.147:/var/www/hushtv/`.
+  Verified: `https://hushtv.xyz/version.json` reports 391 /
+  1.43.91, APK ~21.7 MB.
+- Official channel intentionally still on 1.43.90 — user asked
+  to test Dev first before promoting.
+
+### Testing status
+- Build compiled cleanly (only pre-existing unused-var warnings).
+- Live OTA verified.
+- USER SMOKE TEST PENDING — user will sideload / OTA-update on
+  their Fire Stick / Shield and verify (a) Themes row appears
+  above Decades on Home, (b) Right-from-sidebar lands on first
+  card.
+
+---
+
+## v1.43.88 — Removed installMainLooperResilience — 2026-05-05
 
 User report: *"ITS STILL NOT WORKING !!! ITS CRASHING AS SOO. AS
 YOU OPEN IT WE NEED THIS FIXED SERIOUSLY NOW!! NOBODY CAN GET IN
