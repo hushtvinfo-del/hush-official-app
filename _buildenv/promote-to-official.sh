@@ -37,6 +37,9 @@ sshpass -p 'A_i_36RO84SBAwbg' scp -o StrictHostKeyChecking=no \
     /app/_buildenv/version-official.json \
     root@66.163.113.147:/var/www/hushtv/version-official.json
 
+echo "▶ Tagging the commit so we can roll back to it later…"
+/app/_buildenv/tag-release.sh official
+
 echo "✔ Official channel updated:"
 echo "  APK:      https://hushtv.xyz/hushtv-official.apk"
 echo "  Manifest: https://hushtv.xyz/version-official.json"

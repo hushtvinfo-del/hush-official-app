@@ -1,6 +1,61 @@
 # HushTV — Product Requirements Document
 
-## v1.43.93 — REVERT side-rail focus to v1.43.87 working pattern — 2026-05-06  ⬅ LATEST
+## v1.43.93+ — Build/release tagging infrastructure — 2026-05-06  ⬅ LATEST
+
+User explicitly approved the suggestion: "Want me to bump every Dev
+release to also auto-tag the git commit so future 'go back to
+version N' requests are a one-line git checkout?". Answer was yes.
+
+### What landed
+
+- **`/app/_buildenv/tag-release.sh`** — internal helper that reads
+  `versionName` / `versionCode` from `app/build.gradle.kts` and tags
+  HEAD as `v{versionName}-{channel}`. Idempotent (skips if the tag
+  already points at HEAD); guards against accidentally re-tagging.
+- **`/app/_buildenv/build-and-deploy-dev.sh`** — new single-command
+  Dev release flow: `assembleDevDebug` → `scp` APK + manifest → tag
+  HEAD → print live manifest summary. Replaces the manual sequence
+  the agent has been running every release.
+- **`/app/_buildenv/promote-to-official.sh`** — already existed.
+  Updated to call `tag-release.sh official` after upload so Official
+  releases also get a tag.
+- **`/app/_buildenv/checkout-version.sh`** — convenience helper for
+  the user-facing flow:
+    - `checkout-version.sh list` — pretty-prints all known tags +
+      their commit SHAs + dates.
+    - `checkout-version.sh 1.43.87` — `git checkout v1.43.87-dev`,
+      with a working-tree-dirty safety net.
+- **`/app/_buildenv/README.md`** — documents the toolkit so future
+  agents (and future me) don't have to rediscover it.
+
+### Retroactive tagging
+
+Every dev release in git history was retroactively tagged via
+`git tag -a v{X.Y.Z}-dev <sha>`:
+
+```
+v1.43.86-dev  →  6881c3005
+v1.43.87-dev  →  1b4936bbc      ← the "working" reference point
+v1.43.88-dev  →  e8875f9d8
+v1.43.89-dev  →  c8de51c12
+v1.43.90-dev  →  7f05574a2
+v1.43.91-dev  →  893316b69
+v1.43.92-dev  →  a4958bd6e
+v1.43.93-dev  →  4ad3af01d      ← current HEAD (Themes + CW + v87 focus)
+```
+
+So future "go back to v1.43.87" requests become:
+
+```
+/app/_buildenv/checkout-version.sh 1.43.87
+/app/_buildenv/build-and-deploy-dev.sh
+```
+
+Two lines. No more git-log-S spelunking, no more wasted iterations.
+
+---
+
+## v1.43.93 — REVERT side-rail focus to v1.43.87 working pattern — 2026-05-06
 
 User report (super frustrated, third attempt): *"Nope not working AGAIN
 the right side to first card it not working still it needs to go focus
