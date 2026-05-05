@@ -69,14 +69,17 @@ fun HomeYearsRow(
 ) {
     if (years.isEmpty()) return
 
-    // CW pattern (mirrors HomeContinueWatchingRow line 222-244):
-    // Plain Row + horizontalScroll, NOT LazyRow. LazyRow's virtualisation
-    // breaks the focus tree such that the side-rail's RIGHT-exit cannot
-    // reliably land on the first card. Fixed-width cards (240 dp) keep
-    // the v1.43.90 fix for the 720p decade-vertical-text bug.
+    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
+    // working). Column wrapper holds focusRequester+focusRestorer+focusGroup
+    // so requestFocus() routes through focusRestorer to first card.
+    // Plain Row + horizontalScroll with fixed-width cards keeps the
+    // v1.43.90 fix for the 720p decade-vertical-text bug.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
-            .focusGroup()
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -123,13 +126,12 @@ fun HomeYearsRow(
                 .padding(end = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            years.forEachIndexed { idx, year ->
+            years.forEachIndexed { _, year ->
                 YearCardView(
                     year = year,
                     modifier = Modifier.width(240.dp),
                     onFocus = { onFocusedYearChange(year) },
                     onClick = { onYearClick(year) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -142,28 +144,16 @@ private fun YearCardView(
     modifier: Modifier = Modifier,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
-    val cardBase: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
     Box(
-        cardBase
-            .then(modifier)
+        modifier
             .height(170.dp)
             .onFocusChanged {
                 focused = it.isFocused
-                if (it.isFocused) {
-                    if (focusRequester != null) {
-                        com.hushtv.tv.util.HushTVNav.d(
-                            "✓ Year first card '${year.year}' GAINED FOCUS (cyan ring on)"
-                        )
-                    }
-                    onFocus()
-                }
+                if (it.isFocused) onFocus()
             }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()

@@ -81,16 +81,20 @@ fun HomeStreamingServicesRow(
 ) {
     if (services.isEmpty()) return
 
-    // CW pattern (mirrors HomeContinueWatchingRow line 222-244):
-    // Plain Row + horizontalScroll, NOT LazyRow. LazyRow's virtualisation
-    // breaks the focus tree such that the side-rail's RIGHT-exit cannot
-    // reliably land on the first card — Compose's spatial focus search
-    // sees an empty/half-composed focus subtree and falls through. Plain
-    // Row + horizontalScroll keeps every card in the focus tree, so the
-    // rail's RIGHT-exit hits the first card every single time.
+    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
+    // working without complaints). Column wrapper holds the
+    // focusRequester+focusRestorer+focusGroup so requestFocus() lands
+    // on the focusGroup, then focusRestorer routes to first focusable
+    // child (= first card). Cards themselves get focusRequester=null.
+    //
+    // Plain Row + horizontalScroll (NOT LazyRow) so every card is
+    // always composed and the focus tree is complete.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
-            .focusGroup()
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -136,12 +140,11 @@ fun HomeStreamingServicesRow(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            services.forEachIndexed { idx, service ->
+            services.forEachIndexed { _, service ->
                 ServiceCardView(
                     service = service,
                     onFocus = { onFocusedServiceChange(service) },
                     onClick = { onServiceClick(service) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -153,7 +156,6 @@ private fun ServiceCardView(
     service: StreamingService,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
@@ -162,25 +164,13 @@ private fun ServiceCardView(
         Modifier.width(196.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // ── CARD ──  pure logo-on-gradient. Focus ring + glow live here.
-        // Direct first-card bind (mirrors ContinueCard pattern) so the
-        // rail's RIGHT-exit lands on a real focusable card, not a wrapper.
-        val cardBase: Modifier = if (focusRequester != null)
-            Modifier.focusRequester(focusRequester) else Modifier
         Box(
-            cardBase
+            Modifier
                 .width(196.dp)
                 .height(118.dp)
                 .onFocusChanged {
                     focused = it.isFocused
-                    if (it.isFocused) {
-                        if (focusRequester != null) {
-                            com.hushtv.tv.util.HushTVNav.d(
-                                "✓ SS first card '${service.id}' GAINED FOCUS (cyan ring on)"
-                            )
-                        }
-                        onFocus()
-                    }
+                    if (it.isFocused) onFocus()
                 }
                 .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
                 .focusable()

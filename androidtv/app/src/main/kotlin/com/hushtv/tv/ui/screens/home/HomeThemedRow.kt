@@ -86,11 +86,12 @@ fun HomeThemedRow(
     val visible = themes.take(maxVisible)
     val hasMore = themes.size > maxVisible
 
-    // First-card direct-bind pattern (mirrors HomeContinueWatchingRow):
-    // the rail's RIGHT-exit callback only lands reliably on a real
-    // focusable card when `firstItemFocus` is bound to that card
-    // directly. focusGroup() stays so intra-row LEFT/RIGHT doesn't
-    // escape into the rail.
+    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
+    // working). Column wrapper holds focusRequester+focusRestorer+focusGroup
+    // so requestFocus() routes through focusRestorer to first card.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
 
     // Subscribe to the cache snapshot so tiles upgrade their
     // backdrop from the hardcoded TMDB still to the user's matched
@@ -98,8 +99,7 @@ fun HomeThemedRow(
     val matchSnapshot = ThemedMatchCache.snapshot
 
     Column(
-        Modifier
-            .focusGroup()
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -149,9 +149,7 @@ fun HomeThemedRow(
             }
         }
         Spacer(Modifier.height(14.dp))
-        // CW pattern (mirrors HomeContinueWatchingRow line 222-244):
-        // Plain Row + horizontalScroll, NOT LazyRow — see other home rows
-        // for the full reasoning.
+        // Plain Row + horizontalScroll so every card is always composed.
         val scrollState = androidx.compose.foundation.rememberScrollState()
         Row(
             modifier = Modifier
@@ -160,7 +158,7 @@ fun HomeThemedRow(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            visible.forEachIndexed { idx, theme ->
+            visible.forEachIndexed { _, theme ->
                 val matches = matchSnapshot[theme.id]
                 ThemedCardView(
                     theme = theme,
@@ -168,7 +166,6 @@ fun HomeThemedRow(
                     libraryMatchCount = matches?.size ?: 0,
                     onFocus = { onFocusedThemeChange(theme) },
                     onClick = { onThemeClick(theme) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
             if (hasMore) {
@@ -188,28 +185,17 @@ private fun ThemedCardView(
     libraryMatchCount: Int,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
-    val cardBase: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
     Box(
-        cardBase
+        Modifier
             .width(260.dp)
             .height(156.dp)
             .onFocusChanged {
                 focused = it.isFocused
-                if (it.isFocused) {
-                    if (focusRequester != null) {
-                        com.hushtv.tv.util.HushTVNav.d(
-                            "✓ Themed first card '${theme.id}' GAINED FOCUS (cyan ring on)"
-                        )
-                    }
-                    onFocus()
-                }
+                if (it.isFocused) onFocus()
             }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()

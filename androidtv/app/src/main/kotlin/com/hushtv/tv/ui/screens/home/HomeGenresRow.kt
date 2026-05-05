@@ -80,14 +80,16 @@ fun HomeGenresRow(
 ) {
     if (genres.isEmpty()) return
 
-    // CW pattern (mirrors HomeContinueWatchingRow line 222-244):
-    // Plain Row + horizontalScroll, NOT LazyRow. LazyRow's virtualisation
-    // breaks the focus tree such that the side-rail's RIGHT-exit cannot
-    // reliably land on the first card — Compose's spatial focus search
-    // sees an empty/half-composed focus subtree and falls through.
+    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
+    // working). Column wrapper holds focusRequester+focusRestorer+focusGroup
+    // so requestFocus() routes through focusRestorer to first card.
+    // Plain Row + horizontalScroll so every card is always composed.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
-            .focusGroup()
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -108,7 +110,6 @@ fun HomeGenresRow(
                 }
             },
     ) {
-        // Row header — matches the other Home row headers.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
@@ -134,12 +135,11 @@ fun HomeGenresRow(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            genres.forEachIndexed { idx, genre ->
+            genres.forEachIndexed { _, genre ->
                 GenreCardView(
                     genre = genre,
                     onFocus = { onFocusedGenreChange(genre) },
                     onClick = { onGenreClick(genre) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -151,28 +151,17 @@ private fun GenreCardView(
     genre: Genre,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(12.dp)
 
-    val cardBase: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
     Box(
-        cardBase
+        Modifier
             .width(210.dp)
             .height(118.dp)
             .onFocusChanged {
                 focused = it.isFocused
-                if (it.isFocused) {
-                    if (focusRequester != null) {
-                        com.hushtv.tv.util.HushTVNav.d(
-                            "✓ Genre first card '${genre.id}' GAINED FOCUS (cyan ring on)"
-                        )
-                    }
-                    onFocus()
-                }
+                if (it.isFocused) onFocus()
             }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()

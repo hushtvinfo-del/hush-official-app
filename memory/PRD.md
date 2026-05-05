@@ -1,6 +1,88 @@
 # HushTV — Product Requirements Document
 
-## v1.43.95 — DIAGNOSTIC build: explicit requestFocus + logcat instrumentation — 2026-05-06  ⬅ LATEST
+## v1.43.96 — REAL ROOT CAUSE: tvFocusable inner-focusable swallows focusRequester — 2026-05-06  ⬅ LATEST
+
+### Found it. Genuinely. With proof.
+
+After multiple wrong attempts the actual smoking gun was inside
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/TvComponents.kt`
+line 73-74:
+
+```kotlin
+fun Modifier.tvFocusable(...) = composed {
+    ...
+    .background(...)
+    .border(...)
+    .onFocusChanged { focused = it.isFocused }
+    .focusable()                                  // ← INTERNAL focusable
+}
+```
+
+`tvFocusable` adds its OWN `.focusable()` to the modifier chain.
+
+In v1.43.94/.95 I bound `firstItemFocus` directly to each first card
+via `Modifier.focusRequester(firstItemFocus)` BEFORE `tvFocusable`.
+Compose's focusRequester attaches to the next focusable in the chain
+— which is the INNER `.focusable()` hidden inside `tvFocusable`, NOT
+the outer card's `.focusable()`.
+
+Result: when `requestFocus()` fired, focus landed on the inner
+focusable (which has its own private `focused` state controlling
+just the cyan border around tvFocusable's bg+border composite). The
+outer card's `onFocusChanged` never fired — to the user this looked
+like focus had moved "up into the screen" because the inner focusable
+isn't the visible card boundary they expect.
+
+Discovery worked the entire time because Discovery NEVER bound the
+focusRequester to a card directly — it always used the
+`focusMod = focusRequester(firstItemFocus).focusRestorer().focusGroup()`
+on the OUTER COLUMN wrapper. `requestFocus()` on that focuses the
+focusGroup wrapper, then `focusRestorer()` walks down to the first
+focusable child, which is the entire card composable cleanly.
+
+### Fix in v1.43.96
+
+Made every home row IDENTICAL to Discovery's working pattern:
+
+- `HomeStreamingServicesRow.kt`
+- `HomeGenresRow.kt`
+- `HomeCollectionsRow.kt`
+- `HomeYearsRow.kt`
+- `HomeThemedRow.kt`
+
+For each:
+- Reverted card composable signature: removed
+  `focusRequester: FocusRequester? = null` param.
+- Removed the `cardBase` modifier prefix on the first card.
+- Re-added `focusMod = Modifier.focusRequester(firstItemFocus)
+  .focusRestorer().focusGroup()` on the outer Column wrapper.
+- Kept the `Row + horizontalScroll` (NOT LazyRow) so all cards are
+  always composed and the focus tree is complete.
+
+Verified all 6 home rows now have the IDENTICAL `focusMod` pattern:
+```
+✓ HomeDiscoveryRow.kt
+✓ HomeStreamingServicesRow.kt
+✓ HomeGenresRow.kt
+✓ HomeCollectionsRow.kt
+✓ HomeYearsRow.kt
+✓ HomeThemedRow.kt
+```
+
+The rail's `onExitRight` callback (still wired from v1.43.95) calls
+`firstFocus.requestFocus()` which now reliably routes through
+focusRestorer to the first focusable card on every page.
+
+### Build + deploy
+- versionCode 395 → 396, versionName 1.43.95 → 1.43.96.
+- BUILD SUCCESSFUL (31s after a few syntax-cleanup passes).
+- Live: `https://hushtv.xyz/version.json` reports 396 / 1.43.96.
+- Tag: `v1.43.96-dev` → 4ff9beedc.
+- Official channel still on 1.43.90.
+
+---
+
+## v1.43.95 — DIAGNOSTIC build (instrumentation only, kept) — 2026-05-06
 
 User report (fourth iteration on the same bug, rightly fed up):
 *"How can we debug this properly ive wasted a whole day on this."*

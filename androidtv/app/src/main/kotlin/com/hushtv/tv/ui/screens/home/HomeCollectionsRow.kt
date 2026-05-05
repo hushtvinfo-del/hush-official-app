@@ -75,13 +75,16 @@ fun HomeCollectionsRow(
     val visible = collections.take(maxVisible)
     val hasMore = collections.size > maxVisible
 
-    // CW pattern (mirrors HomeContinueWatchingRow line 222-244):
-    // Plain Row + horizontalScroll, NOT LazyRow. LazyRow's virtualisation
-    // breaks the focus tree such that the side-rail's RIGHT-exit cannot
-    // reliably land on the first card.
+    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
+    // working). Column wrapper holds focusRequester+focusRestorer+focusGroup
+    // so requestFocus() routes through focusRestorer to first card.
+    // Plain Row + horizontalScroll so every card is always composed.
+    val focusMod: Modifier = if (firstItemFocus != null)
+        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
+    else Modifier
+
     Column(
-        Modifier
-            .focusGroup()
+        focusMod
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -139,12 +142,11 @@ fun HomeCollectionsRow(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            visible.forEachIndexed { idx, coll ->
+            visible.forEachIndexed { _, coll ->
                 CollectionCardView(
                     coll = coll,
                     onFocus = { onFocusedCollectionChange(coll) },
                     onClick = { onCollectionClick(coll) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
             if (hasMore) {
@@ -163,28 +165,17 @@ private fun CollectionCardView(
     coll: MovieCollection,
     onFocus: () -> Unit,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
-    val cardBase: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
     Box(
-        cardBase
+        Modifier
             .width(260.dp)
             .height(156.dp)
             .onFocusChanged {
                 focused = it.isFocused
-                if (it.isFocused) {
-                    if (focusRequester != null) {
-                        com.hushtv.tv.util.HushTVNav.d(
-                            "✓ Collection first card '${coll.id}' GAINED FOCUS (cyan ring on)"
-                        )
-                    }
-                    onFocus()
-                }
+                if (it.isFocused) onFocus()
             }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()
