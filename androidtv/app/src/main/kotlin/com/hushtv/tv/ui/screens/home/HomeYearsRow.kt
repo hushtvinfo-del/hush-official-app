@@ -3,6 +3,8 @@
 package com.hushtv.tv.ui.screens.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -113,15 +115,26 @@ fun HomeYearsRow(
             )
         }
         Spacer(Modifier.height(14.dp))
-        // Plain Row — only 3 items so no need for LazyRow. Cards
-        // share the available width via weight(1f) so they always
-        // fit regardless of how narrow the content area is (e.g.
-        // 960 dp TV screens with the side rail eating 80 dp).
-        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            years.forEachIndexed { _, year ->
+        // LazyRow with fixed-width cards so they look right
+        // regardless of TV output resolution. Previous `Row +
+        // weight(1f)` design assumed 1080p+ density — on Shield
+        // output at 720p each card shrunk to ~80 dp wide which
+        // forced the 48 sp year text + "MOVIES" chip to wrap
+        // character-by-character (the rendering the user reported
+        // as "decade cards corrupt"). With LazyRow + fixed width
+        // they always render at intended size and the user can
+        // scroll horizontally if there are more cards than fit.
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 32.dp),
+        ) {
+            items(
+                items = years,
+                key = { it.year },
+            ) { year ->
                 YearCardView(
                     year = year,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.width(240.dp),
                     onFocus = { onFocusedYearChange(year) },
                     onClick = { onYearClick(year) },
                 )
@@ -223,6 +236,8 @@ private fun YearCardView(
                     fontWeight = FontWeight.Black,
                     letterSpacing = 1.5.sp,
                     fontFamily = Inter,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
 
@@ -237,6 +252,8 @@ private fun YearCardView(
                     fontWeight = FontWeight.Black,
                     lineHeight = 50.sp,
                     fontFamily = Inter,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }

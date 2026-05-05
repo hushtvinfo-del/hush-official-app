@@ -1,12 +1,12 @@
 {
-  "versionCode": 388,
-  "versionName": "1.43.88",
+  "versionCode": 389,
+  "versionName": "1.43.89",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
-  "mandatory": true,
+  "mandatory": false,
   "releasedAt": "2026-05-05",
   "channel": "official",
   "changelog": [
-    "Emergency stability fix — fully reverted the experimental crash-suppression layer that may have been causing apps to hang or crash on launch on some TVs. Standard Android error handling restored.",
-    "If your app was stuck not loading, please force-stop it once and reopen — this update will install automatically."
+    "Fixed Decade cards on the home page rendering with vertical stacked text on some TVs — they now render correctly at full size and can scroll horizontally.",
+    "Fixed clicking a Decade card opening an empty browse screen — now opens the curated year picker for that decade."
   ]
 }

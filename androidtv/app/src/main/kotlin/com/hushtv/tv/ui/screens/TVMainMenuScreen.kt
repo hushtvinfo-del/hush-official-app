@@ -1544,9 +1544,16 @@ private fun YearsPage(
                     contentStartPadding = 0.dp,
                     onFocusedYearChange = onFocusedChange,
                     onYearClick = { y ->
-                        val encoded = Uri.encode(y.searchKeyword)
-                        val catParam = y.xtreamCategoryId?.let { "&catId=$it" }.orEmpty()
-                        nav.navigate("browse/$playlistId/movie?category=$encoded$catParam")
+                        // v1.43.89 — clicking a decade tile on the
+                        // home screen now opens the curated decade
+                        // screen (TVDecadeYearsScreen) instead of
+                        // the generic `browse?category=2010s` route
+                        // which was returning empty results because
+                        // Xtream providers don't have categories
+                        // matching decade labels. Mobile already
+                        // routes to `decadeyears` — bringing TV in
+                        // line.
+                        nav.navigate("decadeyears/$playlistId/${y.year}")
                     },
                     firstItemFocus = firstItemFocus,
                     onUpFromRow = onUpFromRow,
