@@ -85,9 +85,11 @@ fun HomeThemedRow(
     val visible = themes.take(maxVisible)
     val hasMore = themes.size > maxVisible
 
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
+    // First-card direct-bind pattern (mirrors HomeContinueWatchingRow):
+    // the rail's RIGHT-exit callback only lands reliably on a real
+    // focusable card when `firstItemFocus` is bound to that card
+    // directly. focusGroup() stays so intra-row LEFT/RIGHT doesn't
+    // escape into the rail.
 
     // Subscribe to the cache snapshot so tiles upgrade their
     // backdrop from the hardcoded TMDB still to the user's matched
@@ -95,7 +97,8 @@ fun HomeThemedRow(
     val matchSnapshot = ThemedMatchCache.snapshot
 
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -149,7 +152,7 @@ fun HomeThemedRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            itemsIndexed(visible, key = { _, t -> t.id }) { _, theme ->
+            itemsIndexed(visible, key = { _, t -> t.id }) { idx, theme ->
                 val matches = matchSnapshot[theme.id]
                 ThemedCardView(
                     theme = theme,
@@ -157,6 +160,7 @@ fun HomeThemedRow(
                     libraryMatchCount = matches?.size ?: 0,
                     onFocus = { onFocusedThemeChange(theme) },
                     onClick = { onThemeClick(theme) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
             if (hasMore) {
@@ -178,12 +182,16 @@ private fun ThemedCardView(
     libraryMatchCount: Int,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
+    val baseTop: Modifier = if (focusRequester != null)
+        Modifier.focusRequester(focusRequester) else Modifier
+
     Box(
-        Modifier
+        baseTop
             .width(260.dp)
             .height(156.dp)
             .onFocusChanged {

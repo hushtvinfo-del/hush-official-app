@@ -263,13 +263,16 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
 
     val ctxLocal = androidx.compose.ui.platform.LocalContext.current
 
-    var currentPage by remember {
-        // Hub was removed from TV by user request; default landing page
-        // is now Discovery, regardless of cache state.
-        mutableStateOf("discovery")
+    var currentPage by remember(hasCw) {
+        // Continue Watching is the natural landing page when the user
+        // has anything in progress — the "return to where you left off"
+        // moment is more valuable than any discovery row. Falls back to
+        // Discovery when CW is empty.
+        mutableStateOf(if (hasCw) "cw" else "discovery")
     }
-    val pageOrder = remember {
+    val pageOrder = remember(hasCw) {
         buildList {
+            if (hasCw) add("cw")
             add("discovery")
             add("ss_movies")
             add("ss_series")
@@ -284,9 +287,9 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             add("years_movies")
         }
     }
-    // If the page list shrinks (e.g. requests dropped to zero) and
-    // the user was on a page that no longer exists, fall back to
-    // discovery rather than an undefined branch.
+    // If CW drops to empty while the user is on the CW page, bounce
+    // them to Discovery. Otherwise also fall back to a valid page if
+    // the order shrinks for any reason (defensive).
     LaunchedEffect(pageOrder) {
         if (currentPage !in pageOrder) {
             currentPage = pageOrder.firstOrNull() ?: "discovery"
@@ -483,6 +486,20 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 label = "home-pager",
             ) { page ->
                 when (page) {
+                    "cw" -> CwPage(
+                        playlistId = playlistId,
+                        nav = nav,
+                        entries = continueEntries,
+                        heroEntry = heroEntry,
+                        firstCwFocus = firstCwFocus,
+                        showNavAndFocus = showNavAndFocus,
+                        onFocusedEntryChange = {
+                            heroEntry = it
+                            heroSection = "cw"
+                        },
+                        onLongPressRemove = { removePromptFor = it },
+                        onDownFromRow = { currentPage = "discovery" },
+                    )
                     "ss_movies" -> SsPage(
                         playlistId = playlistId,
                         nav = nav,
@@ -573,7 +590,9 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                             focusedDiscoveryCard = it
                             heroSection = "discovery"
                         },
-                        onUpFromRow = { showNavAndFocus() },
+                        onUpFromRow = {
+                            if (hasCw) currentPage = "cw" else showNavAndFocus()
+                        },
                         onDownFromRow = { currentPage = "ss_movies" },
                     )
                 }
@@ -585,6 +604,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 kotlinx.coroutines.delay(320)
                 runCatching {
                     when (currentPage) {
+                        "cw" -> if (hasCw) firstCwFocus.requestFocus()
                         "discovery" -> firstDiscoveryFocus.requestFocus()
                         "collections" -> firstCollectionsFocus.requestFocus()
                         "ss_movies" -> firstSsMoviesFocus.requestFocus()
@@ -620,6 +640,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 com.hushtv.tv.ui.screens.home.HomePage(
                     key = k,
                     label = when (k) {
+                        "cw" -> "RESUME"
                         "discovery" -> "DISCOVER"
                         "collections" -> "COLLECT"
                         "ss_movies" -> "MOVIES"
@@ -671,6 +692,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             onExitRight = {
                 runCatching {
                     when (currentPage) {
+                        "cw" -> if (hasCw) firstCwFocus.requestFocus()
                         "discovery" -> firstDiscoveryFocus.requestFocus()
                         "collections" -> firstCollectionsFocus.requestFocus()
                         "ss_movies" -> firstSsMoviesFocus.requestFocus()

@@ -5,6 +5,7 @@ package com.hushtv.tv.ui.screens.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -68,15 +69,15 @@ fun HomeYearsRow(
 ) {
     if (years.isEmpty()) return
 
-    // focusRestorer(): Column acts as a focus group remembering the
-    // last-focused card. Ensures D-pad Down from the Top Nav returns
-    // the user to the exact card they were on — not just idx 0.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
-
+    // First-card direct-bind pattern (mirrors HomeContinueWatchingRow):
+    // we deliberately AVOID Modifier.focusRequester(...).focusRestorer()
+    // on the outer Column. The rail's RIGHT-exit callback only lands
+    // reliably on a real focusable card when the requester is bound
+    // to that card directly. focusGroup() stays so intra-row LEFT/RIGHT
+    // doesn't escape into the rail.
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -128,15 +129,16 @@ fun HomeYearsRow(
             horizontalArrangement = Arrangement.spacedBy(18.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 32.dp),
         ) {
-            items(
+            itemsIndexed(
                 items = years,
-                key = { it.year },
-            ) { year ->
+                key = { _, y -> y.year },
+            ) { idx, year ->
                 YearCardView(
                     year = year,
                     modifier = Modifier.width(240.dp),
                     onFocus = { onFocusedYearChange(year) },
                     onClick = { onYearClick(year) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -149,12 +151,17 @@ private fun YearCardView(
     modifier: Modifier = Modifier,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
 
+    val baseTop: Modifier = if (focusRequester != null)
+        Modifier.focusRequester(focusRequester) else Modifier
+
     Box(
-        modifier
+        baseTop
+            .then(modifier)
             .height(170.dp)
             .onFocusChanged {
                 focused = it.isFocused

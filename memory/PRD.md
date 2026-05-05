@@ -1,6 +1,93 @@
 # HushTV — Product Requirements Document
 
-## v1.43.91 — Themes & Moods home row + side-rail right-arrow fix — 2026-05-06  ⬅ LATEST
+## v1.43.92 — Continue Watching home + side-rail right-arrow root-cause fix — 2026-05-06  ⬅ LATEST
+
+User report (frustrated): *"Themes is back BUT the menu navigation is
+NOT focusing on the 1st card in the section still. Look at our
+conversation history — we already spent huge amounts of time fixing
+this issue, can you just find the fix we already did and apply it?
+Also Continue Watching is NOT showing in the main home screen as it
+was before we rolled back versions. Should be cross-device sync."*
+
+### Root cause (the fix the user was referring to)
+
+Found the documented fix sitting right inside `HomeContinueWatchingSection.kt`
+lines 169-174:
+
+> *"NOTE: we deliberately do NOT use Modifier.focusRestorer() here.
+> Continue Watching is the only row on the home page whose items get
+> removed at runtime (long-press → Remove). The focusRequester is
+> bound directly to the first ContinueCard (not to this outer Column)
+> so the sidebar's RIGHT-exit callback's requestFocus() lands on a
+> real focusable card with a visible cyan ring."*
+
+CW had this pattern. EVERY other home row (Discovery, Years,
+Collections, Genres, Streaming Services, the new Themed) was
+attaching `firstItemFocus` to `Modifier.focusRequester(firstItemFocus)
+.focusRestorer().focusGroup()` on the OUTER Column wrapper, NOT to
+the first card. When the rail's `onExitRight` fired
+`firstItemFocus.requestFocus()`, the request hit the focusGroup
+wrapper which has no visible focus ring, so the user perceived the
+rail RIGHT-arrow as "not focusing on the first card" even when focus
+technically had moved.
+
+### What landed in v1.43.92
+
+#### 1. First-card direct-bind across all 6 home rows
+- `HomeDiscoveryRow.kt`, `HomeYearsRow.kt`, `HomeCollectionsRow.kt`,
+  `HomeGenresRow.kt`, `HomeStreamingServicesRow.kt`, `HomeThemedRow.kt`
+- For each: removed
+  `Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()`
+  from the outer Column. Kept `focusGroup()` so intra-row LEFT/RIGHT
+  doesn't escape into the rail.
+- Each row's card composable (DiscoveryCardView, YearCardView,
+  CollectionCardView, GenreCardView, ServiceCardView, ThemedCardView)
+  now accepts a `focusRequester: FocusRequester? = null` parameter
+  applied BEFORE `.focusable()` so the requester binds to that exact
+  focusable.
+- The `LazyRow.itemsIndexed` callsites now pass
+  `focusRequester = if (idx == 0) firstItemFocus else null`, mirroring
+  what `HomeContinueWatchingRow` already does.
+
+#### 2. Continue Watching restored as default first home page
+- `pageOrder` now prepends `"cw"` whenever
+  `continueEntries.isNotEmpty()`.
+- Default `currentPage` flips to `"cw"` when the user has anything in
+  progress — matches the user's mental model (and how the home page
+  worked before the post-1.43.69 rollbacks).
+- `DiscoveryPage.onUpFromRow` flows back to `"cw"` when CW is present
+  (otherwise `showNavAndFocus()` opens the rail).
+- New `"cw" -> CwPage(...)` branch added to the page-pager `when`
+  block. CwPage was already private in TVMainMenuScreen — no new
+  composable to write, just wire the call.
+- `firstCwFocus` added to the `LaunchedEffect(currentPage)` auto-focus
+  table AND the rail's `onExitRight` callback table.
+- Page indicator dot label: `"cw" -> "RESUME"`.
+
+#### 3. Cross-device sync: nothing to add
+- `SyncEngine` already replicates `hushtv_watch_progress` every 30s
+  (line 87 in `SyncEngine.kt`). The user's previous CW disappearance
+  was purely a UI-rendering bug, not a sync bug — the data was always
+  there in SharedPreferences and being synced. Restoring the home row
+  surfaces it and triggers fresh syncs across devices automatically.
+
+### Build + deploy
+- versionCode 391 → 392, versionName 1.43.91 → 1.43.92.
+- `./gradlew assembleDevDebug` → BUILD SUCCESSFUL (44s).
+- APK + manifest scp'd to `root@66.163.113.147:/var/www/hushtv/`.
+- Verified live: `https://hushtv.xyz/version.json` reports 392 /
+  1.43.92, APK ~21.7 MB.
+- Official channel still on 1.43.90 — user said hold until they sign
+  off on Dev.
+
+### Testing status
+- Build compiled cleanly (only pre-existing unused-var warnings).
+- Live OTA verified.
+- USER SMOKE TEST PENDING.
+
+---
+
+## v1.43.91 — Themes & Moods home row (initial fix attempt) — 2026-05-06
 
 User reports across two messages:
 

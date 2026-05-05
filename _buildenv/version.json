@@ -1,12 +1,13 @@
 {
-  "versionCode": 391,
-  "versionName": "1.43.91",
+  "versionCode": 392,
+  "versionName": "1.43.92",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "Themes & Moods row is now embedded directly in the TV home screen, just above the Decades row — exactly where it used to live. Press Channel-Up/Down or D-pad-Down through the home pages to land on it.",
-    "Side-rail navigation is fixed: pressing RIGHT from any rail item now jumps focus to the FIRST CARD of whichever home page is currently visible, regardless of the rail item's vertical position."
+    "Continue Watching is back as the default first section on Home — when you have anything in progress, it now lands on Resume on launch, like it used to. Cross-device sync (FireStick ↔ Shield ↔ Mobile) is automatic via the same SyncEngine that already runs every 30s.",
+    "Side-rail RIGHT-arrow now reliably focuses the FIRST visible card of the current section. Root cause was the first-card focus requester being attached to a focusGroup wrapper instead of directly to the card itself — fixed across all 6 home rows (Resume, Discovery, Streaming Services, Collections, Genres, Themes & Moods, Decades).",
+    "Themes & Moods row continues to live above the Decades row on Home (from v1.43.91)."
   ]
 }
