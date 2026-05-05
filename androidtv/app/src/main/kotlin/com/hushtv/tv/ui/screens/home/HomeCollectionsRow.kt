@@ -177,7 +177,14 @@ private fun CollectionCardView(
             .height(156.dp)
             .onFocusChanged {
                 focused = it.isFocused
-                if (it.isFocused) onFocus()
+                if (it.isFocused) {
+                    if (focusRequester != null) {
+                        com.hushtv.tv.util.HushTVNav.d(
+                            "✓ Collection first card '${coll.id}' GAINED FOCUS (cyan ring on)"
+                        )
+                    }
+                    onFocus()
+                }
             }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()

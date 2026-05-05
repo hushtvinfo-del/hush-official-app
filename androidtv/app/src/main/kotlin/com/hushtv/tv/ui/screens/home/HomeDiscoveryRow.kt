@@ -178,7 +178,14 @@ private fun DiscoveryCardView(
         .height(168.dp)
         .onFocusChanged {
             focused = it.isFocused
-            if (it.isFocused) onFocus()
+            if (it.isFocused) {
+                if (focusRequester != null) {
+                    com.hushtv.tv.util.HushTVNav.d(
+                        "✓ Discovery first card '${card.title}' GAINED FOCUS (cyan ring on)"
+                    )
+                }
+                onFocus()
+            }
         }
         .onPreviewKeyEvent { ev ->
             // D-pad UP from the first Discovery card pops the top nav

@@ -173,7 +173,14 @@ private fun ServiceCardView(
                 .height(118.dp)
                 .onFocusChanged {
                     focused = it.isFocused
-                    if (it.isFocused) onFocus()
+                    if (it.isFocused) {
+                        if (focusRequester != null) {
+                            com.hushtv.tv.util.HushTVNav.d(
+                                "✓ SS first card '${service.id}' GAINED FOCUS (cyan ring on)"
+                            )
+                        }
+                        onFocus()
+                    }
                 }
                 .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
                 .focusable()

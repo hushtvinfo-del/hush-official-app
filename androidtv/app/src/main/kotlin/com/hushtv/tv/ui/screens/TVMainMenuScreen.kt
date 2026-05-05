@@ -676,20 +676,70 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // its collapsed width; expands on focus and overlays content
         // with a backdrop dim.
         //
-        // v1.43.87 working pattern: do NOT pass `onExitRight`. Letting
-        // the rail item's onPreviewKeyEvent return false on RIGHT lets
-        // Compose's default 2D spatial focus search take over, which
-        // walks across the focusGroup-wrapped rows and lands on the
-        // last-focused card (or first focusable when none) inside the
-        // visible page. Wiring an explicit callback caused
-        // `requestFocus()` to fire against a focusGroup wrapper that
-        // had no current focus target, leaving the user with a "stuck"
-        // feeling — fixed in v1.43.93 by reverting to the v87 default.
+        // Wire `onExitRight` on the rail with a callback that EXPLICITLY
+        // calls `firstFocus.requestFocus()` for whichever home page is
+        // currently visible. Compose's default 2D spatial focus search
+        // is unreliable when the page contains a hero layer + a row
+        // pinned to the bottom (only Discovery worked because of its
+        // particular layout) — explicit requestFocus to a focusRequester
+        // bound directly to the first card is the only reliable way.
+        // Log every step so we can diagnose if it ever stops working.
         com.hushtv.tv.ui.screens.home.TVHubRail(
             activeKey = "home",
             playlistId = playlistId,
             nav = nav,
             homeFocus = homeTabFocus,
+            onExitRight = {
+                com.hushtv.tv.util.HushTVNav.d(
+                    "RailRight pressed → currentPage=$currentPage hasCw=$hasCw"
+                )
+                runCatching {
+                    when (currentPage) {
+                        "cw" -> if (hasCw) {
+                            com.hushtv.tv.util.HushTVNav.d("  → firstCwFocus.requestFocus()")
+                            firstCwFocus.requestFocus()
+                        }
+                        "discovery" -> {
+                            com.hushtv.tv.util.HushTVNav.d("  → firstDiscoveryFocus.requestFocus()")
+                            firstDiscoveryFocus.requestFocus()
+                        }
+                        "collections" -> {
+                            com.hushtv.tv.util.HushTVNav.d("  → firstCollectionsFocus.requestFocus()")
+                            firstCollectionsFocus.requestFocus()
+                        }
+                        "ss_movies" -> {
+                            com.hushtv.tv.util.HushTVNav.d("  → firstSsMoviesFocus.requestFocus()")
+                            firstSsMoviesFocus.requestFocus()
+                        }
+                        "ss_series" -> {
+                            com.hushtv.tv.util.HushTVNav.d("  → firstSsSeriesFocus.requestFocus()")
+                            firstSsSeriesFocus.requestFocus()
+                        }
+                        "genres_movies" -> {
+                            com.hushtv.tv.util.HushTVNav.d("  → firstGenresMoviesFocus.requestFocus()")
+                            firstGenresMoviesFocus.requestFocus()
+                        }
+                        "genres_series" -> {
+                            com.hushtv.tv.util.HushTVNav.d("  → firstGenresSeriesFocus.requestFocus()")
+                            firstGenresSeriesFocus.requestFocus()
+                        }
+                        "themed" -> {
+                            com.hushtv.tv.util.HushTVNav.d("  → firstThemedFocus.requestFocus()")
+                            firstThemedFocus.requestFocus()
+                        }
+                        "years_movies" -> {
+                            com.hushtv.tv.util.HushTVNav.d("  → firstYearsMoviesFocus.requestFocus()")
+                            firstYearsMoviesFocus.requestFocus()
+                        }
+                        else -> {
+                            com.hushtv.tv.util.HushTVNav.d("  → fallthrough: firstDiscoveryFocus")
+                            firstDiscoveryFocus.requestFocus()
+                        }
+                    }
+                }.onFailure { e ->
+                    com.hushtv.tv.util.HushTVNav.d("  ✗ requestFocus FAILED: ${e.message}")
+                }
+            },
         )
 
         // ── First-run / Settings layout chooser modal ──

@@ -1,13 +1,13 @@
 {
-  "versionCode": 394,
-  "versionName": "1.43.94",
+  "versionCode": 395,
+  "versionName": "1.43.95",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "FIXED: Side-rail RIGHT-arrow now lands on the first card of every section, not just Discovery. Root cause was LazyRow's virtualisation breaking Compose's focus tree — every other home row (Streaming Services, Collections, Genres, Years, Themes & Moods) now uses Plain Row + horizontalScroll exactly like Continue Watching has done since v1.43.0+. The pattern was already documented inside HomeContinueWatchingSection.kt — finally applied app-wide.",
-    "Continue Watching is the default first home section when in progress (from v1.43.92).",
-    "Themes & Moods row sits above the Decades row on Home (from v1.43.91)."
+    "DIAGNOSTIC BUILD: Side-rail RIGHT-arrow now uses an EXPLICIT firstFocus.requestFocus() callback per current home page (belt + suspenders on top of the v1.43.94 Row+horizontalScroll fix).",
+    "Comprehensive logcat instrumentation added — run `adb logcat -s HushTVNav` on your device while you press RIGHT from the rail and you'll see exactly which page resolved, which requester was called, and whether the first card actually gained focus. Send me that output and we'll know the EXACT cause in 30 seconds.",
+    "Continue Watching home + Themes & Moods row + Tag-based release rollback all preserved from earlier builds."
   ]
 }

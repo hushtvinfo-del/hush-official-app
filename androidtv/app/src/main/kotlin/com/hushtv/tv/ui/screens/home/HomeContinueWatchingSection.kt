@@ -510,7 +510,14 @@ private fun ContinueCard(
         .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
         .onFocusChanged {
             focused = it.isFocused
-            if (it.isFocused) onFocus()
+            if (it.isFocused) {
+                if (focusRequester != null) {
+                    com.hushtv.tv.util.HushTVNav.d(
+                        "✓ CW first card '${entry.effectiveTitle}' GAINED FOCUS (cyan ring on)"
+                    )
+                }
+                onFocus()
+            }
         }
         .onPreviewKeyEvent { ev ->
             // D-pad UP from this first card should reveal + focus the

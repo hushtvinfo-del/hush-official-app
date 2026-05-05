@@ -156,7 +156,14 @@ private fun YearCardView(
             .height(170.dp)
             .onFocusChanged {
                 focused = it.isFocused
-                if (it.isFocused) onFocus()
+                if (it.isFocused) {
+                    if (focusRequester != null) {
+                        com.hushtv.tv.util.HushTVNav.d(
+                            "✓ Year first card '${year.year}' GAINED FOCUS (cyan ring on)"
+                        )
+                    }
+                    onFocus()
+                }
             }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()

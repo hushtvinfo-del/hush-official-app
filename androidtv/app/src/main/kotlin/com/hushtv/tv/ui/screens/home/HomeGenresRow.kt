@@ -165,7 +165,14 @@ private fun GenreCardView(
             .height(118.dp)
             .onFocusChanged {
                 focused = it.isFocused
-                if (it.isFocused) onFocus()
+                if (it.isFocused) {
+                    if (focusRequester != null) {
+                        com.hushtv.tv.util.HushTVNav.d(
+                            "✓ Genre first card '${genre.id}' GAINED FOCUS (cyan ring on)"
+                        )
+                    }
+                    onFocus()
+                }
             }
             .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
             .focusable()

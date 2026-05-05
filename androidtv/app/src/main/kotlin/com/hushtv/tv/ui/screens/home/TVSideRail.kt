@@ -604,6 +604,9 @@ private fun RailItem(
             .onPreviewKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (ev.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                com.hushtv.tv.util.HushTVNav.d(
+                    "RailItem RIGHT pressed (key=${item.key}) onExitRight=${onExitRight != null}"
+                )
                 val cb = onExitRight ?: return@onPreviewKeyEvent false
                 cb()
                 true

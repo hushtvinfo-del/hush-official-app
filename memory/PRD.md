@@ -1,6 +1,94 @@
 # HushTV — Product Requirements Document
 
-## v1.43.94 — REAL ROOT CAUSE: LazyRow virtualisation breaks rail RIGHT-exit — 2026-05-06  ⬅ LATEST
+## v1.43.95 — DIAGNOSTIC build: explicit requestFocus + logcat instrumentation — 2026-05-06  ⬅ LATEST
+
+User report (fourth iteration on the same bug, rightly fed up):
+*"How can we debug this properly ive wasted a whole day on this."*
+
+### What's new in this build
+
+This is a **diagnostic build** designed to give us answers in seconds
+instead of more guesses:
+
+1. **Belt-and-suspenders focus**: the side-rail RIGHT-arrow now uses
+   an EXPLICIT `firstFocus.requestFocus()` callback for whichever
+   home page is currently visible. No more reliance on Compose's
+   spatial focus search. Wired in `TVMainMenuScreen.kt`'s
+   `TVHubRail(... onExitRight = { ... })` block.
+2. **Comprehensive logcat instrumentation** under tag `HushTVNav`:
+    - Every press of RIGHT in the rail logs the event reaching the
+      handler.
+    - The `onExitRight` callback logs which `currentPage` resolved
+      and which `firstFocus` requester it called.
+    - Every first-card composable logs when it actually GAINED
+      FOCUS (so we know if `requestFocus()` succeeded silently or
+      failed).
+3. **Crash-safe**: `runCatching { ... }.onFailure { e -> log }` so
+   we'll see the exact Compose exception if `requestFocus()` is
+   firing against an unattached requester.
+
+### How to use it
+
+```
+adb logcat -c                       # clear old log
+adb logcat -s HushTVNav             # follow our nav tag only
+```
+
+Then on the TV:
+- Open the app
+- Use D-pad LEFT to focus the side rail
+- Press D-pad RIGHT
+- Watch logcat — you'll see one of three patterns:
+
+**Pattern A — works as expected**:
+```
+RailItem RIGHT pressed (key=home) onExitRight=true
+RailRight pressed → currentPage=ss_movies hasCw=false
+  → firstSsMoviesFocus.requestFocus()
+✓ SS first card 'netflix' GAINED FOCUS (cyan ring on)
+```
+
+**Pattern B — request fires but never lands**:
+```
+RailItem RIGHT pressed (key=home) onExitRight=true
+RailRight pressed → currentPage=ss_movies hasCw=false
+  → firstSsMoviesFocus.requestFocus()
+[NO "GAINED FOCUS" LOG → focus is going somewhere else]
+```
+This means the FocusRequester isn't attached to the first card
+at the moment the rail fires the callback (the card composable
+hasn't run its modifier chain yet, or the requester variable is
+pointing at a stale instance).
+
+**Pattern C — event never reaches the handler**:
+```
+[NO LOGS AT ALL]
+```
+This means the rail item isn't actually receiving the RIGHT-key
+event — either focus isn't on the rail item or some parent is
+intercepting the key.
+
+### Files changed
+- NEW `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/util/HushTVNav.kt`
+  — Single-tag debug logger, no-ops in release flavor.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVMainMenuScreen.kt`
+  — Re-wired `onExitRight` on `TVHubRail` with logged per-page
+  `requestFocus()` calls.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TVSideRail.kt`
+  — Added a log line at the rail item's RIGHT-arrow handler.
+- All 6 home row files — added a log line in `onFocusChanged` when
+  the first card (idx 0) gains focus.
+
+### Build + deploy
+- versionCode 394 → 395, versionName 1.43.94 → 1.43.95.
+- BUILD SUCCESSFUL (55s).
+- Deployed via `/app/_buildenv/build-and-deploy-dev.sh` which auto-
+  tagged HEAD as `v1.43.95-dev` (e649b0c6c).
+- Live: `https://hushtv.xyz/version.json` reports 395 / 1.43.95.
+
+---
+
+## v1.43.94 — REAL ROOT CAUSE: LazyRow virtualisation breaks rail RIGHT-exit — 2026-05-06
 
 User report (third frustration in a row): *"Stop wasting our time and
 credits. The only home screen that's working currently is Discovery.
