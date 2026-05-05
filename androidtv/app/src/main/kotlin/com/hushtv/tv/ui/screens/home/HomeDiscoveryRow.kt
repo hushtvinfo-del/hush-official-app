@@ -137,7 +137,7 @@ fun HomeDiscoveryRow(
                     card = card,
                     onFocus = { onFocusedCardChange(card) },
                     onClick = { onCardClick(card) },
-                    focusRequester = null,
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                     onUpKey = if (idx == 0) onUpFromFirstItem else null,
                 )
             }
@@ -168,12 +168,9 @@ private fun DiscoveryCardView(
         label = "discovery-card-shadow",
     )
 
-    // focusRequester MUST come BEFORE .focusable() — the requester
-    // attaches to the next focusable in the chain, not the previous one.
-    val baseTop: Modifier = if (focusRequester != null)
-        Modifier.focusRequester(focusRequester) else Modifier
-
-    val base = baseTop
+    // focusRequester is wired DIRECTLY into tvFocusable for the
+    // first card so requestFocus() lands on the cyan-ring focusable.
+    val base = Modifier
         .width(360.dp)
         .height(168.dp)
         .onFocusChanged {
@@ -198,9 +195,11 @@ private fun DiscoveryCardView(
                 true
             } else false
         }
-        // No scale — keeps cards safely inside TV overscan.
-        .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
-        .focusable()
+        .tvFocusable(
+            scaleOnFocus = 1f,
+            shape = cardShape,
+            focusRequester = focusRequester,
+        )
         .shadow(
             elevation = shadowElev.value.dp,
             shape = cardShape,

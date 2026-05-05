@@ -86,12 +86,8 @@ fun HomeThemedRow(
     val visible = themes.take(maxVisible)
     val hasMore = themes.size > maxVisible
 
-    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
-    // working). Column wrapper holds focusRequester+focusRestorer+focusGroup
-    // so requestFocus() routes through focusRestorer to first card.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
+    // v1.43.98 — focusRequester wired DIRECTLY into the first card's
+    // tvFocusable so requestFocus() lands on the cyan ring.
 
     // Subscribe to the cache snapshot so tiles upgrade their
     // backdrop from the hardcoded TMDB still to the user's matched
@@ -99,7 +95,8 @@ fun HomeThemedRow(
     val matchSnapshot = ThemedMatchCache.snapshot
 
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -158,7 +155,7 @@ fun HomeThemedRow(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            visible.forEachIndexed { _, theme ->
+            visible.forEachIndexed { idx, theme ->
                 val matches = matchSnapshot[theme.id]
                 ThemedCardView(
                     theme = theme,
@@ -166,6 +163,7 @@ fun HomeThemedRow(
                     libraryMatchCount = matches?.size ?: 0,
                     onFocus = { onFocusedThemeChange(theme) },
                     onClick = { onThemeClick(theme) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
             if (hasMore) {
@@ -185,6 +183,7 @@ private fun ThemedCardView(
     libraryMatchCount: Int,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
@@ -197,8 +196,11 @@ private fun ThemedCardView(
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
-            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
-            .focusable()
+            .tvFocusable(
+                scaleOnFocus = 1f,
+                shape = cardShape,
+                focusRequester = focusRequester,
+            )
             .clickableWithEnter(onClick)
             .clip(cardShape)
             .background(

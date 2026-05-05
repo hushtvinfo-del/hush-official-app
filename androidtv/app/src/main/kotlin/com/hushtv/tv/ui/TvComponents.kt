@@ -14,6 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -27,40 +29,38 @@ import com.hushtv.tv.ui.theme.Inter
 import com.hushtv.tv.ui.theme.UnfocusedBorder
 
 /**
- * Focus modifier — flat performance-first edition (v1.43.85).
+ * Focus modifier — v1.43.98 edition.
  *
- * Removed (per user request, "remove the magnify + glow throughout
- * the whole app — Fire Sticks and lower devices feel sluggish, and
- * the magnify keeps clipping cards off the screen edge"):
- *  • `graphicsLayer { scaleX/scaleY = 1.06f }` — even though
- *    graphicsLayer is hardware-accelerated, every animating card
- *    triggers a layer composition pass and a redraw of the
- *    surrounding rail. On Fire OS / lower-end Google TV hardware
- *    this stacks up across visible cards and tanks the scroll
- *    framerate.
- *  • `animateFloatAsState` tween — no longer needed once scale
- *    is gone. Pure border + background flips are constant-time.
+ * What changed in v1.43.98:
+ *   • Optional `focusRequester` parameter — when supplied, the
+ *     requester is wired DIRECTLY to the inner `.focusable()` so
+ *     `requestFocus()` lands on the EXACT same focusable that
+ *     draws the cyan ring. Earlier attempts wrapped the
+ *     focusRequester on an OUTER Modifier (cardBase) which bound
+ *     it to a *different* focusable than the one tvFocusable
+ *     itself adds — focus landed somewhere invisible. This is the
+ *     root cause of "Discovery works but other rows don't" because
+ *     Discovery used the focusGroup-wrapper pattern that happened
+ *     to dodge the bug.
+ *
+ * Removed in earlier builds:
+ *   • Scale on focus + shadow glow → tanked Fire Stick framerate.
  *
  * Kept:
- *  • 2 dp cyan border on focus → transparent unfocused border
- *    (no layout shift — width unchanged).
- *  • Cyan-tint background fill on focus (cheap composition).
- *  • Same external API (`scaleOnFocus`, `shape`, `fillOnFocus`)
- *    so call-sites compile unchanged. The `scaleOnFocus` param is
- *    kept for source-level compatibility but **ignored**.
- *
- * Why we kept the border: it's the single cheapest, most legible
- * focus indicator on a TV. No depth-of-field shifts, no GPU layer,
- * no animation timeline.
+ *   • 2 dp cyan border on focus → transparent unfocused border
+ *     (no layout shift).
+ *   • Cyan-tint background fill on focus.
+ *   • Same external API (`scaleOnFocus`, `shape`, `fillOnFocus`).
  */
 @Suppress("UNUSED_PARAMETER")
 fun Modifier.tvFocusable(
     scaleOnFocus: Float = 1.0f,
     shape: Shape = RoundedCornerShape(12.dp),
     fillOnFocus: Boolean = true,
+    focusRequester: FocusRequester? = null,
 ): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
-    this
+    val base = this
         .background(
             color = if (focused && fillOnFocus) CyanFocusBg else Color.Transparent,
             shape = shape,
@@ -71,7 +71,13 @@ fun Modifier.tvFocusable(
             shape = shape,
         )
         .onFocusChanged { focused = it.isFocused }
-        .focusable()
+    // requester goes DIRECTLY before the .focusable() it controls so
+    // `requestFocus()` lands on the focusable that updates `focused`
+    // and draws the cyan ring. No wrapper, no outer focusable, no
+    // ambiguity.
+    val withRequester = if (focusRequester != null)
+        base.focusRequester(focusRequester) else base
+    withRequester.focusable()
 }
 
 /**

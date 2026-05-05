@@ -69,17 +69,11 @@ fun HomeYearsRow(
 ) {
     if (years.isEmpty()) return
 
-    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
-    // working). Column wrapper holds focusRequester+focusRestorer+focusGroup
-    // so requestFocus() routes through focusRestorer to first card.
-    // Plain Row + horizontalScroll with fixed-width cards keeps the
-    // v1.43.90 fix for the 720p decade-vertical-text bug.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
-
+    // v1.43.98 — focusRequester is wired DIRECTLY into the first
+    // card's tvFocusable so requestFocus() lands on the cyan ring.
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -126,12 +120,13 @@ fun HomeYearsRow(
                 .padding(end = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            years.forEachIndexed { _, year ->
+            years.forEachIndexed { idx, year ->
                 YearCardView(
                     year = year,
                     modifier = Modifier.width(240.dp),
                     onFocus = { onFocusedYearChange(year) },
                     onClick = { onYearClick(year) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -144,6 +139,7 @@ private fun YearCardView(
     modifier: Modifier = Modifier,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
@@ -155,8 +151,11 @@ private fun YearCardView(
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
-            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
-            .focusable()
+            .tvFocusable(
+                scaleOnFocus = 1f,
+                shape = cardShape,
+                focusRequester = focusRequester,
+            )
             .clickableWithEnter(onClick)
             .clip(cardShape)
             .background(

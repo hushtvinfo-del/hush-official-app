@@ -75,16 +75,13 @@ fun HomeCollectionsRow(
     val visible = collections.take(maxVisible)
     val hasMore = collections.size > maxVisible
 
-    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
-    // working). Column wrapper holds focusRequester+focusRestorer+focusGroup
-    // so requestFocus() routes through focusRestorer to first card.
-    // Plain Row + horizontalScroll so every card is always composed.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
-
+    // v1.43.98 — focusRequester is now wired DIRECTLY into the first
+    // card's tvFocusable so requestFocus() lands on the exact same
+    // focusable that draws the cyan ring. Column just provides
+    // focusGroup() bounding so intra-row LEFT/RIGHT can't escape.
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -142,11 +139,12 @@ fun HomeCollectionsRow(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            visible.forEachIndexed { _, coll ->
+            visible.forEachIndexed { idx, coll ->
                 CollectionCardView(
                     coll = coll,
                     onFocus = { onFocusedCollectionChange(coll) },
                     onClick = { onCollectionClick(coll) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
             if (hasMore) {
@@ -165,6 +163,7 @@ private fun CollectionCardView(
     coll: MovieCollection,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
@@ -177,8 +176,11 @@ private fun CollectionCardView(
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
-            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
-            .focusable()
+            .tvFocusable(
+                scaleOnFocus = 1f,
+                shape = cardShape,
+                focusRequester = focusRequester,
+            )
             .clickableWithEnter(onClick)
             .clip(cardShape)
             .background(

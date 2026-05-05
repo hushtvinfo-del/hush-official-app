@@ -81,20 +81,12 @@ fun HomeStreamingServicesRow(
 ) {
     if (services.isEmpty()) return
 
-    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
-    // working without complaints). Column wrapper holds the
-    // focusRequester+focusRestorer+focusGroup so requestFocus() lands
-    // on the focusGroup, then focusRestorer routes to first focusable
-    // child (= first card). Cards themselves get focusRequester=null.
-    //
-    // Plain Row + horizontalScroll (NOT LazyRow) so every card is
-    // always composed and the focus tree is complete.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
-
+    // v1.43.98 — focusRequester is now wired DIRECTLY into the first
+    // card's tvFocusable so requestFocus() lands on the exact same
+    // focusable that draws the cyan ring.
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -140,11 +132,12 @@ fun HomeStreamingServicesRow(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            services.forEachIndexed { _, service ->
+            services.forEachIndexed { idx, service ->
                 ServiceCardView(
                     service = service,
                     onFocus = { onFocusedServiceChange(service) },
                     onClick = { onServiceClick(service) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -156,6 +149,7 @@ private fun ServiceCardView(
     service: StreamingService,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
@@ -172,8 +166,11 @@ private fun ServiceCardView(
                     focused = it.isFocused
                     if (it.isFocused) onFocus()
                 }
-                .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
-                .focusable()
+                .tvFocusable(
+                    scaleOnFocus = 1f,
+                    shape = cardShape,
+                    focusRequester = focusRequester,
+                )
                 .clickableWithEnter(onClick)
                 .clip(cardShape)
                 .background(

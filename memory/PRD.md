@@ -1,6 +1,108 @@
 # HushTV — Product Requirements Document
 
-## v1.43.97 — TRUE ROOT CAUSE: page-level focusRestorer hijacks requestFocus on slide-navigated pages — 2026-05-06  ⬅ LATEST
+## v1.43.98 — TWO-PART FIX: requester-into-tvFocusable + 320 ms settle delay — 2026-05-06  ⬅ LATEST
+
+User screenshots showed conclusively: pressing RIGHT from the rail
+caused the rail to collapse, but no card showed the cyan focus ring.
+After 4 wrong-cause iterations, found the actual two-part bug.
+
+### Root cause (finally, with proof from the user's photo)
+
+**Part 1 — Wrong focusable**: `tvFocusable` internally adds its own
+`.focusable()`. Card composables had this chain:
+
+```kotlin
+.tvFocusable(scaleOnFocus = 1f, shape = cardShape)  // adds .focusable()
+.focusable()                                          // OUTER redundant focusable
+```
+
+When `Modifier.focusRequester(req)` was placed BEFORE the chain, it
+attached to the FIRST `.focusable()` (the inner one inside
+tvFocusable). When the OUTER `.focusable()` was the one Compose's
+focus traversal visited, requestFocus had bound to the wrong node.
+
+**Part 2 — Synchronous timing race**: even if part 1 had been
+correct, calling `requestFocus()` SYNCHRONOUSLY inside the rail's
+`onPreviewKeyEvent` collided with the rail's own focus-loss /
+collapse animation. The user's discovered workaround "UP then DOWN
+within home" worked because that path goes through
+`LaunchedEffect(currentPage) { delay(320); requestFocus() }` — the
+320 ms delay lets the rail collapse and focus state settle BEFORE
+requestFocus fires.
+
+### Fix in v1.43.98
+
+**Part 1 — `tvFocusable` (`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/TvComponents.kt`)**:
+
+Added optional `focusRequester` parameter. Inside the `composed{}`
+block, the requester is wired DIRECTLY before the internal
+`.focusable()`:
+
+```kotlin
+val withRequester = if (focusRequester != null)
+    base.focusRequester(focusRequester) else base
+withRequester.focusable()
+```
+
+Now `requestFocus()` lands on the EXACT focusable that updates the
+internal `focused` state and draws the cyan ring. Plus removed the
+redundant outer `.focusable()` from every card composable.
+
+**Part 2 — `TVMainMenuScreen.kt` rail-exit defer**:
+
+Replaced the synchronous onExitRight callback with a state-ticker +
+LaunchedEffect:
+
+```kotlin
+var railExitTick by remember { mutableStateOf(0) }
+LaunchedEffect(railExitTick) {
+    if (railExitTick == 0) return@LaunchedEffect
+    delay(320)
+    runCatching { firstFocus.requestFocus() ... }
+}
+TVHubRail(... onExitRight = { railExitTick += 1 }, ...)
+```
+
+When user presses RIGHT, the tick increments, LaunchedEffect waits
+320 ms (same as the working UP/DOWN workflow), THEN fires
+requestFocus. Same path, same delay, same reliability.
+
+### All 6 home rows updated
+
+`HomeDiscoveryRow`, `HomeStreamingServicesRow`, `HomeGenresRow`,
+`HomeCollectionsRow`, `HomeYearsRow`, `HomeThemedRow`. Each card
+composable now accepts `focusRequester: FocusRequester? = null`,
+passes it through to `tvFocusable(focusRequester = focusRequester)`,
+and the parent passes `focusRequester = if (idx == 0) firstItemFocus
+else null`. Removed the outer redundant `.focusable()` from each.
+
+CW is unchanged (already worked correctly because it doesn't use
+tvFocusable; it uses `.focusRequester(req).focusable()` directly).
+
+### Build + deploy
+- versionCode 397 → 398, versionName 1.43.97 → 1.43.98.
+- BUILD SUCCESSFUL (45s).
+- Live: `https://hushtv.xyz/version.json` reports 398 / 1.43.98.
+- Auto-tagged via `/app/_buildenv/build-and-deploy-dev.sh` →
+  `v1.43.98-dev`.
+
+### Lesson permanently in PRD.md and code comments
+
+When a focus modifier (like `tvFocusable`) wraps an internal
+`.focusable()`, NEVER place a `Modifier.focusRequester(...)` BEFORE
+it in the chain. The requester binds to the FIRST focusable in the
+chain. If the modifier's internal focusable is inner-most, the
+requester targets a focusable that may not be the one Compose's
+focus traversal visits. The fix is to thread the focusRequester
+INTO the modifier so it binds to the correct internal focusable.
+
+Plus: `requestFocus()` from a key-event handler that's racing a
+focus-loss animation should ALWAYS be deferred via a small
+LaunchedEffect delay (matches the natural UP/DOWN settle path).
+
+---
+
+## v1.43.97 — Removed page-level focusRestorer (didn't fix it alone) — 2026-05-06
 
 User report: *"I am in first card of Genres series - I go left it
 opens left menu screen (search is selected) - I go right again and

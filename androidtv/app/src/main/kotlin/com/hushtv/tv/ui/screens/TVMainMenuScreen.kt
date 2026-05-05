@@ -684,6 +684,48 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // particular layout) — explicit requestFocus to a focusRequester
         // bound directly to the first card is the only reliable way.
         // Log every step so we can diagnose if it ever stops working.
+        // v1.43.98 — Defer requestFocus via a state ticker rather
+        // than calling it synchronously inside the rail's RIGHT-arrow
+        // handler. Synchronous requestFocus failed because:
+        //   • The rail was still focused & expanded at the moment
+        //     onPreviewKeyEvent fires; Compose's focus system was
+        //     mid-transition and silently rejected the request.
+        //   • The user-discovered workaround "press UP then DOWN
+        //     within home" worked precisely because that path goes
+        //     through `LaunchedEffect(currentPage) { delay(320);
+        //     requestFocus() }` — the 320 ms delay lets the rail
+        //     collapse and focus state settle BEFORE requestFocus
+        //     fires.
+        //
+        // We do the same here: increment a tick-state when RIGHT is
+        // pressed; a sibling LaunchedEffect waits the same 320 ms,
+        // then runs the per-page requestFocus. Same path, same
+        // delay, same reliability.
+        var railExitTick by remember { mutableStateOf(0) }
+        LaunchedEffect(railExitTick) {
+            if (railExitTick == 0) return@LaunchedEffect
+            kotlinx.coroutines.delay(320)
+            com.hushtv.tv.util.HushTVNav.d(
+                "RailExit#$railExitTick fires → currentPage=$currentPage hasCw=$hasCw"
+            )
+            runCatching {
+                when (currentPage) {
+                    "cw" -> if (hasCw) firstCwFocus.requestFocus()
+                    "discovery" -> firstDiscoveryFocus.requestFocus()
+                    "collections" -> firstCollectionsFocus.requestFocus()
+                    "ss_movies" -> firstSsMoviesFocus.requestFocus()
+                    "ss_series" -> firstSsSeriesFocus.requestFocus()
+                    "genres_movies" -> firstGenresMoviesFocus.requestFocus()
+                    "genres_series" -> firstGenresSeriesFocus.requestFocus()
+                    "themed" -> firstThemedFocus.requestFocus()
+                    "years_movies" -> firstYearsMoviesFocus.requestFocus()
+                    else -> firstDiscoveryFocus.requestFocus()
+                }
+            }.onFailure { e ->
+                com.hushtv.tv.util.HushTVNav.d("  ✗ requestFocus FAILED: ${e.message}")
+            }
+        }
+
         com.hushtv.tv.ui.screens.home.TVHubRail(
             activeKey = "home",
             playlistId = playlistId,
@@ -691,54 +733,9 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
             homeFocus = homeTabFocus,
             onExitRight = {
                 com.hushtv.tv.util.HushTVNav.d(
-                    "RailRight pressed → currentPage=$currentPage hasCw=$hasCw"
+                    "RailRight pressed → enqueuing exit tick (currentPage=$currentPage)"
                 )
-                runCatching {
-                    when (currentPage) {
-                        "cw" -> if (hasCw) {
-                            com.hushtv.tv.util.HushTVNav.d("  → firstCwFocus.requestFocus()")
-                            firstCwFocus.requestFocus()
-                        }
-                        "discovery" -> {
-                            com.hushtv.tv.util.HushTVNav.d("  → firstDiscoveryFocus.requestFocus()")
-                            firstDiscoveryFocus.requestFocus()
-                        }
-                        "collections" -> {
-                            com.hushtv.tv.util.HushTVNav.d("  → firstCollectionsFocus.requestFocus()")
-                            firstCollectionsFocus.requestFocus()
-                        }
-                        "ss_movies" -> {
-                            com.hushtv.tv.util.HushTVNav.d("  → firstSsMoviesFocus.requestFocus()")
-                            firstSsMoviesFocus.requestFocus()
-                        }
-                        "ss_series" -> {
-                            com.hushtv.tv.util.HushTVNav.d("  → firstSsSeriesFocus.requestFocus()")
-                            firstSsSeriesFocus.requestFocus()
-                        }
-                        "genres_movies" -> {
-                            com.hushtv.tv.util.HushTVNav.d("  → firstGenresMoviesFocus.requestFocus()")
-                            firstGenresMoviesFocus.requestFocus()
-                        }
-                        "genres_series" -> {
-                            com.hushtv.tv.util.HushTVNav.d("  → firstGenresSeriesFocus.requestFocus()")
-                            firstGenresSeriesFocus.requestFocus()
-                        }
-                        "themed" -> {
-                            com.hushtv.tv.util.HushTVNav.d("  → firstThemedFocus.requestFocus()")
-                            firstThemedFocus.requestFocus()
-                        }
-                        "years_movies" -> {
-                            com.hushtv.tv.util.HushTVNav.d("  → firstYearsMoviesFocus.requestFocus()")
-                            firstYearsMoviesFocus.requestFocus()
-                        }
-                        else -> {
-                            com.hushtv.tv.util.HushTVNav.d("  → fallthrough: firstDiscoveryFocus")
-                            firstDiscoveryFocus.requestFocus()
-                        }
-                    }
-                }.onFailure { e ->
-                    com.hushtv.tv.util.HushTVNav.d("  ✗ requestFocus FAILED: ${e.message}")
-                }
+                railExitTick += 1
             },
         )
 

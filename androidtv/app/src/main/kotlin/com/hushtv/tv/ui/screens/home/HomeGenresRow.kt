@@ -80,16 +80,11 @@ fun HomeGenresRow(
 ) {
     if (genres.isEmpty()) return
 
-    // IDENTICAL pattern to HomeDiscoveryRow (the only one that's been
-    // working). Column wrapper holds focusRequester+focusRestorer+focusGroup
-    // so requestFocus() routes through focusRestorer to first card.
-    // Plain Row + horizontalScroll so every card is always composed.
-    val focusMod: Modifier = if (firstItemFocus != null)
-        Modifier.focusRequester(firstItemFocus).focusRestorer().focusGroup()
-    else Modifier
-
+    // v1.43.98 — focusRequester is wired DIRECTLY into the first
+    // card's tvFocusable so requestFocus() lands on the cyan ring.
     Column(
-        focusMod
+        Modifier
+            .focusGroup()
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -135,11 +130,12 @@ fun HomeGenresRow(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            genres.forEachIndexed { _, genre ->
+            genres.forEachIndexed { idx, genre ->
                 GenreCardView(
                     genre = genre,
                     onFocus = { onFocusedGenreChange(genre) },
                     onClick = { onGenreClick(genre) },
+                    focusRequester = if (idx == 0) firstItemFocus else null,
                 )
             }
         }
@@ -151,6 +147,7 @@ private fun GenreCardView(
     genre: Genre,
     onFocus: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(12.dp)
@@ -163,8 +160,11 @@ private fun GenreCardView(
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
-            .tvFocusable(scaleOnFocus = 1f, shape = cardShape)
-            .focusable()
+            .tvFocusable(
+                scaleOnFocus = 1f,
+                shape = cardShape,
+                focusRequester = focusRequester,
+            )
             .clickableWithEnter(onClick)
             .clip(cardShape)
             .background(

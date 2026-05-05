@@ -1,13 +1,12 @@
 {
-  "versionCode": 397,
-  "versionName": "1.43.97",
+  "versionCode": 398,
+  "versionName": "1.43.98",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "ROOT CAUSE: tvHubContentFocus had a page-level focusRestorer that hijacked the rail's RIGHT-exit requestFocus() when the user had slide-navigated between home pages — the saved pivot pointed at a removed composable. Removed the page-level focusRestorer; intra-row focus memory still works via the row-level focusMod.",
-    "Discovery only worked before because it was the default landing page (no slide-navigation = pivot still valid). Every other page that you reached via UP/DOWN had a stale pivot, which is why ONLY Discovery worked.",
-    "All previous features preserved: Continue Watching as default first home page, Themes & Moods row above Decades, Tag-based release rollback infrastructure."
+    "TWO-PART FIX for the rail-RIGHT focus bug. Part 1: tvFocusable now accepts an optional focusRequester parameter that's bound INSIDE its composed{} block right before its internal .focusable(). This guarantees requestFocus() lands on the EXACT focusable that draws the cyan ring, instead of binding to the wrong (outer redundant) focusable. Part 2: the rail's RIGHT-arrow now defers requestFocus() through a state ticker + 320 ms LaunchedEffect — exactly the same path as the user's discovered workaround 'press UP then DOWN within home', which always worked because of the 320 ms settle delay.",
+    "All home rows (Discovery, SS, Genres, Collections, Years, Themes & Moods) now use the same first-card-direct-bind pattern via the new tvFocusable focusRequester parameter."
   ]
 }
