@@ -492,6 +492,10 @@ data class LeaguePill(
     val slug: String,
     val label: String,
     val accent: Color,
+    /** v1.44.11 — Optional league badge URL. When present the chip
+     *  shows the badge to the left of the label; absent (the All /
+     *  Live / PPV virtual tabs) shows a small icon glyph instead. */
+    val logoUrl: String? = null,
 )
 
 @Composable
@@ -503,24 +507,32 @@ private fun LeaguePillView(
 ) {
     var focused by remember { mutableStateOf(false) }
     val pillShape = RoundedCornerShape(999.dp)
+    // v1.44.11 — Three visual states:
+    //   • selected → solid accent fill, dark text, no border
+    //   • focused (but not selected) → translucent white-bg, white text, accent ring
+    //   • idle → near-transparent bg, white text, faint accent ring
     val bg = when {
         selected -> pill.accent
         focused -> Color(0x33FFFFFF)
-        else -> Color(0x1AFFFFFF)
+        else -> Color(0x14FFFFFF)
     }
     val fg = when {
         selected -> Color(0xFF050810)
         else -> Color.White
     }
-    // NOTE: do NOT add an outer `.focusable()` after `.tvFocusable()`.
-    // tvFocusable already adds its own internal `.focusable()` and
-    // wrapping it again creates two focusables in the chain — see
-    // the v1.43.98 cautionary block in TvComponents.kt. The
-    // focusRequester is passed INTO tvFocusable so it binds to the
-    // exact focusable that updates `focused` state.
-    Box(
+    val ringWidth = when {
+        selected -> 0.dp
+        focused -> 2.dp
+        else -> 1.dp
+    }
+    val ringColor = when {
+        selected -> Color.Transparent
+        focused -> pill.accent
+        else -> pill.accent.copy(alpha = 0.30f)
+    }
+    Row(
         Modifier
-            .height(48.dp)
+            .height(54.dp)
             .onFocusChanged { focused = it.isFocused }
             .tvFocusable(
                 scaleOnFocus = 1f,
@@ -530,18 +542,34 @@ private fun LeaguePillView(
             .clickableWithEnter(onSelect)
             .clip(pillShape)
             .background(bg)
-            .border(
-                width = if (selected) 0.dp else 1.5.dp,
-                color = if (selected) Color.Transparent else pill.accent.copy(alpha = 0.55f),
-                shape = pillShape,
-            )
-            .padding(horizontal = 22.dp),
-        contentAlignment = Alignment.Center,
+            .border(width = ringWidth, color = ringColor, shape = pillShape)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (!pill.logoUrl.isNullOrBlank()) {
+            // Real league badge
+            AsyncImage(
+                model = pill.logoUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(28.dp),
+            )
+        } else {
+            // "All" / "Live" / "PPV" — render a tinted circle so the
+            // strip stays visually coherent (every chip has a left
+            // graphic). The dot color uses the chip's accent.
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(if (selected) fg else pill.accent)
+            )
+        }
         Text(
             pill.label.uppercase(),
             color = fg,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 2.5.sp,
             fontFamily = Inter,

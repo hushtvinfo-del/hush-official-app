@@ -418,6 +418,39 @@ def _ingest_leagues(c: sqlite3.Connection) -> None:
         )
 
 
+def _ingest_league_logos(c: sqlite3.Connection) -> int:
+    """Backfill league badge URLs by hitting TheSportsDB
+    `lookupleague.php` once per active league. Idempotent — skips
+    leagues that already have a logo_url stored.
+
+    v1.44.11 — added so the new league-chip UI on TV can render real
+    league logos instead of plain text pills. Cheap (≤12 GETs total),
+    runs once per server boot from the ingestion path.
+    """
+    rows = c.execute(
+        "SELECT id, slug, sportsdb_id FROM sports_leagues "
+        "WHERE active=1 AND (logo_url IS NULL OR logo_url='')"
+    ).fetchall()
+    backfilled = 0
+    for r in rows:
+        if not r["sportsdb_id"]:
+            continue
+        data = _sportsdb_get("lookupleague.php", {"id": r["sportsdb_id"]})
+        lg = (data.get("leagues") or [{}])[0]
+        # Prefer the badge (square, crisper at small sizes); fall back
+        # to logo (often wider).
+        url = lg.get("strBadge") or lg.get("strLogo")
+        if not url:
+            continue
+        c.execute(
+            "UPDATE sports_leagues SET logo_url=? WHERE id=?",
+            (url, r["id"]),
+        )
+        backfilled += 1
+        log.info("backfilled league logo: slug=%s url=%s", r["slug"], url)
+    return backfilled
+
+
 def _ingest_seed_channel_map(c: sqlite3.Connection) -> None:
     """Seed league-default and team-specific channel mappings.
 
@@ -991,7 +1024,7 @@ def _game_to_dict(c: sqlite3.Connection, row: sqlite3.Row,
             if not (away.get("short_name") or "").strip():
                 away["short_name"] = _derive_short_name(away.get("name"))
     league = c.execute(
-        "SELECT slug, name, accent FROM sports_leagues WHERE id=?",
+        "SELECT slug, name, accent, logo_url FROM sports_leagues WHERE id=?",
         (row["league_id"],),
     ).fetchone()
     resolved_channel = None
@@ -1075,7 +1108,7 @@ def sports_home(
     buckets: List[Dict[str, Any]] = []
     with _conn() as c:
         leagues = c.execute(
-            "SELECT id, slug, name, accent FROM sports_leagues "
+            "SELECT id, slug, name, accent, logo_url FROM sports_leagues "
             "WHERE active=1 ORDER BY display_order, slug"
         ).fetchall()
         for lg in leagues:
@@ -1114,7 +1147,12 @@ def sports_home(
                 games.append(g)
             if games:
                 buckets.append({
-                    "league": {"slug": lg["slug"], "name": lg["name"], "accent": lg["accent"]},
+                    "league": {
+                        "slug": lg["slug"],
+                        "name": lg["name"],
+                        "accent": lg["accent"],
+                        "logo_url": lg["logo_url"],
+                    },
                     "games": games,
                 })
         # PPV bucket
@@ -1450,4 +1488,11 @@ def init() -> None:
     with _connect() as c:
         _ingest_leagues(c)
         _ingest_seed_channel_map(c)
+    # v1.44.11 — separate connection so the logo backfill HTTP calls
+    # don't hold a write transaction open during network I/O.
+    try:
+        with _conn() as c:
+            _ingest_league_logos(c)
+    except Exception as e:
+        log.warning("league logo backfill failed: %s", e)
     start_worker()

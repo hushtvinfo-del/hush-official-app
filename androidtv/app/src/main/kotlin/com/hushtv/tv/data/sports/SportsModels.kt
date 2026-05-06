@@ -20,6 +20,10 @@ data class SportsLeague(
     val name: String,
     val accent: String? = null,
     val display_order: Int = 100,
+    /** v1.44.11 — TheSportsDB league badge URL. Drives the league
+     *  chip strip on the Sports page. Optional; falls back to the
+     *  text-only pill when absent. */
+    val logo_url: String? = null,
 )
 
 data class SportsTeam(

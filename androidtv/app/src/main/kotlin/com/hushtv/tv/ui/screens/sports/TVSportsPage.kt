@@ -108,7 +108,11 @@ fun TVSportsPage(
     }
 
     val pills = remember(home, liveChannels) {
-        buildPills(home?.leagues?.map { it.league.slug to it.league.name } ?: emptyList())
+        buildPills(
+            home?.leagues?.map {
+                Triple(it.league.slug, it.league.name, it.league.logo_url)
+            } ?: emptyList()
+        )
     }
 
     // Background-thread filter — never blocks the main thread even
@@ -236,7 +240,13 @@ fun TVSportsPage(
                             channel = ch.title,
                         )
                     },
-                    onUpFromRow = onUpFromRow,
+                    // v1.44.11 — UP from a card now focuses the
+                    // PILL ROW (not the page above). Skipping past
+                    // the pills to Discovery was the user's complaint.
+                    onUpFromCard = {
+                        runCatching { firstItemFocus.requestFocus() }
+                            .onFailure { onUpFromRow() }
+                    },
                     onDownFromRow = onDownFromRow,
                 )
             } else {
@@ -269,7 +279,12 @@ fun TVSportsPage(
                             score_away = g.score_away,
                         )
                     },
-                    onUpFromRow = onUpFromRow,
+                    // v1.44.11 — UP from a card now focuses the
+                    // PILL ROW (not the page above).
+                    onUpFromCard = {
+                        runCatching { firstItemFocus.requestFocus() }
+                            .onFailure { onUpFromRow() }
+                    },
                     onDownFromRow = onDownFromRow,
                 )
             }
@@ -281,15 +296,17 @@ fun TVSportsPage(
 /** Build the static league-pill list. We always lead with All / Live
  *  / PPV, then the leagues the server reports as having games today,
  *  in their own ordering. */
-private fun buildPills(leagueSlugsAndNames: List<Pair<String, String>>): List<LeaguePill> {
+private fun buildPills(
+    leagues: List<Triple<String, String, String?>>,
+): List<LeaguePill> {
     val out = mutableListOf<LeaguePill>()
     out += LeaguePill("all", "All", Cyan)
     out += LeaguePill("live", "Live", Color(0xFFEF4444))
     out += LeaguePill("ppv", "PPV", Color(0xFFE10600))
-    leagueSlugsAndNames.forEach { (slug, name) ->
+    leagues.forEach { (slug, name, logo) ->
         if (slug == "ppv" || slug == "all" || slug == "live") return@forEach
         val accent = LEAGUE_ACCENTS[slug] ?: Color(0xFF38BDF8)
-        out += LeaguePill(slug, name, accent)
+        out += LeaguePill(slug, name, accent, logoUrl = logo)
     }
     return out
 }
@@ -316,7 +333,7 @@ private fun GameCardsRail(
     items: List<Pair<SportsGame, MediaCard>>,
     railFocus: FocusRequester,
     onGameFocused: (SportsGame, MediaCard) -> Unit,
-    onUpFromRow: () -> Unit,
+    onUpFromCard: () -> Unit,
     onDownFromRow: (() -> Unit)?,
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -356,7 +373,7 @@ private fun GameCardsRail(
                         playLiveChannel(ctx, nav, playlistId, ch)
                     },
                     focusRequester = if (idx == 0) railFocus else null,
-                    onUpFromCard = onUpFromRow,
+                    onUpFromCard = onUpFromCard,
                 )
             }
         }
@@ -370,7 +387,7 @@ private fun PpvCardsRail(
     items: List<Pair<SportsPpvEvent, MediaCard>>,
     railFocus: FocusRequester,
     onPpvFocused: (SportsPpvEvent, MediaCard) -> Unit,
-    onUpFromRow: () -> Unit,
+    onUpFromCard: () -> Unit,
     onDownFromRow: (() -> Unit)?,
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -410,7 +427,7 @@ private fun PpvCardsRail(
                         playLiveChannel(ctx, nav, playlistId, ch)
                     },
                     focusRequester = if (idx == 0) railFocus else null,
-                    onUpFromCard = onUpFromRow,
+                    onUpFromCard = onUpFromCard,
                 )
             }
         }

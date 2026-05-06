@@ -1,12 +1,14 @@
 {
-  "versionCode": 410,
-  "versionName": "1.44.10",
+  "versionCode": 411,
+  "versionName": "1.44.11",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "FIX (DEV ONLY): Hero title no longer clips long team names. Two changes: (1) backend + client now use SHORT team names (e.g. 'White Sox @ Angels' instead of 'Chicago White Sox @ Los Angeles Angels'); (2) hero title font reduced from 56sp to 44sp with matching line height. Verified: every active matchup fits cleanly on 1-2 lines on 1080p TV at the standard 96dp side padding.",
-    "Mandatory:true so v1.44.9 devices force-update."
+    "FIX (DEV ONLY): UP from a sports card no longer skips past the league pills to Discovery — it now correctly focuses the pill row.",
+    "REDESIGN: League pills are now real league chips. Each league chip shows its OFFICIAL TheSportsDB league badge (NHL shield, MLB logo, NBA, NFL, MLS, UCL, EPL, etc.) to the left of the league name, with three visual states: SELECTED (solid accent fill), FOCUSED (translucent + accent ring), IDLE (near-transparent + faint ring). The All / Live / PPV tabs get a tinted dot in place of the missing badge so the strip stays visually coherent.",
+    "Backend backfills league badges from TheSportsDB lookupleague.php on first boot — added _ingest_league_logos so the data is populated automatically; admins don't need to upload anything.",
+    "Mandatory:true so v1.44.10 devices force-update."
   ]
 }

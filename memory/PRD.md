@@ -1,6 +1,85 @@
 # HushTV — Product Requirements Document
 
-## v1.44.10 (DEV ONLY) — Hero title fits on every game — 2026-05-06  ⬅ LATEST
+## v1.44.11 (DEV ONLY) — League chips with logos + UP-from-card fix — 2026-05-06  ⬅ LATEST
+
+User report: *"When you toggle a sports card under the pill and try to go
+back up to the league pills it's skipping all the way up to the next screen
+above (discover) instead of going back up to the pills. Also can't we do
+something nicer like instead of the pills have the leagues logos etc in a
+smart way you can toggle back and forth to transparent or whatever looks
+the best the pills are kind of boring."*
+
+### Two changes shipped
+
+#### 1. UP-from-card focus fix
+- Both `GameCardsRail` and `PpvCardsRail` renamed their callback from
+  `onUpFromRow` → `onUpFromCard` to make the semantic intent obvious.
+- The call sites in `TVSportsPage` now pass:
+  ```kotlin
+  onUpFromCard = {
+      runCatching { firstItemFocus.requestFocus() }
+          .onFailure { onUpFromRow() }
+  }
+  ```
+  So UP from a card focuses the pill row's first chip (with a graceful
+  fallback to the page-above callback if the requester isn't attached).
+- Symmetric to the v1.44.5 DOWN-from-pill fix that focuses `railFocus`
+  with the same try/fallback pattern.
+
+#### 2. League chip redesign — real league badges, not text pills
+- **Backend**:
+    - Added `_ingest_league_logos(c)` helper that hits TheSportsDB's
+      `lookupleague.php` once per active league on server boot and
+      writes the `strBadge` URL into `sports_leagues.logo_url`.
+      Idempotent — skips leagues that already have a URL.
+    - Wired into `init_sports_module()` after the seeded league
+      ingest. Verified: all 12 active leagues backfilled on first
+      restart (NHL shield, MLB, NBA, NFL, UFC, MLS, EPL, UCL, NCAAF,
+      NCAAB, CFL, F1).
+    - `/api/sports/home` league objects now include `logo_url`.
+    - `_game_to_dict` (per-game league lookup) also includes
+      `logo_url` so the client doesn't have to cross-reference.
+- **Client**:
+    - `SportsLeague` Kotlin data class gains `logo_url: String?`.
+    - `LeaguePill` data class gains `logoUrl: String?`.
+    - `LeaguePillView` redesigned as a horizontal Row:
+        ```
+        [ league badge 28dp ]   LABEL
+        ```
+      with three explicit visual states:
+        - **SELECTED** — solid accent fill, dark text, no border
+        - **FOCUSED** — translucent white background, white text,
+          accent-coloured 2dp ring
+        - **IDLE** — near-transparent (8% white) bg, white text,
+          1dp accent ring at 30% alpha
+    - Virtual tabs (All / Live / PPV) don't have a TheSportsDB badge
+      so they render a 10dp tinted circle instead. Keeps the strip
+      visually coherent — every chip has a left-graphic.
+    - Chip height bumped 48dp → 54dp to give the badge breathing room.
+- `buildPills` updated to take `Triple<slug, name, logoUrl>` so the
+  league logo flows through from server to chip.
+
+### Build + deploy
+- versionCode 410 → 411, versionName 1.44.10 → 1.44.11.
+- BUILD SUCCESSFUL.
+- `mandatory: true` so v1.44.10 devices force-update.
+- Backend redeployed; logo backfill ran on restart and persisted —
+  any subsequent boot is a no-op since `WHERE logo_url IS NULL OR
+  logo_url=''` matches nothing.
+
+### Lesson preserved
+Symmetric DPAD navigation: when DOWN from row A focuses row B, UP
+from row B should focus row A. Don't route either direction "through"
+the rest of the page hierarchy. The v1.44.5 fix established the
+pattern; v1.44.11 extends it to the cards-rail UP path.
+
+When you have logos available upstream and your UI is currently using
+plain text labels — USE THE LOGOS. League badges are instantly
+recognisable; "MLB" / "NHL" / "EPL" text labels are not.
+
+---
+
+## v1.44.10 (DEV ONLY) — Hero title fits on every game — 2026-05-06
 
 User report: *"The game names in the hero are cut off look at the picture I
 sent .. this is for every game they are too big or not in the right format
