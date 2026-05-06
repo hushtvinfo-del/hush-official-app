@@ -1,22 +1,13 @@
 {
-  "versionCode": 424,
-  "versionName": "1.44.24",
+  "versionCode": 425,
+  "versionName": "1.44.25",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "LITE MODE — REWRITTEN CORRECTLY. Reverted the v1.44.19–23 mistake of building a parallel flat UI in ui.lite.*. Lite now uses the SAME Pro UI tree (same home screen, same sidebars, same menu, same drilldown screens) — it just strips the heavy effects:",
-    "  • Ken Burns hero zooms (8 home hero layers + sports hero) → static zoomed image",
-    "  • Auto-cycling hero rotation (Discovery 12 s + Sports 8 s) → first item only, no timer",
-    "  • Streaming-service watermark pulse (alpha + scale 6 s loop) → static",
-    "  • TopNavBar 'NEW' badge alpha pulse → full alpha, no breathing",
-    "  • Splash spinner ring rotation → static",
-    "  • Discovery hero AnimatedContent crossfade between posters → instant swap",
-    "  • Sports hero AnimatedContent crossfade → no crossfade",
-    "PRO IS UNCHANGED — every gate defaults to existing Pro behaviour. The CompositionLocal LocalIsLiteMode is `false` in Pro and the original infinite-repeating tweens run with bit-for-bit identical params (initialValue, targetValue, durationMillis, easing, repeatMode).",
-    "TOGGLE — Settings → APP MODE now reads the current mode and shows the OPPOSITE option as the action ('Switch to Lite' when in Pro, 'Switch to Pro' when in Lite). One tap, no relaunch.",
-    "DELETED — LiteShellScreen.kt and LiteComponents.kt (the bad parallel UI). Kept LiteFirstLaunchDialog.kt and AppMode.kt (correct).",
-    "Mandatory:true so v1.44.23 devices force-update."
+    "FIRST-LAUNCH PICKER REMOVED — Pro is now the universal default for everyone. No more capability dialog on first launch, so no chance of a NVIDIA Shield (or any other device) being mis-classified as Lite.",
+    "Lite is still available — toggle from Pro Settings → APP MODE → 'Switch to Lite Mode'. Toggle is one-tap, no relaunch.",
+    "Mandatory:true so v1.44.24 devices force-update."
   ]
 }

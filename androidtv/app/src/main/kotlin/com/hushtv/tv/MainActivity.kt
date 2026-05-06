@@ -178,39 +178,20 @@ private fun AppContent() {
         composable("add") { TVAddAccountScreen(nav) }
         composable("menu/{playlistId}") { bs ->
             val playlistId = bs.arguments?.getString("playlistId") ?: ""
-            // v1.44.24 — Lite/Pro = a single shared UI tree (the
-            // existing TVMainMenuScreen) wrapped with a
-            // CompositionLocal flag. When the user has chosen Lite,
-            // heavy-effect call sites read `LocalIsLiteMode.current`
-            // and skip their work (Ken Burns zooms, auto-cycling
-            // heroes, etc.). When Pro is active, the flag is `false`
-            // and behaviour is bit-for-bit identical to today.
-            //
-            // First-launch (mode == UNSET, hasPrompted == false):
-            //   show the capability dialog. After the user picks,
-            //   the flag flips and the same Pro UI mounts.
+            // v1.44.24 — Lite/Pro = single shared UI tree wrapped in
+            // a CompositionLocal flag. v1.44.25 — Removed the
+            // first-launch picker dialog per user direction. Pro is
+            // the universal default. Users opt into Lite via
+            // Settings → APP MODE only. This eliminates the
+            // mis-classification complaint surface on premium
+            // devices forever.
             val ctx = LocalContext.current
             val savedMode = remember { com.hushtv.tv.data.AppModeStore.load(ctx) }
-            var pickedMode by remember {
-                mutableStateOf<com.hushtv.tv.data.AppMode>(savedMode)
-            }
-            val needsPrompt = remember {
-                pickedMode == com.hushtv.tv.data.AppMode.UNSET &&
-                    !com.hushtv.tv.data.AppModeStore.hasPrompted(ctx)
-            }
-            if (needsPrompt && pickedMode == com.hushtv.tv.data.AppMode.UNSET) {
-                com.hushtv.tv.ui.lite.LiteFirstLaunchDialog(
-                    onPicked = { pickedMode = it }
-                )
-            } else {
-                val effective = if (pickedMode == com.hushtv.tv.data.AppMode.UNSET)
-                    com.hushtv.tv.data.AppMode.PRO else pickedMode
-                val isLite = effective == com.hushtv.tv.data.AppMode.LITE
-                androidx.compose.runtime.CompositionLocalProvider(
-                    com.hushtv.tv.data.LocalIsLiteMode provides isLite,
-                ) {
-                    TVMainMenuScreen(nav, playlistId)
-                }
+            val isLite = savedMode == com.hushtv.tv.data.AppMode.LITE
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.hushtv.tv.data.LocalIsLiteMode provides isLite,
+            ) {
+                TVMainMenuScreen(nav, playlistId)
             }
         }
         composable(
