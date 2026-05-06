@@ -1,18 +1,14 @@
 {
-  "versionCode": 419,
-  "versionName": "1.44.19",
+  "versionCode": 420,
+  "versionName": "1.44.20",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "NEW — APP MODE (Lite / Pro). Same APK, two completely separate UI trees. Pro is what you've always had — cinematic backgrounds, animated heroes, rich detail screens. Lite is a brand-new flat UI built for older Android TVs: no animations, no gradients, no Ken Burns hero, no glow halos.",
-    "FIRST-LAUNCH AUTO-DETECT — On first cold start the app reads the device's RAM (ActivityManager.getMemoryClass), CPU cores, and manufacturer to recommend Lite or Pro. The recommendation is SOFT: a centered modal pops up, the recommended option is highlighted, but the user can still pick either.",
-    "TOP-CORNER LITE BADGE — When Lite is active a small green LITE pill is pinned to the top-right corner so users always know which mode they're in.",
-    "LITE TABS — Home / Live TV / Movies / Series / Sports / Search / Settings. Same data layer (Xtream / TheSportsDB / TMDB) so Pro users can switch any time without re-login.",
-    "LITE SPORTS — Static text-only matchup rows (NHL · Maple Leafs @ Rangers · LIVE · 3-2 · SPORTSNET ONE) instead of the cinematic scoreboard cards. Same backend, no Ken Burns, no auto-cycling.",
-    "TOGGLE ANY TIME — Pro Settings → APP MODE → Switch to Lite. Lite Settings → Switch to Pro. Instant — no relaunch.",
-    "ZERO RISK to Pro: Lite UI lives in a brand-new package com.hushtv.tv.ui.lite.* — physically separated from com.hushtv.tv.ui.screens.*. Editing a Lite file CANNOT affect Pro behaviour by construction.",
-    "Mandatory:true so v1.44.18 devices force-update."
+    "CRASH FIX (Lite Mode) — v1.44.19 crashed on first frame of the Lite Home screen on every device because the LazyRow keys were the entire MediaCard data class. Compose's SaveableStateHolder tries to bundle the key for state restoration; data classes aren't Bundle-storable → IllegalArgumentException, instant crash.",
+    "Switched to MediaCard.id (a String) as the LazyList key. Bundle-safe, fixes the crash, and gives stable scroll position when the list reshuffles.",
+    "Caught from the on-device crash report uploaded to /crash/submit (skyworth Android Google TV, 1.44.19-debug). The crash-reporting infrastructure paid for itself again — root cause was identifiable in seconds from the Compose stack trace.",
+    "Mandatory:true so v1.44.19 devices force-update."
   ]
 }

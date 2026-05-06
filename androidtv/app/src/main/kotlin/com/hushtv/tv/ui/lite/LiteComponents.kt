@@ -223,7 +223,17 @@ fun LiteRow(
             ),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
         ) {
-            itemsIndexedStable(items) { idx, card ->
+            // v1.44.20 — Use MediaCard.id (a String, Bundle-storable)
+            // as the LazyList key. The previous v1.44.19 helper used
+            // the whole MediaCard as the implicit key, which
+            // SaveableStateHolder tries to serialise into a Bundle
+            // for state restoration → IllegalArgumentException
+            // crash on the first frame of LiteHome on every device.
+            items(
+                count = items.size,
+                key = { idx -> items[idx].id },
+            ) { idx ->
+                val card = items[idx]
                 LitePosterCard(
                     card = card,
                     onClick = { onClick(card) },
@@ -232,17 +242,4 @@ fun LiteRow(
             }
         }
     }
-}
-
-/** itemsIndexed equivalent that uses item.id as key for stable
- *  scroll position when the list reshuffles. */
-private inline fun <T> androidx.compose.foundation.lazy.LazyListScope.itemsIndexedStable(
-    items: List<T>,
-    crossinline keySelector: (T) -> Any = { it as Any },
-    crossinline content: @Composable (index: Int, item: T) -> Unit,
-) {
-    items(
-        count = items.size,
-        key = { idx -> keySelector(items[idx]) }
-    ) { idx -> content(idx, items[idx]) }
 }
