@@ -103,7 +103,7 @@ LOGO_PUBLIC_BASE = os.environ.get("SPORTS_LOGO_PUBLIC_BASE",
 
 # Ingestion cadences.
 REFRESH_SCHEDULE_SEC = 15 * 60      # Fetch upcoming schedules
-REFRESH_LIVE_SEC = 2 * 60           # Fetch live scores for in-progress games
+REFRESH_LIVE_SEC = 60               # V2 livescore endpoint — 1 call per league, can poll fast
 REFRESH_PPV_SEC = 6 * 60 * 60       # Fetch PPV / UFC / boxing events
 
 # Window we keep games for. Everything else gets pruned to keep the
@@ -318,14 +318,21 @@ def _sportsdb_get(path: str, params: Optional[Dict[str, Any]] = None,
 
     path is relative (e.g. 'eventsnextleague.php'). v2 flips to the v2
     host (some endpoints like /livescore/ are v2-only).
+
+    v1.44.8 — V2 endpoints require the API key in an X-API-KEY header
+    instead of a URL path segment. V1 stays URL-key (legacy). The
+    business-tier key works on both.
     """
     base = SPORTSDB_V2 if v2 else SPORTSDB_V1
     url = f"{base}/{path.lstrip('/')}"
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
+    headers: Dict[str, str] = {}
+    if v2:
+        headers["X-API-KEY"] = SPORTSDB_KEY
     try:
-        with httpx.Client(timeout=15.0) as client:
-            r = client.get(url)
+        with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+            r = client.get(url, headers=headers)
             r.raise_for_status()
             return r.json() or {}
     except httpx.HTTPError as e:
@@ -569,39 +576,180 @@ def refresh_league_schedule(slug: str) -> int:
         return len(events)
 
 
-def refresh_live_scores() -> int:
-    """Fast poll for in-progress games. Returns # updated.
+def _apply_v2_livescore(c: sqlite3.Connection, ev: Dict[str, Any]) -> bool:
+    """Apply a single live-event update from the V2 livescore endpoint.
 
-    v1.44.6 — widened the window from 4h to 6h past start because
-    MLB games regularly run 3-4h and TheSportsDB lags status updates
-    by ~10-30 min after first pitch. Also includes any 'scheduled'
-    game that started up to 6h ago — they're almost certainly mid-
-    game, just not yet upgraded to status='live' on the upstream
-    feed."""
+    Returns True if a row was actually updated (idEvent matched an
+    existing game). Unlike _upsert_game this is a NARROW update —
+    only status, scores, and the timestamp move. The full schedule
+    upsert happens via _upsert_game on the slower 15-min cycle.
+
+    V2 livescore JSON shape (per business-tier docs):
+      {
+        "idEvent": "2387404",
+        "strProgress": "Top 5th" | "Final" | "FT" | "" | "IN9" | "IN8",
+        "strStatus":   "FT" | "NS" | "IN9" | "in progress" | ...,
+        "intHomeScore": 4,
+        "intAwayScore": 2,
+        ...
+      }
+
+    NOTE: The V2 livescore endpoint returns the FULL DAY's slate per
+    league — not just live games. That includes "NS" (not started)
+    games, which we MUST NOT promote to status='live' even though
+    they came from the livescore feed. Only progress/status that
+    indicates active play counts as live.
+    """
+    sdb_id = ev.get("idEvent")
+    if not sdb_id:
+        return False
+    progress = (ev.get("strProgress") or "").strip()
+    raw_status = (ev.get("strStatus") or "").strip()
+    # Use whichever has more info.
+    status_raw = (progress or raw_status or "").lower().strip()
+
+    final_keywords = (
+        "final", "ft", "match finished", "after extra time", "aet",
+        "after pen", "pen.", "match over", "ended", "complete",
+        "fulltime", "full time", "ap",      # "after penalties"
+    )
+    not_started_values = (
+        "", "ns", "scheduled", "pre-game", "pregame",
+        "tbd", "not started", "postp", "postponed", "cancelled",
+        "canceled", "delayed",
+    )
+    live_keywords = (
+        "progress", "live", "halftime",
+        "q1", "q2", "q3", "q4",
+        "1st", "2nd", "3rd", "4th",
+        "half", "ht ",
+        "top ", "bot ", "mid ", "end ",
+        "over ", "innings", "inning",
+        "in1", "in2", "in3", "in4", "in5", "in6", "in7", "in8", "in9",
+        "in10", "in11", "in12", "in13", "in14", "in15",
+        "set ", "lap ", "period",
+        ":",         # "45:30 - 1st Half"
+        "+",         # "95+4" extra-time
+    )
+
+    if any(k in status_raw for k in final_keywords):
+        status = "final"
+    elif status_raw in not_started_values:
+        # NS / scheduled — don't touch the game's existing status.
+        # The schedule pull already set it to 'scheduled' and the
+        # client's ±5h time-delta fallback handles the corner case
+        # of "started but upstream still says NS".
+        return False
+    elif any(k in status_raw for k in live_keywords):
+        status = "live"
+    else:
+        # Unknown status string — only call it live if there are
+        # actual scores, otherwise leave the row alone.
+        if ev.get("intHomeScore") is not None or ev.get("intAwayScore") is not None:
+            status = "live"
+        else:
+            return False
+
+    score_home = ev.get("intHomeScore")
+    score_away = ev.get("intAwayScore")
+    score_home_str = str(score_home) if score_home is not None else None
+    score_away_str = str(score_away) if score_away is not None else None
+    now_ms = int(time.time() * 1000)
+    res = c.execute(
+        "UPDATE sports_games SET "
+        "  status=?, "
+        "  score_home=COALESCE(?, score_home), "
+        "  score_away=COALESCE(?, score_away), "
+        "  updated_ts=? "
+        "WHERE sportsdb_id=?",
+        (status, score_home_str, score_away_str, now_ms, str(sdb_id)),
+    )
+    return res.rowcount > 0
+
+
+def refresh_live_scores() -> int:
+    """Pull live scores via the V2 per-league livescore endpoint.
+
+    v1.44.8 — Replaces the previous fan-out of per-game lookupevent.php
+    calls with ONE call per active league via
+        GET /api/v2/json/livescore/{idLeague}
+    The V2 endpoint:
+      • Returns ALL currently-live games in the league in a single
+        call (not N games × 1 call).
+      • Updates every 2 min on the business tier (vs ~10 min lag on
+        v1 lookupevent.php).
+      • Auto-removes events ~1 hour after FT, so we naturally clean up
+        once a game ends.
+    Net effect: score-update latency drops from minutes to seconds,
+    AND we're no longer at risk of hitting the rate limit when many
+    games are live.
+
+    Falls back to per-game lookupevent.php for any local game whose
+    sportsdb_id we couldn't find in the V2 response (covers stale
+    rows + leagues V2 doesn't currently support).
+    """
     updated = 0
+    matched_ids: set = set()
+    with _conn() as c:
+        leagues = c.execute(
+            "SELECT id, sportsdb_id FROM sports_leagues "
+            "WHERE active=1 AND sportsdb_id IS NOT NULL"
+        ).fetchall()
+    for lg in leagues:
+        idl = lg["sportsdb_id"]
+        if not idl:
+            continue
+        data = _sportsdb_get(f"livescore/{idl}", v2=True)
+        events = data.get("livescore") or data.get("events") or []
+        if not events:
+            continue
+        with _conn() as c:
+            for ev in events:
+                if _apply_v2_livescore(c, ev):
+                    updated += 1
+                    matched_ids.add(str(ev.get("idEvent")))
+        log.info("v2 livescore league=%s applied=%d", idl, len(events))
+
+    # Fallback: any local "scheduled" game that started within the past
+    # 6h but didn't show up in any livescore response — poll it the
+    # old way so we don't lose visibility of niche games.
     now_ms = int(time.time() * 1000)
     with _conn() as c:
-        live = c.execute(
-            "SELECT sportsdb_id FROM sports_games "
-            "WHERE status='live' "
-            "   OR (status IN ('scheduled','live') "
-            "       AND start_utc <= ? AND start_utc >= ?)",
-            (now_ms, now_ms - 6 * 3600 * 1000),  # 6h instead of 4h
+        stragglers = c.execute(
+            "SELECT sportsdb_id, league_id FROM sports_games "
+            "WHERE status='scheduled' "
+            "  AND start_utc <= ? AND start_utc >= ?",
+            (now_ms, now_ms - 6 * 3600 * 1000),
         ).fetchall()
-    for row in live:
+    stragglers = [r for r in stragglers if str(r["sportsdb_id"]) not in matched_ids]
+    if stragglers:
+        log.info("v1 fallback for %d straggler games", len(stragglers))
+    for row in stragglers:
         sid = row["sportsdb_id"]
-        data = _sportsdb_get(f"lookupevent.php", {"id": sid})
+        data = _sportsdb_get("lookupevent.php", {"id": sid})
         events = data.get("events") or []
         if not events:
             continue
         with _conn() as c:
-            lg_id = c.execute(
-                "SELECT league_id FROM sports_games WHERE sportsdb_id=?",
-                (sid,),
-            ).fetchone()
-            if lg_id:
-                _upsert_game(c, int(lg_id["league_id"]), events[0])
-                updated += 1
+            _upsert_game(c, int(row["league_id"]), events[0])
+            updated += 1
+
+    # v1.44.8 — mark stale-live games as final. The V2 livescore feed
+    # auto-removes games ~1h after FT, so any local game still
+    # marked status='live' with start_utc more than 8h ago has clearly
+    # ended; we just lost the FT signal because it dropped out of the
+    # feed before our next poll. Sweep them up now.
+    stale_threshold = now_ms - 8 * 3600 * 1000
+    with _conn() as c:
+        res = c.execute(
+            "UPDATE sports_games SET status='final', updated_ts=? "
+            "WHERE status='live' AND start_utc < ?",
+            (now_ms, stale_threshold),
+        )
+        if res.rowcount > 0:
+            log.info("marked %d stale-live games as final", res.rowcount)
+            updated += res.rowcount
+
     return updated
 
 

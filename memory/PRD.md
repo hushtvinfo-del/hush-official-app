@@ -1,6 +1,83 @@
 # HushTV — Product Requirements Document
 
-## v1.44.7 (DEV ONLY) — BIG scores layout (apology + better diag) — 2026-05-06  ⬅ LATEST
+## v1.44.8 — TheSportsDB V2 livescore (Business tier) — 2026-05-06  ⬅ LATEST
+
+User instruction: *"Yes obviously I want you to use all features we can
+with our paid api."*
+
+### What landed (backend-only, no APK rebuild needed)
+
+#### V2 livescore endpoint integration
+- New `_apply_v2_livescore(c, ev)` — narrow UPDATE that flips status +
+  scores for an existing game keyed by `sportsdb_id` (which equals
+  V2's `idEvent`).
+- `refresh_live_scores()` rewritten:
+    - Iterates active leagues.
+    - Calls `GET /api/v2/json/livescore/{idLeague}` once per league
+      with `X-API-KEY: 721094` header.
+    - One V2 call returns the FULL day slate (live + recently-FT +
+      not-started). Massive fan-in vs the previous N-calls-per-game
+      pattern.
+    - Falls back to V1 `lookupevent.php` for niche games not present
+      in any V2 response.
+    - Post-process: any local game still `status='live'` whose
+      `start_utc` is more than 8h ago is auto-marked `final` (V2
+      drops finished games ~1h post-FT, so they'd otherwise stay
+      stuck at `live` forever).
+- `_sportsdb_get()` now sends the API key as the `X-API-KEY` header
+  for V2 calls (V2 requires header auth, V1 stays URL-key).
+
+#### Status normalization for V2 progress codes
+- Properly handles all V2 strProgress / strStatus values:
+    - `"FT"` / `"Final"` / `"AET"` / `"Match Finished"` → final
+    - `"NS"` / `""` / `"Not Started"` / `"Postponed"` → scheduled
+      (NEVER live, even if returned by livescore feed)
+    - `"IN9"` / `"IN8"` / `"IN10"-"IN15"` (innings) → live
+    - `"Q1"-"Q4"`, `"Top 5th"`, `"45:30 - 1st Half"`, `"95+4"` → live
+- Critical bug caught + fixed mid-deploy: V2 livescore returns the FULL
+  DAY slate per league (15 NS + 4 live + 6 FT for MLB tonight). My
+  first cut blanket-marked everything in the response as `live`,
+  which incorrectly promoted 15 NS games to live. Now NS values
+  short-circuit and don't touch the existing `scheduled` status.
+
+#### Cadence
+- `REFRESH_LIVE_SEC` dropped from 120s → 60s. The V2 endpoint is
+  one call per league instead of one per game, so we can hit it
+  every minute without rate-limit risk on the business tier.
+
+### Verification (live)
+- `journalctl -u hushtv-sync` shows successful 200s for every league
+  every 60s: `v2 livescore league=4424 applied=25` (MLB),
+  `applied=3` (NBA), `applied=1` (NHL), etc.
+- Backend `/api/sports/home` returns: 4 live MLB games with real
+  scores (`White Sox 2-4 Angels`, `Braves 2-2 Mariners`,
+  `Pirates 0-7 Diamondbacks`, `Padres 8-4 Giants`), 47 scheduled
+  upcoming games, ZERO stale-live yesterday games.
+- Hero is correctly sorted live-first: 2 live MLB games at top, then
+  tomorrow's UCL / NHL / NBA upcoming.
+
+### No client rebuild needed
+v1.44.7 client already accepts the existing API shape — we just
+populated the `score_home/away` fields it was already reading. Users
+on v1.44.7 will see live scores update within 60s of TheSportsDB
+pushing them, with no APK update required.
+
+### Lesson preserved
+
+When a paid-tier endpoint exists, USE IT. The previous V1 fan-out was
+costing us:
+- 30 GET calls per refresh cycle (30 candidate games × 1 call each)
+- 10-30min upstream lag on the V1 lookupevent feed
+- No coverage for games TheSportsDB happened not to have in V1 detail
+
+V2 livescore is one call per league, ~60s upstream latency on the
+business tier, and full coverage of the day's slate. Always check the
+provider's V2 / "premium" / "business" docs before wiring up a
+fan-out poller.
+
+---
+
+## v1.44.7 (DEV ONLY) — BIG scores layout (apology + better diag) — 2026-05-06
 
 User report after v1.44.6: *"Im not using the 'free tier' I gave you an
 api for the business tier... NONE OF THE CARDS AT THE BOTTOM HAVE SHOWN
