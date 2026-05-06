@@ -3,6 +3,22 @@ package com.hushtv.tv.data
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
+import androidx.compose.runtime.compositionLocalOf
+
+/**
+ * v1.44.24 — Lite/Pro plumbing.
+ *
+ * The app SHIPS A SINGLE SHARED UI TREE (the existing Pro
+ * screens). When the user turns on Lite mode, [LocalIsLiteMode]
+ * flips to `true` and individual heavy-effect call sites
+ * (Ken Burns scale animations, hero auto-cycling, etc.) skip
+ * their work. Pro behaviour is unchanged when the flag is
+ * `false` (the default).
+ *
+ * v1.44.19–23 mistakenly built a parallel flat UI in
+ * `ui.lite.*`; that has been deleted and replaced with this
+ * flag-based approach.
+ */
 
 /**
  * v1.44.19 — Lite/Pro mode plumbing.
@@ -34,6 +50,15 @@ enum class AppMode {
         }
     }
 }
+
+/**
+ * Compose-tree flag indicating whether the user has chosen Lite
+ * mode. Wrap the menu-route children in
+ *   `CompositionLocalProvider(LocalIsLiteMode provides true) { ... }`
+ * to enable. Defaults to `false` so any composable that doesn't
+ * wrap (or doesn't read this) keeps Pro behaviour exactly.
+ */
+val LocalIsLiteMode = compositionLocalOf { false }
 
 object AppModeStore {
     private const val PREFS = "app_mode_prefs"

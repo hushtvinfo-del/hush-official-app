@@ -112,14 +112,13 @@ fun HomeCollectionsHeroLayer(
 @Composable
 private fun CollectionBackdrop(coll: MovieCollection) {
     val backdrop = coll.backdropUrl
-    val transition = rememberInfiniteTransition(label = "coll-kb-${coll.tmdbCollectionId}")
-    val scale by transition.animateFloat(
+    // v1.44.24 — Lite-aware Ken Burns. Pro: same 22 s tween.
+    // Lite: static 1.06 zoom.
+    val scale by com.hushtv.tv.ui.lite.rememberKenBurnsScale(
+        label = "coll-kb-${coll.tmdbCollectionId}",
         initialValue = 1.06f,
         targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 22_000, easing = LinearEasing),
-        ),
-        label = "coll-kb-scale",
+        durationMs = 22_000,
     )
 
     Box(Modifier.fillMaxSize()) {

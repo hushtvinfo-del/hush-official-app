@@ -70,9 +70,13 @@ fun SportsHeroLayer(
         return
     }
     val visible = pinned?.let { listOf(it) } ?: heroItems.take(5)
+    // v1.44.24 — Lite-aware auto-advance. Pro: 8 s rotation
+    // through up to 5 hero items. Lite: hold on item 0, no
+    // timer, no AnimatedContent crossfade work.
+    val isLite = com.hushtv.tv.data.LocalIsLiteMode.current
     var idx by remember(visible.size) { mutableStateOf(0) }
-    LaunchedEffect(visible.size, pinned) {
-        if (pinned != null || visible.size <= 1) return@LaunchedEffect
+    LaunchedEffect(visible.size, pinned, isLite) {
+        if (isLite || pinned != null || visible.size <= 1) return@LaunchedEffect
         while (true) {
             delay(8_000)
             idx = (idx + 1) % visible.size
@@ -81,16 +85,21 @@ fun SportsHeroLayer(
     val current = visible.getOrNull(idx.coerceIn(0, visible.size - 1)) ?: return
 
     Box(Modifier.fillMaxSize().background(Color(0xFF05080F))) {
-        // Crossfade between hero items.
-        AnimatedContent(
-            targetState = current,
-            transitionSpec = {
-                fadeIn(tween(900, easing = LinearEasing)) togetherWith
-                    fadeOut(tween(900, easing = LinearEasing))
-            },
-            label = "sports-hero-crossfade",
-        ) { h ->
-            HeroBackdrop(h)
+        if (isLite) {
+            // Lite: render only the current hero, no crossfade.
+            HeroBackdrop(current)
+        } else {
+            // Crossfade between hero items.
+            AnimatedContent(
+                targetState = current,
+                transitionSpec = {
+                    fadeIn(tween(900, easing = LinearEasing)) togetherWith
+                        fadeOut(tween(900, easing = LinearEasing))
+                },
+                label = "sports-hero-crossfade",
+            ) { h ->
+                HeroBackdrop(h)
+            }
         }
 
         // Darken+gradient overlays so copy is always legible.
@@ -147,18 +156,13 @@ fun SportsHeroLayer(
 
 @Composable
 private fun HeroBackdrop(h: SportsHero) {
-    val transition = rememberInfiniteTransition(label = "sports-kb-${h.id}")
-    // v1.44.9 — softened the Ken Burns range from 1.04→1.12 down to
-    // 1.00→1.04 (4% drift). The previous values were zooming the team
-    // logo so far in that the badge clipped its own edges. With Fit
-    // contentScale (below) we already letterbox to keep the full logo
-    // visible; the gentler scale just adds organic motion without
-    // re-cropping.
-    val scale by transition.animateFloat(
+    // v1.44.24 — Lite-aware Ken Burns. Pro: gentle 1.00→1.04
+    // 24 s breath. Lite: static 1.00 (no zoom).
+    val scale by com.hushtv.tv.ui.lite.rememberKenBurnsScale(
+        label = "sports-kb-${h.id}",
         initialValue = 1.00f,
         targetValue = 1.04f,
-        animationSpec = infiniteRepeatable(tween(24_000, easing = LinearEasing)),
-        label = "sports-kb-scale",
+        durationMs = 24_000,
     )
     Box(Modifier.fillMaxSize()) {
         if (!h.image.isNullOrBlank()) {

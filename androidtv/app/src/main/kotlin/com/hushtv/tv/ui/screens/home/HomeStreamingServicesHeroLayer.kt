@@ -124,24 +124,22 @@ private fun BrandedHeroBackdrop(service: StreamingService) {
                 )
         )
 
-        // Giant translucent watermark logo in the right half — subtle
-        // cinematic flourish. Pulses slowly via graphicsLayer alpha.
-        val transition = rememberInfiniteTransition(label = "wm-pulse-${service.id}")
-        val alpha by transition.animateFloat(
+        // v1.44.24 — Lite-aware watermark pulse. Pro: 6 s alpha
+        // breath + slight 1.00→1.04 scale pulse. Lite: static
+        // alpha 0.10, scale 1.00 — no animator allocation.
+        val alpha by com.hushtv.tv.ui.lite.rememberLiteAwareFloat(
+            label = "wm-alpha-${service.id}",
+            liteValue = 0.10f,
             initialValue = 0.10f,
             targetValue = 0.22f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 6000, easing = LinearEasing),
-            ),
-            label = "wm-alpha",
+            durationMs = 6_000,
         )
-        val scale by transition.animateFloat(
+        val scale by com.hushtv.tv.ui.lite.rememberLiteAwareFloat(
+            label = "wm-scale-${service.id}",
+            liteValue = 1.00f,
             initialValue = 1.00f,
             targetValue = 1.04f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 6000, easing = LinearEasing),
-            ),
-            label = "wm-scale",
+            durationMs = 6_000,
         )
         val logoUrl = service.logoUrl
         if (logoUrl != null) {

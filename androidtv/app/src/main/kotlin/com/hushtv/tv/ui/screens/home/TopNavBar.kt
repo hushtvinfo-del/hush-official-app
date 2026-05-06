@@ -304,15 +304,16 @@ private fun TopNavTabView(
             // user opens the page (caller flips `showBadge = false`).
             if (tab.showBadge) {
                 Spacer(Modifier.width(6.dp))
-                val pulse = rememberInfiniteTransition(label = "nav-badge")
-                val alpha by pulse.animateFloat(
+                // v1.44.24 — Lite-aware. Pro: pulse 0.45→1.0 alpha
+                // every 900 ms (Reverse). Lite: full alpha, no pulse.
+                val alpha by com.hushtv.tv.ui.lite.rememberLiteAwareFloat(
+                    label = "nav-badge",
+                    liteValue = 1f,
                     initialValue = 0.45f,
                     targetValue = 1f,
-                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                        animation = tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
-                    ),
-                    label = "nav-badge-alpha",
+                    durationMs = 900,
+                    easing = androidx.compose.animation.core.FastOutSlowInEasing,
+                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
                 )
                 Box(
                     Modifier

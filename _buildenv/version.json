@@ -1,14 +1,22 @@
 {
-  "versionCode": 423,
-  "versionName": "1.44.23",
+  "versionCode": 424,
+  "versionName": "1.44.24",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "FIRST-LAUNCH PICKER — Pro is now the default. Always shown FIRST and always pre-selected (focused) when the dialog opens. Lite is the fallback for older / built-in TVs.",
-    "DEVICE-CAPABILITY DETECTOR REWRITTEN — was reading ActivityManager.getMemoryClass() which returns the per-app HEAP LIMIT (often 96–192MB even on a NVIDIA Shield with 3GB of RAM). That's why the Shield was being mis-classified as Lite. Now reads ActivityManager.MemoryInfo.totalMem (actual system RAM) and treats any device from NVIDIA / Amazon / Google / Onn / Xiaomi / Roku / TiVo as Pro by default. Generic builds need ≥ 2 GB RAM and ≥ 4 cores to default to Pro.",
-    "PLAIN-ENGLISH COPY — 'Pick the version that fits your TV. Most people want Pro. If your TV feels slow with Pro, switch to Lite anytime in Settings.' Pro tagline mentions Fire Stick 4K, NVIDIA Shield, Chromecast with Google TV, Onn 4K Pro by name. Lite tagline names Hisense / TCL / Sceptre as the kind of built-in smart TV it's for.",
-    "Mandatory:true so v1.44.22 devices force-update."
+    "LITE MODE — REWRITTEN CORRECTLY. Reverted the v1.44.19–23 mistake of building a parallel flat UI in ui.lite.*. Lite now uses the SAME Pro UI tree (same home screen, same sidebars, same menu, same drilldown screens) — it just strips the heavy effects:",
+    "  • Ken Burns hero zooms (8 home hero layers + sports hero) → static zoomed image",
+    "  • Auto-cycling hero rotation (Discovery 12 s + Sports 8 s) → first item only, no timer",
+    "  • Streaming-service watermark pulse (alpha + scale 6 s loop) → static",
+    "  • TopNavBar 'NEW' badge alpha pulse → full alpha, no breathing",
+    "  • Splash spinner ring rotation → static",
+    "  • Discovery hero AnimatedContent crossfade between posters → instant swap",
+    "  • Sports hero AnimatedContent crossfade → no crossfade",
+    "PRO IS UNCHANGED — every gate defaults to existing Pro behaviour. The CompositionLocal LocalIsLiteMode is `false` in Pro and the original infinite-repeating tweens run with bit-for-bit identical params (initialValue, targetValue, durationMillis, easing, repeatMode).",
+    "TOGGLE — Settings → APP MODE now reads the current mode and shows the OPPOSITE option as the action ('Switch to Lite' when in Pro, 'Switch to Pro' when in Lite). One tap, no relaunch.",
+    "DELETED — LiteShellScreen.kt and LiteComponents.kt (the bad parallel UI). Kept LiteFirstLaunchDialog.kt and AppMode.kt (correct).",
+    "Mandatory:true so v1.44.23 devices force-update."
   ]
 }

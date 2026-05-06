@@ -304,22 +304,22 @@ private fun FranchiseSplash(
     collectionName: String,
     backdropUrl: String?,
 ) {
-    val transition = rememberInfiniteTransition(label = "splash-kb")
-    val scale by transition.animateFloat(
+    // v1.44.24 — Lite-aware splash. Pro: 16 s zoom + 1.4 s
+    // ring spinner. Lite: static zoom, ring stays at 0°
+    // (still spinner-y enough as a brief load state).
+    val scale by com.hushtv.tv.ui.lite.rememberLiteAwareFloat(
+        label = "splash-kb",
+        liteValue = 1.04f,
         initialValue = 1.04f,
         targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 16_000, easing = LinearEasing),
-        ),
-        label = "splash-scale",
+        durationMs = 16_000,
     )
-    val ringRotation by transition.animateFloat(
+    val ringRotation by com.hushtv.tv.ui.lite.rememberLiteAwareFloat(
+        label = "splash-ring",
+        liteValue = 0f,
         initialValue = 0f,
         targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = LinearEasing),
-        ),
-        label = "splash-ring",
+        durationMs = 1_400,
     )
 
     Box(Modifier.fillMaxSize().background(BgBlack)) {

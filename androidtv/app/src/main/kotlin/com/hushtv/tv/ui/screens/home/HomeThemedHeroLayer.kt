@@ -116,14 +116,12 @@ fun HomeThemedHeroLayer(
 
 @Composable
 private fun ThemedBackdrop(theme: ThemedList) {
-    val transition = rememberInfiniteTransition(label = "themed-kb-${theme.id}")
-    val scale by transition.animateFloat(
+    // v1.44.24 — Lite-aware Ken Burns. Pro: 22 s tween. Lite: static.
+    val scale by com.hushtv.tv.ui.lite.rememberKenBurnsScale(
+        label = "themed-kb-${theme.id}",
         initialValue = 1.06f,
         targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 22_000, easing = LinearEasing),
-        ),
-        label = "themed-kb-scale",
+        durationMs = 22_000,
     )
 
     Box(Modifier.fillMaxSize()) {

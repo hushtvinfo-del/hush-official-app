@@ -111,14 +111,15 @@ fun HomeYearsHeroLayer(
 @Composable
 private fun YearBackdrop(year: MovieYear) {
     val backdrop = year.backdropUrl
-    val transition = rememberInfiniteTransition(label = "year-kb-${year.year}")
-    val scale by transition.animateFloat(
+    // v1.44.24 — Lite-mode aware Ken Burns. In Pro the helper
+    // returns a normal infinite-repeating tween (1.06 → 1.12,
+    // 22 s) — same as before. In Lite it returns a static 1.06,
+    // so the backdrop is just a still slightly-zoomed image.
+    val scale by com.hushtv.tv.ui.lite.rememberKenBurnsScale(
+        label = "year-kb-${year.year}",
         initialValue = 1.06f,
         targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 22_000, easing = LinearEasing),
-        ),
-        label = "year-kb-scale",
+        durationMs = 22_000,
     )
 
     Box(Modifier.fillMaxSize()) {

@@ -178,17 +178,17 @@ private fun AppContent() {
         composable("add") { TVAddAccountScreen(nav) }
         composable("menu/{playlistId}") { bs ->
             val playlistId = bs.arguments?.getString("playlistId") ?: ""
-            // v1.44.19 — Lite/Pro switch happens HERE, at the menu
-            // route. The Pro and Lite UI trees are completely
-            // separate composables (com.hushtv.tv.ui.screens.* vs
-            // com.hushtv.tv.ui.lite.*). The mode is read from
-            // SharedPreferences and re-evaluated each time the
-            // user lands on /menu, so toggling Lite ↔ Pro in
-            // Settings + nav back to /menu instantly switches.
+            // v1.44.24 — Lite/Pro = a single shared UI tree (the
+            // existing TVMainMenuScreen) wrapped with a
+            // CompositionLocal flag. When the user has chosen Lite,
+            // heavy-effect call sites read `LocalIsLiteMode.current`
+            // and skip their work (Ken Burns zooms, auto-cycling
+            // heroes, etc.). When Pro is active, the flag is `false`
+            // and behaviour is bit-for-bit identical to today.
             //
             // First-launch (mode == UNSET, hasPrompted == false):
             //   show the capability dialog. After the user picks,
-            //   mode is saved and the chosen tree mounts.
+            //   the flag flips and the same Pro UI mounts.
             val ctx = LocalContext.current
             val savedMode = remember { com.hushtv.tv.data.AppModeStore.load(ctx) }
             var pickedMode by remember {
@@ -205,9 +205,10 @@ private fun AppContent() {
             } else {
                 val effective = if (pickedMode == com.hushtv.tv.data.AppMode.UNSET)
                     com.hushtv.tv.data.AppMode.PRO else pickedMode
-                if (effective == com.hushtv.tv.data.AppMode.LITE) {
-                    com.hushtv.tv.ui.lite.LiteShellScreen(nav, playlistId)
-                } else {
+                val isLite = effective == com.hushtv.tv.data.AppMode.LITE
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.hushtv.tv.data.LocalIsLiteMode provides isLite,
+                ) {
                     TVMainMenuScreen(nav, playlistId)
                 }
             }

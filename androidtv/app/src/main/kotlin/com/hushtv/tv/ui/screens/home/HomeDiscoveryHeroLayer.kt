@@ -87,11 +87,13 @@ fun HomeDiscoveryHeroLayer(
         val accent = if (card.type == "series") Color(0xFF8B5CF6) else Cyan
         val art = card.heroArt
 
-        // Rotate through the art pool every 12 s — slow enough for the
-        // Ken-Burns pan to be felt, fast enough to stay alive.
+        // v1.44.24 — In Pro, rotate through the art pool every 12 s.
+        // In Lite, freeze at the first poster (no timer, no
+        // crossfade churn, no Ken Burns recomposition pressure).
+        val isLite = com.hushtv.tv.data.LocalIsLiteMode.current
         var artIdx by remember(card.id) { mutableStateOf(0) }
-        LaunchedEffect(card.id, art) {
-            if (art.size <= 1) return@LaunchedEffect
+        LaunchedEffect(card.id, art, isLite) {
+            if (isLite || art.size <= 1) return@LaunchedEffect
             while (true) {
                 delay(12_000)
                 artIdx = (artIdx + 1) % art.size
@@ -101,16 +103,22 @@ fun HomeDiscoveryHeroLayer(
 
         // ── Full-bleed backdrop with Ken-Burns + fade crossfade ──
         if (currentArt != null) {
-            AnimatedContent(
-                targetState = currentArt,
-                transitionSpec = {
-                    // 1.8 s soft crossfade between posters
-                    (fadeIn(tween(1800, easing = LinearEasing)) togetherWith
-                        fadeOut(tween(1800, easing = LinearEasing)))
-                },
-                label = "discovery-backdrop-crossfade",
-            ) { url ->
-                KenBurnsBackdrop(url = url, panIndex = artIdx)
+            if (isLite) {
+                // Static backdrop in Lite — no AnimatedContent
+                // crossfade, no Ken Burns scale loop.
+                KenBurnsBackdrop(url = currentArt, panIndex = artIdx)
+            } else {
+                AnimatedContent(
+                    targetState = currentArt,
+                    transitionSpec = {
+                        // 1.8 s soft crossfade between posters
+                        (fadeIn(tween(1800, easing = LinearEasing)) togetherWith
+                            fadeOut(tween(1800, easing = LinearEasing)))
+                    },
+                    label = "discovery-backdrop-crossfade",
+                ) { url ->
+                    KenBurnsBackdrop(url = url, panIndex = artIdx)
+                }
             }
         }
 
@@ -181,14 +189,12 @@ fun HomeDiscoveryHeroLayer(
  */
 @Composable
 private fun KenBurnsBackdrop(url: String, panIndex: Int) {
-    val transition = rememberInfiniteTransition(label = "ken-burns-$panIndex")
-    val scale by transition.animateFloat(
+    // v1.44.24 — Lite-aware Ken Burns. Pro: 22 s breath. Lite: still.
+    val scale by com.hushtv.tv.ui.lite.rememberKenBurnsScale(
+        label = "ken-burns-$panIndex",
         initialValue = 1.06f,
         targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 22_000, easing = LinearEasing),
-        ),
-        label = "ken-burns-scale",
+        durationMs = 22_000,
     )
     val ctx = LocalContext.current
     // Request with aggressive caching + crossfade disabled (we're doing

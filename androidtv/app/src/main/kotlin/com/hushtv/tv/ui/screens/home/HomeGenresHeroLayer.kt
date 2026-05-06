@@ -118,16 +118,13 @@ fun HomeGenresHeroLayer(
 private fun GenreBackdrop(genre: Genre) {
     val backdrop = genre.backdropUrl
 
-    // Slow scale breath for cinematic feel. No translation to avoid
-    // ever exposing an edge.
-    val transition = rememberInfiniteTransition(label = "genre-kb-${genre.id}")
-    val scale by transition.animateFloat(
+    // v1.44.24 — Lite-aware Ken Burns. Pro: same slow breath.
+    // Lite: static 1.06 zoom, no translation.
+    val scale by com.hushtv.tv.ui.lite.rememberKenBurnsScale(
+        label = "genre-kb-${genre.id}",
         initialValue = 1.06f,
         targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 22_000, easing = LinearEasing),
-        ),
-        label = "genre-kb-scale",
+        durationMs = 22_000,
     )
 
     Box(Modifier.fillMaxSize()) {

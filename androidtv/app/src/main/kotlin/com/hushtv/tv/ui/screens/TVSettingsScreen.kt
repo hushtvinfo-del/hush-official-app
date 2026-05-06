@@ -225,12 +225,12 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 )
             }
 
-            // ── APP MODE (v1.44.19) ─────────────────────────────────
-            // Lets the user toggle between the cinematic Pro UI and
-            // the snappy Lite UI any time. Switching from Pro → Lite
-            // here writes the preference and pops back to /menu,
-            // which re-evaluates the AppMode and mounts the Lite
-            // shell instead of TVMainMenuScreen.
+            // ── APP MODE (v1.44.19, refactored v1.44.24) ────────────
+            // Toggles between Pro (cinematic, animated UI) and Lite
+            // (same UI tree, heavy effects skipped via the
+            // LocalIsLiteMode CompositionLocal). Settings → save →
+            // re-enter /menu so the route re-reads AppMode and
+            // re-provides the flag.
             item { Spacer(Modifier.height(12.dp)) }
             item {
                 Text(
@@ -240,16 +240,28 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 )
             }
             item {
+                val isLite = com.hushtv.tv.data.LocalIsLiteMode.current
+                val (title, subtitle, target) = if (isLite) {
+                    Triple(
+                        "Switch to Pro Mode",
+                        "Cinematic UI — animated heroes, Ken Burns backdrops, smooth transitions. " +
+                            "Best for Fire Stick 4K, NVIDIA Shield, Chromecast with Google TV.",
+                        com.hushtv.tv.data.AppMode.PRO,
+                    )
+                } else {
+                    Triple(
+                        "Switch to Lite Mode",
+                        "Same look, less motion — strips Ken Burns zooms and auto-cycling " +
+                            "heroes for snappier performance on older TVs.",
+                        com.hushtv.tv.data.AppMode.LITE,
+                    )
+                }
                 SettingsCard(
-                    title = "Switch to Lite Mode",
-                    subtitle = "Strips animations and cinematic backgrounds — built for older / slower TVs",
+                    title = title,
+                    subtitle = subtitle,
                     icon = { Icon(Icons.Default.FlashOn, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                     onClick = {
-                        com.hushtv.tv.data.AppModeStore.save(
-                            ctx, com.hushtv.tv.data.AppMode.LITE,
-                        )
-                        // Re-enter /menu so the route's AppMode check
-                        // mounts LiteShellScreen instead of Pro.
+                        com.hushtv.tv.data.AppModeStore.save(ctx, target)
                         nav.navigate("menu/$playlistId") {
                             popUpTo(nav.graph.startDestinationId) { inclusive = false }
                             launchSingleTop = true
