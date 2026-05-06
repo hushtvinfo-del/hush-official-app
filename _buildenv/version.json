@@ -1,13 +1,14 @@
 {
-  "versionCode": 417,
-  "versionName": "1.44.17",
+  "versionCode": 418,
+  "versionName": "1.44.18",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "HERO TITLE — fits on ONE LINE now. Dropped from 44sp to 32sp + maxLines=1 so 'Timberwolves @ Spurs' (and any other matchup label) no longer wraps and never overlaps the right-side team-logo backdrop.",
-    "GAME CARD — full team names now appear UNDER each team logo (no more TIMBERW... ellipsis). Layout is three side-by-side columns: [logo / NAME] [score or VS] [logo / NAME]. Score/VS is height-locked to the badge so it visually centers on the logos. Names use 10sp Black with softWrap disabled so they NEVER show '...'.",
-    "Mandatory:true so v1.44.16 devices force-update."
+    "GAME CARD — logos now PUSHED TO LEFT/RIGHT EDGES with team names directly under them. The score box (or VS) takes the entire wide middle of the card. So a 'LIVE 98 — 102' game has all the room it needs while logos+names stay anchored to their corners. Achieved by switching the inner Row from weight(1f)/weight(1f) thirds to Arrangement.SpaceBetween with intrinsic-width side columns and a weight(1f) center.",
+    "Live scores bumped 30sp → 38sp now that the middle column is wide enough to hold them comfortably. Em-dash separator goes 22sp → 26sp.",
+    "Team-name font 10sp → 11sp for slightly easier readability — still narrow enough that 'GOLDEN KNIGHTS' / 'TIMBERWOLVES' fit without ellipsis (softWrap=false, overflow=Visible).",
+    "Mandatory:true so v1.44.17 devices force-update."
   ]
 }

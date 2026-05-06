@@ -205,22 +205,24 @@ fun GameCard(
                 }
             }
 
-            // ── Zone 2: Logos + scores/VS row, with FULL team names
-            //          stacked directly under each logo. ──
+            // ── Zone 2: Logos pushed to OUTER EDGES, full names
+            //          stacked under each, scores fill the wide
+            //          middle. ──
             //
-            // v1.44.17 — User feedback: previous "[badge] NAME VS NAME
-            // [badge]" single-row layout truncated team names with
-            // "..." on long names like TIMBERWOLVES. New layout uses
-            // three side-by-side Columns:
-            //   ┌ badge ┐  ┌ score / VS ┐  ┌ badge ┐
-            //   └ name  ┘                  └ name  ┘
-            // Team names go UNDER the badges, in a smaller font, with
-            // softWrap disabled so they NEVER show "...". Column with
-            // `weight(1f)` on each side gives the name as much
-            // horizontal room as possible. Badges + score box are
-            // top-aligned and the score is height-matched to the
-            // badge so it visually centers on the badge row even
-            // though the side columns are taller (badge + name).
+            // v1.44.18 — User feedback: previous v1.44.17 layout used
+            //   Row { Col(weight=1f) [score box] Col(weight=1f) }
+            // which split the row into thirds and starved the score
+            // numbers of horizontal room. New layout:
+            //   Row(SpaceBetween) {
+            //     Col(intrinsic) badge+name           ← hugs left edge
+            //     Box(weight=1f) scores / VS          ← devours middle
+            //     Col(intrinsic) badge+name           ← hugs right edge
+            //   }
+            // Each side column is only as wide as its contents (badge
+            // 48dp, or the team name if it's wider). The remaining
+            // ~200dp of card width belongs entirely to the score
+            // numbers, so "98 — 102" or "5 — 4" never crowd the
+            // logos.
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -230,10 +232,10 @@ fun GameCard(
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    // ─ Away team column (badge + full name underneath) ─
+                    // ─ Away team (anchored to left edge) ─
                     Column(
-                        modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         TeamBadgeOnly(
@@ -246,9 +248,9 @@ fun GameCard(
                         Text(
                             (game.away?.short_name ?: game.away?.name ?: "TBA").uppercase(),
                             color = Color.White,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 0.3.sp,
+                            letterSpacing = 0.5.sp,
                             fontFamily = Inter,
                             maxLines = 1,
                             softWrap = false,
@@ -257,24 +259,26 @@ fun GameCard(
                         )
                     }
 
-                    // ─ Center: scores OR "VS" — height-locked to 48dp
-                    //   (badge height) so it visually aligns with the
-                    //   badge centers regardless of the name text below. ─
+                    // ─ Center: scores OR "VS" — devours all leftover
+                    //   horizontal room. Height-locked to 48dp so it
+                    //   visually centers on the badge row even though
+                    //   the side columns are taller (badge + name). ─
                     Box(
                         modifier = Modifier
+                            .weight(1f)
                             .height(48.dp)
-                            .padding(horizontal = 4.dp),
+                            .padding(horizontal = 8.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (showScores) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                                 Text(
                                     game.score_away ?: "0",
                                     color = Color.White,
-                                    fontSize = 30.sp,
+                                    fontSize = 38.sp,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = Inter,
                                     maxLines = 1,
@@ -282,14 +286,14 @@ fun GameCard(
                                 Text(
                                     "—",
                                     color = Color(0xFF475569),
-                                    fontSize = 22.sp,
+                                    fontSize = 26.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = Inter,
                                 )
                                 Text(
                                     game.score_home ?: "0",
                                     color = Color.White,
-                                    fontSize = 30.sp,
+                                    fontSize = 38.sp,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = Inter,
                                     maxLines = 1,
@@ -299,7 +303,7 @@ fun GameCard(
                             Text(
                                 "VS",
                                 color = accent,
-                                fontSize = 18.sp,
+                                fontSize = 20.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 2.sp,
                                 fontFamily = Inter,
@@ -307,9 +311,8 @@ fun GameCard(
                         }
                     }
 
-                    // ─ Home team column (badge + full name underneath) ─
+                    // ─ Home team (anchored to right edge) ─
                     Column(
-                        modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         TeamBadgeOnly(
@@ -322,9 +325,9 @@ fun GameCard(
                         Text(
                             (game.home?.short_name ?: game.home?.name ?: "TBA").uppercase(),
                             color = Color.White,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 0.3.sp,
+                            letterSpacing = 0.5.sp,
                             fontFamily = Inter,
                             maxLines = 1,
                             softWrap = false,
