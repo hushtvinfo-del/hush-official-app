@@ -213,6 +213,8 @@ fun GameCard(
                         TeamBadgeOnly(
                             badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
                             modifier = Modifier.size(36.dp),
+                            focused = focused,
+                            accent = accent,
                         )
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -243,6 +245,8 @@ fun GameCard(
                         TeamBadgeOnly(
                             badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
                             modifier = Modifier.size(36.dp),
+                            focused = focused,
+                            accent = accent,
                         )
                     }
                 } else {
@@ -255,8 +259,10 @@ fun GameCard(
                             name = game.away?.short_name ?: game.away?.name ?: "TBA",
                             badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
                             score = null,
-                            align = Alignment.Start,
+                            align = Alignment.CenterHorizontally,
                             modifier = Modifier.weight(1f),
+                            focused = focused,
+                            accent = accent,
                         )
                         Text(
                             when {
@@ -274,8 +280,10 @@ fun GameCard(
                             name = game.home?.short_name ?: game.home?.name ?: "TBA",
                             badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
                             score = null,
-                            align = Alignment.End,
+                            align = Alignment.CenterHorizontally,
                             modifier = Modifier.weight(1f),
+                            focused = focused,
+                            accent = accent,
                         )
                     }
                 }
@@ -299,25 +307,54 @@ fun GameCard(
  * Just the badge image (no name, no score). Used in the "scoreboard"
  * layout where the score numbers are the central element and the
  * badges are decorative bookends.
+ *
+ * v1.44.14 — When [focused] is true and an [accent] is supplied, the
+ * badge gets a soft accent-coloured halo behind it. Reads as
+ * "this card is hot, watch this game" without flashy motion.
  */
 @Composable
 private fun TeamBadgeOnly(
     badgeUrl: String?,
     modifier: Modifier = Modifier,
+    focused: Boolean = false,
+    accent: Color = Cyan,
 ) {
-    if (!badgeUrl.isNullOrBlank()) {
-        AsyncImage(
-            model = badgeUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = modifier,
-        )
-    } else {
-        Box(
-            modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color(0xFF1F2937))
-        )
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        if (focused) {
+            // Soft circular glow — 20% larger than the badge, fading
+            // from the accent at 35% alpha at center to 0 at the edge.
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .padding((-6).dp)   // bleed slightly past the badge
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            0.0f to accent.copy(alpha = 0.35f),
+                            0.6f to accent.copy(alpha = 0.10f),
+                            1.0f to Color.Transparent,
+                        )
+                    )
+            )
+        }
+        if (!badgeUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = badgeUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.matchParentSize(),
+            )
+        } else {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFF1F2937))
+            )
+        }
     }
 }
 
@@ -328,31 +365,30 @@ private fun TeamBlock(
     score: String?,
     align: Alignment.Horizontal,
     modifier: Modifier = Modifier,
+    focused: Boolean = false,
+    accent: Color = Cyan,
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = align,
     ) {
-        if (!badgeUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = badgeUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.size(56.dp),
-            )
-        } else {
-            Box(
-                Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(Color(0xFF1F2937))
-            )
-        }
-        Spacer(Modifier.height(6.dp))
+        // v1.44.14 — Reuse TeamBadgeOnly so the focus glow logic is
+        // shared between the scoreboard layout (TeamBadgeOnly direct)
+        // and the fallback-with-names layout (TeamBlock wraps it).
+        TeamBadgeOnly(
+            badgeUrl = badgeUrl,
+            modifier = Modifier.size(56.dp),
+            focused = focused,
+            accent = accent,
+        )
+        Spacer(Modifier.height(8.dp))
         Text(
             name.uppercase(),
             color = Color.White,
-            fontSize = 14.sp,
+            // v1.44.14 — Bumped 14sp → 18sp now that the channel chip
+            // is gone. Card has the headroom and the names are the
+            // hero of this layout.
+            fontSize = 18.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 1.sp,
             fontFamily = Inter,

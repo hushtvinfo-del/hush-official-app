@@ -1,6 +1,44 @@
 # HushTV — Product Requirements Document
 
-## v1.44.13 (DEV ONLY) — Removed channel chip (no overlap) — 2026-05-06  ⬅ LATEST
+## v1.44.14 (DEV ONLY) — ESPN-tier card polish — 2026-05-06  ⬅ LATEST
+
+User confirmed: *"Ok"* to the suggestion of bigger team names + accent
+badge glow on focus.
+
+### What landed
+- **Team names 14sp → 18sp** in the no-scores fallback layout. With
+  the channel chip gone (v1.44.13), the names are now the visual hero
+  of that layout and have the headroom to render at TV-readable size.
+- **Center-aligned names** under each badge (was Start/End-aligned).
+  Badge + name read as a single visual unit, balanced against the
+  central "vs"/"—" separator.
+- **Badge focus glow** — when the parent card is focused, both team
+  badges render a soft radial halo behind them using the league's
+  accent color (NHL black, MLB navy blue, NBA red, NFL navy, UFC red,
+  EPL purple, UCL royal blue, etc.). Glow uses 35% → 10% → 0% radial
+  gradient that bleeds 6dp past the badge edge. Subtle, no motion —
+  pure ESPN-style "this card is hot" affordance.
+- **Shared focus glow logic** — `TeamBadgeOnly` is now the single
+  source of truth for the badge rendering + focus halo. `TeamBlock`
+  delegates to it. Used in both card layouts (score-row and
+  badges-with-names-fallback).
+
+### Files touched
+- `/app/androidtv/.../ui/screens/sports/SportsCards.kt` —
+  `TeamBadgeOnly` rewritten to support `focused`/`accent` params and
+  a radial-gradient halo. `TeamBlock` thinned to a wrapper that
+  delegates to `TeamBadgeOnly` and adds the bigger name beneath.
+  Both `GameCard` call sites pass `focused = focused, accent = accent`.
+
+### Build + deploy
+- versionCode 413 → 414, versionName 1.44.13 → 1.44.14.
+- BUILD SUCCESSFUL (45s).
+- Not mandatory (additive polish only — v1.44.13's no-overlap fix is
+  the structural baseline; this is purely visual).
+
+---
+
+## v1.44.13 (DEV ONLY) — Removed channel chip (no overlap) — 2026-05-06
 
 User report: *"See the attached picture. Look at the scorecard with the
 Anaheim Ducks versus the Knights. You'll see that the team names are

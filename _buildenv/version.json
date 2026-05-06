@@ -1,12 +1,12 @@
 {
-  "versionCode": 413,
-  "versionName": "1.44.13",
+  "versionCode": 414,
+  "versionName": "1.44.14",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": true,
+  "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "FIX (DEV ONLY): Removed the '▶ SPORTSNET 360' channel chip from the bottom of every game card. With the no-scores fallback layout (badge + team name underneath), the team names were visually overlapping the chip — there wasn't enough vertical room in a 200dp card for both a centered badge-plus-name and a bottom-pinned chip. Per user direction, the chip is gone entirely; pressing OK on the focused card still plays the matched channel, so the chip was duplicative info anyway.",
-    "Mandatory:true so v1.44.12 devices force-update."
+    "POLISH (DEV ONLY): Team names bumped 14sp → 18sp now that the channel chip is gone — they're the focal point of the no-scores fallback layout. Centered alignment under each badge.",
+    "POLISH: Badge focus glow — when a card is focused, both team badges (in either the score layout or the fallback layout) get a soft radial halo in the league's accent color (NHL black, MLB blue, NBA red, etc.). Reads ESPN-tier without flashy motion."
   ]
 }
