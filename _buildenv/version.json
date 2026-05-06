@@ -1,15 +1,13 @@
 {
-  "versionCode": 416,
-  "versionName": "1.44.16",
+  "versionCode": 417,
+  "versionName": "1.44.17",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "PERFECT-FIT CARDS: Game and PPV cards rewritten with a strict three-zone Column layout (top status row → flexible scores/title middle → bottom accent line / channel chip). Column stacking means zones cannot overlap by construction — no more clipped scores, no more pill-collisions, regardless of font scale or TV overscan.",
-    "Card height bumped 200dp → 220dp giving the scores row 50% more breathing room.",
-    "Live-game scoreboard now uses 36sp scores (up from 26sp) and 52dp team badges (up from 36dp) — readable from across the room.",
-    "Upcoming-game layout simplified to a single horizontal row: [badge] AWAY · VS · HOME [badge]. No more vertical badge-over-name stack that could push content off the bottom.",
-    "Mandatory:true so v1.44.15 devices force-update."
+    "HERO TITLE — fits on ONE LINE now. Dropped from 44sp to 32sp + maxLines=1 so 'Timberwolves @ Spurs' (and any other matchup label) no longer wraps and never overlaps the right-side team-logo backdrop.",
+    "GAME CARD — full team names now appear UNDER each team logo (no more TIMBERW... ellipsis). Layout is three side-by-side columns: [logo / NAME] [score or VS] [logo / NAME]. Score/VS is height-locked to the badge so it visually centers on the logos. Names use 10sp Black with softWrap disabled so they NEVER show '...'.",
+    "Mandatory:true so v1.44.16 devices force-update."
   ]
 }

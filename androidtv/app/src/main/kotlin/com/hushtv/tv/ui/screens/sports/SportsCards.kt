@@ -205,115 +205,131 @@ fun GameCard(
                 }
             }
 
-            // ── Zone 2: Scores/badges row (absorbs all remaining space) ──
+            // ── Zone 2: Logos + scores/VS row, with FULL team names
+            //          stacked directly under each logo. ──
+            //
+            // v1.44.17 — User feedback: previous "[badge] NAME VS NAME
+            // [badge]" single-row layout truncated team names with
+            // "..." on long names like TIMBERWOLVES. New layout uses
+            // three side-by-side Columns:
+            //   ┌ badge ┐  ┌ score / VS ┐  ┌ badge ┐
+            //   └ name  ┘                  └ name  ┘
+            // Team names go UNDER the badges, in a smaller font, with
+            // softWrap disabled so they NEVER show "...". Column with
+            // `weight(1f)` on each side gives the name as much
+            // horizontal room as possible. Badges + score box are
+            // top-aligned and the score is height-matched to the
+            // badge so it visually centers on the badge row even
+            // though the side columns are taller (badge + name).
             Box(
                 Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                if (showScores) {
-                    // Scoreboard layout: [badge] [score] — [score] [badge]
-                    // All one horizontal row so there's no vertical
-                    // stack to clip.
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    // ─ Away team column (badge + full name underneath) ─
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         TeamBadgeOnly(
                             badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
-                            modifier = Modifier.size(52.dp),
+                            modifier = Modifier.size(48.dp),
                             focused = focused,
                             accent = accent,
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            Text(
-                                game.score_away ?: "0",
-                                color = Color.White,
-                                fontSize = 36.sp,
-                                fontWeight = FontWeight.Black,
-                                fontFamily = Inter,
-                                maxLines = 1,
-                            )
-                            Text(
-                                "—",
-                                color = Color(0xFF475569),
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = Inter,
-                            )
-                            Text(
-                                game.score_home ?: "0",
-                                color = Color.White,
-                                fontSize = 36.sp,
-                                fontWeight = FontWeight.Black,
-                                fontFamily = Inter,
-                                maxLines = 1,
-                            )
-                        }
-                        TeamBadgeOnly(
-                            badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
-                            modifier = Modifier.size(52.dp),
-                            focused = focused,
-                            accent = accent,
-                        )
-                    }
-                } else {
-                    // Upcoming / no-scores layout: single horizontal
-                    // row [badge] AWAY   VS   HOME [badge]. Kept in
-                    // ONE row so there is no vertical stack that
-                    // could ever push content out of the card.
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        TeamBadgeOnly(
-                            badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
-                            modifier = Modifier.size(44.dp),
-                            focused = focused,
-                            accent = accent,
-                        )
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             (game.away?.short_name ?: game.away?.name ?: "TBA").uppercase(),
                             color = Color.White,
-                            fontSize = 14.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp,
+                            letterSpacing = 0.3.sp,
                             fontFamily = Inter,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            softWrap = false,
+                            overflow = TextOverflow.Visible,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         )
-                        Text(
-                            "VS",
-                            color = accent,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 2.sp,
-                            fontFamily = Inter,
+                    }
+
+                    // ─ Center: scores OR "VS" — height-locked to 48dp
+                    //   (badge height) so it visually aligns with the
+                    //   badge centers regardless of the name text below. ─
+                    Box(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .padding(horizontal = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (showScores) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    game.score_away ?: "0",
+                                    color = Color.White,
+                                    fontSize = 30.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = Inter,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    "—",
+                                    color = Color(0xFF475569),
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = Inter,
+                                )
+                                Text(
+                                    game.score_home ?: "0",
+                                    color = Color.White,
+                                    fontSize = 30.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = Inter,
+                                    maxLines = 1,
+                                )
+                            }
+                        } else {
+                            Text(
+                                "VS",
+                                color = accent,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 2.sp,
+                                fontFamily = Inter,
+                            )
+                        }
+                    }
+
+                    // ─ Home team column (badge + full name underneath) ─
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        TeamBadgeOnly(
+                            badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
+                            modifier = Modifier.size(48.dp),
+                            focused = focused,
+                            accent = accent,
                         )
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             (game.home?.short_name ?: game.home?.name ?: "TBA").uppercase(),
                             color = Color.White,
-                            fontSize = 14.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp,
+                            letterSpacing = 0.3.sp,
                             fontFamily = Inter,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                        )
-                        TeamBadgeOnly(
-                            badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
-                            modifier = Modifier.size(44.dp),
-                            focused = focused,
-                            accent = accent,
+                            softWrap = false,
+                            overflow = TextOverflow.Visible,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         )
                     }
                 }

@@ -263,15 +263,18 @@ private fun HeroCopy(h: SportsHero) {
         Text(
             h.title,
             color = Color.White,
-            // v1.44.10 — Dropped from 56sp → 44sp. With short team
-            // names ("White Sox @ Angels") at 44sp, the title fits in
-            // ~80% of cases without ellipsis. The 56sp+long-name combo
-            // was clipping mid-word ("Los A...") even in 16:9 1080p.
-            fontSize = 44.sp,
+            // v1.44.17 — User feedback: "Timberwolves @ Spurs" was
+            // wrapping to two lines and overlapping the right-side
+            // team-logo backdrop. Dropped 44sp → 32sp and forced
+            // maxLines = 1 so even the longest matchup labels stay
+            // on a single, legible line. Lighter letterSpacing keeps
+            // the glyphs tight without bleeding into the logo area.
+            fontSize = 32.sp,
             fontWeight = FontWeight.Black,
-            lineHeight = 48.sp,
+            lineHeight = 36.sp,
+            letterSpacing = 0.5.sp,
             fontFamily = Inter,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
 
