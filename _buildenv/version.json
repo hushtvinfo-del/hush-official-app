@@ -1,14 +1,13 @@
 {
-  "versionCode": 420,
-  "versionName": "1.44.20",
+  "versionCode": 421,
+  "versionName": "1.44.21",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "CRASH FIX (Lite Mode) — v1.44.19 crashed on first frame of the Lite Home screen on every device because the LazyRow keys were the entire MediaCard data class. Compose's SaveableStateHolder tries to bundle the key for state restoration; data classes aren't Bundle-storable → IllegalArgumentException, instant crash.",
-    "Switched to MediaCard.id (a String) as the LazyList key. Bundle-safe, fixes the crash, and gives stable scroll position when the list reshuffles.",
-    "Caught from the on-device crash report uploaded to /crash/submit (skyworth Android Google TV, 1.44.19-debug). The crash-reporting infrastructure paid for itself again — root cause was identifiable in seconds from the Compose stack trace.",
-    "Mandatory:true so v1.44.19 devices force-update."
+    "LITE LIVE TV — Categories sidebar restored. Same UX as Pro: a left-side scrollable list of all live categories, click/focus a category to load its channels in the right pane. Lazy fetch — categories load instantly, channels of a category load only the first time you select it (then cached for the session).",
+    "Fixed Search 'crash' (was the same v419 LazyRow Bundle-key bug, already patched in v1.44.20). Anyone still on v1.44.19 needs to OTA-update.",
+    "Mandatory:true so v1.44.20 devices force-update."
   ]
 }

@@ -11,8 +11,8 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 420,
-      "versionName": "1.44.20-debug",
+      "versionCode": 421,
+      "versionName": "1.44.21-debug",
       "outputFile": "resources-dev-debug-optimize.ap_"
     }
   ],

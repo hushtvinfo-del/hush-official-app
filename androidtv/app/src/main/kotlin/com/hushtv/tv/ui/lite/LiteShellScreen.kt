@@ -302,42 +302,176 @@ private fun LiteHomeContent(nav: NavController, playlistId: String) {
 }
 
 // ────────────────────────────────────────────────────────────
-// LIVE TV — flat alphabetical channel list, no backdrop.
+// LIVE TV — sidebar of categories on the left, channel list
+//           for the selected category on the right. Same UX
+//           pattern as Pro's TVLiveBrowseScreen but with no
+//           backdrop image, no category-icon halo, no animations.
 // ────────────────────────────────────────────────────────────
 @Composable
 private fun LiteLiveContent(nav: NavController, playlistId: String) {
     val ctx = LocalContext.current
-    var channels by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
+    var categories by remember {
+        mutableStateOf<List<com.hushtv.tv.data.XtreamCategory>>(emptyList())
+    }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var channelsByCat by remember {
+        mutableStateOf<Map<String, List<MediaCard>>>(emptyMap())
+    }
+    var loading by remember { mutableStateOf(true) }
+
+    // 1) Load category list once. 2) Lazy-load each category's
+    //    channel list on demand the first time the user selects it.
     LaunchedEffect(playlistId) {
+        loading = true
+        val p = PlaylistStore.find(ctx, playlistId)
+        if (p == null) { loading = false; return@LaunchedEffect }
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val cats = XtreamApi.getCategories(p.host, p.username, p.password, "live")
+                categories = cats
+                if (cats.isNotEmpty()) selectedId = cats.first().category_id
+            }
+        }
+        loading = false
+    }
+
+    // Whenever the selected category changes, fetch its streams if
+    // we haven't yet. Cache the result so a back-and-forth nav is
+    // free.
+    LaunchedEffect(selectedId) {
+        val cid = selectedId ?: return@LaunchedEffect
+        if (channelsByCat.containsKey(cid)) return@LaunchedEffect
         val p = PlaylistStore.find(ctx, playlistId) ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
             runCatching {
-                channels = XtreamApi
-                    .getAllStreams(p.host, p.username, p.password, "live")
-                    .sortedBy { it.title }
+                val streams = XtreamApi.getStreamsForCategory(
+                    p.host, p.username, p.password, "live", cid,
+                )
+                channelsByCat = channelsByCat + (cid to streams)
             }
         }
     }
-    if (channels.isEmpty()) {
-        LiteEmpty("No live channels found.")
+
+    if (loading) {
+        LiteEmpty("Loading channels…")
         return
     }
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(channels, key = { it.id }) { ch ->
-            LiteChannelTile(
-                card = ch,
-                onClick = {
-                    val p = PlaylistStore.find(ctx, playlistId) ?: return@LiteChannelTile
-                    val url = XtreamApi.liveUrl(p.host, p.username, p.password, ch.streamId)
-                    nav.navigate(
-                        "player/$playlistId/${Uri.encode(url)}/${Uri.encode(ch.title)}/true"
-                    )
-                },
-            )
+    if (categories.isEmpty()) {
+        LiteEmpty("No live categories available.")
+        return
+    }
+
+    Row(Modifier.fillMaxSize()) {
+        // ─ Left sidebar: category list ─
+        LazyColumn(
+            modifier = Modifier
+                .width(300.dp)
+                .fillMaxSize()
+                .background(Color(0xFF0B1220))
+                .padding(vertical = 12.dp, horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            items(categories.size, key = { idx -> categories[idx].category_id }) { idx ->
+                val cat = categories[idx]
+                LiteCategoryRow(
+                    label = cat.category_name,
+                    selected = cat.category_id == selectedId,
+                    onClick = { selectedId = cat.category_id },
+                    onFocus = { selectedId = cat.category_id },
+                )
+            }
         }
+
+        // ─ Right pane: channel list of selected category ─
+        val current = selectedId?.let { channelsByCat[it] }
+        Box(Modifier.fillMaxSize()) {
+            when {
+                current == null ->
+                    LiteEmpty("Loading…")
+                current.isEmpty() ->
+                    LiteEmpty("No channels in this category.")
+                else -> LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 36.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(current.size, key = { idx -> current[idx].id }) { idx ->
+                        val ch = current[idx]
+                        LiteChannelTile(
+                            card = ch,
+                            onClick = {
+                                val p = PlaylistStore.find(ctx, playlistId)
+                                    ?: return@LiteChannelTile
+                                val url = XtreamApi.liveUrl(
+                                    p.host, p.username, p.password, ch.streamId,
+                                )
+                                nav.navigate(
+                                    "player/$playlistId/${Uri.encode(url)}/${Uri.encode(ch.title)}/true"
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiteCategoryRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onFocus: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(8.dp)
+    val bg = when {
+        focused -> Color(0xFF1E293B)
+        selected -> Color(0x0EFFFFFF)
+        else -> Color.Transparent
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(42.dp)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus()
+            }
+            .tvFocusable(scaleOnFocus = 1f, shape = shape)
+            .clickableWithEnter(onClick)
+            .clip(shape)
+            .background(bg)
+            .border(
+                width = if (focused) 2.dp else 0.dp,
+                color = if (focused) Cyan else Color.Transparent,
+                shape = shape,
+            )
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (selected) {
+            Box(
+                Modifier
+                    .size(width = 3.dp, height = 16.dp)
+                    .background(Cyan, RoundedCornerShape(2.dp))
+            )
+            Spacer(Modifier.width(8.dp))
+        } else {
+            Spacer(Modifier.width(11.dp))
+        }
+        Text(
+            label.uppercase(),
+            color = if (selected || focused) Color.White else Color(0xFFCBD5E1),
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
+            letterSpacing = 1.2.sp,
+            fontFamily = Inter,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
