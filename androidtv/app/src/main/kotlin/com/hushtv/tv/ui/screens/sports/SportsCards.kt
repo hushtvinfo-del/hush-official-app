@@ -4,7 +4,6 @@ package com.hushtv.tv.ui.screens.sports
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -342,12 +341,15 @@ private fun LeaguePillView(
         selected -> Color(0xFF050810)
         else -> Color.White
     }
+    // NOTE: do NOT add an outer `.focusable()` after `.tvFocusable()`.
+    // tvFocusable already adds its own internal `.focusable()` and
+    // wrapping it again creates two focusables in the chain — see
+    // the v1.43.98 cautionary block in TvComponents.kt.
     Box(
         Modifier
             .height(48.dp)
             .onFocusChanged { focused = it.isFocused }
             .tvFocusable(scaleOnFocus = 1f, shape = pillShape)
-            .focusable()
             .clickableWithEnter(onSelect)
             .clip(pillShape)
             .background(bg)

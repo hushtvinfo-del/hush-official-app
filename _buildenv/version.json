@@ -1,14 +1,13 @@
 {
-  "versionCode": 400,
-  "versionName": "1.44.0",
+  "versionCode": 401,
+  "versionName": "1.44.1",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "PHASE 2 (DEV ONLY): New 'PPV & LIVE SPORTS' home page sits right under Discovery in the page pager. Cinematic auto-rotating hero shows top upcoming games + PPV events, league pills bar lets you filter by All / Live / PPV / NHL / MLB / NBA / NFL / MLS / etc., huge readable game cards (360 dp wide) with team badges, scores, and a 'WATCH ON SPORTSNET ONE' channel chip. Tap any card to jump straight into your live channel. Games you can't watch on your subscription are hidden entirely (per spec).",
-    "Backend: TheSportsDB Business + smart 60-mapping Canadian broadcaster seed (Phase 1, already live).",
-    "Mirror: 189 team logos served from hushtv.xyz/sports/teams/ for instant loads (no slow CDN waits).",
-    "OFFICIAL channel held at v1.43.99 — Sports rolls out to Dev only until you confirm Phase 2 + Phase 3 are working end-to-end."
+    "FIX (DEV ONLY): The new 'PPV & LIVE SPORTS' page no longer crashes the app on open. Root cause: Moshi's reflection JSON adapter rejected the wire models because they were carrying a stale `@JsonClass(generateAdapter = true)` annotation that's only valid with kapt codegen (we don't use kapt). Removed the annotations, hardened the parse path with double-nested runCatching + logcat reporting, and removed a redundant outer `.focusable()` on the league-pill row that violated the v1.43.98 focus rule.",
+    "Sports section now degrades gracefully: if the schedule fails to load you see the placeholder 'Loading the schedule…' instead of a hard crash.",
+    "OFFICIAL channel still on v1.43.99 — Sports stays Dev-only until Phase 3 (admin panel) is signed off."
   ]
 }

@@ -1,6 +1,72 @@
 # HushTV — Product Requirements Document
 
-## v1.44.0 (DEV ONLY) — Phase 2: Sports Android UI — 2026-05-06  ⬅ LATEST
+## v1.44.1 (DEV ONLY) — Sports crash fix + parse hardening — 2026-05-06  ⬅ LATEST
+
+User report: *"Crashed as soon as I went to the sports section it crashed
+right away out of the app. B yes fix everything so the damn thing actually
+works."*
+
+### Root cause
+
+`SportsModels.kt` was carrying `@JsonClass(generateAdapter = true)` on every
+data class. The annotation tells Moshi "I have a kapt-generated adapter
+class for this data class, use that instead of reflection". The HushTV
+project does NOT use the `moshi-kotlin-codegen` kapt plugin — it relies on
+`KotlinJsonAdapterFactory` (reflection-based). When Moshi sees a class with
+`generateAdapter = true` but can't find a generated adapter on the classpath,
+it throws an `IllegalArgumentException` from inside `adapter()` at the
+moment `inline fun <reified T> getJson` is monomorphised — which for at
+least one Compose call-site happened OUTSIDE the existing `runCatching`
+block, killing the process the instant the user opened the Sports page.
+
+### What landed in v1.44.1
+
+1. **`SportsModels.kt`** — every `@JsonClass(generateAdapter = true)`
+   removed. Replaced with a 16-line block-comment explaining the trap so
+   future agents don't re-add them.
+2. **`SportsApi.kt`** — rewritten with belt-and-suspenders parse defense:
+   - Two nested `runCatching` blocks (outer: HTTP/network errors,
+     inner: body-parse errors).
+   - Every failure branch logs to `Log.w("HushTVSports", ...)` so the
+     next "what happened?" question is answerable from logcat without
+     needing to repro the crash.
+   - All return paths fall back to `null`. The Compose layer already
+     handles `null` gracefully (placeholder hero + empty cards rail).
+3. **`SportsState.kt`** — added one more layer of `runCatching` around
+   each `withContext(Dispatchers.IO) { SportsApi.* }` call. Even if
+   something inside SportsApi did throw, the coroutine never leaks the
+   exception into the Compose tree.
+4. **`SportsCards.kt: LeaguePillView`** — removed a redundant outer
+   `.focusable()` after `.tvFocusable()`. This violated the v1.43.98
+   focus rule (cautionary block in `TvComponents.kt`). It wasn't the
+   crash cause but would have caused subtle focus issues. Cleaned up so
+   the league-pill row matches the rest of the codebase.
+5. **Manifest + version bump** — `versionCode 400 → 401`,
+   `versionName 1.44.0 → 1.44.1`.
+
+### Build + deploy
+
+- BUILD SUCCESSFUL (1m 13s) on the recovered build env (JDK + qemu +
+  sshpass + AAPT2 wrapper all present).
+- Deployed via `/app/_buildenv/build-and-deploy-dev.sh`. APK 21.7 MB.
+- Auto-tagged `v1.44.1-dev`. Live: `https://hushtv.xyz/version.json` →
+  `versionCode 401`.
+- Backend health verified: `/api/sports/health` reports 161 games / 12
+  PPVs / 12 leagues / 25 channel mappings.
+- Server JSON shape verified field-for-field against the new
+  reflection-only Kotlin data classes via a Python parity check.
+- Officials channel still on v1.43.99 — Sports stays Dev-only until
+  Phase 3 admin panel ships.
+
+### Lesson preserved
+
+Never use `@JsonClass(generateAdapter = true)` in this codebase. The
+SportsModels.kt header now carries a 16-line warning. Moshi reflection
+adapters are the project's standard.
+
+---
+
+## v1.44.0 (DEV ONLY) — Phase 2: Sports Android UI — 2026-05-06
 
 User instruction: *"Ok start phase 2 but make sure only to release to
 development app until we confirm all 3 phases working."* Plus the

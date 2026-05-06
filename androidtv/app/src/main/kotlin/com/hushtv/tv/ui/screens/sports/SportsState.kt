@@ -29,11 +29,15 @@ fun rememberSportsHome(): SportsHomeResponse? {
     var data by remember { mutableStateOf<SportsHomeResponse?>(null) }
     LaunchedEffect(Unit) {
         // Fast initial fetch.
-        data = withContext(Dispatchers.IO) { SportsApi.home() }
+        data = withContext(Dispatchers.IO) {
+            runCatching { SportsApi.home() }.getOrNull()
+        }
         // Refresh every 5 min to keep scores / countdowns fresh.
         while (true) {
             delay(5 * 60 * 1000L)
-            val fresh = withContext(Dispatchers.IO) { SportsApi.home() }
+            val fresh = withContext(Dispatchers.IO) {
+                runCatching { SportsApi.home() }.getOrNull()
+            }
             if (fresh != null) data = fresh
         }
     }
@@ -44,7 +48,9 @@ fun rememberSportsHome(): SportsHomeResponse? {
 fun rememberSportsLeague(slug: String, days: Int = 7): SportsLeagueResponse? {
     var data by remember(slug) { mutableStateOf<SportsLeagueResponse?>(null) }
     LaunchedEffect(slug) {
-        data = withContext(Dispatchers.IO) { SportsApi.league(slug, days) }
+        data = withContext(Dispatchers.IO) {
+            runCatching { SportsApi.league(slug, days) }.getOrNull()
+        }
     }
     return data
 }
@@ -53,7 +59,9 @@ fun rememberSportsLeague(slug: String, days: Int = 7): SportsLeagueResponse? {
 fun rememberSportsPpv(): SportsPpvListResponse? {
     var data by remember { mutableStateOf<SportsPpvListResponse?>(null) }
     LaunchedEffect(Unit) {
-        data = withContext(Dispatchers.IO) { SportsApi.ppv() }
+        data = withContext(Dispatchers.IO) {
+            runCatching { SportsApi.ppv() }.getOrNull()
+        }
     }
     return data
 }
