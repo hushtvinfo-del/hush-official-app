@@ -1,17 +1,20 @@
-@file:Suppress("MemberVisibilityCanBePrivate")
+@file:Suppress("MemberVisibilityCanBePrivate", "ConstructorParameterNaming")
 
 package com.hushtv.tv.data.sports
 
-import com.squareup.moshi.JsonClass
-
 /**
  * Wire models for the sync server's `/api/sports/...` endpoints. Field
- * names match the Python serializer in `sports_module.py`. We use
- * Moshi's codegen because the Sync server already runs gigabytes of
- * traffic through Moshi for the regular sync path.
+ * names match the Python serializer in `sports_module.py`.
+ *
+ * NOTE: We intentionally do NOT annotate these with
+ * `@JsonClass(generateAdapter = true)`. The project uses
+ * `moshi-kotlin` (reflection-based) without the kapt codegen plugin —
+ * if the annotation were present, Moshi's `KotlinJsonAdapterFactory`
+ * would refuse to handle the class (it expects a generated adapter),
+ * causing a runtime "No adapter found" crash on the first JSON parse.
+ * Plain data classes work cleanly via reflection.
  */
 
-@JsonClass(generateAdapter = true)
 data class SportsLeague(
     val slug: String,
     val name: String,
@@ -19,7 +22,6 @@ data class SportsLeague(
     val display_order: Int = 100,
 )
 
-@JsonClass(generateAdapter = true)
 data class SportsTeam(
     val name: String,
     val short_name: String? = null,
@@ -27,7 +29,6 @@ data class SportsTeam(
     val badge_url: String? = null,
 )
 
-@JsonClass(generateAdapter = true)
 data class SportsGame(
     val id: Int,
     val league: SportsLeague? = null,
@@ -41,14 +42,12 @@ data class SportsGame(
     val round: String? = null,
     /** Channel name as it should appear in the user's Xtream playlist
      *  (e.g. "SPORTSNET ONE"). The client does a fuzzy match against
-     *  loaded live channels via [com.hushtv.tv.data.sports.SportsChannelMatcher].
-     */
+     *  loaded live channels via [SportsChannelMatcher]. */
     val channel: String? = null,
 )
 
-@JsonClass(generateAdapter = true)
 data class SportsHero(
-    /** "ppv" | "game" */
+    /** "ppv" or "game" */
     val kind: String,
     val id: Int,
     val title: String,
@@ -58,13 +57,11 @@ data class SportsHero(
     val channel: String? = null,
 )
 
-@JsonClass(generateAdapter = true)
 data class SportsLeagueBucket(
     val league: SportsLeague,
     val games: List<SportsGame>,
 )
 
-@JsonClass(generateAdapter = true)
 data class SportsPpvEvent(
     val id: Int,
     val source: String,
@@ -76,21 +73,18 @@ data class SportsPpvEvent(
     val channel: String? = null,
 )
 
-@JsonClass(generateAdapter = true)
 data class SportsHomeResponse(
     val hero: List<SportsHero> = emptyList(),
     val ppv: List<SportsPpvEvent> = emptyList(),
     val leagues: List<SportsLeagueBucket> = emptyList(),
 )
 
-@JsonClass(generateAdapter = true)
 data class SportsLeagueResponse(
     val league: SportsLeague,
     val games: List<SportsGame> = emptyList(),
     val count: Int = 0,
 )
 
-@JsonClass(generateAdapter = true)
 data class SportsPpvListResponse(
     val events: List<SportsPpvEvent> = emptyList(),
 )
