@@ -1,13 +1,14 @@
 {
-  "versionCode": 421,
-  "versionName": "1.44.21",
+  "versionCode": 422,
+  "versionName": "1.44.22",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "LITE LIVE TV — Categories sidebar restored. Same UX as Pro: a left-side scrollable list of all live categories, click/focus a category to load its channels in the right pane. Lazy fetch — categories load instantly, channels of a category load only the first time you select it (then cached for the session).",
-    "Fixed Search 'crash' (was the same v419 LazyRow Bundle-key bug, already patched in v1.44.20). Anyone still on v1.44.19 needs to OTA-update.",
-    "Mandatory:true so v1.44.20 devices force-update."
+    "LITE — Movies and Series now have a categories sidebar too (was a flat alpha grid before). Same UX as Lite Live TV: left sidebar lists every category, right pane shows a 6-per-row poster grid for the selected category. Lazy-fetch + session cache.",
+    "LITE — All data fetches now SHOW the actual error to the user when they fail, instead of silently rendering an empty page. If categories don't load, you'll see the exception type + message + Xtream host on screen, plus a logcat entry tagged 'LiteLive' / 'LiteCatalog' / 'LiteHome'. This is the diagnostic loop that was missing.",
+    "Investigated the 'no categories on mobile + TV' report. Confirmed Xtream provider hushvipnew.ink:443 is healthy (test/test creds load all 3 category lists in <300ms from the production server). The blank-screen symptom on TV was Lite swallowing errors silently in the previous build — now any failure shows the underlying cause, so we can root-cause future reports in seconds instead of guessing.",
+    "Mandatory:true so v1.44.21 devices force-update."
   ]
 }

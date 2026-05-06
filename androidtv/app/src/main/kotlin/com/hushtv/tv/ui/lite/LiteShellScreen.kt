@@ -233,11 +233,20 @@ private fun LiteHomeContent(nav: NavController, playlistId: String) {
     var movies by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var series by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
     var live by remember { mutableStateOf<List<MediaCard>>(emptyList()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(true) }
 
     LaunchedEffect(playlistId) {
-        val p = PlaylistStore.find(ctx, playlistId) ?: return@LaunchedEffect
+        loading = true
+        error = null
+        val p = PlaylistStore.find(ctx, playlistId)
+        if (p == null) {
+            error = "No playlist configured."
+            loading = false
+            return@LaunchedEffect
+        }
         withContext(Dispatchers.IO) {
-            runCatching {
+            try {
                 movies = XtreamApi.getAllStreams(p.host, p.username, p.password, "movie")
                     .sortedByDescending { it.addedTs }
                     .take(40)
@@ -245,8 +254,25 @@ private fun LiteHomeContent(nav: NavController, playlistId: String) {
                     .sortedByDescending { it.addedTs }
                     .take(40)
                 live = XtreamApi.getAllStreams(p.host, p.username, p.password, "live").take(40)
+            } catch (t: Throwable) {
+                android.util.Log.e(
+                    "LiteHome", "home rails fetch failed for ${p.host}", t,
+                )
+                error = "Couldn't reach your Xtream provider.\n" +
+                    "${t.javaClass.simpleName}: ${t.message ?: "unknown error"}\n" +
+                    "Host: ${p.host}"
             }
         }
+        loading = false
+    }
+
+    if (loading) {
+        LiteEmpty("Loading…")
+        return
+    }
+    if (error != null) {
+        LiteError(error!!)
+        return
     }
 
     LazyColumn(
@@ -318,18 +344,41 @@ private fun LiteLiveContent(nav: NavController, playlistId: String) {
         mutableStateOf<Map<String, List<MediaCard>>>(emptyMap())
     }
     var loading by remember { mutableStateOf(true) }
+    // v1.44.22 — Surface the underlying error instead of silently
+    // showing an empty list. Previously a HTTP 401 / parse error /
+    // timeout from the Xtream provider was being swallowed by the
+    // outer runCatching {}, so the user saw a blank screen with no
+    // diagnostic. Now the exception is captured and shown to the
+    // user, and a one-line log goes to logcat for crash reports.
+    var error by remember { mutableStateOf<String?>(null) }
 
     // 1) Load category list once. 2) Lazy-load each category's
     //    channel list on demand the first time the user selects it.
     LaunchedEffect(playlistId) {
         loading = true
+        error = null
         val p = PlaylistStore.find(ctx, playlistId)
-        if (p == null) { loading = false; return@LaunchedEffect }
+        if (p == null) {
+            error = "No playlist configured."
+            loading = false
+            return@LaunchedEffect
+        }
         withContext(Dispatchers.IO) {
-            runCatching {
-                val cats = XtreamApi.getCategories(p.host, p.username, p.password, "live")
+            try {
+                val cats = XtreamApi.getCategories(
+                    p.host, p.username, p.password, "live",
+                )
                 categories = cats
                 if (cats.isNotEmpty()) selectedId = cats.first().category_id
+            } catch (t: Throwable) {
+                android.util.Log.e(
+                    "LiteLive",
+                    "getCategories(live) failed for ${p.host}",
+                    t,
+                )
+                error = "Couldn't load live categories.\n" +
+                    "${t.javaClass.simpleName}: ${t.message ?: "unknown error"}\n" +
+                    "Host: ${p.host}"
             }
         }
         loading = false
@@ -343,17 +392,28 @@ private fun LiteLiveContent(nav: NavController, playlistId: String) {
         if (channelsByCat.containsKey(cid)) return@LaunchedEffect
         val p = PlaylistStore.find(ctx, playlistId) ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
-            runCatching {
+            try {
                 val streams = XtreamApi.getStreamsForCategory(
                     p.host, p.username, p.password, "live", cid,
                 )
                 channelsByCat = channelsByCat + (cid to streams)
+            } catch (t: Throwable) {
+                android.util.Log.e(
+                    "LiteLive",
+                    "getStreamsForCategory(live, $cid) failed",
+                    t,
+                )
+                channelsByCat = channelsByCat + (cid to emptyList())
             }
         }
     }
 
     if (loading) {
         LiteEmpty("Loading channels…")
+        return
+    }
+    if (error != null) {
+        LiteError(error!!)
         return
     }
     if (categories.isEmpty()) {
@@ -476,53 +536,147 @@ private fun LiteCategoryRow(
 }
 
 // ────────────────────────────────────────────────────────────
-// MOVIES / SERIES catalog — flat alpha grid via LazyColumn of
-// poster rows (5 per row). No category nav (keeps it simple).
+// MOVIES / SERIES catalog — categories sidebar + grid for the
+// selected category. Same lazy-fetch + error-reporting pattern
+// as Live TV (v1.44.22).
 // ────────────────────────────────────────────────────────────
 @Composable
 private fun LiteCatalogContent(nav: NavController, playlistId: String, kind: String) {
     val ctx = LocalContext.current
-    var items by remember(kind) { mutableStateOf<List<MediaCard>>(emptyList()) }
+    var categories by remember(kind) {
+        mutableStateOf<List<com.hushtv.tv.data.XtreamCategory>>(emptyList())
+    }
+    var selectedId by remember(kind) { mutableStateOf<String?>(null) }
+    var itemsByCat by remember(kind) {
+        mutableStateOf<Map<String, List<MediaCard>>>(emptyMap())
+    }
+    var loading by remember(kind) { mutableStateOf(true) }
+    var error by remember(kind) { mutableStateOf<String?>(null) }
+
     LaunchedEffect(playlistId, kind) {
+        loading = true
+        error = null
+        val p = PlaylistStore.find(ctx, playlistId)
+        if (p == null) {
+            error = "No playlist configured."
+            loading = false
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.IO) {
+            try {
+                val cats = XtreamApi.getCategories(
+                    p.host, p.username, p.password, kind,
+                )
+                categories = cats
+                if (cats.isNotEmpty()) selectedId = cats.first().category_id
+            } catch (t: Throwable) {
+                android.util.Log.e(
+                    "LiteCatalog",
+                    "getCategories($kind) failed for ${p.host}",
+                    t,
+                )
+                error = "Couldn't load $kind categories.\n" +
+                    "${t.javaClass.simpleName}: ${t.message ?: "unknown error"}\n" +
+                    "Host: ${p.host}"
+            }
+        }
+        loading = false
+    }
+
+    LaunchedEffect(selectedId, kind) {
+        val cid = selectedId ?: return@LaunchedEffect
+        if (itemsByCat.containsKey(cid)) return@LaunchedEffect
         val p = PlaylistStore.find(ctx, playlistId) ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
-            runCatching {
-                items = XtreamApi
-                    .getAllStreams(p.host, p.username, p.password, kind)
-                    .sortedBy { it.title }
+            try {
+                val streams = XtreamApi.getStreamsForCategory(
+                    p.host, p.username, p.password, kind, cid,
+                )
+                itemsByCat = itemsByCat + (cid to streams)
+            } catch (t: Throwable) {
+                android.util.Log.e(
+                    "LiteCatalog",
+                    "getStreamsForCategory($kind, $cid) failed",
+                    t,
+                )
+                itemsByCat = itemsByCat + (cid to emptyList())
             }
         }
     }
-    if (items.isEmpty()) {
-        LiteEmpty(if (kind == "movie") "No movies found." else "No series found.")
+
+    if (loading) {
+        LiteEmpty(if (kind == "movie") "Loading movies…" else "Loading series…")
         return
     }
-    val perRow = 6
-    val rows = items.chunked(perRow)
-    LazyColumn(
-        Modifier.fillMaxSize().padding(top = 16.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        items(rows.size) { rowIdx ->
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 48.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                rows[rowIdx].forEach { card ->
-                    LitePosterCard(
-                        card = card,
-                        onClick = {
-                            if (kind == "movie") {
-                                nav.navigate(
-                                    "moviedetail/$playlistId/${card.streamId}/${Uri.encode(card.title)}"
-                                )
-                            } else {
-                                nav.navigate(
-                                    "series/$playlistId/${card.seriesId}/${Uri.encode(card.title)}"
-                                )
+    if (error != null) {
+        LiteError(error!!)
+        return
+    }
+    if (categories.isEmpty()) {
+        LiteEmpty(if (kind == "movie") "No movie categories." else "No series categories.")
+        return
+    }
+
+    Row(Modifier.fillMaxSize()) {
+        // Left sidebar: categories
+        LazyColumn(
+            modifier = Modifier
+                .width(300.dp)
+                .fillMaxSize()
+                .background(Color(0xFF0B1220))
+                .padding(vertical = 12.dp, horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            items(categories.size, key = { idx -> categories[idx].category_id }) { idx ->
+                val cat = categories[idx]
+                LiteCategoryRow(
+                    label = cat.category_name,
+                    selected = cat.category_id == selectedId,
+                    onClick = { selectedId = cat.category_id },
+                    onFocus = { selectedId = cat.category_id },
+                )
+            }
+        }
+
+        // Right pane: 6-per-row poster grid for the selected category
+        val current = selectedId?.let { itemsByCat[it] }
+        Box(Modifier.fillMaxSize()) {
+            when {
+                current == null ->
+                    LiteEmpty("Loading…")
+                current.isEmpty() ->
+                    LiteEmpty("No items in this category.")
+                else -> {
+                    val perRow = 6
+                    val rows = current.chunked(perRow)
+                    LazyColumn(
+                        Modifier.fillMaxSize().padding(top = 16.dp, bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(rows.size) { rowIdx ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 36.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                rows[rowIdx].forEach { card ->
+                                    LitePosterCard(
+                                        card = card,
+                                        onClick = {
+                                            if (kind == "movie") {
+                                                nav.navigate(
+                                                    "moviedetail/$playlistId/${card.streamId}/${Uri.encode(card.title)}"
+                                                )
+                                            } else {
+                                                nav.navigate(
+                                                    "series/$playlistId/${card.seriesId}/${Uri.encode(card.title)}"
+                                                )
+                                            }
+                                        },
+                                    )
+                                }
                             }
-                        },
-                    )
+                        }
+                    }
                 }
             }
         }
@@ -808,5 +962,48 @@ private fun LiteEmpty(text: String) {
             fontWeight = FontWeight.SemiBold,
             fontFamily = Inter,
         )
+    }
+}
+
+/**
+ * v1.44.22 — Show the actual underlying error to the user when a
+ * data fetch fails. Previously these errors were swallowed by
+ * runCatching {} and the screen just looked blank, leaving users
+ * (and us) with zero diagnostic info.
+ */
+@Composable
+private fun LiteError(message: String) {
+    Box(
+        Modifier.fillMaxSize().padding(48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "SOMETHING WENT WRONG",
+                color = Color(0xFFEF4444),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.sp,
+                fontFamily = Inter,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                message,
+                color = Color(0xFFCBD5E1),
+                fontSize = 13.sp,
+                fontFamily = Inter,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Check your Xtream credentials in Settings, then return.",
+                color = Color(0xFF64748B),
+                fontSize = 11.sp,
+                fontFamily = Inter,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
     }
 }
