@@ -1,6 +1,110 @@
 # HushTV — Product Requirements Document
 
-## Phase 1: Sports backend live — TheSportsDB Business + sync server — 2026-05-06  ⬅ LATEST
+## v1.44.0 (DEV ONLY) — Phase 2: Sports Android UI — 2026-05-06  ⬅ LATEST
+
+User instruction: *"Ok start phase 2 but make sure only to release to
+development app until we confirm all 3 phases working."* Plus the
+opt-in for the team-logo mirroring suggestion before Phase 2.
+
+### What landed
+
+#### Backend addendum — team logo mirroring (≤500 KB total)
+
+- New `_mirror_logo()` helper in `sports_module.py`: idempotent
+  download → `/var/hushtv-sync/team_logos/{sportsdb_id}.png`.
+- New admin endpoint `POST /api/admin/sports/mirror_logos` for
+  one-shot backfill of teams that already exist.
+- New nginx route `^~ /sports/teams/` aliased to the directory with
+  30-day cache headers. Used `^~` to outrank the existing `\.png$`
+  regex location (which would otherwise match first and 404).
+- Backfilled all **189 team badges** on first run. Verified via
+  `curl -sI https://hushtv.xyz/sports/teams/134855.png` → 200 OK
+  `image/png`.
+- The `_upsert_team()` path now mirrors logos as part of normal
+  ingestion, so any new team auto-mirrors going forward.
+
+#### Android: data layer (`com.hushtv.tv.data.sports`)
+
+- `SportsModels.kt` — Moshi-codegen'd wire models matching the
+  Python serializer. Includes `SportsHero`, `SportsGame`,
+  `SportsTeam`, `SportsLeague`, `SportsLeagueBucket`,
+  `SportsPpvEvent`, `SportsHomeResponse`,
+  `SportsLeagueResponse`, `SportsPpvListResponse`.
+- `SportsApi.kt` — thin OkHttp client (no Retrofit) for the three
+  read endpoints. Uses the existing app's Moshi factory.
+- `SportsChannelMatcher.kt` — fuzzy matcher that resolves the
+  server's canonical channel name (e.g. "SPORTSNET ONE") to an
+  actual `MediaCard` from the user's Xtream live-streams list.
+  Three-strategy fallback (exact normalized → token superset →
+  digit-word equivalence) so it handles variants like
+  "CA: SPORTSNET 1 HD" and "SN1" matching "SPORTSNET ONE".
+
+#### Android: UI layer (`com.hushtv.tv.ui.screens.sports`)
+
+- `SportsState.kt` — `rememberSportsHome()`, `rememberSportsLeague()`,
+  `rememberSportsPpv()`, `rememberLiveChannels()`, plus
+  `filterPlayableGames()` / `filterPlayablePpv()` that hide entries
+  the user can't watch (per spec).
+- `SportsHero.kt` — `SportsHeroLayer` composable. Auto-rotating
+  cinematic backdrop with Ken Burns zoom, crossfade transitions,
+  big eyebrow / title / subtitle / channel chip / countdown. When
+  `pinned` is supplied (from card focus) it sticks to that hero
+  rather than rotating. Includes `friendlyCountdown()` helper that
+  produces glanceable strings like "TONIGHT · 8:30 PM" / "TOMORROW ·
+  7:00 PM" / "FRIDAY · 9:00 PM" / "MAY 18 · 7:00 PM" / "LIVE NOW" /
+  "FINAL".
+- `SportsCards.kt` — `GameCard` (360 dp × 220 dp, big team badges,
+  score-or-VS, channel chip), `LeaguePillBar` (horizontal pill row
+  for All / Live / PPV / NHL / MLB / NBA / NFL / MLS / EPL / UCL /
+  NCAA / CFL / F1, season-aware order from server).
+- `PpvCard.kt` — poster-style PPV tile with cinematic vignette.
+  Same focus contract as GameCard (focusRequester direct-bind via
+  the v1.43.98 `tvFocusable` pattern).
+- `TVSportsPage.kt` — top-level page composable. Hero on top half,
+  pills + cards rail on bottom half. Pinned hero follows whichever
+  card has focus (so the hero "narrates" the user's eye movement).
+
+#### Wiring into TVMainMenuScreen
+
+- New `firstSportsFocus` FocusRequester.
+- `pageOrder` now reads:
+  `[cw?] discovery → sports → ss_movies → ss_series → collections →
+  genres_movies → genres_series → themed → years_movies`.
+- New `"sports" -> TVSportsPage(...)` branch in the page-pager
+  `when` block, with up→discovery, down→ss_movies.
+- `firstSportsFocus` added to the rail-RIGHT exit table AND the
+  `LaunchedEffect(currentPage)` auto-focus table.
+- Page indicator: `"sports" -> "SPORTS"`.
+
+#### Build + deploy
+
+- versionCode 399 → 400, versionName 1.43.99 → 1.44.0.
+- BUILD SUCCESSFUL (1m 49s) after fixing two Kotlin tokenizer
+  surprises:
+    1. KDoc literal `/api/sports/*` was being interpreted as a
+       comment-end. Replaced with `/api/sports/...`.
+    2. The composable `SportsHero` shadowed the data class
+       `SportsHero`. Renamed composable to `SportsHeroLayer`.
+- Deployed via `/app/_buildenv/build-and-deploy-dev.sh`.
+  Auto-tagged: `v1.44.0-dev`.
+- **Official channel held at v1.43.99** per user instruction
+  ("only release to development app until we confirm all 3 phases").
+
+### Mobile
+
+Mobile sports screen NOT done in this iteration — focused on TV
+since that's where the "easy for grandfather" hero matters most.
+Will add `MobileSportsScreen` after user signs off on TV side.
+
+### Phase 3 still pending
+
+React admin panel for channel mappings + PPV events + league active
+toggles. The backend admin API endpoints are already live and
+tested via curl — Phase 3 just wraps them in a friendly UI.
+
+---
+
+## Phase 1: Sports backend live — TheSportsDB Business + sync server — 2026-05-06
 
 User requested a "PPV & LIVE SPORTS" home section. Phase 1 is the
 backend only — schema, ingestion daemon, public API endpoints,

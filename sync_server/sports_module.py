@@ -94,6 +94,13 @@ ADMIN_TOKEN = os.environ.get("SPORTS_ADMIN_TOKEN", "")
 # so a nuke-and-reseed of sports data doesn't risk sync state.
 DB_PATH = os.environ.get("SPORTS_DB", "/var/hushtv-sync/sports.sqlite3")
 
+# Where mirrored team logos live on disk. Served by nginx as
+# /sports/teams/{id}.png. We mirror once per team to escape
+# TheSportsDB's slow CDN — Android client always loads from us.
+LOGO_DIR = os.environ.get("SPORTS_LOGO_DIR", "/var/hushtv-sync/team_logos")
+LOGO_PUBLIC_BASE = os.environ.get("SPORTS_LOGO_PUBLIC_BASE",
+                                  "https://hushtv.xyz/sports/teams")
+
 # Ingestion cadences.
 REFRESH_SCHEDULE_SEC = 15 * 60      # Fetch upcoming schedules
 REFRESH_LIVE_SEC = 2 * 60           # Fetch live scores for in-progress games
@@ -168,6 +175,40 @@ def _ensure_db_dir() -> None:
     d = os.path.dirname(DB_PATH)
     if d and not os.path.isdir(d):
         os.makedirs(d, exist_ok=True)
+    if LOGO_DIR and not os.path.isdir(LOGO_DIR):
+        os.makedirs(LOGO_DIR, exist_ok=True)
+
+
+def _mirror_logo(sportsdb_id: str, src_url: Optional[str]) -> Optional[str]:
+    """Download a team logo to disk if not already mirrored. Returns
+    the public URL (`hushtv.xyz/sports/teams/{id}.png`) or None if
+    we have nothing to mirror.
+
+    Idempotent: if the file already exists at the target path we just
+    return its public URL without re-downloading.
+    """
+    if not sportsdb_id or not src_url:
+        return None
+    safe_id = "".join(ch for ch in str(sportsdb_id) if ch.isalnum())
+    if not safe_id:
+        return None
+    target_path = os.path.join(LOGO_DIR, f"{safe_id}.png")
+    public_url = f"{LOGO_PUBLIC_BASE}/{safe_id}.png"
+    if os.path.isfile(target_path) and os.path.getsize(target_path) > 0:
+        return public_url
+    try:
+        with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+            r = client.get(src_url)
+            if r.status_code != 200 or not r.content:
+                return None
+            tmp = target_path + ".tmp"
+            with open(tmp, "wb") as f:
+                f.write(r.content)
+            os.replace(tmp, target_path)
+            return public_url
+    except Exception as e:
+        log.debug("logo mirror failed for id=%s: %s", sportsdb_id, e)
+        return None
 
 
 def _connect() -> sqlite3.Connection:
@@ -404,6 +445,11 @@ def _upsert_team(c: sqlite3.Connection, league_id: int, team_json: Dict[str, Any
     ).fetchone()
     if row:
         return int(row["id"])
+    # Mirror the badge to our own server so the Android client never
+    # waits on TheSportsDB's CDN. We prefer strBadge (the square team
+    # crest, transparent PNG) over strLogo (often a wordmark).
+    src_logo = team_json.get("strBadge") or team_json.get("strLogo")
+    mirrored = _mirror_logo(str(sdb_id), src_logo)
     c.execute(
         "INSERT OR IGNORE INTO sports_teams "
         "(league_id, sportsdb_id, name, short_name, logo_url, badge_url, country, home_venue) "
@@ -413,8 +459,8 @@ def _upsert_team(c: sqlite3.Connection, league_id: int, team_json: Dict[str, Any
             str(sdb_id),
             name,
             team_json.get("strTeamShort"),
-            team_json.get("strLogo") or team_json.get("strBadge"),
-            team_json.get("strBadge") or team_json.get("strLogo"),
+            mirrored or src_logo,
+            mirrored or team_json.get("strBadge") or team_json.get("strLogo"),
             team_json.get("strCountry"),
             team_json.get("strStadium") or team_json.get("strVenue"),
         ),
@@ -1085,6 +1131,44 @@ def admin_refresh(x_admin_token: Optional[str] = Header(None)) -> Dict[str, Any]
         counts["live"] = f"error: {e}"
     counts["pruned"] = prune_old()
     return {"status": "ok", "counts": counts}
+
+
+@admin_router.post("/mirror_logos")
+def admin_mirror_logos(x_admin_token: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """Backfill: mirror every team logo that's still pointing at
+    thesportsdb.com. Safe to run repeatedly — already-mirrored logos
+    are skipped instantly."""
+    _require_admin(x_admin_token)
+    mirrored = 0
+    skipped = 0
+    failed = 0
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT id, sportsdb_id, badge_url FROM sports_teams"
+        ).fetchall()
+    for r in rows:
+        if not r["sportsdb_id"]:
+            continue
+        if r["badge_url"] and r["badge_url"].startswith(LOGO_PUBLIC_BASE):
+            skipped += 1
+            continue
+        public = _mirror_logo(r["sportsdb_id"], r["badge_url"])
+        if public:
+            with _conn() as c:
+                c.execute(
+                    "UPDATE sports_teams SET badge_url=?, logo_url=? WHERE id=?",
+                    (public, public, r["id"]),
+                )
+            mirrored += 1
+        else:
+            failed += 1
+    return {
+        "status": "ok",
+        "mirrored": mirrored,
+        "already_mirrored": skipped,
+        "failed": failed,
+        "total": len(rows),
+    }
 
 
 # ── Module init ─────────────────────────────────────────────────────

@@ -1,14 +1,14 @@
 {
-  "versionCode": 399,
-  "versionName": "1.43.99",
+  "versionCode": 400,
+  "versionName": "1.44.0",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "Side-rail RIGHT-arrow → first card focus is now LOCKED IN with a strong cautionary code comment in tvFocusable so future changes don't reintroduce the bug.",
-    "BACK on the TV main home screen now pops the exit-confirm dialog (was accidentally lost during a refactor — restored).",
-    "Hush+ rolled back to a 'Coming Soon' teaser — users can scroll the pillars / addon preview but cannot launch any addon. HushXXX, HushVOD+, HushBooks, HushArcade, HushTube are all gated.",
-    "HushXXX deep-link routes (hushxxx/, mhushxxx/) are also blocked at the navigation layer as a defense-in-depth — anyone who hits those routes is silently popped back."
+    "PHASE 2 (DEV ONLY): New 'PPV & LIVE SPORTS' home page sits right under Discovery in the page pager. Cinematic auto-rotating hero shows top upcoming games + PPV events, league pills bar lets you filter by All / Live / PPV / NHL / MLB / NBA / NFL / MLS / etc., huge readable game cards (360 dp wide) with team badges, scores, and a 'WATCH ON SPORTSNET ONE' channel chip. Tap any card to jump straight into your live channel. Games you can't watch on your subscription are hidden entirely (per spec).",
+    "Backend: TheSportsDB Business + smart 60-mapping Canadian broadcaster seed (Phase 1, already live).",
+    "Mirror: 189 team logos served from hushtv.xyz/sports/teams/ for instant loads (no slow CDN waits).",
+    "OFFICIAL channel held at v1.43.99 — Sports rolls out to Dev only until you confirm Phase 2 + Phase 3 are working end-to-end."
   ]
 }

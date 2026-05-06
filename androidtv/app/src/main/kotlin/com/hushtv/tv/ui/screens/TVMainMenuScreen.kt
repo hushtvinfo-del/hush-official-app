@@ -238,6 +238,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     val firstYearsMoviesFocus = remember { FocusRequester() }
     val firstCollectionsFocus = remember { FocusRequester() }
     val firstThemedFocus = remember { FocusRequester() }
+    val firstSportsFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { topNavHomeFocus.requestFocus() } }
 
     val onCardSelect: (MediaCard) -> Unit = sel@{ item ->
@@ -506,6 +507,13 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         onLongPressRemove = { removePromptFor = it },
                         onDownFromRow = { currentPage = "discovery" },
                     )
+                    "sports" -> com.hushtv.tv.ui.screens.sports.TVSportsPage(
+                        nav = nav,
+                        playlistId = playlistId,
+                        firstItemFocus = firstSportsFocus,
+                        onUpFromRow = { currentPage = "discovery" },
+                        onDownFromRow = { currentPage = "ss_movies" },
+                    )
                     "ss_movies" -> SsPage(
                         playlistId = playlistId,
                         nav = nav,
@@ -599,7 +607,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         onUpFromRow = {
                             if (hasCw) currentPage = "cw" else showNavAndFocus()
                         },
-                        onDownFromRow = { currentPage = "ss_movies" },
+                        onDownFromRow = { currentPage = "sports" },
                     )
                 }
             }
@@ -612,6 +620,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     when (currentPage) {
                         "cw" -> if (hasCw) firstCwFocus.requestFocus()
                         "discovery" -> firstDiscoveryFocus.requestFocus()
+                        "sports" -> firstSportsFocus.requestFocus()
                         "collections" -> firstCollectionsFocus.requestFocus()
                         "ss_movies" -> firstSsMoviesFocus.requestFocus()
                         "ss_series" -> firstSsSeriesFocus.requestFocus()
@@ -648,6 +657,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     label = when (k) {
                         "cw" -> "RESUME"
                         "discovery" -> "DISCOVER"
+                        "sports" -> "SPORTS"
                         "collections" -> "COLLECT"
                         "ss_movies" -> "MOVIES"
                         "ss_series" -> "SERIES"
@@ -718,6 +728,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                 when (currentPage) {
                     "cw" -> if (hasCw) firstCwFocus.requestFocus()
                     "discovery" -> firstDiscoveryFocus.requestFocus()
+                    "sports" -> firstSportsFocus.requestFocus()
                     "collections" -> firstCollectionsFocus.requestFocus()
                     "ss_movies" -> firstSsMoviesFocus.requestFocus()
                     "ss_series" -> firstSsSeriesFocus.requestFocus()
