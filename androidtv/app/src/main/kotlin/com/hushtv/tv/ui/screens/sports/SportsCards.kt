@@ -85,6 +85,17 @@ fun GameCard(
     val showScores = (isLive || isFinal) &&
         !game.score_home.isNullOrBlank() && !game.score_away.isNullOrBlank()
 
+    // v1.44.7 — Breadcrumb every card composition with the exact
+    // status + score values we received. If a future user reports
+    // "scores not showing" we can pull their diagnostic and see
+    // whether the data was missing or the render path is wrong.
+    androidx.compose.runtime.LaunchedEffect(game.id, game.status, game.score_home, game.score_away) {
+        com.hushtv.tv.data.EventLog.log(
+            "sports",
+            "card[${game.id}] status=${game.status} score=${game.score_away}-${game.score_home} showScores=$showScores"
+        )
+    }
+
     Box(
         Modifier
             .width(360.dp)
@@ -183,47 +194,87 @@ fun GameCard(
 
             Spacer(Modifier.weight(1f))
 
-            // ── Teams: away · vs · home — left/right balanced ──
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                TeamBlock(
-                    name = game.away?.short_name ?: game.away?.name ?: "TBA",
-                    badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
-                    score = if (showScores) game.score_away else null,
-                    align = Alignment.Start,
-                    modifier = Modifier.weight(1f),
-                )
-                Box(
-                    Modifier
-                        .padding(horizontal = 8.dp)
-                        .size(width = 30.dp, height = 30.dp),
-                    contentAlignment = Alignment.Center,
+            // ── Teams row ──
+            // v1.44.7 — When scores are available, render them as BIG
+            // central numbers ("2  —  4") that can't be missed. When
+            // they aren't, fall back to the logo + name + tiny "vs"
+            // layout. The previous layout buried the score under the
+            // team name where it was getting lost.
+            if (showScores) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
+                    TeamBadgeOnly(
+                        badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
+                        modifier = Modifier.size(48.dp),
+                    )
                     Text(
-                        when {
-                            showScores -> "–"
-                            // v1.44.6 — em-dash placeholder for "live but
-                            // no upstream scores yet". Looks intentional.
-                            effectivelyLive -> "—"
-                            effectivelyFinal -> "—"
-                            else -> "vs"
-                        },
-                        color = Color(0xFF94A3B8),
-                        fontSize = 14.sp,
+                        game.score_away ?: "0",
+                        color = Color.White,
+                        fontSize = 38.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = Inter,
+                    )
+                    Text(
+                        "—",
+                        color = Color(0xFF64748B),
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = Inter,
                     )
+                    Text(
+                        game.score_home ?: "0",
+                        color = Color.White,
+                        fontSize = 38.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = Inter,
+                    )
+                    TeamBadgeOnly(
+                        badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
+                        modifier = Modifier.size(48.dp),
+                    )
                 }
-                TeamBlock(
-                    name = game.home?.short_name ?: game.home?.name ?: "TBA",
-                    badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
-                    score = if (showScores) game.score_home else null,
-                    align = Alignment.End,
-                    modifier = Modifier.weight(1f),
-                )
+            } else {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    TeamBlock(
+                        name = game.away?.short_name ?: game.away?.name ?: "TBA",
+                        badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
+                        score = null,
+                        align = Alignment.Start,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(
+                        Modifier
+                            .padding(horizontal = 8.dp)
+                            .size(width = 30.dp, height = 30.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            when {
+                                effectivelyLive -> "—"
+                                effectivelyFinal -> "—"
+                                else -> "vs"
+                            },
+                            color = Color(0xFF94A3B8),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = Inter,
+                        )
+                    }
+                    TeamBlock(
+                        name = game.home?.short_name ?: game.home?.name ?: "TBA",
+                        badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
+                        score = null,
+                        align = Alignment.End,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
 
             Spacer(Modifier.weight(1f))
@@ -231,6 +282,32 @@ fun GameCard(
             // ── Channel chip — the "WHERE TO WATCH" call-to-action ──
             ChannelChip(channelTitle = matchedChannel.title, focused = focused)
         }
+    }
+}
+
+/**
+ * Just the badge image (no name, no score). Used in the "scoreboard"
+ * layout where the score numbers are the central element and the
+ * badges are decorative bookends.
+ */
+@Composable
+private fun TeamBadgeOnly(
+    badgeUrl: String?,
+    modifier: Modifier = Modifier,
+) {
+    if (!badgeUrl.isNullOrBlank()) {
+        AsyncImage(
+            model = badgeUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = modifier,
+        )
+    } else {
+        Box(
+            modifier
+                .clip(RoundedCornerShape(50))
+                .background(Color(0xFF1F2937))
+        )
     }
 }
 

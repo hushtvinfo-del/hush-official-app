@@ -1,11 +1,13 @@
 {
-  "versionCode": 406,
-  "versionName": "1.44.6",
+  "versionCode": 407,
+  "versionName": "1.44.7",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": false,
+  "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "UX (DEV ONLY): When a game is live but TheSportsDB hasn't pushed scores yet, the card now shows 'LIVE · 2H 14M' (elapsed time) and an em-dash separator — instead of just 'VS'. Backend live-refresh window widened from 4h to 6h to catch lingering MLB games. Some games (e.g. Brewers @ Cardinals you tested) genuinely don't have score data on TheSportsDB's free tier even when they're live in real life — the elapsed timer is the best signal we can give without a paid sports-data feed."
+    "FIX (DEV ONLY): Game cards now show BIG, unmissable scores (38sp font) in the center when available — '2  —  4' between the team logos. Previous design buried the score under the team name where it was getting visually lost. mandatory:true so v1.44.5 / v1.44.6 devices force-update.",
+    "Diagnostic breadcrumbs now log every card's status + score values on each composition. If scores still don't show after this update, hit Diagnostics → Send Report and we can see exactly what data the card received.",
+    "Backed up by the v1.44.6 changes: 6h live-refresh window, em-dash separator for live-without-scores, elapsed time fallback."
   ]
 }

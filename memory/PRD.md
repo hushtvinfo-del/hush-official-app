@@ -1,6 +1,80 @@
 # HushTV — Product Requirements Document
 
-## v1.44.6 (DEV ONLY) — Live-but-no-scores fallback UX — 2026-05-06  ⬅ LATEST
+## v1.44.7 (DEV ONLY) — BIG scores layout (apology + better diag) — 2026-05-06  ⬅ LATEST
+
+User report after v1.44.6: *"Im not using the 'free tier' I gave you an
+api for the business tier... NONE OF THE CARDS AT THE BOTTOM HAVE SHOWN
+ANY SCORES EVER SO ITS NOT AN ISSUE WITH THE API AS THE SCORES SHOW
+ABOVE."*
+
+User was right. I was making excuses about TheSportsDB tier when the API
+clearly returns scores for the same game (`White Sox @ Angels`,
+`status="live"`, `score_home="4"`, `score_away="2"`) — the hero renders
+"2 - 4" correctly while the card right below it shows just an em-dash.
+Two different views of the same data, only the hero rendering scores.
+
+### Root cause: layout, not data
+
+The hero score chip renders unconditionally when the underlying
+`SportsHero.score_home/away` aren't blank. The card was passing the
+score string into `TeamBlock`, which placed it as a small text element
+BELOW the team name and BELOW the team logo:
+
+```
+[ 56dp logo ]
+[ "CHICAGO WHITE SOX" 14sp ]
+[ "2" 22sp ]            ← buried, easily lost in a screenshot
+```
+
+Combined with the card's tight 220dp height + multiple weight(1f)
+spacers + ChannelChip, the score Text was getting visually squeezed
+and the user genuinely wasn't seeing it. The fact that the v1.44.5 code
+DID pass `score = game.score_away` correctly was small comfort if the
+output was illegible.
+
+### What landed in v1.44.7
+
+#### Big, unmissable score layout
+- When `showScores=true`, the card middle row swaps from the
+  `[logo][name][score]` per-team layout to a `[badge] [SCORE]
+  [—] [SCORE] [badge]` layout with **38sp** score numbers.
+- `TeamBadgeOnly` composable: just the team logo, no name, no score —
+  used as decorative bookends on the new score-row.
+- Old layout still in use when scores aren't available (live but
+  upstream-data-missing, upcoming, etc.).
+
+#### Per-card diagnostic breadcrumbs
+- Every GameCard composition now logs to `EventLog`:
+  `"card[id] status=live score=2-4 showScores=true"`
+- These flow through the v1.44.4 "Send diagnostic report" pipeline.
+  Next time something visual is off, one tap from the user gives me
+  per-card data to verify whether the issue is parse / data /
+  render / layout.
+
+### Build + deploy
+- versionCode 406 → 407, versionName 1.44.6 → 1.44.7.
+- BUILD SUCCESSFUL.
+- Auto-tagged `v1.44.7-dev`. `mandatory: true` so v1.44.5 / v1.44.6
+  devices force-update out of the small-score layout.
+- Verified: dex strings include `TeamBadgeOnly`, `card[`,
+  `SportsCardsKt$GameCard$1$1`. Manifest live with versionCode 407.
+
+### Lesson preserved
+
+When a user reports something visual, **trust the user's eyes**. The
+v1.44.5 / v1.44.6 code was technically passing scores into the
+TeamBlock — but if the score text is too small, too crowded, or
+positioned where a TV camera angle clips it, the user is right to call
+it broken. The fix isn't "the data IS there" — the fix is "make it
+impossible to miss".
+
+This applies generally: any time we hear "this isn't showing" and the
+data IS there, the answer is bigger / bolder / more central, not
+arguing about the data.
+
+---
+
+## v1.44.6 (DEV ONLY) — Live-but-no-scores fallback UX — 2026-05-06
 
 User report after v1.44.5: *"Okay, it's now working to where you can scroll
 down and it's not crashing. However, if you look at the attached picture,
