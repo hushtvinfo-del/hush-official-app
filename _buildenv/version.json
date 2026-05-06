@@ -1,12 +1,12 @@
 {
-  "versionCode": 414,
-  "versionName": "1.44.14",
+  "versionCode": 415,
+  "versionName": "1.44.15",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": false,
+  "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "POLISH (DEV ONLY): Team names bumped 14sp → 18sp now that the channel chip is gone — they're the focal point of the no-scores fallback layout. Centered alignment under each badge.",
-    "POLISH: Badge focus glow — when a card is focused, both team badges (in either the score layout or the fallback layout) get a soft radial halo in the league's accent color (NHL black, MLB blue, NBA red, etc.). Reads ESPN-tier without flashy motion."
+    "CRASH FIX (DEV ONLY): The v1.44.14 badge focus glow used Modifier.padding((-6).dp) to bleed the glow past the badge edge. Compose rejects negative padding values with `IllegalArgumentException: Padding must be non-negative`, instantly crashing the card the moment it received focus. Replaced with a clean radial gradient that doesn't need negative padding — same visual halo, no crash. v1.44.3's ANR watchdog + breadcrumb instrumentation captured the exception in seconds; thanks for your patience.",
+    "Mandatory:true so v1.44.14 devices force-update."
   ]
 }

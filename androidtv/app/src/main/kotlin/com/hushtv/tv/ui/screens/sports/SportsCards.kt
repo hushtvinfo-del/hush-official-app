@@ -324,17 +324,22 @@ private fun TeamBadgeOnly(
         contentAlignment = Alignment.Center,
     ) {
         if (focused) {
-            // Soft circular glow — 20% larger than the badge, fading
-            // from the accent at 35% alpha at center to 0 at the edge.
+            // v1.44.15 — glow rendered as a slightly OVER-SIZED Box
+            // behind the badge. Original v1.44.14 used a negative
+            // padding to bleed past the badge edge — Compose throws
+            // `IllegalArgumentException: Padding must be non-negative`
+            // on negative values, instantly crashing the card on
+            // focus. Using a positive `requiredSize` set 12dp larger
+            // than the badge produces the same visual halo without
+            // touching padding.
             Box(
                 Modifier
                     .matchParentSize()
-                    .padding((-6).dp)   // bleed slightly past the badge
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
                             0.0f to accent.copy(alpha = 0.35f),
-                            0.6f to accent.copy(alpha = 0.10f),
+                            0.55f to accent.copy(alpha = 0.10f),
                             1.0f to Color.Transparent,
                         )
                     )

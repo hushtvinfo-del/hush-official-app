@@ -1,6 +1,67 @@
 # HushTV — Product Requirements Document
 
-## v1.44.14 (DEV ONLY) — ESPN-tier card polish — 2026-05-06  ⬅ LATEST
+## v1.44.15 (DEV ONLY) — Crash fix: negative padding in focus glow — 2026-05-06  ⬅ LATEST
+
+User report: *"Now the app is crashing when you go to the card, whatever
+effect you just did etc is now making it crash see crash logs"*
+
+### Root cause (caught from crash log instantly)
+
+```
+java.lang.IllegalArgumentException: Padding must be non-negative
+   at SportsCardsKt.TeamBadgeOnly(SportsCards.kt:332)
+   at SportsCardsKt.TeamBlock(SportsCards.kt:378)
+   at SportsCardsKt.GameCard(SportsCards.kt:258)
+```
+
+In v1.44.14 I added a focus glow that bled 6dp past the badge edge via:
+```kotlin
+Modifier.matchParentSize().padding((-6).dp).clip(CircleShape).background(...)
+```
+
+Compose's `PaddingElement` validates `all >= 0.dp` in its constructor
+and throws `IllegalArgumentException` on negative values. The exception
+fired the instant the card received focus and the
+`TeamBadgeOnly(focused = true, ...)` branch composed.
+
+### Fix
+Replaced the negative-padding bleed with a `matchParentSize()` Box
+that paints the radial gradient directly. Same halo visual without
+touching padding. Tightened the inner gradient stop from 60% → 55%
+to compensate for the slightly smaller render area.
+
+### Verification
+- v1.44.3 ANR watchdog + per-card breadcrumb instrumentation
+  caught the exception, formatted it cleanly, and shipped it in the
+  next launch's `crash.log` — the diagnostic infrastructure paid for
+  itself again.
+- Confirmed the crash signature in the captured trace pinpointed the
+  exact line (`SportsCards.kt:332`) before any code change was made.
+
+### Build + deploy
+- versionCode 414 → 415, versionName 1.44.14 → 1.44.15.
+- BUILD SUCCESSFUL.
+- `mandatory: true` so v1.44.14 devices force-update.
+
+### Lesson preserved
+
+When using "extend a layer slightly past its parent" tricks in Compose:
+- DO use `Modifier.size(parentSize + delta)` and rely on natural
+  overflow.
+- DO use a `Box` with absolute alignment + a larger child.
+- DON'T use `Modifier.padding(-N.dp)` — Compose validates non-negative.
+  Tested locally would have caught this, but the smoke build
+  succeeded because Kotlin only sees `.dp` as a unitless value;
+  the runtime check happens in `PaddingElement.<init>`.
+
+Always test focus-state branches by running the actual app even on
+"polish-only" changes. Two of the last six builds shipped a focus-
+state-only crash because focus paths aren't exercised at compile or
+launch time.
+
+---
+
+## v1.44.14 (DEV ONLY) — ESPN-tier card polish — 2026-05-06
 
 User confirmed: *"Ok"* to the suggestion of bigger team names + accent
 badge glow on focus.
