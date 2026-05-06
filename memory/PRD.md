@@ -1,6 +1,103 @@
 # HushTV — Product Requirements Document
 
-## v1.43.99 — Exit dialog + Hush+ Coming Soon + Dev/Official sync — 2026-05-06  ⬅ LATEST
+## Phase 1: Sports backend live — TheSportsDB Business + sync server — 2026-05-06  ⬅ LATEST
+
+User requested a "PPV & LIVE SPORTS" home section. Phase 1 is the
+backend only — schema, ingestion daemon, public API endpoints,
+admin API endpoints, all live and tested via curl. Phase 2 (Android
+TV + Mobile UI) and Phase 3 (React admin panel) come next.
+
+### Architecture decisions
+
+- **TheSportsDB Business API** (key 721094, $-tier) used as the data
+  source. Polled every 15 min for upcoming schedules per league, every
+  2 min for live scores, every 6 h for PPV events. ~12 req/min total
+  upper bound — well under the 120 req/min Business limit, scales to
+  30,000+ users with no per-device cost since clients hit OUR cache,
+  never TheSportsDB.
+
+- **3-level channel resolution** so the user maps each team / league
+  ONCE and the system auto-resolves every game forever:
+    1. Per-event override   (admin sets one game manually — rare)
+    2. Team-specific map    (Blue Jays → SPORTSNET ONE)
+    3. League fallback      (NHL → SPORTSNET, NBA → TSN, ...)
+    4. None → game **hidden** from clients (per user spec).
+
+- **Smart Canadian seed** ships ~24 mappings on first boot
+  (Blue Jays / Raptors / Maple Leafs / Canadiens / Senators / Jets /
+  Flames / Oilers / Canucks / Toronto FC / CF Montréal / Whitecaps,
+  plus league-default fallbacks for NHL/MLB/NBA/NFL/UFC/MLS/EPL/UCL/
+  NCAAF/NCAAB/CFL/F1). User overrides via admin panel later.
+
+### Files
+
+- `/app/sync_server/sports_module.py` (~700 lines) — schema,
+  ingestion, channel resolution, public + admin routers.
+- `/app/sync_server/hushsync_app.py` — added a 12-line block in
+  `_startup()` to mount the sports module.
+
+Deployed to `/opt/hushtv-sync/` on `66.163.113.147`. Systemd unit
+`hushtv-sync.service` patched with three new env vars:
+`SPORTSDB_KEY=721094`, `SPORTS_ADMIN_TOKEN=...`,
+`SPORTS_DB=/var/hushtv-sync/sports.sqlite3`.
+
+### Public endpoints (no auth)
+
+- `GET /api/sports/health`   — sanity probe + cache counts.
+- `GET /api/sports/leagues`  — list of active leagues.
+- `GET /api/sports/home`     — hero (8 items) + per-league bucket of
+  upcoming games + PPV bucket. All games channel-resolved + filtered.
+- `GET /api/sports/league/{slug}?days=N` — full game list by league.
+- `GET /api/sports/ppv`      — upcoming PPV events.
+- `GET /api/sports/game/{id}` — one game detail.
+
+### Admin endpoints (gated on `X-Admin-Token`)
+
+- `GET    /api/admin/sports/channel_map?scope=team&league_slug=nhl`
+- `POST   /api/admin/sports/channel_map`
+- `DELETE /api/admin/sports/channel_map/{id}`
+- `GET    /api/admin/sports/ppv`
+- `POST   /api/admin/sports/ppv`
+- `DELETE /api/admin/sports/ppv/{id}`
+- `POST   /api/admin/sports/league/{slug}/active`
+- `POST   /api/admin/sports/refresh` (manual ingestion kick)
+
+### nginx
+
+Added two `location` blocks to `/etc/nginx/sites-enabled/hushtv` —
+`/api/sports/` and `/api/admin/sports/` both proxy to `127.0.0.1:5056`.
+Reloaded cleanly.
+
+### Live test results (2026-05-06 first ingestion)
+
+- 161 games cached after first poll (NHL: 12, MLB: 20, NBA: 13,
+  MLS: 20, EPL: 20, UCL: 1, CFL: 20, F1: 20, UFC: 11, plus past-2-day
+  records).
+- 11 PPV events cached (auto-pulled UFC fights).
+- 24 channel mappings active (12 league-default + 12 team-specific
+  resolved from the seed).
+- Channel resolution confirmed working live:
+    - `Blue Jays @ Tampa Bay → SPORTSNET ONE` (team override wins).
+    - `Red Sox @ Detroit → SPORTSNET` (MLB league fallback).
+    - `Canadiens @ Buffalo → TSN 2` (team override wins).
+    - All UFC PPVs → SPORTSNET PPV.
+- Admin auth confirmed: missing/wrong token → 401 "bad admin token".
+- POST channel_map and POST ppv both verified writing.
+
+### Admin token
+
+Saved to `/app/memory/test_credentials.md`. The Phase 3 React admin
+panel will read it from a server-side env var, not embed it in
+the client bundle.
+
+### Next phases
+
+- **Phase 2** — Android TV + Mobile sports home page UI.
+- **Phase 3** — React admin panel for channel mappings + PPV CRUD.
+
+---
+
+## v1.43.99 — Exit dialog + Hush+ Coming Soon + Dev/Official sync — 2026-05-06
 
 User said v1.43.98's rail-RIGHT focus fix was working ("OK WORKING
 FINALLY"). They asked for three things:
