@@ -22,6 +22,10 @@ set -euo pipefail
 
 cd /app/androidtv
 
+# Pre-build disk hygiene so a 9.8G /app pod never aborts the
+# official build mid-compile.
+/app/_buildenv/disk-janitor.sh
+
 echo "▶ Building official-flavor APK…"
 ./gradlew assembleOfficialDebug
 

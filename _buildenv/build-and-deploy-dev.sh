@@ -24,6 +24,11 @@ set -euo pipefail
 
 cd /app/androidtv
 
+# Run the disk janitor BEFORE the build so we never hit a half-way
+# "no space left" failure mid-Kotlin-compile. Cheap when there's
+# room, aggressive when there isn't.
+/app/_buildenv/disk-janitor.sh
+
 echo "▶ Building dev-flavor APK…"
 export JAVA_HOME=/app/_buildenv/jdk
 export ANDROID_HOME=/app/_buildenv/android-sdk
