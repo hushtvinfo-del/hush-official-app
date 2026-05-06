@@ -141,17 +141,24 @@ fun TVSportsPage(
         rememberPlayablePpv(home?.ppv ?: emptyList(), channelIndex)
             .let { list -> remember(list) { list.sortedBy { it.first.start_utc } } }
 
-    Box(
+    Column(
         Modifier
             .fillMaxSize()
             .background(Color(0xFF05080F))
             .focusGroup(),
     ) {
         // ── Hero (top half) ──
+        // v1.44.12 — Switched the page from absolute-positioned (top
+        // half / overlap-bottom-half) to a Column with weighted
+        // children. The previous layout used fixed offsets (350dp,
+        // 420dp) which on TVs whose available page area is < ~720dp
+        // tall pushed the cards row OFF the bottom of the screen.
+        // weight() makes the layout adapt to whatever height we
+        // actually have, so cards can NEVER overflow.
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(420.dp),
+                .weight(0.55f),
         ) {
             SportsHeroLayer(
                 heroItems = home?.hero ?: emptyList(),
@@ -161,30 +168,20 @@ fun TVSportsPage(
         }
 
         // ── League pills + cards rail (bottom half) ──
-        // v1.44.9 — Wrapped in an opaque Box with a top gradient that
-        // smooth-blends from the hero into solid #05080F by the time
-        // the pills row begins. Previous version had a 30-40dp band
-        // between the hero's bottom edge (420dp) and the cards row
-        // (~440dp) where the original hero image leaked through; this
-        // covers it definitively.
         Box(
             Modifier
-                .fillMaxSize()
-                .padding(top = 350.dp),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0.0f to Color(0x0005080F),
-                            0.18f to Color(0xCC05080F),
-                            0.32f to Color(0xFF05080F),
-                            1.0f to Color(0xFF05080F),
-                        )
+                .fillMaxWidth()
+                .weight(0.45f)
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color(0x0005080F),
+                        0.18f to Color(0xCC05080F),
+                        0.32f to Color(0xFF05080F),
+                        1.0f to Color(0xFF05080F),
                     )
-            )
-            Column(Modifier.fillMaxSize().padding(top = 10.dp)) {
+                ),
+        ) {
+            Column(Modifier.fillMaxSize()) {
                 LeaguePillBar(
                 pills = pills,
                 selectedSlug = selectedLeague,
@@ -195,13 +192,6 @@ fun TVSportsPage(
                 firstItemFocus = firstItemFocus,
                 onUpFromRow = onUpFromRow,
                 onDownFromRow = {
-                    // v1.44.5 — defensive: railFocus is only attached
-                    // to GameCard/PpvCard idx 0 when items.isNotEmpty().
-                    // If items are still loading or filtered to zero,
-                    // calling requestFocus() throws
-                    // "FocusRequester is not initialized" and crashes.
-                    // Instead, fall through to the next page so DOWN is
-                    // never a dead-end.
                     val hasCards = if (selectedLeague == "ppv") playablePpv.isNotEmpty()
                                    else playableGames.isNotEmpty()
                     if (hasCards) {
@@ -223,7 +213,12 @@ fun TVSportsPage(
                 },
             )
 
-            if (selectedLeague == "ppv") {
+            // v1.44.12 — Cards rail occupies the remaining vertical
+            // space after the pill row. Wrapping in a weight(1f) Box
+            // means card-row height is bounded by the parent so cards
+            // can never extend off-screen.
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                if (selectedLeague == "ppv") {
                 PpvCardsRail(
                     nav = nav,
                     playlistId = playlistId,
@@ -288,9 +283,10 @@ fun TVSportsPage(
                     onDownFromRow = onDownFromRow,
                 )
             }
+            }  // close cards-rail weight(1f) Box
             }  // close inner Column
-        }      // close bottom wrapper Box
-    }          // close outer page Box
+        }      // close bottom wrapper Box (weight 0.45)
+    }          // close outer page Column
 }
 
 /** Build the static league-pill list. We always lead with All / Live

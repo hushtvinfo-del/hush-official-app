@@ -1,14 +1,13 @@
 {
-  "versionCode": 411,
-  "versionName": "1.44.11",
+  "versionCode": 412,
+  "versionName": "1.44.12",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "FIX (DEV ONLY): UP from a sports card no longer skips past the league pills to Discovery — it now correctly focuses the pill row.",
-    "REDESIGN: League pills are now real league chips. Each league chip shows its OFFICIAL TheSportsDB league badge (NHL shield, MLB logo, NBA, NFL, MLS, UCL, EPL, etc.) to the left of the league name, with three visual states: SELECTED (solid accent fill), FOCUSED (translucent + accent ring), IDLE (near-transparent + faint ring). The All / Live / PPV tabs get a tinted dot in place of the missing badge so the strip stays visually coherent.",
-    "Backend backfills league badges from TheSportsDB lookupleague.php on first boot — added _ingest_league_logos so the data is populated automatically; admins don't need to upload anything.",
-    "Mandatory:true so v1.44.10 devices force-update."
+    "FIX (DEV ONLY): Sports cards no longer extend below the screen — the page now uses Column with weighted children (55% hero, 45% pills+cards) instead of fixed 420dp/350dp absolute positioning. Math: overflow is impossible because every region's height is computed from the actual available space.",
+    "Card internals restructured to use absolute alignment (TopStart for status row, Center for scores, BottomCenter for channel chip). Scores are now GUARANTEED dead-center vertically — no more 'creeping toward the bottom' regression. Card height also dropped 220dp → 200dp for extra headroom.",
+    "Mandatory:true so v1.44.11 devices force-update."
   ]
 }

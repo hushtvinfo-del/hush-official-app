@@ -74,9 +74,6 @@ fun GameCard(
     val accent = parseAccent(game.league?.accent) ?: Cyan
     val isLive = game.status.equals("live", ignoreCase = true)
     val isFinal = game.status.equals("final", ignoreCase = true)
-    // v1.44.5 — Treat games within ±5h of start as "in progress"
-    // when the server hasn't yet pushed a definitive status. Avoids
-    // showing "FINAL" for a game that's still on the air.
     val nowMs = remember { System.currentTimeMillis() }
     val deltaMs = game.start_utc - nowMs
     val effectivelyLive = isLive ||
@@ -85,10 +82,6 @@ fun GameCard(
     val showScores = (isLive || isFinal) &&
         !game.score_home.isNullOrBlank() && !game.score_away.isNullOrBlank()
 
-    // v1.44.7 — Breadcrumb every card composition with the exact
-    // status + score values we received. If a future user reports
-    // "scores not showing" we can pull their diagnostic and see
-    // whether the data was missing or the render path is wrong.
     androidx.compose.runtime.LaunchedEffect(game.id, game.status, game.score_home, game.score_away) {
         com.hushtv.tv.data.EventLog.log(
             "sports",
@@ -98,8 +91,12 @@ fun GameCard(
 
     Box(
         Modifier
+            // v1.44.12 — Card height dropped 220 → 200dp to give the
+            // page more vertical headroom on smaller TV usable areas.
+            // Combined with the v1.44.12 weight-based outer layout
+            // this makes overflow mathematically impossible.
             .width(360.dp)
-            .height(220.dp)
+            .height(200.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
@@ -119,21 +116,32 @@ fun GameCard(
             .clip(cardShape)
             .background(
                 Brush.verticalGradient(
-                    listOf(
-                        Color(0xFF111827),
-                        Color(0xFF050810),
-                    )
+                    0f to Color(0xFF111A2C),
+                    1f to Color(0xFF050810),
                 )
             )
             .border(
                 width = if (focused) 3.dp else 1.dp,
-                color = if (focused) Cyan else accent.copy(alpha = 0.22f),
+                color = if (focused) Cyan else Color(0x22FFFFFF),
                 shape = cardShape,
             ),
     ) {
-        Column(Modifier.fillMaxSize().padding(18.dp)) {
-            // ── Top row: league badge + LIVE pulse + start time ──
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        // v1.44.12 — Switched the card's internal layout from
+        // [topRow + Spacer(weight 1f) + scores + Spacer(weight 1f) +
+        // chip] (which approximated centering) to absolute alignment:
+        //   TopStart   → status row
+        //   Center     → scores (or vs/badge fallback)
+        //   BottomCenter → channel chip
+        // This GUARANTEES the score is visually dead-center vertically
+        // and the chip is glued to the bottom regardless of any
+        // sub-layout text-baseline drift. No more "score creeps below
+        // center" complaints.
+        Box(Modifier.fillMaxSize().padding(16.dp)) {
+            // ── Top status row (league badge + LIVE/COUNTDOWN) ──
+            Row(
+                Modifier.align(Alignment.TopStart).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Box(
                     Modifier
                         .size(width = 3.dp, height = 14.dp)
@@ -159,10 +167,6 @@ fun GameCard(
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            // v1.44.6 — when we know the game is live but
-                            // upstream hasn't pushed scores yet, show
-                            // elapsed time instead of just "LIVE". Beats
-                            // staring at "VS" with no extra info.
                             if (showScores) "LIVE" else "LIVE  ·  ${elapsedShort(deltaMs)}",
                             color = Color(0xFFEF4444),
                             fontSize = 11.sp,
@@ -192,80 +196,68 @@ fun GameCard(
                 }
             }
 
-            Spacer(Modifier.weight(1f))
-
-            // ── Teams row ──
-            // v1.44.7 — When scores are available, render them as BIG
-            // central numbers ("2  —  4") that can't be missed. When
-            // they aren't, fall back to the logo + name + tiny "vs"
-            // layout. The previous layout buried the score under the
-            // team name where it was getting lost.
-            if (showScores) {
-                // v1.44.9 — scores at 28sp (was 38sp). 38sp was being
-                // clipped at the bottom of the 220dp card on actual TVs.
-                // 28sp + a vertically-centered Box leaves comfortable
-                // breathing room above the channel chip.
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    TeamBadgeOnly(
-                        badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
-                        modifier = Modifier.size(40.dp),
-                    )
+            // ── Center: scores OR fallback-vs ──
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (showScores) {
                     Row(
+                        Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text(
-                            game.score_away ?: "0",
-                            color = Color.White,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = Inter,
+                        TeamBadgeOnly(
+                            badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
+                            modifier = Modifier.size(36.dp),
                         )
-                        Text(
-                            "—",
-                            color = Color(0xFF64748B),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = Inter,
-                        )
-                        Text(
-                            game.score_home ?: "0",
-                            color = Color.White,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = Inter,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                game.score_away ?: "0",
+                                color = Color.White,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = Inter,
+                            )
+                            Text(
+                                "—",
+                                color = Color(0xFF64748B),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = Inter,
+                            )
+                            Text(
+                                game.score_home ?: "0",
+                                color = Color.White,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = Inter,
+                            )
+                        }
+                        TeamBadgeOnly(
+                            badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
+                            modifier = Modifier.size(36.dp),
                         )
                     }
-                    TeamBadgeOnly(
-                        badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
-                        modifier = Modifier.size(40.dp),
-                    )
-                }
-            } else {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    TeamBlock(
-                        name = game.away?.short_name ?: game.away?.name ?: "TBA",
-                        badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
-                        score = null,
-                        align = Alignment.Start,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Box(
-                        Modifier
-                            .padding(horizontal = 8.dp)
-                            .size(width = 30.dp, height = 30.dp),
-                        contentAlignment = Alignment.Center,
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
+                        TeamBlock(
+                            name = game.away?.short_name ?: game.away?.name ?: "TBA",
+                            badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
+                            score = null,
+                            align = Alignment.Start,
+                            modifier = Modifier.weight(1f),
+                        )
                         Text(
                             when {
                                 effectivelyLive -> "—"
@@ -276,22 +268,27 @@ fun GameCard(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = Inter,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                        TeamBlock(
+                            name = game.home?.short_name ?: game.home?.name ?: "TBA",
+                            badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
+                            score = null,
+                            align = Alignment.End,
+                            modifier = Modifier.weight(1f),
                         )
                     }
-                    TeamBlock(
-                        name = game.home?.short_name ?: game.home?.name ?: "TBA",
-                        badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
-                        score = null,
-                        align = Alignment.End,
-                        modifier = Modifier.weight(1f),
-                    )
                 }
             }
 
-            Spacer(Modifier.weight(1f))
-
-            // ── Channel chip — the "WHERE TO WATCH" call-to-action ──
-            ChannelChip(channelTitle = matchedChannel.title, focused = focused)
+            // ── Bottom: channel chip ──
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+            ) {
+                ChannelChip(channelTitle = matchedChannel.title, focused = focused)
+            }
         }
     }
 }

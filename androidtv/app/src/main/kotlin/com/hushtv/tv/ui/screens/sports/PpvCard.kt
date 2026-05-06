@@ -67,7 +67,7 @@ fun PpvCard(
     Box(
         Modifier
             .width(300.dp)
-            .height(220.dp)
+            .height(200.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()

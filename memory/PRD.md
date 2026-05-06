@@ -1,6 +1,75 @@
 # HushTV — Product Requirements Document
 
-## v1.44.11 (DEV ONLY) — League chips with logos + UP-from-card fix — 2026-05-06  ⬅ LATEST
+## v1.44.12 (DEV ONLY) — Weight-based layout + alignment-pinned card content — 2026-05-06  ⬅ LATEST
+
+User report: *"Now the scores are cut off again. See the picture. Look in
+the cards and you'll see the scores are cut off again at the bottom. You
+had already just fixed this and now they've come back to being cut off
+again. They need to be completely centered in the card. All the content
+in the card should be completely centered properly. Nothing should ever
+be cut off. It looks terrible when they're cut off. Why is it doing that
+now? Fix it. Don't let it happen again either."*
+
+User's screenshot analysis showed the cards were physically rendering
+BELOW the visible screen edge — not a content-centering bug, an
+overflow bug. Two distinct fixes were required:
+
+### Fix 1: Page layout — weighted children, no absolute positioning
+- Old: `Box(fillMaxSize) { Box(height=420dp); Box(padding-top=350dp) }`
+  — used fixed absolute heights. On TVs whose available page area
+  was smaller than the (420 + 84 + 220 + 24 = 748dp) total, the cards
+  rail extended past the screen bottom edge.
+- New: `Column(fillMaxSize) { Box(weight 0.55f); Box(weight 0.45f) }`
+  — every region's height is now computed from the *actual* available
+  space. Overflow is mathematically impossible regardless of TV size,
+  overscan, system insets, or future top-nav resizing.
+- Inside the bottom 45% Box: a Column with the LeaguePillBar followed
+  by the cards rail wrapped in a `Box(Modifier.weight(1f))`. The
+  cards rail can never push beyond what's left after the pill row.
+
+### Fix 2: GameCard internals — absolute alignment, not weighted spacers
+- Old: `Column { topRow; Spacer(weight 1f); scoresRow; Spacer(weight 1f);
+  channelChip }` — approximated centering but text-baseline drift
+  could pull the score Row toward the bottom.
+- New: `Box(fillMaxSize) {
+    topRow.align(Alignment.TopStart)
+    scoresRow.align(Alignment.Center)
+    channelChip.align(Alignment.BottomCenter)
+  }` — content positions are now explicitly tied to the card's
+  geometric center / corners. The score CANNOT drift.
+- Card height dropped 220dp → 200dp for extra headroom.
+- Score font reduced 28sp → 26sp, badge 40dp → 36dp to give the
+  centered Row more breathing room inside the smaller card.
+
+### PpvCard: just the height drop (poster cards already used absolute layout)
+
+### Build + deploy
+- versionCode 411 → 412, versionName 1.44.11 → 1.44.12.
+- BUILD SUCCESSFUL.
+- `mandatory: true` so v1.44.11 devices force-update.
+
+### Lessons preserved (don't let this happen again)
+
+1. **Never use fixed absolute heights for full-screen TV layouts.**
+   TV available height varies: overscan, system insets, top-nav
+   re-layouts, parent-page chrome. Always use weighted Column /
+   `BoxWithConstraints` so the layout fits whatever it gets.
+
+2. **Don't approximate centering with weighted Spacers when you mean
+   exact centering.** `Spacer(weight 1f) + content + Spacer(weight 1f)`
+   produces visually-centered content ONLY if the content has stable
+   metrics. Text with descenders, line-height vs font-size mismatches,
+   etc. shift it. Use `Box.align(Alignment.Center)` when "exactly
+   centered" is the requirement.
+
+3. **When a user complains about a regression, check ABOVE the symptom
+   for the real cause.** "Score cut off" wasn't a font-size bug — it
+   was a card-extends-past-screen bug. Always verify the symptom
+   matches the assumed mechanism before fixing.
+
+---
+
+## v1.44.11 (DEV ONLY) — League chips with logos + UP-from-card fix — 2026-05-06
 
 User report: *"When you toggle a sports card under the pill and try to go
 back up to the league pills it's skipping all the way up to the next screen
