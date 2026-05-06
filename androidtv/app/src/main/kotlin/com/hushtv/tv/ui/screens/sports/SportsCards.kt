@@ -4,6 +4,7 @@ package com.hushtv.tv.ui.screens.sports
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,6 +67,7 @@ fun GameCard(
     onFocus: () -> Unit,
     onClick: () -> Unit,
     focusRequester: FocusRequester? = null,
+    onUpFromCard: (() -> Unit)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(18.dp)
@@ -80,6 +87,12 @@ fun GameCard(
                 shape = cardShape,
                 focusRequester = focusRequester,
             )
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (ev.key == Key.DirectionUp && onUpFromCard != null) {
+                    onUpFromCard(); true
+                } else false
+            }
             .clickableWithEnter(onClick)
             .clip(cardShape)
             .background(
@@ -291,6 +304,9 @@ private fun parseAccent(hex: String?): Color? {
 /** League pill bar — the user's spec was "PPV / NHL / MLB / NBA / OTHERS"
  *  but in v1.43.99+ we default to season-aware ordering supplied by the
  *  server. This is just a horizontally-scrollable focusable row.
+ *
+ *  v1.44.2: the first pill ("All") is now the page's first focusable.
+ *  See TVSportsPage's class comment for why.
  */
 @Composable
 fun LeaguePillBar(
@@ -298,21 +314,38 @@ fun LeaguePillBar(
     selectedSlug: String,
     onSelect: (String) -> Unit,
     contentStartPadding: androidx.compose.ui.unit.Dp = 96.dp,
+    firstItemFocus: FocusRequester? = null,
+    onUpFromRow: (() -> Unit)? = null,
+    onDownFromRow: (() -> Unit)? = null,
 ) {
     val scroll = rememberScrollState()
     Row(
         Modifier
             .fillMaxWidth()
             .horizontalScroll(scroll)
+            .focusGroup()
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (ev.key) {
+                    Key.DirectionUp -> {
+                        if (onUpFromRow != null) { onUpFromRow(); true } else false
+                    }
+                    Key.DirectionDown -> {
+                        if (onDownFromRow != null) { onDownFromRow(); true } else false
+                    }
+                    else -> false
+                }
+            }
             .padding(start = contentStartPadding, end = 96.dp, top = 12.dp, bottom = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        pills.forEach { p ->
+        pills.forEachIndexed { idx, p ->
             LeaguePillView(
                 pill = p,
                 selected = p.slug == selectedSlug,
                 onSelect = { onSelect(p.slug) },
+                focusRequester = if (idx == 0) firstItemFocus else null,
             )
         }
     }
@@ -329,6 +362,7 @@ private fun LeaguePillView(
     pill: LeaguePill,
     selected: Boolean,
     onSelect: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val pillShape = RoundedCornerShape(999.dp)
@@ -344,12 +378,18 @@ private fun LeaguePillView(
     // NOTE: do NOT add an outer `.focusable()` after `.tvFocusable()`.
     // tvFocusable already adds its own internal `.focusable()` and
     // wrapping it again creates two focusables in the chain — see
-    // the v1.43.98 cautionary block in TvComponents.kt.
+    // the v1.43.98 cautionary block in TvComponents.kt. The
+    // focusRequester is passed INTO tvFocusable so it binds to the
+    // exact focusable that updates `focused` state.
     Box(
         Modifier
             .height(48.dp)
             .onFocusChanged { focused = it.isFocused }
-            .tvFocusable(scaleOnFocus = 1f, shape = pillShape)
+            .tvFocusable(
+                scaleOnFocus = 1f,
+                shape = pillShape,
+                focusRequester = focusRequester,
+            )
             .clickableWithEnter(onSelect)
             .clip(pillShape)
             .background(bg)

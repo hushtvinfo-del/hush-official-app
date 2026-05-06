@@ -29,6 +29,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +58,7 @@ fun PpvCard(
     onFocus: () -> Unit,
     onClick: () -> Unit,
     focusRequester: FocusRequester? = null,
+    onUpFromCard: (() -> Unit)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(18.dp)
@@ -71,6 +77,12 @@ fun PpvCard(
                 shape = cardShape,
                 focusRequester = focusRequester,
             )
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (ev.key == Key.DirectionUp && onUpFromCard != null) {
+                    onUpFromCard(); true
+                } else false
+            }
             .clickableWithEnter(onClick)
             .clip(cardShape)
             .background(Color(0xFF050810))

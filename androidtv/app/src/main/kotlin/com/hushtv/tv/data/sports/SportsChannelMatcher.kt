@@ -28,50 +28,94 @@ import com.hushtv.tv.data.MediaCard
  * never fall back to a substring match without all canonical tokens —
  * that'd cause "SPORTSNET" → match "SPORTSNET WEST" when the user
  * actually wanted the main "SPORTSNET" channel.
+ *
+ * v1.44.2 PERF FIX:
+ * The original implementation re-normalized every live channel on
+ * every match() call. With ~5,000 channels in a typical Xtream
+ * playlist and ~160 games to match, that produced ~1.6M regex
+ * operations on whatever thread called filterPlayableGames(). Inside
+ * a Compose `remember{}` block this happens on the MAIN thread,
+ * causing 5-15 s ANR hangs and an OS-killed process (which bypasses
+ * the JVM uncaught-exception handler — that's why no crash report
+ * ever made it to the server).
+ *
+ * The fix is [ChannelIndex]: pre-normalize every channel once, then
+ * match against the cached form. The caller does this transformation
+ * on Dispatchers.Default and feeds the resulting index into the
+ * filter functions (which then run cheap O(games × index.size)
+ * comparisons instead of nested regex.replaceAll calls).
  */
 object SportsChannelMatcher {
 
-    /** Returns the best-match live channel from [liveChannels], or
+    /**
+     * Pre-normalized snapshot of the user's live-channel list. Build
+     * once per playlist load; reuse for every match.
+     */
+    class ChannelIndex(channels: List<MediaCard>) {
+        // (channel, normalized-tokens) — built once.
+        val rows: List<Triple<MediaCard, String, List<String>>> =
+            channels.map { c ->
+                val normalized = normalize(c.title)
+                val tokens = normalized.split(" ").filter { it.isNotBlank() }
+                Triple(c, normalized, tokens)
+            }
+        val size: Int get() = rows.size
+        val isEmpty: Boolean get() = rows.isEmpty()
+    }
+
+    /** Returns the best-match live channel from [index], or
      *  null if nothing meets the bar. */
-    fun match(canonicalName: String, liveChannels: List<MediaCard>): MediaCard? {
-        if (canonicalName.isBlank() || liveChannels.isEmpty()) return null
+    fun match(canonicalName: String, index: ChannelIndex): MediaCard? {
+        if (canonicalName.isBlank() || index.isEmpty) return null
         val canonical = normalize(canonicalName)
         val canonicalTokens = canonical.split(" ").filter { it.isNotBlank() }
         if (canonicalTokens.isEmpty()) return null
         val canonicalDigitsRewritten = canonicalTokens.map(::digitToWord).joinToString(" ")
 
-        // Pre-normalize playlist names once.
-        val rows = liveChannels.map { it to normalize(it.title) }
-
         // 1. Exact match on the normalized form.
-        rows.firstOrNull { it.second == canonical }?.let { return it.first }
+        index.rows.firstOrNull { it.second == canonical }?.let { return it.first }
 
         // Also check the digit-rewritten form (so "SPORTSNET 1" finds
         // canonical "SPORTSNET ONE" and vice versa).
-        rows.firstOrNull { it.second == canonicalDigitsRewritten }?.let { return it.first }
+        index.rows.firstOrNull { it.second == canonicalDigitsRewritten }?.let { return it.first }
 
         // 2. Token superset: playlist must contain every canonical
         //    token. Score by extra tokens (fewer = better).
-        val supersetMatches = rows
-            .filter { (_, n) ->
-                val pTokens = n.split(" ")
-                canonicalTokens.all { ct -> ct in pTokens }
+        var best: Triple<MediaCard, String, List<String>>? = null
+        var bestScore = Int.MAX_VALUE
+        for (row in index.rows) {
+            val pTokens = row.third
+            if (canonicalTokens.all { ct -> ct in pTokens }) {
+                val score = pTokens.size
+                if (score < bestScore) {
+                    best = row
+                    bestScore = score
+                }
             }
-            .sortedBy { (_, n) -> n.split(" ").size }
-        if (supersetMatches.isNotEmpty()) return supersetMatches.first().first
+        }
+        if (best != null) return best.first
 
         // 3. Same again but with digit-word swaps everywhere.
-        val mixedMatches = rows
-            .filter { (_, n) ->
-                val pTokens = n.split(" ").map(::digitToWord)
-                val cToks = canonicalTokens.map(::digitToWord)
-                cToks.all { ct -> ct in pTokens }
+        val cToksDigitForm = canonicalTokens.map(::digitToWord)
+        bestScore = Int.MAX_VALUE
+        for (row in index.rows) {
+            val pTokensDigitForm = row.third.map(::digitToWord)
+            if (cToksDigitForm.all { ct -> ct in pTokensDigitForm }) {
+                val score = pTokensDigitForm.size
+                if (score < bestScore) {
+                    best = row
+                    bestScore = score
+                }
             }
-            .sortedBy { (_, n) -> n.split(" ").size }
-        if (mixedMatches.isNotEmpty()) return mixedMatches.first().first
-
-        return null
+        }
+        return best?.first
     }
+
+    /** Convenience wrapper — builds an index and matches a single
+     *  name. Avoid in tight loops; build [ChannelIndex] yourself
+     *  and call [match] with it. */
+    fun match(canonicalName: String, liveChannels: List<MediaCard>): MediaCard? =
+        match(canonicalName, ChannelIndex(liveChannels))
 
     /** Normalize a channel name for matching: uppercase, strip
      *  non-alnum (`HD`, `4K`, `[CA]`, `:`, dashes...) collapse runs of

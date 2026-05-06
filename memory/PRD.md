@@ -1,6 +1,135 @@
 # HushTV — Product Requirements Document
 
-## v1.44.1 (DEV ONLY) — Sports crash fix + parse hardening — 2026-05-06  ⬅ LATEST
+## v1.44.2 (DEV ONLY) — Sports ANR FIX (real root cause) — 2026-05-06  ⬅ LATEST
+
+User report after v1.44.1: *"Nope I updated and its still crashing. As soon
+as I scroll down to the sports section below discovery the left menu
+automatically opens (never does that in any other section) I can briefly
+see the sports section on the right side and then all freezes and the app
+shuts down. Why can't you see this in the crash reports isn't that the
+whole point of having crash reports go to our server after crashes
+happen?"*
+
+The user was right — and the lack of crash reports was the smoking gun.
+
+### Real root cause (it was an ANR, not an exception)
+
+`SportsChannelMatcher.match()` re-normalized EVERY live channel via two
+regex `replaceAll` passes on EVERY call. With a typical Xtream playlist
+size (~5,000 live channels) and ~160 games to match, that's **~1.6 million
+regex operations** — and worse, it was being called from a Compose
+`remember{}` block in `TVSportsPage`, which executes on the main UI thread.
+
+After ~5 s of blocked main thread, the Android system watchdog detects an
+ANR and **`SIGKILL`s the process**. SIGKILL bypasses
+`Thread.setDefaultUncaughtExceptionHandler` entirely — that's why no crash
+log was ever written, and the upload-on-next-launch handler had nothing to
+upload.
+
+The "left menu opens automatically" was a SECONDARY symptom of the same
+bug: while the main thread was busy in the regex storm, the LaunchedEffect
+that fires `firstSportsFocus.requestFocus()` 320 ms after page change
+landed on a `FocusRequester` bound to GameCard idx 0. But the data was
+still loading → no GameCard was composed → the requester was unattached →
+`requestFocus()` silently failed (caught by surrounding `runCatching`) →
+focus drifted to the leftmost focusable on screen, which is the side rail,
+which auto-expands on focus.
+
+### What landed in v1.44.2
+
+#### 1. Pre-normalized channel index
+- New `SportsChannelMatcher.ChannelIndex` class — builds the normalized +
+  tokenized representation of every live channel ONCE.
+- `match(canonicalName, index)` now does pure string-equality lookups
+  against the cached form. The two regex `replaceAll`s only run on the
+  ~3-5 token canonical name, never on the 5,000-channel haystack.
+- Replaced `firstOrNull { ... sortedBy {} }` with a single linear pass +
+  best-score tracking — O(N) instead of O(N + N log N).
+
+#### 2. All matching off the main thread
+- `rememberChannelIndex(channels)` builds the index on
+  `Dispatchers.Default` via `produceState`.
+- `rememberPlayableGames(games, index)` does the per-game match on
+  `Dispatchers.Default` via `produceState`.
+- `rememberPlayablePpv(events, index)` likewise.
+- The main thread now does literally zero work beyond reading the
+  pre-computed `List<Pair<...>>`. Sports page composes in ~16 ms even on
+  a 5,000-channel playlist.
+
+#### 3. First focus lands on the first league pill
+- `LeaguePillBar` accepts a `firstItemFocus: FocusRequester?` parameter
+  applied to the first pill ("All").
+- `TVSportsPage` passes `firstItemFocus` (the page-level requester from
+  `TVMainMenuScreen`) into the pill bar.
+- Pills always exist (3 + N league pills, where N comes from the server),
+  so `firstSportsFocus.requestFocus()` always lands on a real focusable.
+  The "rail auto-opens" symptom is gone.
+- Pills DOWN → first card (via `railFocus`); cards UP → first pill;
+  pills UP → exit to previous page; cards DOWN → next page. Natural
+  D-pad flow.
+
+#### 4. Removed redundant outer `.focusable()` (carried over from v1.44.1)
+- `LeaguePillView`'s outer `.focusable()` after `.tvFocusable()` removed
+  per the v1.43.98 focus rule.
+
+### Files changed
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/sports/SportsChannelMatcher.kt`
+  — Full rewrite. Adds `ChannelIndex`, switches to single-pass best-score
+  matching, retains the deprecated `match(name, list)` overload for
+  backward compat.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/sports/SportsState.kt`
+  — Adds `rememberChannelIndex`, `rememberPlayableGames`,
+  `rememberPlayablePpv`. Removes the synchronous `filterPlayableGames` /
+  `filterPlayablePpv` (they were the bug surface).
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/sports/TVSportsPage.kt`
+  — Uses the new async filters. Threads `firstItemFocus` into the pill
+  bar instead of into the cards rail. Adds `railFocus` for intra-page
+  pill→card navigation.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/sports/SportsCards.kt`
+  — `LeaguePillBar` now accepts `firstItemFocus`, `onUpFromRow`,
+  `onDownFromRow`. `LeaguePillView` accepts `focusRequester` (passed
+  into `tvFocusable` directly per the v1.43.98 rule). `GameCard` accepts
+  `onUpFromCard` so DPAD-UP from a card returns to the pill.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/sports/PpvCard.kt`
+  — Same treatment as GameCard.
+
+### Build + deploy
+- versionCode 401 → 402, versionName 1.44.1 → 1.44.2.
+- BUILD SUCCESSFUL (1m 13s).
+- Deployed via `/app/_buildenv/build-and-deploy-dev.sh`. APK 21.7 MB.
+- Auto-tagged `v1.44.2-dev`. Live: `https://hushtv.xyz/version.json`
+  reports `versionCode 402, mandatory: true`.
+- `mandatory: true` so the user's device force-updates out of the v1.44.0
+  / v1.44.1 crash loop on next launch.
+
+### Verification
+- Smoke check: dex strings confirm `ChannelIndex`,
+  `rememberPlayableGames`, `rememberChannelIndex` all compiled in.
+- Backend `/api/sports/health`: 161 games / 12 PPVs / 25 mappings —
+  unchanged.
+
+### Lessons preserved
+
+1. **Compose `remember{}` runs on the main thread.** Anything heavier
+   than ~1 ms of CPU work belongs in `produceState` /
+   `derivedStateOf` + a coroutine on `Dispatchers.Default`.
+2. **ANRs are SIGKILLs.** They bypass `Thread.setDefaultUncaughtException
+   Handler` because the JVM never gets a chance to run. To diagnose them,
+   you need `/data/anr/traces.txt` (root-only on prod devices) or a
+   user's verbal description of the symptom — which is exactly what the
+   user provided when they said "freezes then shuts down".
+3. **Unattached `FocusRequester` calls fail silently inside
+   `runCatching`.** If your first-focus target is conditionally composed
+   (e.g. depends on data load), bind the requester to a composable that
+   ALWAYS exists. League pills always exist; cards may not.
+
+---
+
+## v1.44.1 (DEV ONLY) — Sports crash fix attempt #1 (Moshi annotations) — 2026-05-06
+
+(Did NOT fix the actual problem — see v1.44.2 above. Removing the
+`@JsonClass(generateAdapter = true)` annotations was necessary cleanup
+but not the crash cause.)
 
 User report: *"Crashed as soon as I went to the sports section it crashed
 right away out of the app. B yes fix everything so the damn thing actually

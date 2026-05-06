@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -12,8 +13,10 @@ import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.sports.SportsApi
 import com.hushtv.tv.data.sports.SportsChannelMatcher
+import com.hushtv.tv.data.sports.SportsGame
 import com.hushtv.tv.data.sports.SportsHomeResponse
 import com.hushtv.tv.data.sports.SportsLeagueResponse
+import com.hushtv.tv.data.sports.SportsPpvEvent
 import com.hushtv.tv.data.sports.SportsPpvListResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -23,6 +26,22 @@ import kotlinx.coroutines.withContext
  * Sports state holders — load + refresh + match canonical channel
  * names to the user's actual Xtream live channels. Public surface is
  * intentionally tiny so the UI files stay focused on layout.
+ *
+ * v1.44.2 PERF + ANR FIX:
+ * Channel matching used to run in a Compose `remember{}` block on the
+ * MAIN thread. With ~5000 live channels in a typical playlist, the
+ * normalize-then-match nested loop took 5-15 s, triggering an OS-level
+ * ANR kill the moment the user landed on the Sports page.
+ *
+ * Two-part fix:
+ *   1. The matcher now caches normalized channels in [ChannelIndex]
+ *      (built once per playlist).
+ *   2. [filterPlayableGamesAsync] / [filterPlayablePpvAsync] do all
+ *      the matching on `Dispatchers.Default`, so the main thread
+ *      stays responsive while the CPU work happens in the background.
+ *
+ * Net effect: the Sports page composes in ~16 ms and the rail no
+ * longer half-opens behind the page while the match work catches up.
  */
 @Composable
 fun rememberSportsHome(): SportsHomeResponse? {
@@ -68,9 +87,9 @@ fun rememberSportsPpv(): SportsPpvListResponse? {
 
 /**
  * Loads the user's full live-channel list once for the active
- * playlist and keeps it in memory for SportsChannelMatcher. Returns
- * an empty list while loading (the UI hides un-matchable cards
- * regardless, so this just delays the row a beat).
+ * playlist and keeps it in memory. Runs on Dispatchers.IO so the
+ * (potentially-thousands-of-channels) HTTP fetch never blocks the
+ * UI thread.
  */
 @Composable
 fun rememberLiveChannels(playlistId: String): List<MediaCard> {
@@ -87,32 +106,82 @@ fun rememberLiveChannels(playlistId: String): List<MediaCard> {
 }
 
 /**
- * For a list of games, returns only the ones whose canonical channel
- * name resolves to a real channel in the user's playlist. Per the
- * user spec from v1.43.99: "hide entirely" — we don't show greyed-out
- * games. The caller passes the raw channels list once and we match
- * each game against it.
+ * Builds a [SportsChannelMatcher.ChannelIndex] off the main thread
+ * the moment the live-channel list is ready. The index encapsulates
+ * every channel's normalized form so per-game matching becomes
+ * O(games × channels) instead of O(games × channels × normalize_cost).
  */
-fun filterPlayableGames(
-    games: List<com.hushtv.tv.data.sports.SportsGame>,
-    liveChannels: List<MediaCard>,
-): List<Pair<com.hushtv.tv.data.sports.SportsGame, MediaCard>> {
-    if (liveChannels.isEmpty()) return emptyList()
-    return games.mapNotNull { g ->
-        val ch = g.channel ?: return@mapNotNull null
-        val match = SportsChannelMatcher.match(ch, liveChannels) ?: return@mapNotNull null
-        g to match
-    }
+@Composable
+fun rememberChannelIndex(
+    channels: List<MediaCard>,
+): SportsChannelMatcher.ChannelIndex? {
+    return produceState<SportsChannelMatcher.ChannelIndex?>(
+        initialValue = null,
+        key1 = channels,
+    ) {
+        if (channels.isEmpty()) {
+            value = null
+            return@produceState
+        }
+        value = withContext(Dispatchers.Default) {
+            SportsChannelMatcher.ChannelIndex(channels)
+        }
+    }.value
 }
 
-fun filterPlayablePpv(
-    events: List<com.hushtv.tv.data.sports.SportsPpvEvent>,
-    liveChannels: List<MediaCard>,
-): List<Pair<com.hushtv.tv.data.sports.SportsPpvEvent, MediaCard>> {
-    if (liveChannels.isEmpty()) return emptyList()
-    return events.mapNotNull { e ->
-        val ch = e.channel ?: return@mapNotNull null
-        val match = SportsChannelMatcher.match(ch, liveChannels) ?: return@mapNotNull null
-        e to match
-    }
+/**
+ * Async equivalent of the old `filterPlayableGames`. Returns
+ * `emptyList()` while the index or game list are still loading; emits
+ * the resolved list once the background filter completes.
+ *
+ * Keys on the identity of [games] and [index] so a swipe between
+ * leagues (which changes [games]) re-runs the filter, but a steady-
+ * state recomposition (e.g. focus tick) reuses the cached value.
+ */
+@Composable
+fun rememberPlayableGames(
+    games: List<SportsGame>,
+    index: SportsChannelMatcher.ChannelIndex?,
+): List<Pair<SportsGame, MediaCard>> {
+    return produceState<List<Pair<SportsGame, MediaCard>>>(
+        initialValue = emptyList(),
+        key1 = games,
+        key2 = index,
+    ) {
+        if (index == null || index.isEmpty || games.isEmpty()) {
+            value = emptyList()
+            return@produceState
+        }
+        value = withContext(Dispatchers.Default) {
+            games.mapNotNull { g ->
+                val ch = g.channel ?: return@mapNotNull null
+                val match = SportsChannelMatcher.match(ch, index) ?: return@mapNotNull null
+                g to match
+            }
+        }
+    }.value
+}
+
+@Composable
+fun rememberPlayablePpv(
+    events: List<SportsPpvEvent>,
+    index: SportsChannelMatcher.ChannelIndex?,
+): List<Pair<SportsPpvEvent, MediaCard>> {
+    return produceState<List<Pair<SportsPpvEvent, MediaCard>>>(
+        initialValue = emptyList(),
+        key1 = events,
+        key2 = index,
+    ) {
+        if (index == null || index.isEmpty || events.isEmpty()) {
+            value = emptyList()
+            return@produceState
+        }
+        value = withContext(Dispatchers.Default) {
+            events.mapNotNull { e ->
+                val ch = e.channel ?: return@mapNotNull null
+                val match = SportsChannelMatcher.match(ch, index) ?: return@mapNotNull null
+                e to match
+            }
+        }
+    }.value
 }

@@ -9,15 +9,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,8 +48,8 @@ import com.hushtv.tv.ui.theme.Inter
  *   ┌──────────────────────────── Hero ─────────────────────────────┐
  *   │  cinematic backdrop · countdown · channel chip                │
  *   └───────────────────────────────────────────────────────────────┘
- *   ┌── League pills row ──────────────────────────────────────────┐
- *   │ [LIVE] [PPV] [NHL] [MLB] [NBA] [NFL] [MLS] [UCL] ...          │
+ *   ┌── League pills row (← FIRST FOCUS LANDS HERE) ────────────────┐
+ *   │ [LIVE] [PPV] [NHL] [MLB] [NBA] [NFL] [MLS] [UCL] ...           │
  *   └───────────────────────────────────────────────────────────────┘
  *   ┌── Game cards rail (horizontal scroll) ───────────────────────┐
  *   │ [card1] [card2] [card3] [card4] ...                          │
@@ -61,6 +57,23 @@ import com.hushtv.tv.ui.theme.Inter
  *
  * Channel cards filter to only games / PPV the user can actually
  * watch (per spec: "hide entirely" if no playlist match).
+ *
+ * v1.44.2 ANR FIX:
+ * The first focusable on this page is now the FIRST PILL ("All"), not
+ * the first card. Reasons:
+ *   • Pills always exist (even while data loads), so
+ *     `firstItemFocus.requestFocus()` always lands on a real
+ *     focusable. Previously the requester was bound to GameCard idx 0
+ *     which doesn't get composed when the games list is still loading
+ *     → requester unattached → request silently fails → focus drifts
+ *     to the side rail (which auto-expands), exactly the symptom the
+ *     user reported.
+ *   • Pills are the natural entry point for the page anyway — the
+ *     first thing the user wants to do is choose a league.
+ *
+ * Card matching now runs on Dispatchers.Default via
+ * [rememberPlayableGames] / [rememberPlayablePpv] so the main thread
+ * never blocks waiting for ~5000-channel × ~160-game match work.
  */
 @Composable
 fun TVSportsPage(
@@ -72,47 +85,47 @@ fun TVSportsPage(
 ) {
     val home = rememberSportsHome()
     val liveChannels = rememberLiveChannels(playlistId)
+    val channelIndex = rememberChannelIndex(liveChannels)
 
     var selectedLeague by remember { mutableStateOf<String>("all") }
     var pinnedHero by remember { mutableStateOf<SportsHero?>(null) }
+    val railFocus = remember { FocusRequester() }
 
     val pills = remember(home, liveChannels) {
         buildPills(home?.leagues?.map { it.league.slug to it.league.name } ?: emptyList())
     }
 
-    // Resolve which games to show in the cards rail given the active pill.
+    // Background-thread filter — never blocks the main thread even
+    // when the playlist has thousands of channels.
+    val flatGames = remember(home) {
+        (home?.leagues ?: emptyList()).flatMap { it.games }
+    }
+    val playableAll: List<Pair<SportsGame, MediaCard>> =
+        rememberPlayableGames(flatGames, channelIndex)
+
     val playableGames: List<Pair<SportsGame, MediaCard>> =
-        remember(home, liveChannels, selectedLeague) {
-            val all = (home?.leagues ?: emptyList())
-                .flatMap { it.games }
-                .let { filterPlayableGames(it, liveChannels) }
+        remember(playableAll, selectedLeague) {
             when (selectedLeague) {
-                "all", "live" -> {
-                    if (selectedLeague == "live")
-                        all.filter { it.first.status.equals("live", ignoreCase = true) }
-                    else all
-                }
-                else -> all.filter { it.first.league?.slug == selectedLeague }
-            }.sortedBy { it.first.start_utc }
+                "all" -> playableAll.sortedBy { it.first.start_utc }
+                "live" -> playableAll
+                    .filter { it.first.status.equals("live", ignoreCase = true) }
+                    .sortedBy { it.first.start_utc }
+                "ppv" -> emptyList() // handled separately below
+                else -> playableAll
+                    .filter { it.first.league?.slug == selectedLeague }
+                    .sortedBy { it.first.start_utc }
+            }
         }
 
     val playablePpv: List<Pair<SportsPpvEvent, MediaCard>> =
-        remember(home, liveChannels) {
-            filterPlayablePpv(home?.ppv ?: emptyList(), liveChannels)
-                .sortedBy { it.first.start_utc }
-        }
+        rememberPlayablePpv(home?.ppv ?: emptyList(), channelIndex)
+            .let { list -> remember(list) { list.sortedBy { it.first.start_utc } } }
 
     Box(
         Modifier
             .fillMaxSize()
             .background(Color(0xFF05080F))
-            .focusGroup()
-            .onPreviewKeyEvent { ev ->
-                // Vertical D-pad outside any focusable in this page
-                // routes back to the parent's onUp/onDown.
-                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                false
-            },
+            .focusGroup(),
     ) {
         // ── Hero (top half) ──
         Box(
@@ -138,6 +151,9 @@ fun TVSportsPage(
                 selectedSlug = selectedLeague,
                 onSelect = { selectedLeague = it },
                 contentStartPadding = 96.dp,
+                firstItemFocus = firstItemFocus,
+                onUpFromRow = onUpFromRow,
+                onDownFromRow = { railFocus.requestFocus() },
             )
 
             if (selectedLeague == "ppv") {
@@ -145,7 +161,7 @@ fun TVSportsPage(
                     nav = nav,
                     playlistId = playlistId,
                     items = playablePpv,
-                    firstItemFocus = firstItemFocus,
+                    railFocus = railFocus,
                     onPpvFocused = { p, ch ->
                         pinnedHero = SportsHero(
                             kind = "ppv",
@@ -165,7 +181,7 @@ fun TVSportsPage(
                     nav = nav,
                     playlistId = playlistId,
                     items = playableGames,
-                    firstItemFocus = firstItemFocus,
+                    railFocus = railFocus,
                     onGameFocused = { g, ch ->
                         pinnedHero = SportsHero(
                             kind = "game",
@@ -185,8 +201,8 @@ fun TVSportsPage(
     }
 }
 
-/** Build the static league-pill list. We always lead with LIVE NOW
- *  + PPV, then the leagues the server reports as having games today,
+/** Build the static league-pill list. We always lead with All / Live
+ *  / PPV, then the leagues the server reports as having games today,
  *  in their own ordering. */
 private fun buildPills(leagueSlugsAndNames: List<Pair<String, String>>): List<LeaguePill> {
     val out = mutableListOf<LeaguePill>()
@@ -221,7 +237,7 @@ private fun GameCardsRail(
     nav: NavController,
     playlistId: String,
     items: List<Pair<SportsGame, MediaCard>>,
-    firstItemFocus: FocusRequester,
+    railFocus: FocusRequester,
     onGameFocused: (SportsGame, MediaCard) -> Unit,
     onUpFromRow: () -> Unit,
     onDownFromRow: (() -> Unit)?,
@@ -235,7 +251,6 @@ private fun GameCardsRail(
             .onPreviewKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (ev.key) {
-                    Key.DirectionUp -> { onUpFromRow(); true }
                     Key.DirectionDown -> {
                         if (onDownFromRow != null) { onDownFromRow(); true } else false
                     }
@@ -262,7 +277,8 @@ private fun GameCardsRail(
                     onClick = {
                         playLiveChannel(ctx, nav, playlistId, ch)
                     },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
+                    focusRequester = if (idx == 0) railFocus else null,
+                    onUpFromCard = onUpFromRow,
                 )
             }
         }
@@ -274,7 +290,7 @@ private fun PpvCardsRail(
     nav: NavController,
     playlistId: String,
     items: List<Pair<SportsPpvEvent, MediaCard>>,
-    firstItemFocus: FocusRequester,
+    railFocus: FocusRequester,
     onPpvFocused: (SportsPpvEvent, MediaCard) -> Unit,
     onUpFromRow: () -> Unit,
     onDownFromRow: (() -> Unit)?,
@@ -288,7 +304,6 @@ private fun PpvCardsRail(
             .onPreviewKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (ev.key) {
-                    Key.DirectionUp -> { onUpFromRow(); true }
                     Key.DirectionDown -> {
                         if (onDownFromRow != null) { onDownFromRow(); true } else false
                     }
@@ -313,7 +328,8 @@ private fun PpvCardsRail(
                     matchedChannel = ch,
                     onFocus = { onPpvFocused(event, ch) },
                     onClick = { playLiveChannel(ctx, nav, playlistId, ch) },
-                    focusRequester = if (idx == 0) firstItemFocus else null,
+                    focusRequester = if (idx == 0) railFocus else null,
+                    onUpFromCard = onUpFromRow,
                 )
             }
         }

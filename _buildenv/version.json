@@ -1,13 +1,13 @@
 {
-  "versionCode": 401,
-  "versionName": "1.44.1",
+  "versionCode": 402,
+  "versionName": "1.44.2",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": false,
+  "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "FIX (DEV ONLY): The new 'PPV & LIVE SPORTS' page no longer crashes the app on open. Root cause: Moshi's reflection JSON adapter rejected the wire models because they were carrying a stale `@JsonClass(generateAdapter = true)` annotation that's only valid with kapt codegen (we don't use kapt). Removed the annotations, hardened the parse path with double-nested runCatching + logcat reporting, and removed a redundant outer `.focusable()` on the league-pill row that violated the v1.43.98 focus rule.",
-    "Sports section now degrades gracefully: if the schedule fails to load you see the placeholder 'Loading the schedule…' instead of a hard crash.",
-    "OFFICIAL channel still on v1.43.99 — Sports stays Dev-only until Phase 3 (admin panel) is signed off."
+    "ACTUAL CRASH FIX (DEV ONLY): The Sports section was triggering an ANR (main-thread hang) — not a Java exception, which is why crash reports never made it to the server. Root cause: the channel-name fuzzy matcher was running ~1.6 MILLION regex operations (5,000 channels × 160 games × 2 normalize passes) inside a Compose `remember{}` block, which executes on the main UI thread. Once the main thread blocked >5 s, the OS SIGKILL'd the process, bypassing every Java handler.",
+    "Fix has three parts: (1) channel matcher now caches normalized names in a ChannelIndex built ONCE per playlist; (2) all matching runs on Dispatchers.Default via `produceState`, so the main thread stays responsive; (3) first focus on the Sports page now lands on the first league pill ('All'), which always exists, instead of the first card (which doesn't exist while data loads — that's why the rail was 'auto-opening' before, focus was drifting to the leftmost focusable when the unattached card requester failed silently).",
+    "Marked mandatory:true so devices stuck on the broken v1.44.0/1.44.1 get force-updated out of the crash loop."
   ]
 }
