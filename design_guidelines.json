@@ -1,130 +1,56 @@
 {
-  "theme": "Dark",
-  "archetype": "5 (Jewel & Luxury)",
-  "vibe": "Beautiful, sexy, modern, clean, premium adult, vibrant",
+  "theme": "Dark Mode (Android TV)",
+  "archetype": "The Performance Pro",
+  "component_name": "SportsGameCard",
+  "dimensions": {
+    "width": "360dp",
+    "height": "200dp"
+  },
+  "core_layout_strategy": "Vertical Scoreboard Layout. We abandon the horizontal 'Logo VS Logo' layout because it mathematically cannot fit two 24-character names + logos in 360dp. Instead, we use a vertical stack (Away Team Row over Home Team Row). This allocates a dedicated, flexible-height text block for each team name, supporting up to 2 lines per line without ever truncating.",
+  "states": {
+    "layout_measurements": {
+      "card_padding": "16dp all sides",
+      "available_content_width": "328dp (360 - 32)",
+      "top_bar_height": "24dp",
+      "middle_spacing": "12dp",
+      "team_row_height": "56dp",
+      "inter_team_spacing": "8dp",
+      "total_internal_height": "156dp content + 32dp padding = 188dp (Fits safely inside 200dp with 12dp to spare)"
+    },
+    "no_scores_upcoming": {
+      "description": "Displays team names prominently with an explicit '@' or 'VS' indicator.",
+      "away_row": "[Logo: 40x40dp] -> [Spacer: 16dp] -> [Text: Team Name, weight 1f, maxLines 2] -> [Spacer: 16dp] -> [Text: '@', 32dp width, right aligned]",
+      "home_row": "[Logo: 40x40dp] -> [Spacer: 16dp] -> [Text: Team Name, weight 1f, maxLines 2] -> [Spacer: 16dp] -> [Empty space for alignment]"
+    },
+    "with_scores_live_final": {
+      "description": "Replaces the '@' with score numbers.",
+      "away_row": "[Logo: 40x40dp] -> [Spacer: 16dp] -> [Text: Team Name, weight 1f, maxLines 2] -> [Spacer: 16dp] -> [Text: Score, 32dp width, right aligned]",
+      "home_row": "[Logo: 40x40dp] -> [Spacer: 16dp] -> [Text: Team Name, weight 1f, maxLines 2] -> [Spacer: 16dp] -> [Text: Score, 32dp width, right aligned]"
+    }
+  },
+  "focus_state": {
+    "unfocused": {
+      "background": "#1E1E1E",
+      "border": "1dp solid #333333",
+      "scale": "1.0f",
+      "elevation": "2dp"
+    },
+    "focused": {
+      "background": "#252525",
+      "border": "3dp solid #00FFFF",
+      "scale": "1.05f",
+      "elevation": "12dp",
+      "glow": "Adding a cyan drop shadow or outer glow is recommended if Compose version supports it, otherwise rely on the 3dp border + scale."
+    }
+  },
   "typography": {
-    "headings": {
-      "font": "Outfit",
-      "weights": ["Medium", "SemiBold", "Bold"],
-      "usage": "Large clean typography for high legibility from 10 feet away. Avoid ultra-thin or black weights."
-    },
-    "body": {
-      "font": "Manrope",
-      "weights": ["Regular", "Medium"],
-      "usage": "Highly legible geometric sans for metadata, tags, and descriptions."
-    },
-    "scale": {
-      "h1": "text-5xl md:text-6xl tracking-tight leading-tight",
-      "h2": "text-3xl md:text-4xl tracking-tight",
-      "h3": "text-2xl md:text-3xl",
-      "h4": "text-xl",
-      "body_large": "text-lg md:text-xl",
-      "body": "text-base md:text-lg text-gray-300",
-      "small": "text-sm text-gray-400 uppercase tracking-widest"
-    }
+    "status_live": "12sp, Bold, Color: #FF3B30, uppercase, tracking: 0.05em",
+    "status_final": "12sp, Medium, Color: #AAAAAA, uppercase",
+    "team_name": "16sp, Medium, Color: #FFFFFF, maxLines: 2, overflow: TextOverflow.Visible, LineHeight: 20sp",
+    "score": "22sp, Bold, Color: #FFFFFF, textAlign: Right",
+    "vs_indicator": "16sp, Medium, Color: #888888, textAlign: Right"
   },
-  "colors": {
-    "background": {
-      "primary": "#050505",
-      "secondary": "#0A0A0A",
-      "surface": "#141414",
-      "surface_glass": "rgba(20, 20, 20, 0.6)"
-    },
-    "accent": {
-      "primary": "#FF2A6D",
-      "primary_hover": "#FF5285",
-      "glow": "rgba(255, 42, 109, 0.5)"
-    },
-    "text": {
-      "primary": "#FFFFFF",
-      "secondary": "#A3A3A3",
-      "muted": "#737373"
-    }
-  },
-  "tv_focus_system": {
-    "philosophy": "D-pad navigation requires highly prominent focus states. The currently focused item must be instantly recognizable from 10 feet away.",
-    "rest_state": {
-      "classes": "transform scale-100 transition-all duration-300 ease-out opacity-80"
-    },
-    "focus_state": {
-      "classes": "transform scale-105 md:scale-110 opacity-100 z-50 ring-4 ring-[#FF2A6D] ring-offset-4 ring-offset-[#050505] shadow-[0_0_30px_rgba(255,42,109,0.5)] bg-[#141414]"
-    },
-    "active_state": {
-      "classes": "transform scale-95 md:scale-100 opacity-80 ring-2"
-    },
-    "disabled_state": {
-      "classes": "opacity-30 grayscale cursor-not-allowed"
-    }
-  },
-  "layout_and_spacing": {
-    "tv_overscan_padding": "px-8 md:px-16 py-6 md:py-12",
-    "rail_spacing": "gap-6 md:gap-8",
-    "section_spacing": "py-12 md:py-20",
-    "card_radii": "rounded-xl md:rounded-2xl"
-  },
-  "components": {
-    "hero_carousel": {
-      "layout": "70vh height, full bleed. Left-aligned content block with 50% width on desktop. Strong gradient overlay.",
-      "background": "bg-gradient-to-r from-[#050505] via-[#050505]/70 to-transparent",
-      "bottom_gradient": "bg-gradient-to-t from-[#050505] h-32 absolute bottom-0 w-full",
-      "focus": "The active hero item gets a primary accent glow on its associated CTA button."
-    },
-    "horizontal_rails": {
-      "title": "text-2xl font-semibold mb-6 uppercase tracking-widest text-[#FFFFFF]",
-      "container": "flex overflow-x-auto pb-8 hide-scrollbar scroll-smooth gap-4 md:gap-6",
-      "card_scene": "aspect-video w-64 md:w-80 rounded-xl relative overflow-hidden group bg-[#141414]",
-      "card_poster": "aspect-[2/3] w-48 md:w-60 rounded-xl relative overflow-hidden group bg-[#141414]",
-      "card_performer": "aspect-square w-32 md:w-48 rounded-full relative overflow-hidden group bg-[#141414]",
-      "card_studio": "aspect-[3/1] w-56 md:w-72 rounded-xl flex items-center justify-center bg-[#141414] border border-white/10"
-    },
-    "detail_screen": {
-      "backdrop": "Full bleed with 50% opacity and heavy bottom/left gradient mask.",
-      "layout": "Grid layout. Left: Metadata, Actions. Right/Bottom: Related rails.",
-      "metadata": "Title (H1), Year/Duration/Rating (inline list, small), Tags (glassmorphism chips), Synopsis (body large).",
-      "auto_focus": "The 'Play' button must receive auto-focus when the screen mounts.",
-      "buttons": {
-        "play": "bg-[#FF2A6D] text-white px-8 py-4 rounded-full font-bold uppercase tracking-wider focus:outline-none focus:ring-4 focus:ring-white focus:scale-110 focus:shadow-[0_0_20px_rgba(255,42,109,0.8)]",
-        "secondary": "bg-white/10 text-white px-8 py-4 rounded-full font-bold focus:outline-none focus:bg-white/20 focus:ring-4 focus:ring-[#FF2A6D] focus:scale-110"
-      }
-    },
-    "age_gate": {
-      "overlay": "backdrop-blur-3xl bg-[#050505]/90 fixed inset-0 z-[100] flex items-center justify-center",
-      "dialog": "max-w-xl w-full bg-[#141414]/90 border border-white/10 rounded-3xl p-12 text-center shadow-2xl",
-      "actions": "Flex column or row gap-4. Primary 'I am 18+' button must be distinct, huge, and auto-focused.",
-      "buttons": "Focus states must use the standard TV focus system (scale + ring + glow)."
-    },
-    "dmca_form": {
-      "layout": "Clean, structured form using Shadcn inputs with dark theme overrides.",
-      "focus": "Inputs must have strong focus-visible rings (ring-[#FF2A6D]) for D-pad users."
-    }
-  },
-  "media": {
-    "image_urls": {
-      "hero_background": {
-        "url": "https://images.pexels.com/photos/6648497/pexels-photo-6648497.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080&w=1920",
-        "description": "Silhouette of man and woman in studio with neon pink lighting. Use as the main hero carousel background."
-      },
-      "performer_avatar": {
-        "url": "https://images.pexels.com/photos/7194458/pexels-photo-7194458.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "description": "Stylish female model in neon lights. Use for performer circular cards."
-      },
-      "abstract_cover": {
-        "url": "https://images.unsplash.com/photo-1759885697855-52d11c41b19b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxNzV8MHwxfHNlYXJjaHwxfHxuZW9uJTIwbGlnaHRpbmclMjBkYXJrJTIwc3R1ZGlvfGVufDB8fHx8MTc3Nzk0NDczOHww&ixlib=rb-4.1.0&q=85",
-        "description": "Abstract illuminated shapes. Use as fallback for scene posters/thumbnails."
-      }
-    }
-  },
-  "accessibility_and_testing": {
-    "contrast": "All text must pass WCAG AA against the dark backgrounds. Avoid gray-on-gray.",
-    "test_ids": "Every focusable card, button, and input MUST have a data-testid attribute (e.g., data-testid='rail-card-1', data-testid='play-button').",
-    "motion": "Use prefers-reduced-motion queries to disable scaling if necessary, but keep the ring and color changes."
-  },
-  "instructions_to_main_agent": [
-    "Ensure Shadcn components (if used) are heavily customized to match the Dark/Jewel archetype. Strip away standard Vercel borders.",
-    "Implement the TV focus system explicitly using Tailwind's focus-visible or custom state classes tailored for D-pad navigation.",
-    "The Home screen needs a full-bleed Hero section that fades gracefully into the horizontal rails below.",
-    "Horizontal rails must allow smooth scrolling. Hide standard scrollbars. Provide sufficient right-padding so the last item isn't cut off abruptly.",
-    "Detail screen must overlay the backdrop image properly using bg-black/60 masks.",
-    "Do NOT use 'Inter'. Apply 'Outfit' for headings and 'Manrope' for body text."
-  ]
+  "definitive_answer_for_long_names": "For strings like 'Vegas Golden Knights' (24 chars), a horizontal layout fails. By using the Vertical Scoreboard Layout, the team name text composable is granted 'weight(1f)', yielding exactly 200dp of width. At 16sp, 200dp holds ~22 characters per line. By explicitly setting 'maxLines = 2', 'Vegas Golden Knights' will perfectly wrap to a second line. The Row height of 56dp accommodates 2 lines of 16sp text (approx 40dp tall) vertically centered next to the 40dp logo. NO TRUNCATION EVER OCCURS.",
+  "compose_pseudo_code": "Card(modifier = Modifier.size(360.dp, 200.dp).onFocusChanged{}.border(if (isFocused) 3.dp else 1.dp, if (isFocused) Cyan else DarkGray).padding(16.dp)) {\n  Column(modifier = Modifier.fillMaxSize()) {\n    // Top Bar\n    Row(modifier = Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {\n      Image(LeagueBadge, modifier = Modifier.size(24.dp))\n      Spacer(Modifier.weight(1f))\n      Text(Status, fontSize = 12.sp)\n    }\n    Spacer(Modifier.height(12.dp))\n    // Away Team Row\n    Row(modifier = Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {\n      Image(AwayLogo, modifier = Modifier.size(40.dp))\n      Spacer(Modifier.width(16.dp))\n      Text(AwayName, modifier = Modifier.weight(1f), fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Visible)\n      Spacer(Modifier.width(16.dp))\n      Text(AwayScoreOrAt, modifier = Modifier.width(32.dp), textAlign = TextAlign.End, fontSize = 22.sp)\n    }\n    Spacer(Modifier.height(8.dp))\n    // Home Team Row\n    Row(modifier = Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {\n      Image(HomeLogo, modifier = Modifier.size(40.dp))\n      Spacer(Modifier.width(16.dp))\n      Text(HomeName, modifier = Modifier.weight(1f), fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Visible)\n      Spacer(Modifier.width(16.dp))\n      Text(HomeScoreOrEmpty, modifier = Modifier.width(32.dp), textAlign = TextAlign.End, fontSize = 22.sp)\n    }\n  }\n}",
+  "instructions_to_main_agent": "Implement the Android TV Jetpack Compose component strictly according to the compose_pseudo_code and layout_measurements. Ensure the text composables for team names do NOT contain TextOverflow.Ellipsis and strictly use maxLines = 2. Apply a 1.05f scale and 3dp Cyan border when focused. Do not deviate from the 360x200dp bounds."
 }
