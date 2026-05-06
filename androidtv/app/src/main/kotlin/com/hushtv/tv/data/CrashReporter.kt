@@ -38,6 +38,7 @@ object CrashReporter {
 
     private const val PREFS = "crash_reporter"
     private const val KEY_LAST_UPLOADED_MTIME = "last_uploaded_mtime"
+    private const val KEY_LAST_UPLOADED_ANR_MTIME = "last_uploaded_anr_mtime"
 
     private val executor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "hushtv-crash-upload").apply { isDaemon = true }
@@ -80,21 +81,27 @@ object CrashReporter {
     }
 
     private fun maybeUpload(ctx: Context, force: Boolean): Boolean {
-        val f = File(ctx.filesDir, "crash.log")
-        if (!f.exists() || f.length() == 0L) return false
-
-        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val lastMtime = prefs.getLong(KEY_LAST_UPLOADED_MTIME, 0L)
-        if (!force && f.lastModified() == lastMtime) return false
-
-        val body = buildPayload(ctx, f.readText())
-        val success = postJson(ENDPOINT, body)
-        if (success) {
-            prefs.edit()
-                .putLong(KEY_LAST_UPLOADED_MTIME, f.lastModified())
-                .apply()
+        // Two log files to ship: the JVM uncaught-exception log
+        // (crash.log) and the ANR watchdog log (anr.log). Each is
+        // tracked separately via its own mtime so we can ship one
+        // without re-shipping the other.
+        var anyUploaded = false
+        for ((name, mtimeKey) in arrayOf(
+            "crash.log" to KEY_LAST_UPLOADED_MTIME,
+            "anr.log"   to KEY_LAST_UPLOADED_ANR_MTIME,
+        )) {
+            val f = File(ctx.filesDir, name)
+            if (!f.exists() || f.length() == 0L) continue
+            val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val lastMtime = prefs.getLong(mtimeKey, 0L)
+            if (!force && f.lastModified() == lastMtime) continue
+            val body = buildPayload(ctx, f.readText())
+            if (postJson(ENDPOINT, body)) {
+                prefs.edit().putLong(mtimeKey, f.lastModified()).apply()
+                anyUploaded = true
+            }
         }
-        return success
+        return anyUploaded
     }
 
     private fun buildPayload(ctx: Context, trace: String): String {

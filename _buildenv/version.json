@@ -1,13 +1,14 @@
 {
-  "versionCode": 402,
-  "versionName": "1.44.2",
+  "versionCode": 403,
+  "versionName": "1.44.3",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "ACTUAL CRASH FIX (DEV ONLY): The Sports section was triggering an ANR (main-thread hang) — not a Java exception, which is why crash reports never made it to the server. Root cause: the channel-name fuzzy matcher was running ~1.6 MILLION regex operations (5,000 channels × 160 games × 2 normalize passes) inside a Compose `remember{}` block, which executes on the main UI thread. Once the main thread blocked >5 s, the OS SIGKILL'd the process, bypassing every Java handler.",
-    "Fix has three parts: (1) channel matcher now caches normalized names in a ChannelIndex built ONCE per playlist; (2) all matching runs on Dispatchers.Default via `produceState`, so the main thread stays responsive; (3) first focus on the Sports page now lands on the first league pill ('All'), which always exists, instead of the first card (which doesn't exist while data loads — that's why the rail was 'auto-opening' before, focus was drifting to the leftmost focusable when the unattached card requester failed silently).",
-    "Marked mandatory:true so devices stuck on the broken v1.44.0/1.44.1 get force-updated out of the crash loop."
+    "DIAGNOSTIC + DEFENSIVE BUILD (DEV ONLY): Added an ANR watchdog that detects main-thread freezes >4s, captures the main-thread stack trace + last 30 breadcrumbs, writes to anr.log, and uploads on next launch. This closes the diagnostic gap that ate v1.44.0 → v1.44.2 — ANRs are SIGKILL'd by the OS and bypass every JVM crash handler, which is why no crash data ever made it to the server.",
+    "Sports page: hardened the click-to-play path with try/catch around nav.navigate, added stream-URL validation (no playback attempted on streamId<=0 or blank URL), made pill clicks idempotent (clicking the already-selected pill is a no-op).",
+    "Breadcrumbs added throughout Sports interactions (page mount, data load, league change, card focus, card click, play attempts) so the next ANR / crash report shows exactly what the user did right before the freeze.",
+    "Mandatory:true so devices stuck on v1.44.0 → v1.44.2 force-update."
   ]
 }

@@ -91,6 +91,21 @@ fun TVSportsPage(
     var pinnedHero by remember { mutableStateOf<SportsHero?>(null) }
     val railFocus = remember { FocusRequester() }
 
+    // v1.44.3 — breadcrumbs so the next ANR/crash report can show
+    // exactly what state the user was in when it fired.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        com.hushtv.tv.data.EventLog.log("sports", "page mounted playlistId=$playlistId")
+    }
+    androidx.compose.runtime.LaunchedEffect(home, liveChannels.size, channelIndex) {
+        com.hushtv.tv.data.EventLog.log(
+            "sports",
+            "data home=${home != null} live=${liveChannels.size} idx=${channelIndex?.size ?: -1}"
+        )
+    }
+    androidx.compose.runtime.LaunchedEffect(selectedLeague) {
+        com.hushtv.tv.data.EventLog.log("sports", "league=$selectedLeague")
+    }
+
     val pills = remember(home, liveChannels) {
         buildPills(home?.leagues?.map { it.league.slug to it.league.name } ?: emptyList())
     }
@@ -149,7 +164,9 @@ fun TVSportsPage(
             LeaguePillBar(
                 pills = pills,
                 selectedSlug = selectedLeague,
-                onSelect = { selectedLeague = it },
+                onSelect = { newSlug ->
+                    if (newSlug != selectedLeague) selectedLeague = newSlug
+                },
                 contentStartPadding = 96.dp,
                 firstItemFocus = firstItemFocus,
                 onUpFromRow = onUpFromRow,
@@ -275,6 +292,7 @@ private fun GameCardsRail(
                     matchedChannel = ch,
                     onFocus = { onGameFocused(game, ch) },
                     onClick = {
+                        com.hushtv.tv.data.EventLog.log("sports", "card click ${ch.title}")
                         playLiveChannel(ctx, nav, playlistId, ch)
                     },
                     focusRequester = if (idx == 0) railFocus else null,
@@ -327,7 +345,10 @@ private fun PpvCardsRail(
                     event = event,
                     matchedChannel = ch,
                     onFocus = { onPpvFocused(event, ch) },
-                    onClick = { playLiveChannel(ctx, nav, playlistId, ch) },
+                    onClick = {
+                        com.hushtv.tv.data.EventLog.log("sports", "ppv click ${ch.title}")
+                        playLiveChannel(ctx, nav, playlistId, ch)
+                    },
                     focusRequester = if (idx == 0) railFocus else null,
                     onUpFromCard = onUpFromRow,
                 )
@@ -361,9 +382,35 @@ private fun playLiveChannel(
     playlistId: String,
     ch: MediaCard,
 ) {
-    val p = PlaylistStore.find(ctx, playlistId) ?: return
-    val streamUrl = XtreamApi.liveUrl(p.host, p.username, p.password, ch.streamId)
-    val encUrl = android.net.Uri.encode(streamUrl)
-    val encTitle = android.net.Uri.encode(ch.title)
-    nav.navigate("player/$playlistId/$encUrl/$encTitle/true")
+    // Wrap the entire navigation in runCatching so a malformed
+    // streamUrl or a transient navigation race never crashes the
+    // process. v1.44.3 — was a suspected crash path on the
+    // sports-card → player navigation; defensive belt added.
+    runCatching {
+        com.hushtv.tv.data.EventLog.log(
+            "sports",
+            "play streamId=${ch.streamId} title=${ch.title}"
+        )
+        val p = PlaylistStore.find(ctx, playlistId) ?: run {
+            com.hushtv.tv.data.EventLog.log("sports", "play aborted: playlist not found")
+            return
+        }
+        val streamUrl = XtreamApi.liveUrl(p.host, p.username, p.password, ch.streamId)
+        if (streamUrl.isBlank() || ch.streamId <= 0) {
+            com.hushtv.tv.data.EventLog.log(
+                "sports",
+                "play aborted: blank/invalid streamUrl streamId=${ch.streamId}"
+            )
+            return
+        }
+        val encUrl = android.net.Uri.encode(streamUrl)
+        val encTitle = android.net.Uri.encode(ch.title.ifBlank { "Sports" })
+        nav.navigate("player/$playlistId/$encUrl/$encTitle/true")
+    }.onFailure {
+        com.hushtv.tv.data.EventLog.log(
+            "sports",
+            "play crashed: ${it.javaClass.simpleName}: ${it.message}"
+        )
+        android.util.Log.w("HushTVSports", "playLiveChannel failed", it)
+    }
 }

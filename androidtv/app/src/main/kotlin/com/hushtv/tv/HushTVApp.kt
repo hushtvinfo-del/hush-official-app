@@ -50,6 +50,11 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // If a crash was captured during the last session, POST it to
         // the server in the background. Silent-no-op if nothing's new.
         com.hushtv.tv.data.CrashReporter.uploadIfPending(this)
+        // v1.44.3 — start the ANR watchdog. Detects main-thread freezes
+        // >4s and writes a stack trace to anr.log so the next launch
+        // can ship it. Closes the diagnostic gap that ate v1.44.0–.2:
+        // ANRs are SIGKILL'd by the OS and bypass every JVM handler.
+        com.hushtv.tv.data.AnrWatchdog.start(this)
     }
 
     /**
