@@ -177,7 +177,40 @@ private fun AppContent() {
         composable("home") { TVHomeScreen(nav) }
         composable("add") { TVAddAccountScreen(nav) }
         composable("menu/{playlistId}") { bs ->
-            TVMainMenuScreen(nav, bs.arguments?.getString("playlistId") ?: "")
+            val playlistId = bs.arguments?.getString("playlistId") ?: ""
+            // v1.44.19 — Lite/Pro switch happens HERE, at the menu
+            // route. The Pro and Lite UI trees are completely
+            // separate composables (com.hushtv.tv.ui.screens.* vs
+            // com.hushtv.tv.ui.lite.*). The mode is read from
+            // SharedPreferences and re-evaluated each time the
+            // user lands on /menu, so toggling Lite ↔ Pro in
+            // Settings + nav back to /menu instantly switches.
+            //
+            // First-launch (mode == UNSET, hasPrompted == false):
+            //   show the capability dialog. After the user picks,
+            //   mode is saved and the chosen tree mounts.
+            val ctx = LocalContext.current
+            val savedMode = remember { com.hushtv.tv.data.AppModeStore.load(ctx) }
+            var pickedMode by remember {
+                mutableStateOf<com.hushtv.tv.data.AppMode>(savedMode)
+            }
+            val needsPrompt = remember {
+                pickedMode == com.hushtv.tv.data.AppMode.UNSET &&
+                    !com.hushtv.tv.data.AppModeStore.hasPrompted(ctx)
+            }
+            if (needsPrompt && pickedMode == com.hushtv.tv.data.AppMode.UNSET) {
+                com.hushtv.tv.ui.lite.LiteFirstLaunchDialog(
+                    onPicked = { pickedMode = it }
+                )
+            } else {
+                val effective = if (pickedMode == com.hushtv.tv.data.AppMode.UNSET)
+                    com.hushtv.tv.data.AppMode.PRO else pickedMode
+                if (effective == com.hushtv.tv.data.AppMode.LITE) {
+                    com.hushtv.tv.ui.lite.LiteShellScreen(nav, playlistId)
+                } else {
+                    TVMainMenuScreen(nav, playlistId)
+                }
+            }
         }
         composable(
             route = "browse/{playlistId}/{type}?category={category}&catId={catId}",

@@ -1,14 +1,18 @@
 {
-  "versionCode": 418,
-  "versionName": "1.44.18",
+  "versionCode": 419,
+  "versionName": "1.44.19",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "GAME CARD — logos now PUSHED TO LEFT/RIGHT EDGES with team names directly under them. The score box (or VS) takes the entire wide middle of the card. So a 'LIVE 98 — 102' game has all the room it needs while logos+names stay anchored to their corners. Achieved by switching the inner Row from weight(1f)/weight(1f) thirds to Arrangement.SpaceBetween with intrinsic-width side columns and a weight(1f) center.",
-    "Live scores bumped 30sp → 38sp now that the middle column is wide enough to hold them comfortably. Em-dash separator goes 22sp → 26sp.",
-    "Team-name font 10sp → 11sp for slightly easier readability — still narrow enough that 'GOLDEN KNIGHTS' / 'TIMBERWOLVES' fit without ellipsis (softWrap=false, overflow=Visible).",
-    "Mandatory:true so v1.44.17 devices force-update."
+    "NEW — APP MODE (Lite / Pro). Same APK, two completely separate UI trees. Pro is what you've always had — cinematic backgrounds, animated heroes, rich detail screens. Lite is a brand-new flat UI built for older Android TVs: no animations, no gradients, no Ken Burns hero, no glow halos.",
+    "FIRST-LAUNCH AUTO-DETECT — On first cold start the app reads the device's RAM (ActivityManager.getMemoryClass), CPU cores, and manufacturer to recommend Lite or Pro. The recommendation is SOFT: a centered modal pops up, the recommended option is highlighted, but the user can still pick either.",
+    "TOP-CORNER LITE BADGE — When Lite is active a small green LITE pill is pinned to the top-right corner so users always know which mode they're in.",
+    "LITE TABS — Home / Live TV / Movies / Series / Sports / Search / Settings. Same data layer (Xtream / TheSportsDB / TMDB) so Pro users can switch any time without re-login.",
+    "LITE SPORTS — Static text-only matchup rows (NHL · Maple Leafs @ Rangers · LIVE · 3-2 · SPORTSNET ONE) instead of the cinematic scoreboard cards. Same backend, no Ken Burns, no auto-cycling.",
+    "TOGGLE ANY TIME — Pro Settings → APP MODE → Switch to Lite. Lite Settings → Switch to Pro. Instant — no relaunch.",
+    "ZERO RISK to Pro: Lite UI lives in a brand-new package com.hushtv.tv.ui.lite.* — physically separated from com.hushtv.tv.ui.screens.*. Editing a Lite file CANNOT affect Pro behaviour by construction.",
+    "Mandatory:true so v1.44.18 devices force-update."
   ]
 }

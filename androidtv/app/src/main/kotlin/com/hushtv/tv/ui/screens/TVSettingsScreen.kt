@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -221,6 +222,39 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                     subtitle = "Share a crash report if the app force-closes",
                     icon = { Icon(Icons.Default.Report, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                     onClick = { nav.navigate("diag") },
+                )
+            }
+
+            // ── APP MODE (v1.44.19) ─────────────────────────────────
+            // Lets the user toggle between the cinematic Pro UI and
+            // the snappy Lite UI any time. Switching from Pro → Lite
+            // here writes the preference and pops back to /menu,
+            // which re-evaluates the AppMode and mounts the Lite
+            // shell instead of TVMainMenuScreen.
+            item { Spacer(Modifier.height(12.dp)) }
+            item {
+                Text(
+                    "APP MODE",
+                    color = TextSecondary, fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+                )
+            }
+            item {
+                SettingsCard(
+                    title = "Switch to Lite Mode",
+                    subtitle = "Strips animations and cinematic backgrounds — built for older / slower TVs",
+                    icon = { Icon(Icons.Default.FlashOn, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                    onClick = {
+                        com.hushtv.tv.data.AppModeStore.save(
+                            ctx, com.hushtv.tv.data.AppMode.LITE,
+                        )
+                        // Re-enter /menu so the route's AppMode check
+                        // mounts LiteShellScreen instead of Pro.
+                        nav.navigate("menu/$playlistId") {
+                            popUpTo(nav.graph.startDestinationId) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
 
