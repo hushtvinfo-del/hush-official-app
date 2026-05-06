@@ -490,11 +490,34 @@ def _upsert_game(c: sqlite3.Connection, league_id: int, ev: Dict[str, Any]) -> N
             "strBadge": ev.get("strAwayTeamBadge"),
         })
     now_ms = int(time.time() * 1000)
-    status = (ev.get("strStatus") or "scheduled").lower()
-    if "final" in status or "ft" in status:
+    status_raw = (ev.get("strStatus") or ev.get("strProgress") or "scheduled").lower().strip()
+    # Comprehensive status normalization for all sports.
+    final_keywords = (
+        "final", "ft", "match finished", "after extra time", "aet",
+        "after pen", "pen.", "match over", "ended", "complete",
+    )
+    live_keywords = (
+        "progress", "live", "q1", "q2", "q3", "q4",
+        "1st", "2nd", "3rd", "4th",   # quarters / halves
+        "half", "halftime", "ht ",    # soccer / basketball half
+        "top ", "bot ", "mid ", "end ",  # baseball innings ("Top 1st")
+        "over", "innings",            # cricket
+        "set ",                       # tennis
+        "lap ",                       # motorsport
+        "period",                     # hockey
+    )
+    if any(k in status_raw for k in final_keywords):
         status = "final"
-    elif "progress" in status or "live" in status or "q1" in status or "half" in status:
+    elif any(k in status_raw for k in live_keywords):
         status = "live"
+    elif status_raw in ("ns", "scheduled", "pre-game", "pregame", "tbd", ""):
+        status = "scheduled"
+    else:
+        # Fallback: trust the time delta.
+        delta_h = (start_ms - now_ms) / 3600_000.0
+        status = "live" if -5 <= delta_h <= 5 else (
+            "final" if delta_h < -5 else "scheduled"
+        )
     c.execute(
         "INSERT INTO sports_games "
         "(sportsdb_id, league_id, home_team_id, away_team_id, start_utc, status, "
@@ -851,9 +874,30 @@ def sports_home(
         for lg in leagues:
             rows = c.execute(
                 "SELECT * FROM sports_games "
-                "WHERE league_id=? AND start_utc > ? AND start_utc < ? "
-                "ORDER BY start_utc LIMIT ?",
-                (lg["id"], now - 4 * 3600 * 1000, horizon, limit),
+                # v1.44.5 — exclude games more than 5h past start that
+                # haven't been confirmed live by the server. They're
+                # almost certainly over and just haven't been marked
+                # final by TheSportsDB yet. Server still keeps live
+                # games (status='live') visible no matter how long.
+                "WHERE league_id=? AND ("
+                "       status='live' "
+                "    OR (status='scheduled' AND start_utc > ? AND start_utc < ?) "
+                "    OR (status='final' AND start_utc > ?) "
+                "    ) "
+                # Sort: live first, then upcoming by start time, then
+                # final last.
+                "ORDER BY CASE status WHEN 'live' THEN 0 "
+                "                     WHEN 'scheduled' THEN 1 "
+                "                     ELSE 2 END, "
+                "         start_utc "
+                "LIMIT ?",
+                (
+                    lg["id"],
+                    now - 5 * 3600 * 1000,   # scheduled: keep up to 5h past start
+                    horizon,
+                    now - 6 * 3600 * 1000,   # final: only show very recently completed
+                    limit,
+                ),
             ).fetchall()
             games: List[Dict[str, Any]] = []
             for r in rows:
@@ -891,6 +935,11 @@ def sports_home(
         })
     for b in buckets:
         for g in b["games"][:2]:
+            # v1.44.5 — Skip final games for the hero. They don't
+            # belong in the marquee — they belong in the cards rail
+            # below where the user can quickly check the result.
+            if (g.get("status") or "").lower() == "final":
+                continue
             hero.append({
                 "kind": "game",
                 "id": g["id"],
@@ -901,8 +950,15 @@ def sports_home(
                          or (g["home"] or {}).get("logo_url"),
                 "start_utc": g["start_utc"],
                 "channel": g["channel"],
+                "status": g.get("status") or "scheduled",
+                "score_home": g.get("score_home"),
+                "score_away": g.get("score_away"),
             })
-    hero.sort(key=lambda h: h["start_utc"] or 0)
+    # Sort: live first, then upcoming by start time.
+    hero.sort(key=lambda h: (
+        0 if (h.get("status") or "").lower() == "live" else 1,
+        h.get("start_utc") or 0,
+    ))
     return {
         "hero": hero[:8],
         "ppv": ppv_list,

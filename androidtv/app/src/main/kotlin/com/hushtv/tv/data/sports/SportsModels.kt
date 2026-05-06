@@ -55,6 +55,17 @@ data class SportsHero(
     val image: String? = null,
     val start_utc: Long,
     val channel: String? = null,
+    /** v1.44.5 — server-supplied status: "scheduled", "live", "final".
+     *  Used by SportsHero to pick the correct eyebrow label and the
+     *  correct countdown text instead of inferring from the time
+     *  delta alone (which mislabelled in-progress games as "FINAL"
+     *  the moment they crossed the +2h mark). */
+    val status: String = "scheduled",
+    /** Score lines for live/final games. Strings (not Ints) because
+     *  cricket / motorsport sometimes use non-numeric scores
+     *  ("DNF", "RAINED OUT"). */
+    val score_home: String? = null,
+    val score_away: String? = null,
 )
 
 data class SportsLeagueBucket(

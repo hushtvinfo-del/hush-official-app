@@ -1,13 +1,14 @@
 {
-  "versionCode": 404,
-  "versionName": "1.44.4",
+  "versionCode": 405,
+  "versionName": "1.44.5",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": false,
+  "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "NEW (DEV ONLY): One-tap 'Send diagnostic report' button on Diagnostics screen (Settings → Diagnostics → bug-report icon). Bundles device info, free memory, free disk, recent breadcrumbs, plus the latest crash + ANR logs into a single snapshot tagged kind=diagnostic and ships it to the server. Use this any time something feels off — buffering, freezing, weird focus — even if the app didn't actually crash.",
-    "TV + Mobile parity: same yellow bug-report button on both flavours.",
-    "All v1.44.3 ANR-watchdog + Sports stability fixes still active."
+    "CRASH FIX: Pressing DOWN from the league pills crashed the app when the cards rail was empty / still loading. Root cause was caught by v1.44.3's ANR watchdog uploading the trace: railFocus.requestFocus() on an unattached FocusRequester. Now wrapped in runCatching with a hasItems guard — if there are no cards, DOWN advances to the next page instead of crashing.",
+    "DATA: Hero and game cards now use the server's actual status field (live / final / scheduled) plus team scores when available. The 'UPCOMING GAME · FINAL' contradiction is gone; live MLB games now show real scores like '2 – 2'. Backend (sports_module.py) was updated with comprehensive status keyword recognition for all sports (basketball quarters, hockey periods, baseball innings, soccer halves, cricket overs, motorsport laps, tennis sets) and time-delta fallback when the upstream feed lags.",
+    "UX: Final games no longer pollute the hero marquee — they're pushed to the cards rail only. Hero is sorted live-first, then upcoming-by-start-time. Games more than 5h past start without a server-confirmed status are filtered out as 'almost certainly over'.",
+    "Mandatory:true so devices stuck on the v1.44.2 → v1.44.4 focus crash force-update."
   ]
 }

@@ -193,18 +193,27 @@ private fun HeroCopy(h: SportsHero) {
     Column(Modifier.fillMaxWidth(0.65f)) {
         // ── Eyebrow: kind + countdown ──
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // v1.44.5 — eyebrow + countdown now derived from server-
+            // supplied [SportsHero.status], not just inferred from the
+            // time delta. A 3-hour-old NHL game that's still going was
+            // being rendered as "UPCOMING GAME · FINAL" because the
+            // eyebrow was hardcoded "UPCOMING GAME" and the countdown
+            // returned "FINAL" past the +2h mark — two contradictory
+            // labels in the same row.
+            val (eyebrow, eyebrowColor) = sportsEyebrow(h)
+            val countdown = sportsCountdown(h)
             Box(
                 Modifier
                     .size(width = 4.dp, height = 18.dp)
                     .background(
-                        if (h.kind == "ppv") Color(0xFFE10600) else Cyan,
+                        eyebrowColor,
                         RoundedCornerShape(2.dp),
                     )
             )
             Spacer(Modifier.width(12.dp))
             Text(
-                if (h.kind == "ppv") "PPV EVENT" else "UPCOMING GAME",
-                color = if (h.kind == "ppv") Color(0xFFE10600) else Cyan,
+                eyebrow,
+                color = eyebrowColor,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 4.sp,
@@ -212,13 +221,31 @@ private fun HeroCopy(h: SportsHero) {
             )
             Spacer(Modifier.width(16.dp))
             Text(
-                friendlyCountdown(h.start_utc),
+                countdown,
                 color = Color(0xFFE2E8F0),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.5.sp,
                 fontFamily = Inter,
             )
+            // Show live scores in the eyebrow row when available.
+            if (!h.score_home.isNullOrBlank() && !h.score_away.isNullOrBlank()) {
+                Spacer(Modifier.width(20.dp))
+                Box(
+                    Modifier
+                        .background(Color(0x33FFFFFF), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 14.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        "${h.score_away}  -  ${h.score_home}",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp,
+                        fontFamily = Inter,
+                    )
+                }
+            }
         }
         Spacer(Modifier.height(16.dp))
 
@@ -316,12 +343,52 @@ private fun SportsHeroPlaceholder() {
  * Designed to be glanceable on a TV from the couch — matches the
  * "easy for grandfather" requirement.
  */
+/**
+ * Eyebrow label + accent colour for the hero card. Returns one of:
+ *   PPV EVENT       (red)        — kind == "ppv"
+ *   LIVE NOW        (red)        — status == "live"  OR  -5h < delta < +5h with no status
+ *   FINAL           (slate-300)  — status == "final" OR delta < -5h
+ *   UPCOMING GAME   (cyan)       — everything else
+ */
+fun sportsEyebrow(h: SportsHero): Pair<String, Color> {
+    if (h.kind == "ppv") return "PPV EVENT" to Color(0xFFE10600)
+    val status = h.status.lowercase()
+    if (status == "live") return "LIVE NOW" to Color(0xFFEF4444)
+    if (status == "final") return "FINAL" to Color(0xFFCBD5E1)
+    val now = System.currentTimeMillis()
+    val diffMs = h.start_utc - now
+    if (diffMs in -5 * 3600_000L..5 * 3600_000L) {
+        return "LIVE NOW" to Color(0xFFEF4444)
+    }
+    if (diffMs < -5 * 3600_000L) return "FINAL" to Color(0xFFCBD5E1)
+    return "UPCOMING GAME" to Cyan
+}
+
+/**
+ * Time-aware countdown text companion to [sportsEyebrow]. Returns:
+ *   "Quarter / inning / period info" for live games (when known)
+ *   "FINAL" for finished games
+ *   "TONIGHT · 8:00 PM" / "TOMORROW · 7:30 PM" / "MAY 18 · 7:00 PM"
+ *      for upcoming.
+ */
+fun sportsCountdown(h: SportsHero): String {
+    val status = h.status.lowercase()
+    if (status == "live") return "IN PROGRESS"
+    if (status == "final") return "FINAL"
+    val now = System.currentTimeMillis()
+    val diffMs = h.start_utc - now
+    // A reasonable "long" sport runs ~4h; treat anything within ±5h
+    // of start as in-progress until the server tells us otherwise.
+    if (diffMs in -5 * 3600_000L..5 * 3600_000L) return "IN PROGRESS"
+    if (diffMs < -5 * 3600_000L) return "FINAL"
+    return friendlyCountdown(h.start_utc)
+}
+
 fun friendlyCountdown(startUtcMs: Long): String {
     if (startUtcMs <= 0L) return ""
     val now = System.currentTimeMillis()
     val diffMs = startUtcMs - now
-    if (diffMs <= -2 * 3600 * 1000L) return "FINAL"
-    if (diffMs <= 3 * 3600 * 1000L && diffMs > -2 * 3600 * 1000L) return "LIVE NOW"
+    // Time-only fallback used by [sportsCountdown] for the upcoming case.
     val cal = java.util.Calendar.getInstance().apply { timeInMillis = startUtcMs }
     val today = java.util.Calendar.getInstance().apply { timeInMillis = now }
     val dayDelta = (cal.get(java.util.Calendar.DAY_OF_YEAR) -

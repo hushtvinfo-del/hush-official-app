@@ -170,7 +170,33 @@ fun TVSportsPage(
                 contentStartPadding = 96.dp,
                 firstItemFocus = firstItemFocus,
                 onUpFromRow = onUpFromRow,
-                onDownFromRow = { railFocus.requestFocus() },
+                onDownFromRow = {
+                    // v1.44.5 — defensive: railFocus is only attached
+                    // to GameCard/PpvCard idx 0 when items.isNotEmpty().
+                    // If items are still loading or filtered to zero,
+                    // calling requestFocus() throws
+                    // "FocusRequester is not initialized" and crashes.
+                    // Instead, fall through to the next page so DOWN is
+                    // never a dead-end.
+                    val hasCards = if (selectedLeague == "ppv") playablePpv.isNotEmpty()
+                                   else playableGames.isNotEmpty()
+                    if (hasCards) {
+                        runCatching { railFocus.requestFocus() }
+                            .onFailure {
+                                com.hushtv.tv.data.EventLog.log(
+                                    "sports",
+                                    "railFocus.requestFocus failed: ${it.message}"
+                                )
+                                onDownFromRow?.invoke()
+                            }
+                    } else {
+                        com.hushtv.tv.data.EventLog.log(
+                            "sports",
+                            "DOWN from pills with no cards → next page"
+                        )
+                        onDownFromRow?.invoke()
+                    }
+                },
             )
 
             if (selectedLeague == "ppv") {
@@ -208,6 +234,9 @@ fun TVSportsPage(
                             image = g.home?.badge_url ?: g.home?.logo_url,
                             start_utc = g.start_utc,
                             channel = ch.title,
+                            status = g.status,
+                            score_home = g.score_home,
+                            score_away = g.score_away,
                         )
                     },
                     onUpFromRow = onUpFromRow,

@@ -73,6 +73,17 @@ fun GameCard(
     val cardShape = RoundedCornerShape(18.dp)
     val accent = parseAccent(game.league?.accent) ?: Cyan
     val isLive = game.status.equals("live", ignoreCase = true)
+    val isFinal = game.status.equals("final", ignoreCase = true)
+    // v1.44.5 — Treat games within ±5h of start as "in progress"
+    // when the server hasn't yet pushed a definitive status. Avoids
+    // showing "FINAL" for a game that's still on the air.
+    val nowMs = remember { System.currentTimeMillis() }
+    val deltaMs = game.start_utc - nowMs
+    val effectivelyLive = isLive ||
+        (!isFinal && deltaMs in -5 * 3600_000L..5 * 3600_000L)
+    val effectivelyFinal = isFinal || deltaMs < -5 * 3600_000L
+    val showScores = (isLive || isFinal) &&
+        !game.score_home.isNullOrBlank() && !game.score_away.isNullOrBlank()
 
     Box(
         Modifier
@@ -127,7 +138,7 @@ fun GameCard(
                     fontFamily = Inter,
                 )
                 Spacer(Modifier.weight(1f))
-                if (isLive) {
+                if (effectivelyLive) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier
@@ -145,6 +156,15 @@ fun GameCard(
                             fontFamily = Inter,
                         )
                     }
+                } else if (effectivelyFinal) {
+                    Text(
+                        "FINAL",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp,
+                        fontFamily = Inter,
+                    )
                 } else {
                     Text(
                         friendlyCountdown(game.start_utc),
@@ -168,7 +188,7 @@ fun GameCard(
                 TeamBlock(
                     name = game.away?.short_name ?: game.away?.name ?: "TBA",
                     badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
-                    score = if (isLive || game.status == "final") game.score_away else null,
+                    score = if (showScores) game.score_away else null,
                     align = Alignment.Start,
                     modifier = Modifier.weight(1f),
                 )
@@ -179,7 +199,7 @@ fun GameCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        if (isLive || game.status == "final") "–" else "vs",
+                        if (showScores) "–" else "vs",
                         color = Color(0xFF94A3B8),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
@@ -189,7 +209,7 @@ fun GameCard(
                 TeamBlock(
                     name = game.home?.short_name ?: game.home?.name ?: "TBA",
                     badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
-                    score = if (isLive || game.status == "final") game.score_home else null,
+                    score = if (showScores) game.score_home else null,
                     align = Alignment.End,
                     modifier = Modifier.weight(1f),
                 )

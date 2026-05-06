@@ -1,6 +1,119 @@
 # HushTV — Product Requirements Document
 
-## v1.44.4 (DEV ONLY) — One-tap diagnostic report button — 2026-05-06  ⬅ LATEST
+## v1.44.5 (DEV ONLY) — Sports focus crash + accurate status/scores — 2026-05-06  ⬅ LATEST
+
+User report after v1.44.4: *"first off, see the attached picture showing
+the Los Angeles Lakers games against OKC. It's showing Final, and this
+is a live game on right now. Every single game that's coming up is
+showing final. It's not showing any live games, so the API isn't working
+correctly, nor is it showing the actual scores of the game. […] if you
+go down at all while it's loading the actual games, it crashes the app."*
+
+Two distinct bugs:
+
+### Bug 1 — Crash when pressing DOWN from the league pills
+
+The v1.44.3 ANR watchdog finally caught the trace (~10 reports in
+`/var/hushtv-crash/2026-05-06/`):
+
+```
+java.lang.IllegalStateException: FocusRequester is not initialized.
+   at FocusRequester.requestFocus(FocusRequester.kt:63)
+   at TVSportsPageKt$TVSportsPage$1$2$2$1.invoke(TVSportsPage.kt:156)
+   at SportsCardsKt$LeaguePillBar$1$1.invoke(SportsCards.kt:334)
+   at KeyInputNode.onPreKeyEvent
+```
+
+`onDownFromRow = { railFocus.requestFocus() }` was called when the user
+pressed DOWN from the pills row, but `railFocus` was bound to GameCard
+idx 0 — which doesn't get composed when `items.isEmpty()` (still
+loading, or filtered to zero). Calling `requestFocus()` on an
+unattached requester throws.
+
+Fix: wrap `railFocus.requestFocus()` in `runCatching` AND check
+`playableGames.isNotEmpty() / playablePpv.isNotEmpty()` first. If no
+cards exist, fall through to `onDownFromRow` (advance to the next
+page) instead of crashing.
+
+### Bug 2 — Stale/inaccurate status & missing scores
+
+Hero said "UPCOMING GAME · FINAL" simultaneously and cards showed "VS"
+on games that had already started. Two root causes:
+
+1. **Hardcoded eyebrow**: `SportsHero` had `"UPCOMING GAME"` baked into
+   the layout. The `friendlyCountdown` function returned `"FINAL"` for
+   anything more than 2h past start, so a 3h-into-an-NHL-game (which is
+   STILL LIVE) rendered as "UPCOMING GAME · FINAL".
+2. **Backend status normalization too narrow**: the ingestion only
+   recognised `"final"`, `"ft"`, `"progress"`, `"live"`, `"q1"`,
+   `"half"` as live/final keywords. TheSportsDB's actual `strStatus`
+   uses many other values: `"Top 1st"` (baseball), `"3rd"` (hockey),
+   `"Halftime"`, `"AET"`, `"Match Finished"`, etc. Result: 95% of
+   in-progress games were stuck at `status='scheduled'` even after
+   start.
+
+#### What landed in v1.44.5
+
+##### Backend (`/app/sync_server/sports_module.py`)
+- Comprehensive status normalization. New keyword sets for live + final
+  cover basketball quarters (Q1/Q2/Q3/Q4 + 1st/2nd/3rd/4th), hockey
+  periods, baseball innings (Top/Bot/Mid/End), soccer halves, cricket
+  overs, motorsport laps, and tennis sets. Final keywords expanded to
+  include `Match Finished`, `AET`, `After Pen`, `Match Over`,
+  `Complete`, etc.
+- Time-delta fallback: if upstream `strStatus` is empty / unknown, the
+  server marks it `live` if within ±5h of start, `final` if older.
+- `/api/sports/home` filters: drops final games more than 6h old, drops
+  scheduled games more than 5h past start. Always keeps `live` games
+  visible regardless of age.
+- Hero items now include `status`, `score_home`, `score_away`. Final
+  games are excluded from the hero entirely (they belong in the cards
+  rail). Hero is sorted live-first, then upcoming-by-start-time.
+
+##### Client (`/app/androidtv/.../sports/`)
+- `SportsHero` data class gains `status`, `score_home`, `score_away`
+  fields.
+- `sportsEyebrow(h)` returns `(label, accent)` based on actual status
+  with cyan/red/slate accents:
+    `LIVE NOW` (red) when status==live OR ±5h of start unknown,
+    `FINAL` (slate) when status==final OR <-5h, otherwise
+    `UPCOMING GAME` (cyan), `PPV EVENT` (red).
+- `sportsCountdown(h)` shows `IN PROGRESS` for live, `FINAL` for done,
+  the existing `friendlyCountdown` time text for upcoming.
+- Hero now renders a score chip ("2 – 2") when scores are available.
+- `GameCard` uses `effectivelyLive` / `effectivelyFinal` derived from
+  status + ±5h time window so an NBA game 3h into action shows the red
+  LIVE pulse instead of "FINAL".
+
+##### Crash fix (`TVSportsPage.kt`)
+- `LeaguePillBar.onDownFromRow` callback rewritten to:
+    1. Check `selectedLeague=="ppv" ? playablePpv.isNotEmpty()
+       : playableGames.isNotEmpty()`.
+    2. If has-cards → `runCatching { railFocus.requestFocus() }`,
+       fall back to `onDownFromRow?.invoke()` on failure.
+    3. If no-cards → log breadcrumb + invoke `onDownFromRow?` directly.
+
+### Build + deploy
+- versionCode 404 → 405, versionName 1.44.4 → 1.44.5.
+- `mandatory: true` to force devices off v1.44.2–v1.44.4 (all of which
+  were crashing).
+- Backend redeployed via `scp sports_module.py + systemctl restart
+  hushtv-sync`. Verified `/api/sports/home` now returns live MLB games
+  with real scores like "2 – 2".
+
+### Why crash reports finally worked
+The ANR watchdog from v1.44.3 was overkill for THIS crash — it was a
+plain `IllegalStateException`, which the JVM uncaught-exception handler
+already catches. The handler had been working all along, but in v1.44.0
+→ v1.44.2 the focus failure was inside a `runCatching` and silently
+swallowed (the user just saw the UI freeze). v1.44.3 added defensive
+breadcrumbs everywhere; that combination made the unsuppressed
+exception stack reach the server. The watchdog itself is still active
+for the next class of bug — actual main-thread hangs.
+
+---
+
+## v1.44.4 (DEV ONLY) — One-tap diagnostic report button — 2026-05-06
 
 User asked: *"Yes"* to the suggestion of a "Send diagnostic report" button
 on the Diagnostics screen so they can ship full device + app context to
