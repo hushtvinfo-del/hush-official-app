@@ -70,12 +70,11 @@ if [ "$(free_gb)" -lt "$LOW_WATER_GB" ]; then
     apt-get clean 2>/dev/null || true
     rm -rf /root/.cache/pip 2>/dev/null || true
 
-    # Prune git pack files older than 30 days. The repo is mostly
-    # binary commits which compress well after gc.
-    if [ -d /app/.git ] && [ "$(free_gb)" -lt "$LOW_WATER_GB" ]; then
-        echo "▶ disk-janitor: still tight — running git gc --aggressive"
-        git -C /app gc --aggressive --prune=now 2>/dev/null || true
-    fi
+    # Git gc is intentionally NOT run here — `git gc --aggressive`
+    # tries to delta-pack the entire 4 GB binary history and pegs
+    # CPU + RAM for 5–10 minutes with no measurable disk savings
+    # (binary blobs don't delta-compress well). If we still need
+    # space, manual `git gc` can be run out-of-band by the operator.
 
     echo "▶ disk-janitor: post-clean free = $(free_gb)G"
 fi

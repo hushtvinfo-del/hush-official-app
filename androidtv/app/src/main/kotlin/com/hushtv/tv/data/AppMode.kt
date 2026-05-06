@@ -67,67 +67,77 @@ object AppModeStore {
 }
 
 /**
- * One-shot device-capability detector. Combines three signals:
+ * One-shot device-capability detector.
  *
- *   1. ActivityManager.getMemoryClass() — Android's official RAM
- *      hint for our process. < 192 MB strongly suggests low-end.
+ * v1.44.23 — Rewritten because v1.44.19 was reading
+ * ActivityManager.getMemoryClass(), which returns the per-app
+ * heap LIMIT (often 96–192MB even on devices with 8GB of RAM).
+ * That meant a NVIDIA Shield was being mis-classified as Lite,
+ * which is the opposite of correct.
  *
- *   2. Runtime.availableProcessors() — fewer than 4 cores on a TV
- *      box almost always means a 2018-era SoC.
+ * The right signal for "is this device actually fast?" is:
+ *   1. Total system RAM, via ActivityManager.MemoryInfo.totalMem.
+ *   2. Total CPU core count.
+ *   3. The brand/manufacturer.
  *
- *   3. Manufacturer / model heuristics — known-good devices
- *      (NVIDIA Shield, Fire TV 4K, Chromecast 4K) get Pro by
- *      default; known-cheap brands (some Hisense / TCL Roku TV
- *      / generic "MIBOX" SOCs) lean Lite.
- *
- * Returns the RECOMMENDATION; the user can override.
+ * Pro is the DEFAULT. Lite is only recommended for devices that
+ * meet ALL of: low RAM AND not a known premium brand AND
+ * not enough cores. The bar is intentionally low so we don't
+ * drag good devices into Lite.
  */
 object DeviceCapability {
     data class Result(
         val recommended: AppMode,
-        val memoryClassMb: Int,
+        val totalRamMb: Long,
         val cores: Int,
         val manufacturer: String,
         val model: String,
         val reason: String,
     )
 
-    private val PRO_OK_MANUFACTURERS = setOf(
-        "NVIDIA", "AMAZON", "GOOGLE", "ONN", "XIAOMI",
+    /** Brands that ship dedicated streaming hardware. ALWAYS get Pro
+     *  unless the device truly can't handle it (very old generation). */
+    private val PREMIUM_DEVICE_BRANDS = setOf(
+        "NVIDIA", "AMAZON", "GOOGLE", "XIAOMI", "ONN", "ROKU",
+        "TIVO", "DYNALINK", "WALMART",
     )
 
     fun detect(ctx: Context): Result {
         val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val memMb = runCatching { am.memoryClass }.getOrDefault(0)
+        val memInfo = ActivityManager.MemoryInfo()
+        runCatching { am.getMemoryInfo(memInfo) }
+        val totalMb = memInfo.totalMem / (1024L * 1024L)
         val cores = runCatching { Runtime.getRuntime().availableProcessors() }.getOrDefault(2)
         val manuf = (Build.MANUFACTURER ?: "").uppercase()
         val model = (Build.MODEL ?: "").uppercase()
 
-        // Hard heuristic — definitely Pro
-        val proOkBrand = PRO_OK_MANUFACTURERS.any { manuf.contains(it) }
-        val plentyRam = memMb >= 256
+        // Premium dedicated streaming devices: always Pro.
+        // (NVIDIA Shield, Fire TV / Fire Stick 4K, Chromecast w/ Google TV,
+        //  Onn 4K Pro, Xiaomi Mi Box 4K, Roku, etc.)
+        val isPremiumBrand = PREMIUM_DEVICE_BRANDS.any { manuf.contains(it) }
+        if (isPremiumBrand) {
+            return Result(
+                AppMode.PRO, totalMb, cores, manuf, model,
+                reason = "Powerful streaming device — Pro will run smoothly.",
+            )
+        }
+
+        // For everything else (built-in smart TVs, generic boxes,
+        // unknown brands), use objective performance heuristics:
+        //   • >= 2GB total RAM
+        //   • >= 4 CPU cores
+        // Anything below either bar gets Lite.
+        val plentyRam = totalMb >= 2048
         val plentyCores = cores >= 4
 
-        // Hard heuristic — definitely Lite
-        val verySmallRam = memMb in 1..191
-        val fewCores = cores < 4
-
         return when {
-            verySmallRam || fewCores -> Result(
-                AppMode.LITE, memMb, cores, manuf, model,
-                reason = "Low memory (${memMb}MB) or few cores ($cores)"
-            )
-            proOkBrand && plentyRam && plentyCores -> Result(
-                AppMode.PRO, memMb, cores, manuf, model,
-                reason = "Premium device ($manuf $model)"
-            )
             plentyRam && plentyCores -> Result(
-                AppMode.PRO, memMb, cores, manuf, model,
-                reason = "Capable device (${memMb}MB RAM, $cores cores)"
+                AppMode.PRO, totalMb, cores, manuf, model,
+                reason = "Your device looks capable — Pro is recommended.",
             )
             else -> Result(
-                AppMode.LITE, memMb, cores, manuf, model,
-                reason = "Marginal device (${memMb}MB RAM, $cores cores)"
+                AppMode.LITE, totalMb, cores, manuf, model,
+                reason = "Built-in smart TVs run smoother on Lite.",
             )
         }
     }

@@ -61,11 +61,13 @@ fun LiteFirstLaunchDialog(onPicked: (AppMode) -> Unit) {
     val proFocus = remember { FocusRequester() }
     val liteFocus = remember { FocusRequester() }
 
+    // v1.44.23 — ALWAYS focus Pro by default, regardless of the
+    // detector's recommendation. Pro is the headline experience;
+    // we don't want to nudge a NVIDIA Shield user into Lite even
+    // if the heuristic gets confused. The detector still earns the
+    // "RECOMMENDED" cyan pill on whichever button is best for them.
     LaunchedEffect(Unit) {
-        runCatching {
-            if (recommended == AppMode.LITE) liteFocus.requestFocus()
-            else proFocus.requestFocus()
-        }
+        runCatching { proFocus.requestFocus() }
     }
 
     Box(
@@ -76,7 +78,7 @@ fun LiteFirstLaunchDialog(onPicked: (AppMode) -> Unit) {
     ) {
         Column(
             Modifier
-                .width(640.dp)
+                .width(680.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(Color(0xFF0B1220))
                 .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(20.dp))
@@ -93,24 +95,27 @@ fun LiteFirstLaunchDialog(onPicked: (AppMode) -> Unit) {
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                "Choose your experience",
+                "Pick the version that fits your TV",
                 color = Color.White,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = Inter,
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
-                "We checked your device — ${capability.reason}.",
+                "Most people want Pro. If your TV feels slow with Pro, switch to Lite anytime in Settings.",
                 color = Color(0xFFCBD5E1),
                 fontSize = 14.sp,
                 fontFamily = Inter,
             )
             Spacer(Modifier.height(24.dp))
 
+            // ── Pro is shown FIRST and is the default focus. ──
             ModeOptionRow(
                 label = "Pro",
-                tagline = "Cinematic UI, animated heroes, rich detail.",
+                tagline = "The full HushTV experience — smooth animations, big posters, " +
+                    "cinematic backgrounds. Best for Fire Stick 4K, NVIDIA Shield, " +
+                    "Chromecast with Google TV, Onn 4K Pro, and similar streaming boxes.",
                 isRecommended = recommended == AppMode.PRO,
                 focusRequester = proFocus,
                 onPick = {
@@ -122,7 +127,9 @@ fun LiteFirstLaunchDialog(onPicked: (AppMode) -> Unit) {
             Spacer(Modifier.height(12.dp))
             ModeOptionRow(
                 label = "Lite",
-                tagline = "Stripped animations. Built for snappy, low-spec TVs.",
+                tagline = "Stripped-down version that runs fast on older or slower TVs. " +
+                    "Pick this only if your TV is a built-in smart TV (Hisense, " +
+                    "TCL, Sceptre, etc.) and Pro feels laggy.",
                 isRecommended = recommended == AppMode.LITE,
                 focusRequester = liteFocus,
                 onPick = {
@@ -133,7 +140,7 @@ fun LiteFirstLaunchDialog(onPicked: (AppMode) -> Unit) {
             )
             Spacer(Modifier.height(20.dp))
             Text(
-                "You can switch any time in Settings → App Mode.",
+                "You can switch between Pro and Lite any time in Settings → App Mode.",
                 color = Color(0xFF94A3B8),
                 fontSize = 11.sp,
                 fontFamily = Inter,
