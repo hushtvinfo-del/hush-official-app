@@ -1,14 +1,13 @@
 {
-  "versionCode": 403,
-  "versionName": "1.44.3",
+  "versionCode": 404,
+  "versionName": "1.44.4",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": true,
+  "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "DIAGNOSTIC + DEFENSIVE BUILD (DEV ONLY): Added an ANR watchdog that detects main-thread freezes >4s, captures the main-thread stack trace + last 30 breadcrumbs, writes to anr.log, and uploads on next launch. This closes the diagnostic gap that ate v1.44.0 → v1.44.2 — ANRs are SIGKILL'd by the OS and bypass every JVM crash handler, which is why no crash data ever made it to the server.",
-    "Sports page: hardened the click-to-play path with try/catch around nav.navigate, added stream-URL validation (no playback attempted on streamId<=0 or blank URL), made pill clicks idempotent (clicking the already-selected pill is a no-op).",
-    "Breadcrumbs added throughout Sports interactions (page mount, data load, league change, card focus, card click, play attempts) so the next ANR / crash report shows exactly what the user did right before the freeze.",
-    "Mandatory:true so devices stuck on v1.44.0 → v1.44.2 force-update."
+    "NEW (DEV ONLY): One-tap 'Send diagnostic report' button on Diagnostics screen (Settings → Diagnostics → bug-report icon). Bundles device info, free memory, free disk, recent breadcrumbs, plus the latest crash + ANR logs into a single snapshot tagged kind=diagnostic and ships it to the server. Use this any time something feels off — buffering, freezing, weird focus — even if the app didn't actually crash.",
+    "TV + Mobile parity: same yellow bug-report button on both flavours.",
+    "All v1.44.3 ANR-watchdog + Sports stability fixes still active."
   ]
 }

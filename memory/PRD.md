@@ -1,6 +1,91 @@
 # HushTV — Product Requirements Document
 
-## v1.44.2 (DEV ONLY) — Sports ANR FIX (real root cause) — 2026-05-06  ⬅ LATEST
+## v1.44.4 (DEV ONLY) — One-tap diagnostic report button — 2026-05-06  ⬅ LATEST
+
+User asked: *"Yes"* to the suggestion of a "Send diagnostic report" button
+on the Diagnostics screen so they can ship full device + app context to
+the server in one tap, even when the app hasn't actually crashed
+(buffering, weird focus, slow channel switching, etc.).
+
+### What landed
+- **`CrashReporter.sendDiagnostic(ctx, note, callback)`** — bundles device
+  info (manufacturer/model/SDK/Android release), app version + version
+  code, free memory (free/total/max), free disk, sanitised playlist
+  metadata (host without scheme/port, no credentials), the breadcrumb
+  ring buffer (`EventLog.snapshot()`), the tail of `crash.log`, and the
+  tail of `anr.log` into a single payload tagged `kind=diagnostic`.
+  Posted to the existing `/crash/submit/<TOKEN>` endpoint — the server
+  already accepts arbitrary kinds and the dashboard chips them
+  appropriately.
+- **TV: yellow bug-report button** (`Icons.Default.BugReport`) added to
+  `TVDiagnosticsScreen` action row. Always available, not gated on
+  `hasContent`. Tapping it triggers `sendDiagnostic` + a status banner
+  ("Bundling…" → "Diagnostic report sent. Mention 'sent diagnostic' in
+  your message and we'll pull it up.").
+- **Mobile: same button** added to `MobileDiagnosticsScreen`. Same UX,
+  same status states.
+- **End-to-end smoke-tested**: a curl POST with `kind=diagnostic` to
+  `https://hushtv.xyz/crash/submit/<token>` succeeded; report stored at
+  `/var/hushtv-crash/2026-05-06/025505-956615-smoketest.json`. The
+  existing dashboard renders kind=diagnostic with the warn chip styling.
+
+### Files changed
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/CrashReporter.kt`
+  — added `sendDiagnostic` + `buildDiagnosticPayload`.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVDiagnosticsScreen.kt`
+  — added `Icons.Default.BugReport` import, button, and 3 new banner
+  states (`sending-diag`, `diag-sent`, `diag-failed`).
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/mobile/MobileDiagnosticsScreen.kt`
+  — same treatment for mobile.
+
+### Build + deploy
+- versionCode 403 → 404, versionName 1.44.3 → 1.44.4.
+- BUILD SUCCESSFUL (1m 4s).
+- Auto-tagged `v1.44.4-dev`. Live: `https://hushtv.xyz/version.json`
+  reports `versionCode 404`. Not mandatory (additive feature only —
+  v1.44.3 stability fixes still active).
+
+---
+
+## v1.44.3 (DEV ONLY) — ANR watchdog + Sports diagnostic build — 2026-05-06
+
+User report after v1.44.2: *"Ok so now it works but as soon as I clicked
+the 'live' tab something loaded in the background which was cut off i
+couldn't see anything then about 5 seconds later it crashed. Then I went
+back in and tried to navigate to watch the game in the preview and it
+crashed again. Why can't you see this in the crash reports isn't that the
+whole point of having crash reports go to our server?"*
+
+The user was right. The existing crash reporter only catches JVM uncaught
+exceptions via `Thread.setDefaultUncaughtExceptionHandler`. ANRs are
+detected by the OS watchdog and result in `SIGKILL` of the process —
+bypassing every JVM handler. So when a Compose composable does heavy
+work on the main thread (or a cross-thread deadlock occurs), the user
+sees "freeze → app shut down" and ZERO crash data lands on the server.
+
+### What landed in v1.44.3
+- **`AnrWatchdog`** — daemon thread posts a no-op runnable to the main
+  looper every 1 s, waits up to 4 s for it to drain. If it doesn't, the
+  watchdog captures the main-thread stack trace, the last 30
+  breadcrumbs from `EventLog`, and writes them to
+  `filesDir/anr.log` in the same machine-readable format
+  `installCrashHandler` uses.
+- **`CrashReporter.maybeUpload`** now ships BOTH `crash.log` AND
+  `anr.log`. Each tracked separately by mtime so one can ship without
+  re-shipping the other.
+- **Sports interactions**: every action (page mount, data load, league
+  change, card click, play attempt) now writes a breadcrumb so the next
+  ANR/crash report shows exactly what the user did right before the
+  hang.
+- **`playLiveChannel` hardened**: wrapped in `runCatching`, validates
+  streamId/streamUrl, falls back gracefully if the player route fails
+  to navigate.
+- **Pill clicks idempotent**: clicking the already-selected league pill
+  is a no-op — eliminates one possible recomposition storm.
+
+---
+
+## v1.44.2 (DEV ONLY) — Sports ANR FIX (real root cause) — 2026-05-06
 
 User report after v1.44.1: *"Nope I updated and its still crashing. As soon
 as I scroll down to the sports section below discovery the left menu

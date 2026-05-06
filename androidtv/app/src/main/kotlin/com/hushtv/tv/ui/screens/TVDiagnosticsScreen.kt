@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
@@ -83,6 +84,24 @@ fun TVDiagnosticsScreen(nav: NavController) {
                     letterSpacing = 1.4.sp,
                 )
             }
+            // v1.44.4 — Always-available "Send Report" bug-report button.
+            // Bundles device info + breadcrumbs + crash + ANR logs into a
+            // single diagnostic snapshot so users can ping us about non-
+            // crash flakiness in one tap.
+            TvCircleBtn(
+                icon = Icons.Default.BugReport,
+                tint = Color(0xFFFBBF24),
+                onClick = {
+                    uploadState = "sending-diag"
+                    CrashReporter.sendDiagnostic(ctx) { result ->
+                        uploadState = when (result) {
+                            "sent" -> "diag-sent"
+                            else -> "diag-failed"
+                        }
+                    }
+                },
+            )
+            Spacer(Modifier.width(10.dp))
             if (hasContent) {
                 TvCircleBtn(Icons.Default.CloudUpload, tint = Cyan, onClick = {
                     uploadState = "sending"
@@ -166,6 +185,12 @@ fun TVDiagnosticsScreen(nav: NavController) {
                     "Already on the server — uploaded automatically when the app started. Nothing new to send.")
                 "failed" -> Triple(Color(0x14EF4444), Color(0xFFEF4444),
                     "Upload failed. Check internet and try again.")
+                "sending-diag" -> Triple(Color(0x14FBBF24), Color(0xFFFBBF24),
+                    "Bundling diagnostic snapshot — device info, breadcrumbs, recent logs…")
+                "diag-sent" -> Triple(Color(0x1422C55E), Color(0xFF22C55E),
+                    "Diagnostic report sent. Mention 'sent diagnostic' in your message and we'll pull it up.")
+                "diag-failed" -> Triple(Color(0x14EF4444), Color(0xFFEF4444),
+                    "Diagnostic upload failed. Check internet and try again.")
                 else -> Triple(Color.Transparent, Color.White, "")
             }
             Row(

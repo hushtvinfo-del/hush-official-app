@@ -80,6 +80,119 @@ object CrashReporter {
         }
     }
 
+    /**
+     * v1.44.4 — One-tap diagnostic snapshot. Bundles device info,
+     * app version, the breadcrumb ring buffer, the most recent
+     * crash + ANR logs (if any), free disk + free memory, and
+     * playlist metadata (no credentials), then POSTs to the same
+     * crash submit endpoint with `kind=diagnostic` so the dashboard
+     * surfaces it next to crashes/freezes.
+     *
+     * Use case: user reports something flaky ("buffering forever",
+     * "can't find a channel", "Sports loaded weird") that ISN'T a
+     * crash. One tap from Settings → Diagnostics → Send Report and
+     * we get full context without needing them to repro it on a
+     * device we have ADB to.
+     */
+    fun sendDiagnostic(ctx: Context, note: String? = null, callback: (String) -> Unit) {
+        executor.execute {
+            val result = runCatching {
+                val payload = buildDiagnosticPayload(ctx, note)
+                if (postJson(ENDPOINT, payload)) "sent" else "failed"
+            }.getOrDefault("failed")
+            callback(result)
+        }
+    }
+
+    private fun buildDiagnosticPayload(ctx: Context, note: String?): String {
+        val fmtUtc = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val deviceId = runCatching {
+            Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID)
+                ?.take(8)
+        }.getOrNull() ?: "unknown"
+        val device = "${Build.MANUFACTURER}-${Build.MODEL}-$deviceId"
+            .replace(' ', '-').take(60)
+
+        // Optional payload sections — read what's available, skip
+        // anything that throws / is missing.
+        val crashLog = runCatching {
+            val f = File(ctx.filesDir, "crash.log")
+            if (f.exists() && f.length() > 0) f.readText().takeLast(48 * 1024)
+            else ""
+        }.getOrDefault("")
+        val anrLog = runCatching {
+            val f = File(ctx.filesDir, "anr.log")
+            if (f.exists() && f.length() > 0) f.readText().takeLast(48 * 1024)
+            else ""
+        }.getOrDefault("")
+        val breadcrumbs = runCatching {
+            EventLog.snapshot()
+        }.getOrDefault("")
+
+        val rt = Runtime.getRuntime()
+        val freeMb = rt.freeMemory() / (1024 * 1024)
+        val totalMb = rt.totalMemory() / (1024 * 1024)
+        val maxMb = rt.maxMemory() / (1024 * 1024)
+        val diskFreeMb = runCatching {
+            ctx.filesDir.usableSpace / (1024 * 1024)
+        }.getOrDefault(-1L)
+
+        val sb = StringBuilder()
+        sb.append("===== HushTV ").append(fmtUtc.format(Date()))
+            .append(" v").append(BuildConfig.VERSION_NAME)
+            .append("#").append(BuildConfig.VERSION_CODE)
+            .append(" thread=user-diagnostic =====\n")
+        sb.append("DIAGNOSTIC-REPORT user_initiated=true\n")
+        if (!note.isNullOrBlank()) {
+            sb.append("note=").append(note.take(500)).append('\n')
+        }
+        sb.append("device=").append(device).append('\n')
+        sb.append("android_sdk=").append(Build.VERSION.SDK_INT).append('\n')
+        sb.append("android_release=").append(Build.VERSION.RELEASE).append('\n')
+        sb.append("memory_free_mb=").append(freeMb)
+            .append(" total_mb=").append(totalMb)
+            .append(" max_mb=").append(maxMb).append('\n')
+        sb.append("disk_free_mb=").append(diskFreeMb).append('\n')
+        // No playlist credentials in diagnostic — just count.
+        runCatching {
+            val playlists = com.hushtv.tv.data.PlaylistStore.getAll(ctx)
+            sb.append("playlists=").append(playlists.size).append('\n')
+            playlists.forEachIndexed { i, p ->
+                val sanitizedHost = p.host
+                    .replace(Regex("https?://"), "")
+                    .replace(Regex(":\\d+"), "")
+                sb.append("  playlist[$i] host=").append(sanitizedHost).append('\n')
+            }
+        }
+        sb.append('\n')
+
+        if (breadcrumbs.isNotBlank()) {
+            sb.append("─── Breadcrumbs (last ${breadcrumbs.lines().size}) ───\n")
+            sb.append(breadcrumbs).append("\n\n")
+        }
+        if (crashLog.isNotBlank()) {
+            sb.append("─── Recent crash.log tail ───\n")
+            sb.append(crashLog).append("\n\n")
+        }
+        if (anrLog.isNotBlank()) {
+            sb.append("─── Recent anr.log tail ───\n")
+            sb.append(anrLog).append("\n\n")
+        }
+
+        return buildJson {
+            put("device", device)
+            put("android_sdk", Build.VERSION.SDK_INT.toString())
+            put("app_version", BuildConfig.VERSION_NAME)
+            put("version_code", BuildConfig.VERSION_CODE.toString())
+            put("captured_at", fmtUtc.format(Date()))
+            put("installed_version", BuildConfig.VERSION_NAME)
+            put("kind", "diagnostic")
+            put("trace", sb.toString())
+        }
+    }
+
     private fun maybeUpload(ctx: Context, force: Boolean): Boolean {
         // Two log files to ship: the JVM uncaught-exception log
         // (crash.log) and the ANR watchdog log (anr.log). Each is
