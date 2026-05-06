@@ -1,14 +1,11 @@
 {
-  "versionCode": 405,
-  "versionName": "1.44.5",
+  "versionCode": 406,
+  "versionName": "1.44.6",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": true,
+  "mandatory": false,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "CRASH FIX: Pressing DOWN from the league pills crashed the app when the cards rail was empty / still loading. Root cause was caught by v1.44.3's ANR watchdog uploading the trace: railFocus.requestFocus() on an unattached FocusRequester. Now wrapped in runCatching with a hasItems guard — if there are no cards, DOWN advances to the next page instead of crashing.",
-    "DATA: Hero and game cards now use the server's actual status field (live / final / scheduled) plus team scores when available. The 'UPCOMING GAME · FINAL' contradiction is gone; live MLB games now show real scores like '2 – 2'. Backend (sports_module.py) was updated with comprehensive status keyword recognition for all sports (basketball quarters, hockey periods, baseball innings, soccer halves, cricket overs, motorsport laps, tennis sets) and time-delta fallback when the upstream feed lags.",
-    "UX: Final games no longer pollute the hero marquee — they're pushed to the cards rail only. Hero is sorted live-first, then upcoming-by-start-time. Games more than 5h past start without a server-confirmed status are filtered out as 'almost certainly over'.",
-    "Mandatory:true so devices stuck on the v1.44.2 → v1.44.4 focus crash force-update."
+    "UX (DEV ONLY): When a game is live but TheSportsDB hasn't pushed scores yet, the card now shows 'LIVE · 2H 14M' (elapsed time) and an em-dash separator — instead of just 'VS'. Backend live-refresh window widened from 4h to 6h to catch lingering MLB games. Some games (e.g. Brewers @ Cardinals you tested) genuinely don't have score data on TheSportsDB's free tier even when they're live in real life — the elapsed timer is the best signal we can give without a paid sports-data feed."
   ]
 }

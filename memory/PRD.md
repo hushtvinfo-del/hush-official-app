@@ -1,6 +1,81 @@
 # HushTV — Product Requirements Document
 
-## v1.44.5 (DEV ONLY) — Sports focus crash + accurate status/scores — 2026-05-06  ⬅ LATEST
+## v1.44.6 (DEV ONLY) — Live-but-no-scores fallback UX — 2026-05-06  ⬅ LATEST
+
+User report after v1.44.5: *"Okay, it's now working to where you can scroll
+down and it's not crashing. However, if you look at the attached picture,
+it's showing live games but it's still not showing the scores in the
+actual game cards."*
+
+The user's screenshot showed **Milwaukee Brewers @ St. Louis Cardinals**
+correctly labelled `LIVE NOW · IN PROGRESS` (so the v1.44.5 status logic
+is working), but the card was empty (`VS` instead of scores).
+
+### Root cause: upstream data hole, not a code bug
+
+Direct query against the API for that exact event:
+
+```
+GET /api/v1/json/721094/lookupevent.php?id=2387404
+{
+  "strStatus":   "NS",        # "Not Started" — TheSportsDB still hasn't
+  "strProgress": null,         # flipped this game live, ~3.6h after first
+  "intHomeScore": null,        # pitch
+  "intAwayScore": null,
+  ...
+}
+```
+
+By contrast, four other MLB games at the same time-window (~1.7 h past
+start) were correctly returning `strStatus: "Top 5th"` etc. with real
+scores — so the backend ingestion is fine, TheSportsDB just doesn't
+have data for the Brewers-Cardinals matchup. The free-tier API has
+sparse coverage of mid-tier games; high-profile broadcasts get score
+updates within minutes, less-popular games can lag indefinitely.
+
+### What landed in v1.44.6
+
+#### Better UX when upstream data is missing
+- `GameCard` now shows `LIVE  ·  2H 14M` (elapsed time) in the corner
+  when a game is live but `score_home`/`score_away` are still null.
+- Center separator switches from `VS` to `—` (em-dash) when the game is
+  live-or-final without scores. Looks intentional, signals "we know
+  this is live, scores just aren't public yet" without confusing users
+  who think the game hasn't started.
+- New `elapsedShort(deltaMs)` helper: returns `"2H 14M"`, `"45M"`,
+  `"3H"`, etc.
+
+#### Backend window widened
+- `refresh_live_scores()` now polls scheduled-but-recent games up to
+  6h past start (was 4h). Covers MLB extras / NHL OT.
+- Verified live: 4 MLB games show real scores (`White Sox 2-4 Angels`,
+  `Braves 2-2 Mariners`, `Pirates 0-2 Diamondbacks`, `Padres 7-4
+  Giants`). Brewers-Cardinals stays score-less because upstream still
+  reports `strStatus: "NS"` — but at least now its card shows
+  `LIVE · 3H 36M` so the user knows it's in progress.
+
+### Build + deploy
+- versionCode 405 → 406, versionName 1.44.5 → 1.44.6.
+- BUILD SUCCESSFUL (1m 45s).
+- Auto-tagged `v1.44.6-dev`. Live: `https://hushtv.xyz/version.json`
+  reports versionCode 406.
+- Build env note: JVM/qemu wipe occurred again, fixed via
+  `apt-get install openjdk-17-jdk-headless qemu-user-static
+  libgcc-s1-amd64-cross libc6-amd64-cross sshpass`. Recurring issue —
+  see Earlier Issues section.
+
+### Lessons preserved
+
+When upstream data is genuinely missing, the right move is to make the
+gap LOOK INTENTIONAL via UX language ("LIVE · 3H 14M" with em-dash
+separator) rather than show empty space and let the user assume the
+app is broken. We can't conjure score data the upstream feed doesn't
+have, but we CAN tell the user we know the game is live and how long
+it's been on so they make an informed choice.
+
+---
+
+## v1.44.5 (DEV ONLY) — Sports focus crash + accurate status/scores — 2026-05-06
 
 User report after v1.44.4: *"first off, see the attached picture showing
 the Los Angeles Lakers games against OKC. It's showing Final, and this

@@ -570,14 +570,23 @@ def refresh_league_schedule(slug: str) -> int:
 
 
 def refresh_live_scores() -> int:
-    """Fast poll for in-progress games. Returns # updated."""
+    """Fast poll for in-progress games. Returns # updated.
+
+    v1.44.6 — widened the window from 4h to 6h past start because
+    MLB games regularly run 3-4h and TheSportsDB lags status updates
+    by ~10-30 min after first pitch. Also includes any 'scheduled'
+    game that started up to 6h ago — they're almost certainly mid-
+    game, just not yet upgraded to status='live' on the upstream
+    feed."""
     updated = 0
+    now_ms = int(time.time() * 1000)
     with _conn() as c:
         live = c.execute(
             "SELECT sportsdb_id FROM sports_games "
             "WHERE status='live' "
-            "   OR (status='scheduled' AND start_utc <= ? AND start_utc >= ?)",
-            (int(time.time() * 1000), int(time.time() * 1000) - 4 * 3600 * 1000),
+            "   OR (status IN ('scheduled','live') "
+            "       AND start_utc <= ? AND start_utc >= ?)",
+            (now_ms, now_ms - 6 * 3600 * 1000),  # 6h instead of 4h
         ).fetchall()
     for row in live:
         sid = row["sportsdb_id"]

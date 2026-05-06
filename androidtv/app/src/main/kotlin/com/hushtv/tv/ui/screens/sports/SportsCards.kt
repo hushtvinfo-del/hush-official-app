@@ -148,7 +148,11 @@ fun GameCard(
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            "LIVE",
+                            // v1.44.6 — when we know the game is live but
+                            // upstream hasn't pushed scores yet, show
+                            // elapsed time instead of just "LIVE". Beats
+                            // staring at "VS" with no extra info.
+                            if (showScores) "LIVE" else "LIVE  ·  ${elapsedShort(deltaMs)}",
                             color = Color(0xFFEF4444),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
@@ -199,7 +203,14 @@ fun GameCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        if (showScores) "–" else "vs",
+                        when {
+                            showScores -> "–"
+                            // v1.44.6 — em-dash placeholder for "live but
+                            // no upstream scores yet". Looks intentional.
+                            effectivelyLive -> "—"
+                            effectivelyFinal -> "—"
+                            else -> "vs"
+                        },
                         color = Color(0xFF94A3B8),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
@@ -270,6 +281,24 @@ private fun TeamBlock(
                 fontFamily = Inter,
             )
         }
+    }
+}
+
+/**
+ * Short "elapsed" label for live games whose upstream scores haven't
+ * landed yet — e.g. "2H 14M" if start was 2h14m ago. Returns a clean
+ * "0M" floor so we never render negative time.
+ */
+private fun elapsedShort(deltaMs: Long): String {
+    val elapsed = -deltaMs   // game started in the past, so deltaMs < 0
+    if (elapsed <= 0) return "0M"
+    val totalMin = (elapsed / 60_000).toInt()
+    val h = totalMin / 60
+    val m = totalMin % 60
+    return when {
+        h <= 0 -> "${m}M"
+        m == 0 -> "${h}H"
+        else -> "${h}H ${m}M"
     }
 }
 
