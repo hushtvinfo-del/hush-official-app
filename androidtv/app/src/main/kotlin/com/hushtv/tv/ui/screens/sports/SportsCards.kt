@@ -91,12 +91,12 @@ fun GameCard(
 
     Box(
         Modifier
-            // v1.44.12 — Card height dropped 220 → 200dp to give the
-            // page more vertical headroom on smaller TV usable areas.
-            // Combined with the v1.44.12 weight-based outer layout
-            // this makes overflow mathematically impossible.
+            // v1.44.16 — Card height bumped 200 → 220dp. Combined with
+            // the new zoned Column layout below this gives the
+            // scores/badges row 150dp of dedicated breathing room —
+            // impossible to clip at any font scale a user might set.
             .width(360.dp)
-            .height(200.dp)
+            .height(220.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
@@ -126,20 +126,25 @@ fun GameCard(
                 shape = cardShape,
             ),
     ) {
-        // v1.44.12 — Switched the card's internal layout from
-        // [topRow + Spacer(weight 1f) + scores + Spacer(weight 1f) +
-        // chip] (which approximated centering) to absolute alignment:
-        //   TopStart   → status row
-        //   Center     → scores (or vs/badge fallback)
-        //   BottomCenter → channel chip
-        // This GUARANTEES the score is visually dead-center vertically
-        // and the chip is glued to the bottom regardless of any
-        // sub-layout text-baseline drift. No more "score creeps below
-        // center" complaints.
-        Box(Modifier.fillMaxSize().padding(16.dp)) {
-            // ── Top status row (league badge + LIVE/COUNTDOWN) ──
+        // v1.44.16 — Rewrote card internals as a three-zone Column:
+        //   Zone 1 (fixed 22dp) : status row (league tag + LIVE/ETA)
+        //   Zone 2 (weight 1f)  : scores/badges (the hero of the card)
+        //   Zone 3 (fixed 2dp)  : cyan "live pulse" accent line
+        //
+        // Column is strict vertical stacking — zones physically
+        // cannot overlap each other by construction. The weight(1f)
+        // middle zone absorbs all remaining space, so if a translator
+        // gives us "Manchester United" instead of "MAN UTD" the score
+        // row just gets less vertical slack; it never spills into
+        // the status row and never clips at the bottom.
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 14.dp)
+        ) {
+            // ── Zone 1: Top status row ──
             Row(
-                Modifier.align(Alignment.TopStart).fillMaxWidth(),
+                Modifier.fillMaxWidth().height(22.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
@@ -153,8 +158,10 @@ fun GameCard(
                     color = accent,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
-                    letterSpacing = 2.5.sp,
+                    letterSpacing = 2.sp,
                     fontFamily = Inter,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.weight(1f))
                 if (effectivelyLive) {
@@ -167,12 +174,13 @@ fun GameCard(
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            if (showScores) "LIVE" else "LIVE  ·  ${elapsedShort(deltaMs)}",
+                            if (showScores) "LIVE" else "LIVE · ${elapsedShort(deltaMs)}",
                             color = Color(0xFFEF4444),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 2.sp,
+                            letterSpacing = 1.5.sp,
                             fontFamily = Inter,
+                            maxLines = 1,
                         )
                     }
                 } else if (effectivelyFinal) {
@@ -181,7 +189,7 @@ fun GameCard(
                         color = Color(0xFFCBD5E1),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp,
+                        letterSpacing = 1.5.sp,
                         fontFamily = Inter,
                     )
                 } else {
@@ -190,21 +198,24 @@ fun GameCard(
                         color = Color(0xFF94A3B8),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.5.sp,
+                        letterSpacing = 1.sp,
                         fontFamily = Inter,
+                        maxLines = 1,
                     )
                 }
             }
 
-            // ── Center: scores OR fallback-vs ──
+            // ── Zone 2: Scores/badges row (absorbs all remaining space) ──
             Box(
                 Modifier
-                    .align(Alignment.Center)
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
+                    .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
                 if (showScores) {
+                    // Scoreboard layout: [badge] [score] — [score] [badge]
+                    // All one horizontal row so there's no vertical
+                    // stack to clip.
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -212,76 +223,95 @@ fun GameCard(
                     ) {
                         TeamBadgeOnly(
                             badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
-                            modifier = Modifier.size(36.dp),
+                            modifier = Modifier.size(52.dp),
                             focused = focused,
                             accent = accent,
                         )
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             Text(
                                 game.score_away ?: "0",
                                 color = Color.White,
-                                fontSize = 26.sp,
+                                fontSize = 36.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = Inter,
+                                maxLines = 1,
                             )
                             Text(
                                 "—",
-                                color = Color(0xFF64748B),
-                                fontSize = 18.sp,
+                                color = Color(0xFF475569),
+                                fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = Inter,
                             )
                             Text(
                                 game.score_home ?: "0",
                                 color = Color.White,
-                                fontSize = 26.sp,
+                                fontSize = 36.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = Inter,
+                                maxLines = 1,
                             )
                         }
                         TeamBadgeOnly(
                             badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
-                            modifier = Modifier.size(36.dp),
+                            modifier = Modifier.size(52.dp),
                             focused = focused,
                             accent = accent,
                         )
                     }
                 } else {
+                    // Upcoming / no-scores layout: single horizontal
+                    // row [badge] AWAY   VS   HOME [badge]. Kept in
+                    // ONE row so there is no vertical stack that
+                    // could ever push content out of the card.
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        TeamBlock(
-                            name = game.away?.short_name ?: game.away?.name ?: "TBA",
+                        TeamBadgeOnly(
                             badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
-                            score = null,
-                            align = Alignment.CenterHorizontally,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.size(44.dp),
                             focused = focused,
                             accent = accent,
                         )
                         Text(
-                            when {
-                                effectivelyLive -> "—"
-                                effectivelyFinal -> "—"
-                                else -> "vs"
-                            },
-                            color = Color(0xFF94A3B8),
+                            (game.away?.short_name ?: game.away?.name ?: "TBA").uppercase(),
+                            color = Color.White,
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp,
                             fontFamily = Inter,
-                            modifier = Modifier.padding(horizontal = 8.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                         )
-                        TeamBlock(
-                            name = game.home?.short_name ?: game.home?.name ?: "TBA",
+                        Text(
+                            "VS",
+                            color = accent,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 2.sp,
+                            fontFamily = Inter,
+                        )
+                        Text(
+                            (game.home?.short_name ?: game.home?.name ?: "TBA").uppercase(),
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp,
+                            fontFamily = Inter,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                        )
+                        TeamBadgeOnly(
                             badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
-                            score = null,
-                            align = Alignment.CenterHorizontally,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.size(44.dp),
                             focused = focused,
                             accent = accent,
                         )
@@ -289,16 +319,22 @@ fun GameCard(
                 }
             }
 
-            // ── Bottom: REMOVED in v1.44.13 ──
-            // The "▶ SPORTSNET 360" channel chip used to live here
-            // pinned to BottomCenter. With the no-scores fallback
-            // layout (TeamBlock with badge + team-name underneath),
-            // the team names visually overlapped the chip — there
-            // wasn't enough vertical room in a 200dp card for both
-            // a centered badge+name and a bottom-pinned chip. Per
-            // user direction (v1.44.13), the chip is gone entirely;
-            // pressing OK on the focused card already plays the
-            // matched channel, so the chip was duplicative info.
+            // ── Zone 3: Bottom accent pulse line ──
+            // A hair-thin horizontal line. When the card is focused
+            // it brightens to full cyan; otherwise a subtle 20% tint.
+            // Replaces the old channel chip (removed v1.44.13) and
+            // gives the card a "finished" feel without consuming any
+            // meaningful vertical space.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(
+                        if (focused) accent
+                        else accent.copy(alpha = 0.25f)
+                    )
+            )
         }
     }
 }

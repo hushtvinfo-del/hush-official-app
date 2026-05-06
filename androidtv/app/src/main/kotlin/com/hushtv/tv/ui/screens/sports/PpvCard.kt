@@ -66,8 +66,10 @@ fun PpvCard(
 
     Box(
         Modifier
+            // v1.44.16 — Match GameCard height (220dp) so rows of
+            // mixed PPV + Game cards line up perfectly.
             .width(300.dp)
-            .height(200.dp)
+            .height(220.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
@@ -120,8 +122,26 @@ fun PpvCard(
             )
         )
 
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        // v1.44.16 — Zoned Column layout identical in philosophy to
+        // GameCard's. Three zones stacked top-to-bottom:
+        //   Zone 1 (fixed 22dp) : "PPV EVENT" label
+        //   Zone 2 (weight 1f)  : title + countdown (both fixed
+        //                         caps so they can't push the chip
+        //                         off the bottom)
+        //   Zone 3 (fixed ~36dp): channel chip
+        // Column stacking guarantees zero overlap regardless of how
+        // long the PPV title is (it truncates to 2 lines via
+        // maxLines + ellipsis).
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 14.dp)
+        ) {
+            // ── Zone 1: PPV label row ──
+            Row(
+                Modifier.fillMaxWidth().height(22.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Box(
                     Modifier
                         .size(width = 3.dp, height = 14.dp)
@@ -133,51 +153,62 @@ fun PpvCard(
                     color = accent,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
-                    letterSpacing = 2.5.sp,
+                    letterSpacing = 2.sp,
                     fontFamily = Inter,
                 )
             }
-            Spacer(Modifier.weight(1f))
-            Text(
-                event.title.uppercase(),
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Black,
-                lineHeight = 22.sp,
-                letterSpacing = 0.5.sp,
-                fontFamily = Inter,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                friendlyCountdown(event.start_utc),
-                color = Color(0xFFCBD5E1),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-                fontFamily = Inter,
-            )
+
+            // ── Zone 2: Title + countdown (absorbs leftover space) ──
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.Bottom,
+            ) {
+                Text(
+                    event.title.uppercase(),
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    lineHeight = 22.sp,
+                    letterSpacing = 0.5.sp,
+                    fontFamily = Inter,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    friendlyCountdown(event.start_utc),
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    fontFamily = Inter,
+                    maxLines = 1,
+                )
+            }
+
+            // ── Zone 3: Channel chip (fixed height, never clips) ──
             Spacer(Modifier.height(10.dp))
-            // Channel chip — same look as GameCard's chip.
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .height(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(if (focused) Color(0xFFFFFFFF) else Color(0x1AFFFFFF))
                     .border(
                         1.dp,
                         if (focused) Color.Transparent else Color(0xFF1E90FF).copy(alpha = 0.45f),
-                        RoundedCornerShape(12.dp),
+                        RoundedCornerShape(10.dp),
                     )
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                    .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "▶  ",
                         color = if (focused) Color(0xFF05080F) else Cyan,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = Inter,
                     )
@@ -186,7 +217,7 @@ fun PpvCard(
                         color = if (focused) Color(0xFF05080F) else Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
-                        letterSpacing = 1.8.sp,
+                        letterSpacing = 1.5.sp,
                         fontFamily = Inter,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

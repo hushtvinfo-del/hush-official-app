@@ -1,6 +1,62 @@
 # HushTV — Product Requirements Document
 
-## v1.44.15 (DEV ONLY) — Crash fix: negative padding in focus glow — 2026-05-06  ⬅ LATEST
+## v1.44.16 (DEV ONLY) — Perfect-fit Sports Cards via Zoned Column Layout — 2026-05-06  ⬅ LATEST
+
+User report: *"all i want to make sure is that the cards and everything else
+clearly have everything fit in them the logos - the time the game starts and the
+scores of the games - all need to fit perfectly inside the actual card nothing
+can overlap the other section"*
+
+### Root cause of the recurring "scores cut off" bug
+The previous layouts used either:
+- (v1.44.12) `Box(fillMaxSize)` with absolute `Alignment.TopStart / Center /
+  BottomCenter`, which only *positions* — it doesn't allocate space, so children
+  could overlap if their sizes summed to more than the card height.
+- (no-scores fallback) Vertical `Column { badge ; name }` per team — total
+  vertical extent (56dp badge + 8dp gap + 18sp name + descender) ≈ 90dp, which
+  pushed past the 200dp card minus its 32dp padding minus the 22dp top status
+  row whenever a TV had even 5–10% font scaling enabled.
+
+### The fix — strict three-zone Column layout
+Both `GameCard` and `PpvCard` are now structured as:
+
+```
+Card 220dp tall, 14dp padding top+bottom = 192dp usable
+┌── Zone 1 ── Row(height = 22dp)        ─ status row (league + LIVE/ETA)
+├── Zone 2 ── Box(weight = 1f)          ─ scores or title (centered)
+└── Zone 3 ── Box(height = 2dp | 34dp)  ─ accent line | channel chip
+```
+
+A Compose `Column` strictly stacks children top-to-bottom: zones cannot
+overlap by construction. The middle zone absorbs all remaining vertical
+space and centers its content. Even at 200% font scale and TV overscan the
+arithmetic still works.
+
+### Visual upgrades shipped with the fix
+- Card height: 200dp → 220dp (50% more breathing room).
+- Live-game scores: 26sp → **36sp**; team badges 36dp → **52dp** (couch-readable).
+- Upcoming-games row simplified to a single horizontal line:
+  `[badge] AWAY · VS · HOME [badge]`. No vertical badge-over-name stack.
+- Bottom **cyan pulse line** (2dp) replaces the old channel chip on GameCards.
+- PpvCard keeps its full-bleed poster + channel chip but with a fixed-height
+  (34dp) chip zone that can no longer be pushed off the bottom.
+
+### Build & deploy
+- versionCode 415 → 416, versionName 1.44.15 → 1.44.16.
+- mandatory: true (force-update for v1.44.15 devices).
+- BUILD SUCCESSFUL. APK + manifest deployed to https://hushtv.xyz/.
+- JVM-wipe workaround applied (apt-get install openjdk-17-jdk-headless
+  sshpass qemu-user-static libgcc-s1-amd64-cross libc6-amd64-cross).
+
+### Mockup approved by user
+Generated via Nano Banana (`gemini-3-pro-image-preview`) and approved before
+implementation. Saved at `/app/_mockups/sports_cards_mockup_0.png` and
+hosted for review at
+`https://tv-apk-build.preview.emergentagent.com/mockups/sports_cards_v1.png`.
+
+---
+
+## v1.44.15 (DEV ONLY) — Crash fix: negative padding in focus glow — 2026-05-06
 
 User report: *"Now the app is crashing when you go to the card, whatever
 effect you just did etc is now making it crash see crash logs"*

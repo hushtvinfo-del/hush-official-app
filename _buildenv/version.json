@@ -1,12 +1,15 @@
 {
-  "versionCode": 415,
-  "versionName": "1.44.15",
+  "versionCode": 416,
+  "versionName": "1.44.16",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "CRASH FIX (DEV ONLY): The v1.44.14 badge focus glow used Modifier.padding((-6).dp) to bleed the glow past the badge edge. Compose rejects negative padding values with `IllegalArgumentException: Padding must be non-negative`, instantly crashing the card the moment it received focus. Replaced with a clean radial gradient that doesn't need negative padding — same visual halo, no crash. v1.44.3's ANR watchdog + breadcrumb instrumentation captured the exception in seconds; thanks for your patience.",
-    "Mandatory:true so v1.44.14 devices force-update."
+    "PERFECT-FIT CARDS: Game and PPV cards rewritten with a strict three-zone Column layout (top status row → flexible scores/title middle → bottom accent line / channel chip). Column stacking means zones cannot overlap by construction — no more clipped scores, no more pill-collisions, regardless of font scale or TV overscan.",
+    "Card height bumped 200dp → 220dp giving the scores row 50% more breathing room.",
+    "Live-game scoreboard now uses 36sp scores (up from 26sp) and 52dp team badges (up from 36dp) — readable from across the room.",
+    "Upcoming-game layout simplified to a single horizontal row: [badge] AWAY · VS · HOME [badge]. No more vertical badge-over-name stack that could push content off the bottom.",
+    "Mandatory:true so v1.44.15 devices force-update."
   ]
 }
