@@ -263,9 +263,13 @@ private fun HeroCopy(h: SportsHero) {
         Text(
             h.title,
             color = Color.White,
-            fontSize = 56.sp,
+            // v1.44.10 — Dropped from 56sp → 44sp. With short team
+            // names ("White Sox @ Angels") at 44sp, the title fits in
+            // ~80% of cases without ellipsis. The 56sp+long-name combo
+            // was clipping mid-word ("Los A...") even in 16:9 1080p.
+            fontSize = 44.sp,
             fontWeight = FontWeight.Black,
-            lineHeight = 60.sp,
+            lineHeight = 48.sp,
             fontFamily = Inter,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,

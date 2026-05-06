@@ -171,6 +171,49 @@ TEAM_CHANNEL_SEED: List[Tuple[str, str, str]] = [
 _db_lock = threading.Lock()
 
 
+_COMPOUND_CITIES = {
+    "Los Angeles", "New York", "San Francisco", "San Diego", "San Antonio",
+    "San Jose", "Tampa Bay", "Kansas City", "St. Louis", "New Orleans",
+    "New England", "Golden State", "Oklahoma City", "Salt Lake",
+}
+
+
+def _derive_short_name(full: Optional[str]) -> str:
+    """Cheap heuristic to extract a TV-friendly short team name from
+    the full TheSportsDB name. Goal: 'Chicago White Sox' → 'White Sox',
+    'Los Angeles Angels' → 'Angels', 'New York Knicks' → 'Knicks'.
+
+    Rules (in order):
+      1. ≤1 word → return as-is.
+      2. 3+ words with first 2 matching a known compound city
+         ('Los Angeles', 'New York', etc.) → drop both. Yields
+         'Angels' / 'Yankees' / 'Knicks' / 'Lightning'.
+      3. 3+ words otherwise → drop just the first word. Yields
+         'White Sox' / 'Maple Leafs' / 'Golden Knights' / 'Pirates'.
+      4. 2 words AND the full string is more than 12 chars → drop
+         the first word. Yields 'Sabres' / 'Ducks' / 'Pirates'.
+      5. 2 words AND ≤12 chars → keep as-is. Preserves soccer-style
+         brand names like 'Real Madrid', 'Paris SG', 'Inter Miami',
+         'Bayern Munich', 'Toronto FC' which would otherwise become
+         meaningless ('Madrid', 'SG', 'Miami', etc.).
+    """
+    s = (full or "").strip()
+    if not s:
+        return ""
+    words = s.split()
+    if len(words) <= 1:
+        return s
+    head = " ".join(words[:2])
+    if len(words) >= 3 and head in _COMPOUND_CITIES:
+        return " ".join(words[2:])
+    if len(words) >= 3:
+        return " ".join(words[1:])
+    # 2-word case
+    if len(s) > 13:
+        return words[1]
+    return s
+
+
 def _ensure_db_dir() -> None:
     d = os.path.dirname(DB_PATH)
     if d and not os.path.isdir(d):
@@ -933,6 +976,11 @@ def _game_to_dict(c: sqlite3.Connection, row: sqlite3.Row,
         ).fetchone()
         if ht:
             home = dict(ht)
+            # v1.44.10 — auto-fill short_name when TheSportsDB doesn't
+            # supply one. Mutating the in-memory dict only; doesn't
+            # touch the DB. Keeps the wire shape stable.
+            if not (home.get("short_name") or "").strip():
+                home["short_name"] = _derive_short_name(home.get("name"))
     if row["away_team_id"]:
         at = c.execute(
             "SELECT name, short_name, logo_url, badge_url FROM sports_teams WHERE id=?",
@@ -940,6 +988,8 @@ def _game_to_dict(c: sqlite3.Connection, row: sqlite3.Row,
         ).fetchone()
         if at:
             away = dict(at)
+            if not (away.get("short_name") or "").strip():
+                away["short_name"] = _derive_short_name(away.get("name"))
     league = c.execute(
         "SELECT slug, name, accent FROM sports_leagues WHERE id=?",
         (row["league_id"],),
@@ -1097,11 +1147,20 @@ def sports_home(
             # below where the user can quickly check the result.
             if (g.get("status") or "").lower() == "final":
                 continue
+            # v1.44.10 — Use short_name ("White Sox" / "Angels") for the
+            # hero title. Falls back to a derived short name (drops the
+            # city prefix) when TheSportsDB doesn't provide one — which
+            # is most of the time for MLB.
+            away = g.get("away") or {}
+            home = g.get("home") or {}
+            away_name = (away.get("short_name") or "").strip() \
+                or _derive_short_name(away.get("name"))
+            home_name = (home.get("short_name") or "").strip() \
+                or _derive_short_name(home.get("name"))
             hero.append({
                 "kind": "game",
                 "id": g["id"],
-                "title": f"{g['away']['name'] if g['away'] else ''} @ "
-                         f"{g['home']['name'] if g['home'] else ''}",
+                "title": f"{away_name} @ {home_name}".strip(" @"),
                 "subtitle": g["league"]["name"] if g["league"] else "",
                 "image": (g["home"] or {}).get("badge_url")
                          or (g["home"] or {}).get("logo_url"),

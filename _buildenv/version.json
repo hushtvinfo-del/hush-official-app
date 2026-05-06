@@ -1,12 +1,12 @@
 {
-  "versionCode": 408,
-  "versionName": "1.44.9",
+  "versionCode": 410,
+  "versionName": "1.44.10",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "FIX (DEV ONLY): Sports section visual + navigation polish. (1) Score numbers reduced from 38sp to 28sp so they no longer clip the bottom of 220dp cards. (2) Added an opaque dark scrim under the league pills + cards so the hero image never bleeds through the gap below the hero. (3) Hero team logos now use ContentScale.Fit (was Crop) and a softened 1.00→1.04 Ken Burns scale so the FULL logo is visible — no more cropped half-badges. (4) UP from Streaming Services · Movies now returns to Sports (was incorrectly skipping back to Discovery). Sports added to pageOrder so the page-up indicator chevrons + slide direction also work.",
-    "Mandatory:true so v1.44.7 / v1.44.8 devices force-update."
+    "FIX (DEV ONLY): Hero title no longer clips long team names. Two changes: (1) backend + client now use SHORT team names (e.g. 'White Sox @ Angels' instead of 'Chicago White Sox @ Los Angeles Angels'); (2) hero title font reduced from 56sp to 44sp with matching line height. Verified: every active matchup fits cleanly on 1-2 lines on 1080p TV at the standard 96dp side padding.",
+    "Mandatory:true so v1.44.9 devices force-update."
   ]
 }

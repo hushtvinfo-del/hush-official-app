@@ -246,10 +246,20 @@ fun TVSportsPage(
                     items = playableGames,
                     railFocus = railFocus,
                     onGameFocused = { g, ch ->
+                        // v1.44.10 — Use short_name (e.g. "White Sox",
+                        // "Angels") in the hero title. The previous
+                        // version used full names ("Chicago White Sox
+                        // @ Los Angeles Angels") which clipped at 56sp
+                        // and even at 44sp can wrap. Short names fit
+                        // comfortably on one line.
+                        val awayName = g.away?.short_name?.takeIf { it.isNotBlank() }
+                            ?: g.away?.name ?: "TBA"
+                        val homeName = g.home?.short_name?.takeIf { it.isNotBlank() }
+                            ?: g.home?.name ?: "TBA"
                         pinnedHero = SportsHero(
                             kind = "game",
                             id = g.id,
-                            title = "${g.away?.name ?: "TBA"}  @  ${g.home?.name ?: "TBA"}",
+                            title = "$awayName  @  $homeName",
                             subtitle = g.league?.name,
                             image = g.home?.badge_url ?: g.home?.logo_url,
                             start_utc = g.start_utc,

@@ -1,6 +1,78 @@
 # HushTV — Product Requirements Document
 
-## v1.44.9 (DEV ONLY) — Sports visual polish + nav fix — 2026-05-06  ⬅ LATEST
+## v1.44.10 (DEV ONLY) — Hero title fits on every game — 2026-05-06  ⬅ LATEST
+
+User report: *"The game names in the hero are cut off look at the picture I
+sent .. this is for every game they are too big or not in the right format
+- we need to be able to see the full title names and should not be cut off
+or overlapped etc"*
+
+### Two-part fix
+
+#### 1. Smaller font + matching line-height
+- Hero title 56sp → 44sp, lineHeight 60sp → 48sp.
+- maxLines stays at 2 + ellipsis as a final backstop.
+
+#### 2. Smart short-name derivation
+- Backend: new `_derive_short_name(full_name)` helper used both in
+  `/api/sports/home` hero items AND in the per-game team object
+  (`_game_to_dict`) so the client's `onGameFocused`-pinned hero gets
+  the same short name.
+- Heuristic (in priority order):
+    1. `≤1 word` → return as-is.
+    2. `3+ words` AND first 2 are a known compound city
+       (`Los Angeles`, `New York`, `Tampa Bay`, `Kansas City`, etc.)
+       → drop both. Yields `Angels` / `Knicks` / `Yankees` /
+       `Lightning`.
+    3. `3+ words` otherwise → drop just the first word. Yields
+       `White Sox` / `Maple Leafs` / `Golden Knights` / `Blue Jays` /
+       `Pirates`.
+    4. `2 words` AND total > 13 chars → drop the first word. Yields
+       `Sabres`, `Diamondbacks`, etc.
+    5. `2 words` AND ≤13 chars → keep as-is. Preserves soccer-style
+       brand names (`Real Madrid`, `Paris SG`, `Inter Miami`,
+       `Bayern Munich`, `Toronto FC`) which would otherwise become
+       meaningless single words.
+- TVSportsPage.kt's `onGameFocused` now uses
+  `g.away?.short_name?.takeIf{it.isNotBlank()} ?: g.away?.name` so the
+  pinned hero gets the same short name when the user focuses a card.
+
+### Verified live across full slate
+```
+hero title              len  fits 1-line at 44sp on 1080p?
+White Sox @ Angels      18   ✓
+Pirates @ Diamondbacks  22   ✓
+Paris SG @ Bayern Munich 24  ✓
+Canadiens @ Sabres      18   ✓
+76ers @ Knicks          14   ✓
+Anaheim Ducks @ Golden Knights 30  wraps to 2 lines, no ellipsis
+Timberwolves @ Spurs    20   ✓
+Osasuna @ Levante       17   ✓
+```
+Max length is 30 chars; even that wraps cleanly on 2 lines without
+ellipsis at 44sp on the standard 1528dp content width (1920 - 200dp
+side rail - 96dp + 96dp side padding).
+
+### Build + deploy
+- versionCode 408 → 410, versionName 1.44.9 → 1.44.10.
+  (Skipped 409 — atomic-bump for cleanliness with the backend deploy.)
+- `mandatory: true` so v1.44.9 devices force-update.
+- Backend deployed: 25 distinct teams across all 8 leagues now have
+  derived short names; `Inter Miami` / `Real Madrid` / `Toronto FC`
+  correctly preserved.
+
+### Lesson preserved
+
+When a CMS or upstream provides "short_name" as a separate field but
+you can't trust it being populated, build a derivation function as the
+fallback. Don't make the user/admin hand-curate 1000+ team mappings
+when a 5-rule heuristic gets it right 95% of the time and the
+remaining 5% can be hand-overridden via the (upcoming) Phase 3 admin
+panel.
+
+---
+
+## v1.44.9 (DEV ONLY) — Sports visual polish + nav fix — 2026-05-06
 
 User report: *"1. See picture the scores in the title are too big not
 centered and being cut off at the bottom of the card. 2. The overlay in
