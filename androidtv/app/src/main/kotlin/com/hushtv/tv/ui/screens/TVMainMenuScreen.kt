@@ -281,6 +281,14 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         buildList {
             if (hasCw) add("cw")
             add("discovery")
+            // v1.44.9 — sports needs to be in pageOrder so the
+            // page-up/page-down indicator chevrons + the slide-
+            // direction logic in AnimatedContent both know about it.
+            // Previously the page existed and rendered fine, but it
+            // wasn't part of pageOrder so ss_movies's onUpFromRow
+            // bypassed it entirely (skipped from streaming back to
+            // discovery).
+            add("sports")
             add("ss_movies")
             add("ss_series")
             add("collections")
@@ -523,7 +531,11 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         kindLabel = "STREAMING SERVICES · MOVIES",
                         kind = "movie",
                         firstItemFocus = firstSsMoviesFocus,
-                        onUpFromRow = { currentPage = "discovery" },
+                        // v1.44.9 — UP from streaming-movies returns
+                        // to Sports (the page above it in pageOrder),
+                        // not Discovery. Previously this skipped over
+                        // Sports entirely.
+                        onUpFromRow = { currentPage = "sports" },
                         onDownFromRow = { currentPage = "ss_series" },
                     )
                     "ss_series" -> SsPage(

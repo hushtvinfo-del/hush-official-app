@@ -1,13 +1,12 @@
 {
-  "versionCode": 407,
-  "versionName": "1.44.7",
+  "versionCode": 408,
+  "versionName": "1.44.9",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "FIX (DEV ONLY): Game cards now show BIG, unmissable scores (38sp font) in the center when available — '2  —  4' between the team logos. Previous design buried the score under the team name where it was getting visually lost. mandatory:true so v1.44.5 / v1.44.6 devices force-update.",
-    "Diagnostic breadcrumbs now log every card's status + score values on each composition. If scores still don't show after this update, hit Diagnostics → Send Report and we can see exactly what data the card received.",
-    "Backed up by the v1.44.6 changes: 6h live-refresh window, em-dash separator for live-without-scores, elapsed time fallback."
+    "FIX (DEV ONLY): Sports section visual + navigation polish. (1) Score numbers reduced from 38sp to 28sp so they no longer clip the bottom of 220dp cards. (2) Added an opaque dark scrim under the league pills + cards so the hero image never bleeds through the gap below the hero. (3) Hero team logos now use ContentScale.Fit (was Crop) and a softened 1.00→1.04 Ken Burns scale so the FULL logo is visible — no more cropped half-badges. (4) UP from Streaming Services · Movies now returns to Sports (was incorrectly skipping back to Discovery). Sports added to pageOrder so the page-up indicator chevrons + slide direction also work.",
+    "Mandatory:true so v1.44.7 / v1.44.8 devices force-update."
   ]
 }

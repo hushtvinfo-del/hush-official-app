@@ -201,39 +201,50 @@ fun GameCard(
             // layout. The previous layout buried the score under the
             // team name where it was getting lost.
             if (showScores) {
+                // v1.44.9 — scores at 28sp (was 38sp). 38sp was being
+                // clipped at the bottom of the 220dp card on actual TVs.
+                // 28sp + a vertically-centered Box leaves comfortable
+                // breathing room above the channel chip.
                 Row(
-                    Modifier.fillMaxWidth(),
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     TeamBadgeOnly(
                         badgeUrl = game.away?.badge_url ?: game.away?.logo_url,
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(40.dp),
                     )
-                    Text(
-                        game.score_away ?: "0",
-                        color = Color.White,
-                        fontSize = 38.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = Inter,
-                    )
-                    Text(
-                        "—",
-                        color = Color(0xFF64748B),
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = Inter,
-                    )
-                    Text(
-                        game.score_home ?: "0",
-                        color = Color.White,
-                        fontSize = 38.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = Inter,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            game.score_away ?: "0",
+                            color = Color.White,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = Inter,
+                        )
+                        Text(
+                            "—",
+                            color = Color(0xFF64748B),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = Inter,
+                        )
+                        Text(
+                            game.score_home ?: "0",
+                            color = Color.White,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = Inter,
+                        )
+                    }
                     TeamBadgeOnly(
                         badgeUrl = game.home?.badge_url ?: game.home?.logo_url,
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(40.dp),
                     )
                 }
             } else {

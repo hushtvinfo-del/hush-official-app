@@ -148,20 +148,31 @@ fun SportsHeroLayer(
 @Composable
 private fun HeroBackdrop(h: SportsHero) {
     val transition = rememberInfiniteTransition(label = "sports-kb-${h.id}")
+    // v1.44.9 — softened the Ken Burns range from 1.04→1.12 down to
+    // 1.00→1.04 (4% drift). The previous values were zooming the team
+    // logo so far in that the badge clipped its own edges. With Fit
+    // contentScale (below) we already letterbox to keep the full logo
+    // visible; the gentler scale just adds organic motion without
+    // re-cropping.
     val scale by transition.animateFloat(
-        initialValue = 1.04f,
-        targetValue = 1.12f,
+        initialValue = 1.00f,
+        targetValue = 1.04f,
         animationSpec = infiniteRepeatable(tween(24_000, easing = LinearEasing)),
         label = "sports-kb-scale",
     )
     Box(Modifier.fillMaxSize()) {
         if (!h.image.isNullOrBlank()) {
+            // v1.44.9 — switched from ContentScale.Crop to .Fit so the
+            // FULL team logo is visible. Crop was rendering the
+            // top-half of the badge only on most TVs because logos
+            // are square 512x512 and the hero box is ~16:9.
             AsyncImage(
                 model = h.image,
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(end = 80.dp, top = 30.dp, bottom = 30.dp)
                     .graphicsLayer { scaleX = scale; scaleY = scale },
             )
         } else {

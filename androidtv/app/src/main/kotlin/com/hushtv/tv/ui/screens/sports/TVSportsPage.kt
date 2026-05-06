@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -156,12 +157,31 @@ fun TVSportsPage(
         }
 
         // ── League pills + cards rail (bottom half) ──
-        Column(
+        // v1.44.9 — Wrapped in an opaque Box with a top gradient that
+        // smooth-blends from the hero into solid #05080F by the time
+        // the pills row begins. Previous version had a 30-40dp band
+        // between the hero's bottom edge (420dp) and the cards row
+        // (~440dp) where the original hero image leaked through; this
+        // covers it definitively.
+        Box(
             Modifier
                 .fillMaxSize()
-                .padding(top = 360.dp),
+                .padding(top = 350.dp),
         ) {
-            LeaguePillBar(
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color(0x0005080F),
+                            0.18f to Color(0xCC05080F),
+                            0.32f to Color(0xFF05080F),
+                            1.0f to Color(0xFF05080F),
+                        )
+                    )
+            )
+            Column(Modifier.fillMaxSize().padding(top = 10.dp)) {
+                LeaguePillBar(
                 pills = pills,
                 selectedSlug = selectedLeague,
                 onSelect = { newSlug ->
@@ -243,8 +263,9 @@ fun TVSportsPage(
                     onDownFromRow = onDownFromRow,
                 )
             }
-        }
-    }
+            }  // close inner Column
+        }      // close bottom wrapper Box
+    }          // close outer page Box
 }
 
 /** Build the static league-pill list. We always lead with All / Live

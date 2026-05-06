@@ -1,6 +1,90 @@
 # HushTV — Product Requirements Document
 
-## v1.44.8 — TheSportsDB V2 livescore (Business tier) — 2026-05-06  ⬅ LATEST
+## v1.44.9 (DEV ONLY) — Sports visual polish + nav fix — 2026-05-06  ⬅ LATEST
+
+User report: *"1. See picture the scores in the title are too big not
+centered and being cut off at the bottom of the card. 2. The overlay in
+the background the dark Grey overlay that goes over the background image
+does not go all the way down to the actual cards… There is a gap between
+the league pills and the cards. It needs to fill the screen perfectly so
+that the background image doesn't creep through the gap etc. 3. The
+background image logos in heroes are too big… they should fit the screen
+perfectly and show the full logo perfectly in the background. 4. When you
+scroll down on the sports section to the next screen (streaming services
+- movies) and then when you go back up, it's jumping all the way up past
+the sports screen to discover section it should go back to the sports
+section."*
+
+### Four fixes shipped
+
+#### 1. Score sizing
+- Reduced from 38sp → 28sp. Was clipping the bottom of 220dp cards on
+  actual TV displays.
+- Layout swapped from `SpaceEvenly` (which spread the 5 elements
+  edge-to-edge with no padding control) to `SpaceBetween` with explicit
+  horizontal padding + a center inner-Row that groups
+  `[score · — · score]` as a unit. The away/home badges now bookend
+  the score group with consistent spacing.
+- Em-dash separator dropped from 22sp → 18sp to match the smaller
+  scores aesthetically.
+
+#### 2. Background scrim gap closed
+- Wrapped the bottom (pills + cards) section in an opaque
+  `Box(Modifier.fillMaxSize().padding(top = 350dp))` carrying a vertical
+  gradient from transparent at the very top → solid `#05080F` by 32%
+  of the box height.
+- Result: the hero's bottom gradient blends seamlessly into the page
+  scrim. The 30-40dp band between hero-end (420dp) and cards-start
+  (~440dp) where the hero image used to leak through is now fully
+  opaque.
+- Required adding `Brush` import to `TVSportsPage.kt`.
+
+#### 3. Hero logos no longer cropped
+- `HeroBackdrop`: `ContentScale.Crop` → `ContentScale.Fit`. Crop was
+  showing the top-half of the badge only because logos are square
+  512×512 and the hero box is ~16:9.
+- Ken Burns scale softened from `1.04→1.12` to `1.00→1.04`. The old
+  scale was zooming so far in that even with Fit, the badge edges
+  clipped against the box.
+- Added `padding(end = 80dp, top = 30dp, bottom = 30dp)` so the logo
+  has breathing room from the edges + leaves space for the copy
+  block on the left and pagination dots in the bottom-right.
+
+#### 4. Page navigation — UP from ss_movies returns to Sports
+- Root cause: `pageOrder` didn't include `"sports"` even though Sports
+  was a real page rendered via `currentPage="sports"`. The page
+  existed but the slide-direction logic + page-up indicator chevrons
+  + page-up-down keyboard shortcut all bypassed it.
+  ALSO `ss_movies`'s `onUpFromRow = { currentPage = "discovery" }`
+  was a stale hardcode from before Sports existed.
+- Fix:
+    - Added `"sports"` to `pageOrder` between `"discovery"` and
+      `"ss_movies"`.
+    - Changed `ss_movies.onUpFromRow` to `currentPage = "sports"`.
+
+### Build + deploy
+- versionCode 407 → 408, versionName 1.44.7 → 1.44.9.
+  (Skipping 1.44.8 — that was the V2 livescore backend-only release.)
+- BUILD SUCCESSFUL (54s).
+- Auto-tagged `v1.44.9-dev`. `mandatory: true` so v1.44.7 / v1.44.8
+  devices force-update.
+- Verified no brace-balance issues post-edit (Python `count('{')` ==
+  `count('}')`).
+
+### Lesson preserved
+
+When fixing a UI bug:
+1. Look at the screenshot CAREFULLY before assuming the data layer is
+   the problem.
+2. Read every Modifier in the layout chain — `ContentScale.Crop` was
+   silently hiding 50% of the team badge for weeks.
+3. When adding navigation between pages, ALWAYS update both
+   `pageOrder` and the per-page `onUp/onDownFromRow` callbacks.
+   Forgetting one creates the "skip" pattern the user just hit.
+
+---
+
+## v1.44.8 — TheSportsDB V2 livescore (Business tier) — 2026-05-06
 
 User instruction: *"Yes obviously I want you to use all features we can
 with our paid api."*
