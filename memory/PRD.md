@@ -1,6 +1,59 @@
 # HushTV — Product Requirements Document
 
-## v1.44.12 (DEV ONLY) — Weight-based layout + alignment-pinned card content — 2026-05-06  ⬅ LATEST
+## v1.44.13 (DEV ONLY) — Removed channel chip (no overlap) — 2026-05-06  ⬅ LATEST
+
+User report: *"See the attached picture. Look at the scorecard with the
+Anaheim Ducks versus the Knights. You'll see that the team names are
+overlapping the play button. I told you, you can't have things
+overlapping each other. It looks very unprofessional. You need to fix
+it. You need to remove something out, either the team name or the play
+on the channel. I'd recommend... Taking out the play name, the play on
+the channel, and leaving the names. Just fix it. Make it look good.
+Nothing can overlap anything else. Everything needs to fit perfectly."*
+
+### Why the overlap happened
+
+In the no-scores fallback case (most pre-game / non-MLB cards):
+- `TeamBlock` rendered = 56dp badge + 6dp gap + 1-line 14sp text =
+  ~80dp tall content stack.
+- That stack was placed at `Box.align(Alignment.Center)` of a 200dp
+  card → occupied y = [60dp, 140dp].
+- `ChannelChip` (~36dp tall) was at `Box.align(Alignment.BottomCenter)`
+  → occupied y = [164dp, 200dp].
+- On paper these don't overlap. BUT the `TeamBlock` was `Modifier
+  .weight(1f)` inside a Row, and on cards where the team name was
+  long enough to wrap to 2 lines, the stack grew to ~100dp and the
+  bottom edge of the name-text crashed into the top edge of the
+  channel chip.
+
+### Fix shipped
+
+**Removed `ChannelChip` from `GameCard` entirely** per user direction.
+Reasons it was safe to remove:
+- Pressing OK on the focused card already plays the matched live
+  channel, so the chip was duplicative.
+- The hero (top half of the page) ALSO shows the matched channel
+  name in its eyebrow row when a game card has focus — same info,
+  no redundancy lost.
+- The `ChannelChip` composable itself is kept in `SportsCards.kt` as
+  a private function in case we want to bring it back in a different
+  layout later, but no caller invokes it now.
+
+### Build + deploy
+- versionCode 412 → 413, versionName 1.44.12 → 1.44.13.
+- BUILD SUCCESSFUL (49s).
+- `mandatory: true` so v1.44.12 devices force-update.
+
+### Lesson preserved
+
+When two pieces of information are pinned to FIXED corners of a small
+container (200dp tall) with content of variable height between them,
+overlap is a *when*, not an *if*. If both can't be guaranteed to fit
+across all data shapes, REMOVE the less-essential piece.
+
+---
+
+## v1.44.12 (DEV ONLY) — Weight-based layout + alignment-pinned card content — 2026-05-06
 
 User report: *"Now the scores are cut off again. See the picture. Look in
 the cards and you'll see the scores are cut off again at the bottom. You

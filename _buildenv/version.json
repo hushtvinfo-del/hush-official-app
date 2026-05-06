@@ -1,13 +1,12 @@
 {
-  "versionCode": 412,
-  "versionName": "1.44.12",
+  "versionCode": 413,
+  "versionName": "1.44.13",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-06",
   "channel": "dev",
   "changelog": [
-    "FIX (DEV ONLY): Sports cards no longer extend below the screen — the page now uses Column with weighted children (55% hero, 45% pills+cards) instead of fixed 420dp/350dp absolute positioning. Math: overflow is impossible because every region's height is computed from the actual available space.",
-    "Card internals restructured to use absolute alignment (TopStart for status row, Center for scores, BottomCenter for channel chip). Scores are now GUARANTEED dead-center vertically — no more 'creeping toward the bottom' regression. Card height also dropped 220dp → 200dp for extra headroom.",
-    "Mandatory:true so v1.44.11 devices force-update."
+    "FIX (DEV ONLY): Removed the '▶ SPORTSNET 360' channel chip from the bottom of every game card. With the no-scores fallback layout (badge + team name underneath), the team names were visually overlapping the chip — there wasn't enough vertical room in a 200dp card for both a centered badge-plus-name and a bottom-pinned chip. Per user direction, the chip is gone entirely; pressing OK on the focused card still plays the matched channel, so the chip was duplicative info anyway.",
+    "Mandatory:true so v1.44.12 devices force-update."
   ]
 }

@@ -281,14 +281,16 @@ fun GameCard(
                 }
             }
 
-            // ── Bottom: channel chip ──
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth(),
-            ) {
-                ChannelChip(channelTitle = matchedChannel.title, focused = focused)
-            }
+            // ── Bottom: REMOVED in v1.44.13 ──
+            // The "▶ SPORTSNET 360" channel chip used to live here
+            // pinned to BottomCenter. With the no-scores fallback
+            // layout (TeamBlock with badge + team-name underneath),
+            // the team names visually overlapped the chip — there
+            // wasn't enough vertical room in a 200dp card for both
+            // a centered badge+name and a bottom-pinned chip. Per
+            // user direction (v1.44.13), the chip is gone entirely;
+            // pressing OK on the focused card already plays the
+            // matched channel, so the chip was duplicative info.
         }
     }
 }
