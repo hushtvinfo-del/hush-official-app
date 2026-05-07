@@ -1571,6 +1571,78 @@ def sports_game_detail(game_id: int) -> Dict[str, Any]:
     return g
 
 
+# ── EPG-based channel discovery (v1.44.27) ──────────────────────────
+# The user's Xtream EPG is the source of truth for "which of MY
+# channels is currently airing this game". We call xmltv.php once
+# per playlist (cached 4h on disk + in-memory) and search programmes
+# whose title/sub/desc contain BOTH team names within a ±30 min
+# window of the game's start.
+#
+# Endpoint: GET /api/sports/game/{id}/channels
+#   Query: host, username, password — the user's Xtream creds.
+#          (Same trust model as everything else: app -> sync server.)
+#
+# Returns either a list of matches or the no-match sentinel:
+#   { "ok": true,  "matches": [ {channel_id, channel_name,
+#                                 programme_title, programme_sub,
+#                                 start_utc_ms, stop_utc_ms}, ... ] }
+#   { "ok": false, "reason": "no_epg_match" }
+@router.get("/game/{game_id}/channels")
+def sports_game_channels(
+    game_id: int,
+    host: str = Query(..., description="Xtream host (https://...)"),
+    username: str = Query(...),
+    password: str = Query(...),
+    window_minutes: int = Query(30, ge=5, le=240),
+) -> Dict[str, Any]:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT g.id, g.start_utc, ht.name AS home_name, "
+            "       at_.name AS away_name "
+            "FROM sports_games g "
+            "LEFT JOIN sports_teams ht  ON ht.id  = g.home_team_id "
+            "LEFT JOIN sports_teams at_ ON at_.id = g.away_team_id "
+            "WHERE g.id=?",
+            (game_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "game not found")
+    home = row["home_name"] or ""
+    away = row["away_name"] or ""
+    if not home or not away:
+        return {"ok": False, "reason": "no_team_names"}
+
+    # Lazy import so the new module isn't a hard dep on cold-start.
+    from sports_epg import search_channels_for_game
+
+    matches = search_channels_for_game(
+        host=host,
+        username=username,
+        password=password,
+        home_team=home,
+        away_team=away,
+        game_start_utc_ms=row["start_utc"],
+        window_minutes=window_minutes,
+    )
+    if not matches:
+        return {"ok": False, "reason": "no_epg_match"}
+    return {"ok": True, "matches": matches}
+
+
+@router.post("/epg/warm")
+def sports_epg_warm(
+    host: str = Query(...),
+    username: str = Query(...),
+    password: str = Query(...),
+) -> Dict[str, Any]:
+    """Warm-up endpoint — apps can hit this once at app launch to
+    pre-fetch the playlist's EPG so the first /game/{id}/channels
+    call is instant. Idempotent + cheap (re-uses cache if fresh)."""
+    from sports_epg import warm_cache
+    ok = warm_cache(host, username, password)
+    return {"ok": bool(ok)}
+
+
 # ── Admin endpoints ─────────────────────────────────────────────────
 def _require_admin(token: Optional[str]) -> None:
     if not ADMIN_TOKEN:
