@@ -1947,6 +1947,37 @@ private fun OsdChipButton(
  *
  * Defaults focus to "No, save my place" so an accidental Enter on
  * exit never wipes the user's progress.
+ *
+ * ════════════════════════════════════════════════════════════════════
+ * ⚠ DO-NOT-REGRESS NOTE — read before adding any new prompt overlay
+ * ════════════════════════════════════════════════════════════════════
+ * This composable is wrapped in `androidx.compose.ui.window.Dialog`.
+ * That is INTENTIONAL and NOT optional.
+ *
+ * Why a Dialog? The player screen owns a root-level
+ * `Modifier.onKeyEvent` that traps every D-pad key (UP/DOWN/LEFT/
+ * RIGHT/Enter/Back) for playback shortcuts (volume, seek, channel
+ * zap, etc.). If we draw a prompt as a plain `Box` overlay inside
+ * the player's composable tree, the player's root key handler still
+ * fires on every key press and the overlay's buttons NEVER receive
+ * focus moves — the user sees the box but their D-pad presses
+ * tunnel right through it into the player behind. That was the
+ * v1.44.43 bug visible in the user's screenshot.
+ *
+ * Compose's `Dialog` solves this by hosting the overlay in its own
+ * native `Window`, which is a separate input target on Android.
+ * Key events go to THIS window's content tree, not the player's, so
+ * focus traversal stays inside the dialog and the player stops
+ * receiving spurious keys until the dialog dismisses.
+ *
+ * RULE FOR FUTURE PROMPTS: any modal overlay that needs its own
+ * D-pad focus traversal — confirmations, pickers, choosers — MUST
+ * use `androidx.compose.ui.window.Dialog` (with
+ * `usePlatformDefaultWidth = false` if you need a wide layout).
+ * Plain `Box` overlays only work when the parent composable does
+ * NOT install a root onKeyEvent / onPreviewKeyEvent handler. The
+ * player, the live-grid, and the home pager all do — so dialogs are
+ * the only correct pattern there.
  */
 @Composable
 private fun AreYouDoneOverlay(
@@ -1959,69 +1990,69 @@ private fun AreYouDoneOverlay(
         delay(80)
         runCatching { noFocus.requestFocus() }
     }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0xE6000000))
-            // Swallow BACK at the overlay level so a second back-press
-            // dismisses the prompt rather than popping the player.
-            .onKeyEvent { ev ->
-                if (ev.type == KeyEventType.KeyDown &&
-                    (ev.key == Key.Back || ev.key == Key.Escape)
-                ) {
-                    onDismiss()
-                    true
-                } else false
-            },
-        contentAlignment = Alignment.Center,
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            // Full-screen dialog: we draw our own dim layer.
+            usePlatformDefaultWidth = false,
+        ),
     ) {
-        Surface(
-            color = Color(0xFF0B111D),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier
-                .widthIn(min = 520.dp, max = 640.dp)
-                .border(1.dp, Color(0x4D06B6D4), RoundedCornerShape(20.dp)),
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xE6000000)),
+            contentAlignment = Alignment.Center,
         ) {
-            Column(
-                Modifier.padding(horizontal = 36.dp, vertical = 32.dp),
-                horizontalAlignment = Alignment.Start,
+            Surface(
+                color = Color(0xFF0B111D),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .widthIn(min = 520.dp, max = 640.dp)
+                    .border(1.dp, Color(0x4D06B6D4), RoundedCornerShape(20.dp)),
             ) {
-                Text(
-                    "BEFORE YOU GO",
-                    color = Cyan,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 3.sp,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "Are you done watching?",
-                    color = Color.White,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Pick \"Yes\" to remove this from Continue Watching, or \"No\" to save your place and resume later.",
-                    color = Color(0xFFCBD5E1),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                )
-                Spacer(Modifier.height(24.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ResumeButton(
-                        label = "Yes, I'm done",
-                        icon = Icons.Default.ArrowBack,
-                        primary = true,
-                        onClick = onYes,
+                Column(
+                    Modifier.padding(horizontal = 36.dp, vertical = 32.dp),
+                    horizontalAlignment = Alignment.Start,
+                ) {
+                    Text(
+                        "BEFORE YOU GO",
+                        color = Cyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 3.sp,
                     )
-                    ResumeButton(
-                        label = "No, save my place",
-                        icon = Icons.Default.PlayArrow,
-                        primary = false,
-                        focusRequester = noFocus,
-                        onClick = onNo,
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "Are you done watching?",
+                        color = Color.White,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Pick \"Yes\" to remove this from Continue Watching, or \"No\" to save your place and resume later.",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ResumeButton(
+                            label = "Yes, I'm done",
+                            icon = Icons.Default.ArrowBack,
+                            primary = true,
+                            onClick = onYes,
+                        )
+                        ResumeButton(
+                            label = "No, save my place",
+                            icon = Icons.Default.PlayArrow,
+                            primary = false,
+                            focusRequester = noFocus,
+                            onClick = onNo,
+                        )
+                    }
                 }
             }
         }

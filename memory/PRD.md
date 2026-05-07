@@ -1,6 +1,58 @@
 # HushTV — Product Requirements Document
 
-## v1.44.43 (DEV) — Side-rail focus fix: LEFT always lands on Home — 2026-02-08  ⬅ LATEST
+## v1.44.44 (DEV) — Bulletproof rail focus redirect + Dialog-wrapped exit prompt — 2026-02-08  ⬅ LATEST
+
+User reported two issues from the v1.44.43 OTA: rail still focuses Search on LEFT, and the "Are you done watching?" prompt couldn't capture D-pad — keys tunnelled through to the player behind.
+
+### Issue 1 — Why focusProperties.enter wasn't enough
+
+`focusProperties { enter = ... }` only fires when focus arrives via `focusManager.moveFocus()`. It does NOT fire for:
+- direct `FocusRequester.requestFocus()` calls
+- Compose's 2D spatial-focus search after a key event escapes a focusGroup
+
+When the user pressed LEFT from a Continue Watching card pinned to the bottom of the screen, the spatial search picked Search (vertically closest rail item). `enter` never ran. Search received focus.
+
+### Fix — runtime onFocusChanged cold-entry redirect
+
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TVSideRail.kt`
+
+Added `Modifier.onFocusChanged` on the rail's outer Column tracking a `railHadFocus: Boolean`. Transitions:
+- `false → true` (cold entry from outside the rail) → unconditionally call `firstItemFocus.requestFocus()` to redirect to Home.
+- `true → true` (intra-rail UP/DOWN movement) → no-op so user navigation works.
+- `true → false` (rail loses focus) → just update the flag.
+
+This runs AFTER Compose's own focus search, so even if 2D spatial-search picked the wrong item, we override it within the same frame. Belt-and-braces alongside the existing `focusProperties { enter }`. Heavy comments above the block explain the pattern.
+
+### Issue 2 — Dialog-wrapped exit prompt
+
+The `AreYouDoneOverlay` was drawn as a plain `Box` overlay inside the player's composable tree. The player has a root-level `onKeyEvent` that traps every D-pad key for playback shortcuts (volume, seek, channel zap). Plain Box overlays do not isolate input, so the player's root handler still grabbed LEFT/RIGHT/UP/DOWN — the user could see the dialog but couldn't move between the Yes/No buttons.
+
+### Fix — wrap in `androidx.compose.ui.window.Dialog`
+
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVPlayerScreen.kt`
+
+Compose's `Dialog` hosts the overlay in its own native `Window`, which is a separate Android input target. Key events go to the dialog's content tree, not the player's. Same pattern as the working `RemoveContinueWatchingDialog` and `LayoutChooserDialog`.
+
+### DO-NOT-REGRESS comment
+
+Added a 28-line comment block above `AreYouDoneOverlay` explaining:
+- WHY the Dialog is required (player's root onKeyEvent traps every key).
+- The rule for future prompts: *any modal overlay that needs its own D-pad focus traversal MUST use `androidx.compose.ui.window.Dialog` with `usePlatformDefaultWidth = false`*.
+- When plain `Box` overlays are acceptable (only when the parent doesn't install a root key handler).
+
+### Files touched
+```
+app/build.gradle.kts                                              bumped to 1.44.44 / 444
+app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TVSideRail.kt
+app/src/main/kotlin/com/hushtv/tv/ui/screens/TVPlayerScreen.kt
+_buildenv/version.json
+```
+
+Build + deploy: `assembleDevDebug` ✓ (4m 2s), APK + manifest pushed, OTA serving 1.44.44 / 444 ✓.
+
+---
+
+## v1.44.43 (DEV) — Side-rail focus fix: LEFT always lands on Home — 2026-02-08
 
 User reported: *"When you navigate left to the menu it is automatically toggling Search by default — should toggle Home always by default."*
 

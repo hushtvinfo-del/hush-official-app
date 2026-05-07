@@ -1,16 +1,13 @@
 {
-  "versionCode": 443,
-  "versionName": "1.44.43",
+  "versionCode": 444,
+  "versionName": "1.44.44",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Side menu navigation: Pressing LEFT from any home page (Discover, Continue Watching, Streaming Services, Genres, Decades, Sports, etc.) now ALWAYS lands focus on Home — never on Search or whichever rail item was last focused. Predictable, professional rail-entry every time.",
-    "Continue Watching: Pressing BACK during a movie or series asks \"Are you done watching?\" — Yes clears the title from your list, No saves your place. Live TV BACK behaviour unchanged.",
-    "Continue Watching: New \"Clear All\" tile at the end of the row + a \"Clear All\" link on the mobile hub. Confirmation dialog defaults to Cancel.",
-    "Continue Watching: Removing a title now syncs across every device on the same playlist (tombstone-based sync). 30-second propagation cycle.",
-    "Continue Watching: 14-day auto-prune drops anything you haven't touched in two weeks.",
-    "Continue Watching: The Home page lands on the Continue Watching tile automatically whenever you have something in progress, with the first card already focused."
+    "Side menu (FIXED PROPERLY): Pressing LEFT from any card on any home page now lands focus on Home — every single time, regardless of which card you came from. The previous fix relied on focusProperties.enter which only fires for moveFocus() calls; this build adds a runtime onFocusChanged-based cold-entry redirect that catches every focus path including direct requestFocus and 2D spatial-search.",
+    "Player exit prompt (FIXED): The \"Are you done watching?\" dialog now correctly traps D-pad navigation. You can move LEFT/RIGHT between Yes/No buttons and the player no longer steals key presses behind the dialog. Wrapped in a proper Compose Dialog with its own input window — same pattern as the long-press Remove confirmation. Code now has a DO-NOT-REGRESS comment block above the dialog to ensure future prompts use the same Dialog pattern.",
+    "Continue Watching: All v1.44.42 features still in place — Are-you-done prompt, Clear All, tombstone deletion, 14-day prune, auto-focus first CW tile."
   ]
 }

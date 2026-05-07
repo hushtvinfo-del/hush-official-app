@@ -270,12 +270,6 @@ fun TVSideRail(
 ) {
     // Track WHICH item currently has focus and WHEN it gained focus
     // — we only act on focus that has been stable for [HOLD_MS] ms.
-    // This prevents the home page's lazy-load focus-flicker from
-    // briefly highlighting the rail's first item AND from flashing
-    // the expand animation. Below the hold threshold the rail
-    // visually pretends nothing happened — the item gets no focus
-    // ring, the rail stays its collapsed width, the divider
-    // doesn't move.
     var focusedItemKey by remember { mutableStateOf<String?>(null) }
     var stableFocus by remember { mutableStateOf<String?>(null) }
     val expanded = stableFocus != null
@@ -284,9 +278,6 @@ fun TVSideRail(
         if (key == null) {
             stableFocus = null
         } else {
-            // Hold at least 250 ms before treating focus as stable.
-            // 4-frame transient flickers from lazy-list re-layout
-            // are gone in <60 ms, so 250 ms is plenty of cushion.
             kotlinx.coroutines.delay(250)
             if (focusedItemKey == key) stableFocus = key
         }
@@ -296,6 +287,34 @@ fun TVSideRail(
         animationSpec = tween(durationMillis = 220),
         label = "rail-width",
     )
+
+    // ── Cold-entry redirect (v1.44.44 — bulletproof Home-on-entry) ──
+    //
+    // **Problem the previous fix didn't solve**: `focusProperties { enter }`
+    // only fires for `focusManager.moveFocus()`, NOT for direct
+    // `requestFocus()` calls and NOT for Compose's 2D spatial-focus
+    // search that fires when LEFT escapes a content focusGroup. So
+    // when a card near the bottom of the screen lost focus to the
+    // LEFT, Compose picked Search (vertically closest rail item) and
+    // our enter callback never ran.
+    //
+    // **The bulletproof pattern**: tag the rail container with
+    // `onFocusChanged` to observe whether ANY descendant currently
+    // has focus. The boolean transitions:
+    //   • `false → true`  ⇒ cold entry from outside the rail
+    //   • `true  → true`  ⇒ intra-rail navigation (UP/DOWN between items)
+    //   • `true  → false` ⇒ rail lost focus (user pressed RIGHT or
+    //                       moved to content area)
+    //
+    // On the cold-entry transition we unconditionally re-target the
+    // first item (Home). On intra-rail movements we do nothing so the
+    // user's UP/DOWN navigation between Home / Live / Movies / etc.
+    // still works.
+    //
+    // This runs AFTER Compose's own focus search, so even if 2D
+    // spatial search picked Search, we override it within the same
+    // frame. The user sees focus land on Home directly.
+    var railHadFocus by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(
@@ -323,20 +342,34 @@ fun TVSideRail(
                     .background(Color(0xFF05080F))
                     .padding(vertical = 18.dp)
                     // Treat the entire rail (Home → Settings) as one
-                    // focus group so 2D spatial-focus search from a
-                    // card on the right cannot pick a vertically-
-                    // closer rail item (e.g. Search if the card was
-                    // near the bottom of the screen).
+                    // focus group so 2D spatial-focus search has a
+                    // clear container target.
                     .focusGroup()
+                    // Cold-entry redirect — see top-of-function block
+                    // for the full explanation. ANY transition from
+                    // "no descendant focused" → "some descendant
+                    // focused" forces focus to Home, overriding
+                    // whichever item Compose's spatial search picked.
+                    .onFocusChanged { state ->
+                        val nowHasFocus = state.hasFocus
+                        if (nowHasFocus && !railHadFocus) {
+                            // Cold entry from outside the rail.
+                            // Posting via runCatching tolerates the
+                            // case where the requester isn't quite
+                            // attached yet (first frame).
+                            runCatching { firstItemFocus.requestFocus() }
+                        }
+                        railHadFocus = nowHasFocus
+                    }
                     // SAFE-FOCUS-PROPERTIES: firstItemFocus is bound
                     // to the Home RailItem inside the items loop
                     // below; Home is ALWAYS rendered (never gated by
                     // an `if`), so the requester is attached for
-                    // every focus state. This forces ANY focus
-                    // entering the rail to land on Home — the
-                    // canonical entry point — regardless of which
-                    // card the user came from or which item was
-                    // last focused.
+                    // every focus state. Belt-and-braces with the
+                    // onFocusChanged redirect above — `enter` covers
+                    // the moveFocus() path, onFocusChanged covers
+                    // the spatial-search and direct requestFocus
+                    // paths.
                     .focusProperties { enter = { firstItemFocus } },
             ) {
                 BrandMark(expanded = expanded)
