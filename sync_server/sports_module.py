@@ -932,9 +932,18 @@ def refresh_broadcasts_for_window(days: int = 7) -> int:
     to events whose `idEvent` is in our `sports_games` table. Dedupe
     by (sportsdb_id, channel_name, country) so we can keep CA + US
     + UK rows for the same game.
+
+    v1.44.27 — Date window starts at YESTERDAY-UTC, not today, so
+    games that started 23:00 UTC last night (still live in North
+    America evenings) are still in scope. Without this, a 7 PM EST
+    NHL game would lose its broadcaster info as soon as the UTC
+    date rolled over (i.e. 7 PM EST = 00:00 UTC), even though it's
+    still live for another 2.5 hours.
     """
     today = datetime.now(timezone.utc).date()
-    dates = [today + timedelta(days=i) for i in range(days)]
+    # Include yesterday + today + N future days. Yesterday catches
+    # in-progress NA evening games whose dateEvent rolled over.
+    dates = [today + timedelta(days=i) for i in range(-1, days)]
 
     with _conn() as c:
         active_slugs = [r["slug"] for r in c.execute(
