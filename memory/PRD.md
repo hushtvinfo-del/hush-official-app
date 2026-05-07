@@ -1,6 +1,43 @@
 # HushTV — Product Requirements Document
 
-## v1.44.44 (DEV) — Bulletproof rail focus redirect + Dialog-wrapped exit prompt — 2026-02-08  ⬅ LATEST
+## v1.44.45 (DEV) — REVERT rail focus changes (1.44.43 + 1.44.44) — 2026-02-08  ⬅ LATEST
+
+User reported: *"REVERT THIS STEP BACK ASAP WHATEVER YOU DID MADE THE APP SLOW AND UNRESPONSIVE WITH CRASHES AS WELL. CHANGE IT BACK NOW! SEE ANDROID NVIDIA SHIELD CRASHES IN CRASH REPORTS"*
+
+### What was reverted
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TVSideRail.kt`
+
+Removed both attempts at the rail "always-land-on-Home" redirect:
+1. **v1.44.43** — `.focusGroup() + .focusProperties { enter = { firstItemFocus } }` on the outer rail Column.
+2. **v1.44.44** — `Modifier.onFocusChanged` cold-entry redirect tracking `railHadFocus: Boolean`.
+
+Both modifiers + the `railHadFocus` state + the `focusProperties` import + the `@OptIn(ExperimentalComposeUiApi)` annotation were removed.
+
+### Why
+The combination caused **Nvidia Shield crashes + slow/unresponsive UI** in production. Likely root causes (to investigate before any retry):
+- The added `onFocusChanged` callback on the rail's outer Column fires on every descendant focus change — combined with the existing per-item `onFocusChanged` it may have caused recomposition storms on Shield's focus engine.
+- `focusProperties { enter }` returning a `FocusRequester` that may not always be attached during Compose's focus pre-search can throw on some Compose UI versions.
+
+### What stays in v1.44.45
+- Continue Watching overhaul: tombstone deletion, 14-day prune, Clear All, auto-focus first CW tile (these are stable).
+- "Are you done?" Dialog wrapping for proper D-pad capture (separate file, not implicated in the crash).
+- DO-NOT-REGRESS comment block above `AreYouDoneOverlay`.
+
+### Result
+Rail behaviour is **back to the v1.44.42 baseline** — pressing LEFT from a card uses the existing `tvHubContentFocus` mechanism (which calls `firstRailItemFocus.requestFocus()` on left-edge), no extra focus modifiers on the rail Column. The "Search lands on focus" issue will be investigated separately with a less-intrusive approach once crash telemetry confirms a safe pattern.
+
+### Files touched
+```
+app/build.gradle.kts                                              bumped to 1.44.45 / 445
+app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TVSideRail.kt   reverted to v1.44.42 baseline
+_buildenv/version.json
+```
+
+Build + deploy: `assembleDevDebug` ✓ (3m 58s), APK + manifest pushed, OTA serving 1.44.45 / 445 ✓.
+
+---
+
+## v1.44.44 (DEV) — Bulletproof rail focus redirect + Dialog-wrapped exit prompt — 2026-02-08 [SUPERSEDED]
 
 User reported two issues from the v1.44.43 OTA: rail still focuses Search on LEFT, and the "Are you done watching?" prompt couldn't capture D-pad — keys tunnelled through to the player behind.
 

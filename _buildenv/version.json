@@ -1,13 +1,14 @@
 {
-  "versionCode": 444,
-  "versionName": "1.44.44",
+  "versionCode": 445,
+  "versionName": "1.44.45",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Side menu (FIXED PROPERLY): Pressing LEFT from any card on any home page now lands focus on Home — every single time, regardless of which card you came from. The previous fix relied on focusProperties.enter which only fires for moveFocus() calls; this build adds a runtime onFocusChanged-based cold-entry redirect that catches every focus path including direct requestFocus and 2D spatial-search.",
-    "Player exit prompt (FIXED): The \"Are you done watching?\" dialog now correctly traps D-pad navigation. You can move LEFT/RIGHT between Yes/No buttons and the player no longer steals key presses behind the dialog. Wrapped in a proper Compose Dialog with its own input window — same pattern as the long-press Remove confirmation. Code now has a DO-NOT-REGRESS comment block above the dialog to ensure future prompts use the same Dialog pattern.",
-    "Continue Watching: All v1.44.42 features still in place — Are-you-done prompt, Clear All, tombstone deletion, 14-day prune, auto-focus first CW tile."
+    "REVERTED: Side-rail focus redirect (1.44.43 + 1.44.44) — was causing slow/unresponsive UI and crashes on Nvidia Shield. Rail behaviour is back to v1.44.42 baseline. Will retry with a less-intrusive approach later once we have crash-report telemetry.",
+    "KEPT: Continue Watching overhaul — Are-you-done prompt (Dialog-based, D-pad navigation works correctly), Clear All, tombstone deletion, 14-day auto-prune, auto-focus first CW tile.",
+    "KEPT: \"Are you done?\" prompt is wrapped in a Compose Dialog so D-pad navigation between Yes/No works correctly inside the box.",
+    "KEPT: DO-NOT-REGRESS comment block above AreYouDoneOverlay so future prompts use the Dialog pattern."
   ]
 }
