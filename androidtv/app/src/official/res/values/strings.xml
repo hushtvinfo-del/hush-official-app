@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v1.44.38 — flavor-specific app launcher label.
+
+  See the dev variant for full rationale. This file pins the
+  official-channel APK's display name to "HushTV Official".
+-->
+<resources>
+    <string name="app_name">HushTV Official</string>
+</resources>

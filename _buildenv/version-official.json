@@ -1,19 +1,12 @@
 {
-  "versionCode": 437,
-  "versionName": "1.44.37",
+  "versionCode": 438,
+  "versionName": "1.44.38",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "official",
   "changelog": [
-    "BIG WIN — Cloud DVR is here. Record live channels, see them in My Recordings (TV + Mobile), 5-hour quota per profile. Recordings play back instantly on tap with a real seek bar.",
-    "BIG WIN — Sports & PPV section. Live game cards show team logos, scores and broadcast times pulled from TheSportsDB, with an EPG-driven channel picker that finds which of YOUR Xtream channels is airing each game.",
-    "Long-press OK on any live channel now opens a polished actions sheet — Add to Favorites, Set Reminder, and Record Now in one place. Mirrored on TV and Mobile.",
-    "Recording is automatically blocked on channels without a program guide so you never start a runaway capture by accident.",
-    "Movie audio now works for DTS / DTS-HD / AC3 / EAC3 / TrueHD / FLAC / Opus / Vorbis tracks via a software audio decoder fallback — fixes the long tail of movies that previously played silently on Android TV / NVIDIA SHIELD.",
-    "Fixed the bright vertical line glitch on the right edge of dark scenes by routing the player surface through GPU compositing.",
-    "Lite Mode toggle in Settings strips heavy animations (Ken Burns, glow effects) for older / lower-end TV boxes.",
-    "App-wide BACK navigation now correctly returns you to the tab you were on instead of resetting to Home.",
-    "Many smaller polish fixes: faster EPG loading, more reliable focus handling on the side rails, smoother poster grids on Streaming Services / Collections / Genres / Years / Themes & Moods, and Continue Watching surfaces as the default first section when you have anything in progress."
+    "App launcher label is now flavor-specific. Official installs show \"HushTV Official\" in the launcher / Settings → Apps; the bleeding-edge dev channel now shows \"HushTV Dev\" so you can tell which one you have at a glance.",
+    "Carries over all v1.44.37 fixes — DTS / AC3 / EAC3 audio support for previously-silent movies, Cloud DVR with 5-hour quota, no-EPG record block, right-edge dark-scene line glitch fix, and the long-press OK channel actions sheet."
   ]
 }

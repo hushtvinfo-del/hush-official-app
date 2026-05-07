@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v1.44.38 — flavor-specific app launcher label.
+
+  Resource merging: per-flavor `values/strings.xml` overrides the
+  same-named resource from `app/src/main/res/values/strings.xml`.
+  Manifest's android:label="@string/app_name" picks up the flavor
+  variant at build time, so the dev APK shows "HushTV Dev" and
+  official shows "HushTV Official" in the launcher / Settings →
+  Apps list. Lets users tell at a glance which channel they have
+  installed.
+
+  applicationId stays unified so installing one channel REPLACES
+  the other (no side-by-side stale installs); the label is the
+  only visible difference.
+-->
+<resources>
+    <string name="app_name">HushTV Dev</string>
+</resources>

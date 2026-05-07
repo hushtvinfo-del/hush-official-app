@@ -1,12 +1,12 @@
 {
-  "versionCode": 437,
-  "versionName": "1.44.37",
+  "versionCode": 438,
+  "versionName": "1.44.38",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX (no audio on Blue Ruin / DTS movies) — Telemetry caught it: audio track is audio/vnd.dts which Android (including NVIDIA SHIELD) has no native decoder for due to licensing. Added the Jellyfin-prebuilt Media3 FFmpeg audio decoder extension which provides software DTS, DTS-HD, AC3, EAC3, TrueHD, FLAC, Opus, Vorbis, ALAC, G711, AMR decoding. Same package + class names as Google's official extension so DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON picks it up via reflection — zero code changes beyond the gradle dep. APK grows ~6 MB (native libs for arm64/armv7/x86/x86_64).",
-    "Mandatory:true so v1.44.36 devices upgrade automatically and get DTS audio."
+    "App launcher label is now flavor-specific so you can tell at a glance which channel an APK belongs to: dev installs show \"HushTV Dev\" in the launcher and Settings → Apps; official installs show \"HushTV Official\". Same applicationId so installing one channel still replaces the other (no orphan side-by-side installs).",
+    "Mandatory:true so v1.44.37 devices upgrade and pick up the renamed launcher label."
   ]
 }

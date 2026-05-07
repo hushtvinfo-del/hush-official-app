@@ -1,6 +1,70 @@
 # HushTV — Product Requirements Document
 
-## v1.44.37 (DEV + OFFICIAL) — Promoted to official channel — 2026-05-07  ⬅ LATEST
+## v1.44.38 (DEV + OFFICIAL) — Flavor-specific launcher labels — 2026-05-07  ⬅ LATEST
+
+User asked: *"I need a way to distinguish which app is dev and which app
+is official… can you make the dev app name 'HushTV Dev' and official
+'HushTV Official' so when I am on the device I can see the different app
+names."*
+
+### What landed
+
+Created flavor-specific `strings.xml` files that override the base
+`app_name` resource:
+
+- `app/src/main/res/values/strings.xml` → `"HushTV"` (fallback)
+- `app/src/dev/res/values/strings.xml` (NEW) → `"HushTV Dev"`
+- `app/src/official/res/values/strings.xml` (NEW) → `"HushTV Official"`
+
+`AndroidManifest.xml` already references `android:label="@string/app_name"`
+on the `<application>` tag and there are no per-activity overrides, so
+the Android resource merger automatically picks the flavor-specific
+value for each build variant. The launcher and Settings → Apps list
+will now show the right name per channel.
+
+`applicationId` stays unified at `com.hushtv.tv.debug`. Installing one
+channel's APK still REPLACES the other (no orphan side-by-side
+installs that could confuse users about which one is current). The
+label is the only visible difference, which is exactly what was asked
+for.
+
+### Verification (before declaring done)
+
+```
+$ unzip -p dev.apk resources.arsc | strings | grep -E "^HushTV (Dev|Official)$"
+HushTV Dev
+$ unzip -p official.apk resources.arsc | strings | grep -E "^HushTV (Dev|Official)$"
+HushTV Official
+```
+
+### Files
+
+- `app/src/dev/res/values/strings.xml` (NEW) — "HushTV Dev"
+- `app/src/official/res/values/strings.xml` (NEW) — "HushTV Official"
+- `app/build.gradle.kts` — versionCode 437 → 438, versionName
+  1.44.37 → 1.44.38.
+- `_buildenv/version.json`, `_buildenv/version-official.json` —
+  bumped, mandatory:true so users force-update and pick up the
+  renamed launcher entry.
+
+### Build + deploy
+
+Both flavors built in a single Gradle invocation; APKs uploaded to
+both `https://hushtv.xyz/HushTV.apk` (dev) and
+`https://hushtv.xyz/hushtv-official.apk` (official). Tagged
+`v1.44.38-dev` and `v1.44.38-official`.
+
+### Lessons preserved
+
+For Android multi-flavor projects, prefer per-flavor `strings.xml`
+overrides over `manifestPlaceholders` — the former lets ANY
+`@string/foo` reference (manifest, code, layouts, notifications,
+shortcuts) automatically pick up the variant; placeholders only
+work in the manifest.
+
+---
+
+## v1.44.37 (DEV + OFFICIAL) — Promoted to official channel — 2026-05-07
 
 User asked: *"Can we push all the newest updates we have done now to the
 official app also and mobile version"*.

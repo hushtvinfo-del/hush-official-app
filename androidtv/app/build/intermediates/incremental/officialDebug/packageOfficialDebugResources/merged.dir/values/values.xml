@@ -7,7 +7,7 @@
     <color name="surface_elev">#1E293B</color>
     <color name="surface_navy">#0F172A</color>
     <color name="white">#FFFFFF</color>
-    <string name="app_name">HushTV</string>
+    <string name="app_name">HushTV Official</string>
     <style name="Theme.HushTV" parent="android:Theme.Material.NoActionBar.Fullscreen">
         <item name="android:windowBackground">@color/bg_black</item>
         <item name="android:colorBackground">@color/bg_black</item>
