@@ -566,6 +566,31 @@ fun TVPlayerScreen(
     val saveTitle = playbackMeta?.displayTitle?.takeIf { it.isNotBlank() }
         ?: currentName
 
+    // ─── "Are you done watching?" exit prompt ────────────────────────
+    // For VOD only (movies + series). When the user presses BACK, we
+    // intercept and ask whether they're done with this title:
+    //   • Yes → tombstone the CW entry (syncs deletion across devices)
+    //           then pop the back stack.
+    //   • No  → save current progress (the dispose effect handles
+    //           that automatically) and pop the back stack so they
+    //           can resume later.
+    // Live TV bypasses this entirely (the existing double-back/last-
+    // channel toggle logic owns the live BACK semantics).
+    var areYouDoneOpen by remember { mutableStateOf(false) }
+    // Latched the moment the user picks "Yes, I'm done" so the
+    // periodic / seek / dispose save effects know NOT to resurrect
+    // the tombstone we just wrote. Otherwise the LaunchedEffect
+    // delay would race the popBackStack and a stale save() call
+    // would overwrite the tombstone with a fresh entry.
+    var skipFurtherSaves by remember { mutableStateOf(false) }
+    val confirmExitOrPop: () -> Unit = {
+        if (isLive || vodStreamId == null) {
+            nav.popBackStack()
+        } else {
+            areYouDoneOpen = true
+        }
+    }
+
     // ─── Resume prompt ────────────────────────────────────────────────
     // On cold launch, if the user has meaningful saved progress for this
     // VOD title (more than 30s in, less than 30s from the end), show a
@@ -614,6 +639,7 @@ fun TVPlayerScreen(
         LaunchedEffect(vodStreamId) {
             while (true) {
                 delay(4_000)
+                if (skipFurtherSaves) continue
                 val pos = player.currentPosition
                 val dur = player.duration.coerceAtLeast(0)
                 if (dur > 0 && pos > 2_000) {
@@ -644,6 +670,7 @@ fun TVPlayerScreen(
                     reason: Int,
                 ) {
                     if (reason == androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK) {
+                        if (skipFurtherSaves) return
                         val pos = player.currentPosition
                         val dur = player.duration.coerceAtLeast(0)
                         if (dur > 0 && pos > 2_000) {
@@ -665,6 +692,7 @@ fun TVPlayerScreen(
         }
         DisposableEffect(vodStreamId) {
             onDispose {
+                if (skipFurtherSaves) return@onDispose
                 val pos = player.currentPosition
                 val dur = player.duration.coerceAtLeast(0)
                 if (dur > 0 && pos > 2_000) {
@@ -937,7 +965,8 @@ fun TVPlayerScreen(
                             player.seekTo((player.currentPosition - 30_000).coerceAtLeast(0)); true
                         } else false
                     }
-                    // Back: single press → exit. Double press within 1 s → toggle last channel.
+                    // Back: single press → exit (with VOD "Are you done?" prompt).
+                    // Double press within 1 s on Live → toggle last channel.
                     Key.Back, Key.Escape -> {
                         val now = System.currentTimeMillis()
                         if (isLive && now - lastBackMs < 1000L && NavState.previousChannelIndex >= 0) {
@@ -947,7 +976,8 @@ fun TVPlayerScreen(
                             true
                         } else {
                             lastBackMs = now
-                            nav.popBackStack(); true
+                            confirmExitOrPop()
+                            true
                         }
                     }
                     Key.Menu, Key.F1 -> {
@@ -1190,7 +1220,7 @@ fun TVPlayerScreen(
                         color = Color(0x80000000), shape = CircleShape,
                         modifier = Modifier.size(48.dp)
                             .tvFocusable(shape = CircleShape)
-                            .clickableWithEnter { nav.popBackStack() }
+                            .clickableWithEnter { confirmExitOrPop() }
                     ) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(26.dp))
@@ -1607,6 +1637,52 @@ fun TVPlayerScreen(
             )
         }
 
+        // "Are you done watching?" exit prompt (VOD only). Shown when
+        // the user presses BACK on a movie/series; tombstones the CW
+        // entry on Yes so the deletion syncs across devices.
+        if (areYouDoneOpen && !isLive) {
+            AreYouDoneOverlay(
+                onYes = {
+                    // Latch the skip flag BEFORE clearing so the
+                    // periodic save tick can't race in and overwrite
+                    // the tombstone with a fresh entry.
+                    skipFurtherSaves = true
+                    player.pause()
+                    if (vodStreamId != null && vodStreamId > 0) {
+                        runCatching {
+                            WatchProgressStore.clear(ctx, vodStreamId, playbackKind)
+                        }
+                    }
+                    areYouDoneOpen = false
+                    nav.popBackStack()
+                },
+                onNo = {
+                    // "No, save my place" — explicit save now (the
+                    // dispose effect will also save, but doing it
+                    // here means a nav crash mid-pop never loses
+                    // progress). Then pop.
+                    val pos = player.currentPosition
+                    val dur = player.duration.coerceAtLeast(0)
+                    if (vodStreamId != null && vodStreamId > 0 && dur > 0 && pos > 2_000) {
+                        runCatching {
+                            WatchProgressStore.save(
+                                ctx,
+                                streamId = vodStreamId,
+                                kind = playbackKind,
+                                title = saveTitle,
+                                poster = playbackMeta?.backdrop ?: playbackMeta?.poster,
+                                positionMs = pos,
+                                durationMs = dur,
+                            )
+                        }
+                    }
+                    areYouDoneOpen = false
+                    nav.popBackStack()
+                },
+                onDismiss = { areYouDoneOpen = false },
+            )
+        }
+
         // Options menu overlay
         if (optionsOpen) {
             PlayerOptionsMenu(
@@ -1860,6 +1936,94 @@ private fun OsdChipButton(
             Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/**
+ * Full-screen "Are you done watching?" prompt shown when the user
+ * presses BACK during VOD playback. Mirrors the [ResumePromptOverlay]
+ * styling so the exit/return dialogs feel like a matching pair.
+ *
+ * Defaults focus to "No, save my place" so an accidental Enter on
+ * exit never wipes the user's progress.
+ */
+@Composable
+private fun AreYouDoneOverlay(
+    onYes: () -> Unit,
+    onNo: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val noFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(80)
+        runCatching { noFocus.requestFocus() }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xE6000000))
+            // Swallow BACK at the overlay level so a second back-press
+            // dismisses the prompt rather than popping the player.
+            .onKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown &&
+                    (ev.key == Key.Back || ev.key == Key.Escape)
+                ) {
+                    onDismiss()
+                    true
+                } else false
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            color = Color(0xFF0B111D),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .widthIn(min = 520.dp, max = 640.dp)
+                .border(1.dp, Color(0x4D06B6D4), RoundedCornerShape(20.dp)),
+        ) {
+            Column(
+                Modifier.padding(horizontal = 36.dp, vertical = 32.dp),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(
+                    "BEFORE YOU GO",
+                    color = Cyan,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 3.sp,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Are you done watching?",
+                    color = Color.White,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Pick \"Yes\" to remove this from Continue Watching, or \"No\" to save your place and resume later.",
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+                Spacer(Modifier.height(24.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ResumeButton(
+                        label = "Yes, I'm done",
+                        icon = Icons.Default.ArrowBack,
+                        primary = true,
+                        onClick = onYes,
+                    )
+                    ResumeButton(
+                        label = "No, save my place",
+                        icon = Icons.Default.PlayArrow,
+                        primary = false,
+                        focusRequester = noFocus,
+                        onClick = onNo,
+                    )
+                }
+            }
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
@@ -28,6 +29,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -159,6 +161,7 @@ fun HomeContinueWatchingRow(
     onFocusedEntryChange: (ContinueEntry) -> Unit,
     onCardClick: (ContinueEntry) -> Unit,
     onLongPressRemove: (ContinueEntry) -> Unit = {},
+    onClearAll: (() -> Unit)? = null,
     contentStartPadding: androidx.compose.ui.unit.Dp = 96.dp,
     firstItemFocus: androidx.compose.ui.focus.FocusRequester? = null,
     onUpFromFirstItem: (() -> Unit)? = null,
@@ -240,6 +243,9 @@ fun HomeContinueWatchingRow(
                     focusRequester = if (idx == 0) firstItemFocus else null,
                     onUpKey = if (idx == 0) onUpFromFirstItem else null,
                 )
+            }
+            if (onClearAll != null) {
+                ClearAllCard(onClick = onClearAll)
             }
         }
     }
@@ -719,5 +725,94 @@ private fun formatLeft(entry: ContinueEntry): String {
         "${h}h ${m}m left"
     } else {
         "${totalMin}m left"
+    }
+}
+
+/**
+ * Trailing "Clear All" focusable tile rendered after the last
+ * Continue Watching card. A confirmation dialog is wired up by the
+ * parent — this composable just fires [onClick] when activated.
+ *
+ * Same width / height as a [ContinueCard] so the row keeps a clean
+ * uniform rhythm. Uses a darker glass-morphism surface with a subtle
+ * cyan border so it visually reads as a utility action, not content.
+ */
+@Composable
+private fun ClearAllCard(onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val cardShape = RoundedCornerShape(12.dp)
+    val borderColor = if (focused) Cyan else Color(0x33FFFFFF)
+    Column(
+        modifier = Modifier
+            .width(240.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickableWithEnter(onClick),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .shadow(
+                    elevation = if (focused) 14.dp else 2.dp,
+                    shape = cardShape,
+                    ambientColor = if (focused) Cyan else Color.Black,
+                    spotColor = if (focused) Cyan else Color.Black,
+                )
+                .clip(cardShape)
+                .background(Color(0xFF0C101A)),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Subtle border so the tile reads as a "secondary action".
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0x14FFFFFF))
+            )
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .border(
+                        width = if (focused) 2.dp else 1.dp,
+                        color = borderColor,
+                        shape = cardShape,
+                    ),
+            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(if (focused) Color(0xCC06B6D4) else Color(0x33FFFFFF)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.DeleteSweep,
+                        contentDescription = null,
+                        tint = if (focused) Color.Black else Color.White,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "CLEAR ALL",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp,
+                    fontFamily = Inter,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Remove from list",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 10.sp,
+                    fontFamily = Inter,
+                )
+            }
+        }
     }
 }

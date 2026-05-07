@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "artifactType": {
+    "type": "OPTIMIZED_PROCESSED_RES",
+    "kind": "Directory"
+  },
+  "applicationId": "com.hushtv.tv.dev.debug",
+  "variantName": "devDebug",
+  "elements": [
+    {
+      "type": "SINGLE",
+      "filters": [],
+      "attributes": [],
+      "versionCode": 442,
+      "versionName": "1.44.42-debug",
+      "outputFile": "resources-dev-debug-optimize.ap_"
+    }
+  ],
+  "elementType": "File"
+}

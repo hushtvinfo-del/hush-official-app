@@ -204,3 +204,113 @@ private fun DialogButton(
         }
     }
 }
+
+/**
+ * Confirmation modal shown when the user activates the "Clear All"
+ * tile at the end of the Continue Watching row. Tombstones every
+ * in-progress entry so the deletion syncs across devices.
+ *
+ * Focus lands on the safer "Cancel" button by default so an accidental
+ * second OK press doesn't wipe the entire list.
+ */
+@Composable
+fun ClearAllContinueWatchingDialog(
+    count: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val cancelFocus = remember { FocusRequester() }
+    var ready by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(80)
+        runCatching { cancelFocus.requestFocus() }
+        delay(400)
+        ready = true
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+        ),
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xE6000000)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                color = Color(0xFF0B111D),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .widthIn(min = 520.dp, max = 620.dp)
+                    .border(1.dp, Color(0x4D06B6D4), RoundedCornerShape(20.dp)),
+            ) {
+                Column(
+                    Modifier.padding(horizontal = 36.dp, vertical = 30.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(40.dp)
+                                .background(Color(0x26FFFFFF), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "CLEAR ALL",
+                                color = Cyan,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 3.sp,
+                                fontFamily = Inter,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "$count title${if (count == 1) "" else "s"}",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = Inter,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Remove every title from Continue Watching? Your saved positions will be cleared on this device and on every device signed in to the same playlist.",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        fontFamily = Inter,
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DialogButton(
+                            label = "Clear All",
+                            primary = true,
+                            onClick = { if (ready) onConfirm() },
+                        )
+                        DialogButton(
+                            label = "Cancel",
+                            primary = false,
+                            focusRequester = cancelFocus,
+                            onClick = onDismiss,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

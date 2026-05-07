@@ -1,13 +1,15 @@
 {
-  "versionCode": 441,
-  "versionName": "1.44.41",
+  "versionCode": 442,
+  "versionName": "1.44.42",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
-  "releasedAt": "2026-05-07",
+  "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "First-run \"Choose your layout\" modal is gone. Both Dev and Official now default to the Left Sidebar layout immediately on first launch — no chooser, no friction.",
-    "DEV channel keeps the Settings → Layout → Change Layout option so we can A/B between Top Bar and Left Sidebar for testing. OFFICIAL channel hides this option entirely so end users only ever see the canonical sidebar UI.",
-    "Mandatory:true so v1.44.40 dev installs upgrade automatically."
+    "Continue Watching: Pressing BACK during a movie or series now asks \"Are you done watching?\" — pick Yes to clear the title from your list, or No to save your place and resume later. Live TV BACK keeps its existing single/double-press behaviour.",
+    "Continue Watching: A new \"Clear All\" tile sits at the end of the row so you can wipe every in-progress title at once. Confirmation dialog defaults to Cancel so you never wipe by accident.",
+    "Continue Watching: Removing a title now propagates across every device signed in to the same playlist (tombstone-based sync). The deletion shows up on your Fire Stick, your phone, and any other paired device on the next 30-second sync cycle.",
+    "Continue Watching: Anything you haven't touched in 14 days is automatically pruned from the list — keeps the row focused on what you actually still want to finish.",
+    "Continue Watching: The Home page now lands on the Continue Watching tile automatically whenever you have something in progress. First card focused, ready to resume."
   ]
 }

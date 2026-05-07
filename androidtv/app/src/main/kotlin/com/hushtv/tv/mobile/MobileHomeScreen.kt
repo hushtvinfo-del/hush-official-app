@@ -275,6 +275,10 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
                         WatchProgressStore.clear(ctx, e.streamId, e.kind)
                         cwVersion++
                     },
+                    onClearAllCw = {
+                        WatchProgressStore.clearAll(ctx)
+                        cwVersion++
+                    },
                 )
                 "discovery" -> DiscoveryPageMobile(nav, playlistId, discoveryCards, titleBlock)
                 "themes" -> ThemesPageMobile(nav, playlistId, titleBlock)
@@ -312,10 +316,12 @@ private fun HomeHubPage(
     cwEntries: List<WatchProgressStore.Entry>,
     titleBlock: @Composable () -> Unit,
     onRemoveCw: (WatchProgressStore.Entry) -> Unit,
+    onClearAllCw: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val playlist = remember(playlistId) { PlaylistStore.find(ctx, playlistId) }
     var cwLongPressTarget by remember { mutableStateOf<WatchProgressStore.Entry?>(null) }
+    var clearAllPromptOpen by remember { mutableStateOf(false) }
 
     androidx.compose.foundation.lazy.LazyColumn(
         Modifier.fillMaxSize(),
@@ -361,7 +367,38 @@ private fun HomeHubPage(
         // ── CONTINUE WATCHING ──────────────────────────────────────
         if (cwEntries.isNotEmpty()) {
             item("cw_label") {
-                SectionLabel("CONTINUE WATCHING", "· ${cwEntries.size}")
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "CONTINUE WATCHING",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "· ${cwEntries.size}",
+                        color = Cyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "Clear All",
+                        color = Cyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { clearAllPromptOpen = true }
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
             }
             item("cw_row") {
                 LazyRow(
@@ -460,6 +497,78 @@ private fun HomeHubPage(
                 ) {
                     Text("Cancel", color = Color.White, fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+
+    // ── Clear All Continue Watching confirmation ──
+    if (clearAllPromptOpen) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { clearAllPromptOpen = false }) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF0B1220))
+                    .padding(18.dp),
+            ) {
+                Text(
+                    "CLEAR ALL",
+                    color = Cyan,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.5.sp,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Remove ${cwEntries.size} title${if (cwEntries.size == 1) "" else "s"}?",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Saved positions will be cleared on this device and on every device signed in to the same playlist.",
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                )
+                Spacer(Modifier.height(16.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFEF4444))
+                        .clickable {
+                            onClearAllCw()
+                            clearAllPromptOpen = false
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "Clear All",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x14FFFFFF))
+                        .clickable { clearAllPromptOpen = false }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "Cancel",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
         }

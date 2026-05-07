@@ -321,6 +321,25 @@ fun MobilePlayerScreen(
         }
     }
 
+    // ── "Are you done watching?" exit prompt (VOD only). ──
+    // Mobile uses BackHandler to intercept the system back gesture/
+    // hardware back button. Live TV bypasses (just pops). When open,
+    // the overlay swallows further BACK presses to dismiss itself.
+    var areYouDoneOpen by remember { mutableStateOf(false) }
+    // Latched on "Yes, I'm done" so the periodic / dispose save
+    // effects below don't resurrect the tombstone we wrote.
+    var skipFurtherSaves by remember { mutableStateOf(false) }
+    val confirmExitOrPop: () -> Unit = {
+        if (isLive || vodStreamId == null || vodStreamId <= 0 || vodKind.isNullOrBlank()) {
+            nav.popBackStack()
+        } else {
+            areYouDoneOpen = true
+        }
+    }
+    androidx.activity.compose.BackHandler(enabled = !areYouDoneOpen) {
+        confirmExitOrPop()
+    }
+
     // ── Resume from saved position (VOD only) ──
     // Using an AtomicBoolean-style one-shot flag so re-seeking doesn't
     // happen on orientation changes or on channel-flips within the
@@ -344,6 +363,7 @@ fun MobilePlayerScreen(
         if (isLive || vodStreamId == null || vodStreamId <= 0 || vodKind.isNullOrBlank()) return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(4_000)
+            if (skipFurtherSaves) continue
             val pos = player.currentPosition
             val dur = player.duration
             if (dur > 0 && pos > 1_000) {
@@ -364,6 +384,7 @@ fun MobilePlayerScreen(
     // exit position even if the 4-second tick hasn't fired yet.
     DisposableEffect(vodStreamId, vodKind) {
         onDispose {
+            if (skipFurtherSaves) return@onDispose
             if (!isLive && vodStreamId != null && vodStreamId > 0 && !vodKind.isNullOrBlank()) {
                 val pos = player.currentPosition
                 val dur = player.duration
@@ -575,7 +596,7 @@ fun MobilePlayerScreen(
                             .size(40.dp)
                             .clip(CircleShape)
                             .background(Color(0x33000000))
-                            .clickable { nav.popBackStack() },
+                            .clickable { confirmExitOrPop() },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -805,6 +826,136 @@ fun MobilePlayerScreen(
                     downloadedSrtLang = lang
                 },
             )
+        }
+
+        // "Are you done watching?" exit prompt — VOD only. Wired by
+        // the BackHandler above and the top-bar back arrow. On Yes
+        // we tombstone the CW entry so the deletion syncs across
+        // devices; on No we save current progress so the user can
+        // resume. Live TV always pops directly without prompting.
+        if (areYouDoneOpen && !isLive) {
+            MobileAreYouDoneOverlay(
+                onYes = {
+                    skipFurtherSaves = true
+                    player.pause()
+                    if (vodStreamId != null && vodStreamId > 0 && !vodKind.isNullOrBlank()) {
+                        runCatching {
+                            com.hushtv.tv.data.WatchProgressStore.clear(ctx, vodStreamId, vodKind)
+                        }
+                    }
+                    areYouDoneOpen = false
+                    nav.popBackStack()
+                },
+                onNo = {
+                    val pos = player.currentPosition
+                    val dur = player.duration
+                    if (vodStreamId != null && vodStreamId > 0 && !vodKind.isNullOrBlank() &&
+                        dur > 0 && pos > 1_000
+                    ) {
+                        runCatching {
+                            com.hushtv.tv.data.WatchProgressStore.save(
+                                ctx = ctx,
+                                streamId = vodStreamId,
+                                kind = vodKind,
+                                title = channelName,
+                                poster = vodPoster,
+                                positionMs = pos,
+                                durationMs = dur,
+                            )
+                        }
+                    }
+                    areYouDoneOpen = false
+                    nav.popBackStack()
+                },
+                onDismiss = { areYouDoneOpen = false },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MobileAreYouDoneOverlay(
+    onYes: () -> Unit,
+    onNo: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.activity.compose.BackHandler(enabled = true) { onDismiss() }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xE6000000))
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+            ) { onDismiss() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth(0.86f)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF0B111D))
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                ) { /* swallow inner taps */ }
+                .padding(horizontal = 22.dp, vertical = 24.dp),
+        ) {
+            Text(
+                "BEFORE YOU GO",
+                color = Cyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 2.5.sp,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Are you done watching?",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Tap \"Yes\" to remove this from Continue Watching, or \"No\" to save your place and resume later.",
+                color = Color(0xFFCBD5E1),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            )
+            Spacer(Modifier.height(20.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Cyan)
+                    .clickable { onYes() }
+                    .padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "Yes, I'm done",
+                    color = Color.Black,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0x22FFFFFF))
+                    .clickable { onNo() }
+                    .padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "No, save my place",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }

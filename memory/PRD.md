@@ -1,6 +1,118 @@
 # HushTV — Product Requirements Document
 
-## v1.44.42 (server-only) — Verified delete propagation + aggressive cleanup + full server wipe — 2026-05-07  ⬅ LATEST
+## v1.44.42 (DEV) — Continue Watching overhaul: Are-you-done prompt, Clear All, tombstone sync, 14-day prune, auto-focus — 2026-02-08  ⬅ LATEST
+
+User asked: *"Massive updates to Continue Watching: Auto-focus first
+tile on Home, cross-device tombstone deletion, Clear All button,
+14-day auto-prune, and an 'Are you done?' prompt on playback exit."*
+
+Five-part change shipped as a single Dev release. Official build is
+intentionally **not** promoted yet — user requested verifying on Dev
+first.
+
+### 1. Tombstone-based deletion (cross-device sync)
+
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/WatchProgressStore.kt`
+
+- Added `Entry.deleted: Boolean` (defaults `false`). Encoded as an
+  optional 8th `\u001f1` field on the wire — fully backward compatible
+  (older clients ignore the trailing field; older saves decode with
+  `deleted = false`).
+- `clear()` no longer removes the row — it overwrites the entry with
+  `deleted = true` and a fresh `lastWatchedAt = now`. The existing
+  `SyncEngine.applyDownload` LWW-by-`lastWatchedAt` for `CW_STORE`
+  picks up the tombstone exactly like any other write, so deletions
+  now propagate to every device on the same Xtream playlist within
+  the standard 30-second sync cycle.
+- `get()` returns `null` for tombstones; `continueWatching()` filters
+  them out — UI never sees them.
+
+### 2. 14-day auto-prune
+
+`pruneOld(ctx)` hard-removes any row (good entry or tombstone) whose
+`lastWatchedAt` is older than 14 days. Called opportunistically from
+`continueWatching()` on every Home read — cheap (single prefs scan)
+and only mutates if something expired. 14 days is enough time for
+sibling devices to come online and observe a tombstone before we
+garbage-collect it.
+
+### 3. Clear All
+
+- TV: `HomeContinueWatchingSection.kt` renders a focusable
+  `ClearAllCard` (DeleteSweep icon + "CLEAR ALL" label) as the
+  trailing tile. Activating it opens a new
+  `ClearAllContinueWatchingDialog` (defaults focus to Cancel so an
+  accidental Enter never wipes the list).
+- Mobile: `MobileHomeScreen.HomeHubPage` now shows a "Clear All" link
+  in the section header next to the count, opening a confirmation
+  bottom sheet styled like the existing per-item Remove sheet.
+- Both paths call `WatchProgressStore.clearAll(ctx)` which tombstones
+  every in-progress entry in one batch commit.
+
+### 4. Auto-focus first Continue Watching tile
+
+`TVMainMenuScreen.kt`:
+
+- `currentPage` defaults to `"discovery"`. A new `autoLandedOnCw`
+  rememberSaveable flag latches the first auto-snap to `"cw"` when
+  `hasCw` flips true after CW entries hydrate. Once latched, the user
+  can navigate freely without being snapped back.
+- The existing `LaunchedEffect(currentPage)` then runs
+  `firstCwFocus.requestFocus()` after the standard 320 ms settle.
+  Net result: app launches, hero paints, and focus lands on the first
+  Continue Watching card with the cyan ring already on.
+
+### 5. "Are you done watching?" exit prompt
+
+VOD-only — Live TV preserves its existing single/double-back semantics.
+
+- TV (`TVPlayerScreen.kt`):
+  - Both the Back/Escape key handler AND the OSD top-bar back arrow
+    route through a new `confirmExitOrPop()` helper that shows
+    `AreYouDoneOverlay` when `isLive == false` and `vodStreamId != null`.
+  - Yes → latches `skipFurtherSaves`, pauses player, calls
+    `WatchProgressStore.clear()`, pops back stack.
+  - No → saves current position synchronously, pops back stack.
+  - `skipFurtherSaves` flag short-circuits the periodic save tick,
+    seek-discontinuity save listener, AND the dispose-time save —
+    otherwise any of the three would resurrect the tombstone.
+  - Overlay defaults focus to "No, save my place" so an accidental
+    Enter never deletes progress.
+- Mobile (`MobilePlayerScreen.kt`):
+  - `BackHandler` intercepts the system back gesture / hardware back
+    button.
+  - On-screen back arrow (top-left) routes through the same helper.
+  - Same `skipFurtherSaves` flag protects the periodic + dispose save.
+
+### Files touched
+
+```
+app/build.gradle.kts                                     bumped to 1.44.42 / 442
+app/src/main/kotlin/com/hushtv/tv/data/WatchProgressStore.kt
+app/src/main/kotlin/com/hushtv/tv/ui/screens/home/HomeContinueWatchingSection.kt
+app/src/main/kotlin/com/hushtv/tv/ui/screens/home/RemoveContinueWatchingDialog.kt
+app/src/main/kotlin/com/hushtv/tv/ui/screens/TVMainMenuScreen.kt
+app/src/main/kotlin/com/hushtv/tv/ui/screens/TVPlayerScreen.kt
+app/src/main/kotlin/com/hushtv/tv/mobile/MobileHomeScreen.kt
+app/src/main/kotlin/com/hushtv/tv/mobile/MobilePlayerScreen.kt
+_buildenv/version.json
+```
+
+### Build + deploy
+
+```
+cd /app/androidtv && ./gradlew assembleDevDebug
+sshpass scp app-dev-debug.apk → :/var/www/hushtv/HushTV.apk
+sshpass scp version.json     → :/var/www/hushtv/version.json
+curl https://hushtv.xyz/version.json → 1.44.42 / 442 ✓
+```
+
+Per user direction: **Dev only** — don't promote to Official until
+they've verified all 5 behaviours on a device.
+
+---
+
+## v1.44.42 (server-only) — Verified delete propagation + aggressive cleanup + full server wipe — 2026-05-07
 
 User asked: *"Verify that when a user deletes a recording in their My
 Recordings section or the app itself removes a recording, it needs to

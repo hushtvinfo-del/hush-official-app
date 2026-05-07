@@ -10,6 +10,16 @@ import android.content.Context
  *
  * The ratio is used to render a cyan arc ring around partially-watched
  * posters, and to populate the "Continue Watching" virtual category.
+ *
+ * Tombstones (v1.44.42)
+ * ─────────────────────
+ * `clear()` no longer removes the row — it writes a tombstone with
+ * `deleted = true` and `lastWatchedAt = now` so the [SyncEngine]
+ * propagates the deletion to other devices via standard last-write-
+ * wins merge. Tombstones are filtered out of [continueWatching] and
+ * [get] so the UI never sees them. They are hard-pruned by
+ * [pruneOld] after 14 days from `lastWatchedAt`, which is plenty of
+ * time for any other device to come online and observe the deletion.
  */
 object WatchProgressStore {
 
@@ -17,17 +27,14 @@ object WatchProgressStore {
     /** When progress is this close to the end, treat the title as "finished"
      *  and stop showing it in Continue Watching. */
     private const val FINISH_THRESHOLD = 0.95f
-    /** Minimum saved position (ms) before an entry is treated as "started".
-     *  Tiny floor to avoid spurious 0-position writes from player init —
-     *  but low enough that a user who paused after 6 seconds still sees
-     *  the entry in Continue Watching when they come back. */
+    /** Minimum saved position (ms) before an entry is treated as "started". */
     private const val MIN_PROGRESS_MS = 5_000L
-    /** Treat a saved duration smaller than this as "untrustworthy" — the
-     *  player probably hadn't fully parsed the manifest yet. ExoPlayer
-     *  can briefly report a tiny partial duration during prepare which
-     *  used to corrupt the saved ratio and hide entries forever. We now
-     *  refuse to overwrite a good entry with a bad one. */
+    /** Treat a saved duration smaller than this as "untrustworthy". */
     const val MIN_VALID_DURATION_MS = 60_000L
+    /** Hard-prune any row (good entry or tombstone) whose
+     *  `lastWatchedAt` is older than this. 14 days is enough time
+     *  for sibling devices to come online and observe a tombstone. */
+    private const val PRUNE_AGE_MS = 14L * 24 * 60 * 60 * 1000
 
     data class Entry(
         val streamId: Int,
@@ -37,35 +44,28 @@ object WatchProgressStore {
         val positionMs: Long,
         val durationMs: Long,
         val lastWatchedAt: Long,
+        /** Tombstone flag — true when the user explicitly cleared this
+         *  entry. Tombstones are kept in storage so [SyncEngine] can
+         *  propagate the deletion to other devices via LWW; they are
+         *  filtered out of all read paths and hard-pruned after 14
+         *  days by [pruneOld]. */
+        val deleted: Boolean = false,
     ) {
         val ratio: Float get() =
             if (durationMs <= 0) 0f
             else (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
         /** An entry is "in progress" — and therefore visible in Continue
-         *  Watching — for as long as the user has watched any meaningful
-         *  amount of it AND has not finished it. Per product spec
-         *  (v1.43.60): the entry stays in CW until completion (≥95%) or
-         *  the user explicitly removes it via long-press. */
+         *  Watching — iff it is NOT a tombstone, the user has watched a
+         *  meaningful amount, and they have not finished it. */
         val isInProgress: Boolean get() =
-            positionMs >= MIN_PROGRESS_MS && ratio < FINISH_THRESHOLD
+            !deleted && positionMs >= MIN_PROGRESS_MS && ratio < FINISH_THRESHOLD
     }
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun key(kind: String, streamId: Int): String = "$kind:$streamId"
 
-    // ── In-memory cache (Fire Stick perf phase 4) ──────────────
-    // [getRatio] is called per-poster on every home + browse +
-    // detail composition. Each call used to hit prefs + decode
-    // the pipe-separated string. With 60 visible posters that's
-    // 60 disk reads per recomposition.
-    //
-    // Cache holds a snapshot of every entry. We invalidate on the
-    // single mutation paths ([save], [clear]) by bumping
-    // [cacheVersion]; readers check the version on each call and
-    // refresh by re-walking [SharedPreferences.getAll] only when
-    // the version moved. The result: typical render does zero
-    // prefs reads; mutation-then-render does one.
+    // ── In-memory cache ────────────────────────────────────────
     @Volatile
     private var cacheVersion: Long = 0
     @Volatile
@@ -74,9 +74,6 @@ object WatchProgressStore {
     private var cachedEntries: Map<String, Entry> = emptyMap()
 
     private fun ensureCache(ctx: Context) {
-        // If the version matches what we last built FOR, the cache
-        // is current — even if it contains zero entries (empty
-        // prefs is a perfectly valid steady state).
         if (cacheVersion == lastBuiltVersion) return
         val all = prefs(ctx).all
         val rebuilt = HashMap<String, Entry>(all.size)
@@ -96,31 +93,9 @@ object WatchProgressStore {
     /**
      * Save progress for a movie or series episode.
      *
-     * Refuses to overwrite an existing valid entry with a corrupted one.
-     * ExoPlayer can briefly report a tiny partial [durationMs] during
-     * prepare/seek; before this guard a single bogus tick could push
-     * the saved ratio above 1.0 and hide the entry from Continue
-     * Watching forever. Now we keep the previous good entry untouched
-     * unless the new save passes the validity gates:
-     *
-     *   • [durationMs] >= [MIN_VALID_DURATION_MS] (60 s) — anything
-     *     under a minute is almost certainly the player misreporting
-     *     a partial buffer.
-     *   • [positionMs] < [durationMs] — out-of-range positions are
-     *     impossible for sane content.
-     *
-     * If the current save is bogus but a previous good entry exists,
-     * we silently keep the old one. If neither old nor new is sane,
-     * we skip the write entirely.
-     *
-     * Durability (v1.43.81): uses `commit()` instead of `apply()` so
-     * the bytes are guaranteed on disk before this returns. `apply()`
-     * queues the write to a background thread, which means a Fire
-     * Stick power-pull / hard reboot mid-tick loses the most recent
-     * progress. With `commit()`, the periodic 4-second save in the
-     * player loop survives any kind of crash. Each entry is ~150
-     * bytes so the synchronous write is sub-millisecond on flash —
-     * imperceptible from the LaunchedEffect coroutine that calls it.
+     * Refuses bogus saves (durationMs < 60s or positionMs out of range).
+     * Saving always clears the tombstone flag so re-watching a title
+     * the user previously cleared brings it back to Continue Watching.
      */
     fun save(
         ctx: Context,
@@ -142,8 +117,8 @@ object WatchProgressStore {
             positionMs = positionMs,
             durationMs = durationMs,
             lastWatchedAt = System.currentTimeMillis(),
+            deleted = false,
         )
-        // commit() — synchronous, durable. See kdoc above.
         runCatching {
             prefs(ctx).edit()
                 .putString(key(kind, streamId), encode(entry))
@@ -152,19 +127,25 @@ object WatchProgressStore {
         bumpCache()
     }
 
-    /** Fetch progress (0..1) for a given title. 0 = not started or finished. */
+    /** Fetch progress (0..1) for a given title. 0 = not started, finished, or tombstoned. */
     fun getRatio(ctx: Context, streamId: Int, kind: String): Float {
         val e = get(ctx, streamId, kind) ?: return 0f
         return if (e.isInProgress) e.ratio else 0f
     }
 
+    /** Returns the entry for a given title, or null if missing or tombstoned. */
     fun get(ctx: Context, streamId: Int, kind: String): Entry? {
         ensureCache(ctx)
-        return cachedEntries[key(kind, streamId)]
+        val e = cachedEntries[key(kind, streamId)] ?: return null
+        return if (e.deleted) null else e
     }
 
     /** Returns all in-progress titles sorted by most-recently-watched first. */
     fun continueWatching(ctx: Context, kind: String? = null): List<Entry> {
+        // Opportunistic prune — drops tombstones + stale entries older
+        // than 14 days. Cheap (single prefs scan) and only mutates if
+        // something actually expired.
+        pruneOld(ctx)
         ensureCache(ctx)
         return cachedEntries.values
             .filter { it.isInProgress }
@@ -172,24 +153,83 @@ object WatchProgressStore {
             .sortedByDescending { it.lastWatchedAt }
     }
 
-    /** Remove a title from Continue Watching (user finished or hid it). */
+    /**
+     * Tombstone a single entry. The row stays in storage with
+     * `deleted = true` and a fresh `lastWatchedAt` so the [SyncEngine]
+     * propagates the deletion to other devices on the next push.
+     * Hard-pruned after 14 days by [pruneOld].
+     */
     fun clear(ctx: Context, streamId: Int, kind: String) {
-        prefs(ctx).edit().remove(key(kind, streamId)).apply()
+        ensureCache(ctx)
+        val k = key(kind, streamId)
+        val existing = cachedEntries[k]
+        // Build a tombstone preserving identifying data so the wire
+        // payload stays valid. If we don't have an existing row, there's
+        // nothing to clear.
+        val tombstone = (existing ?: return).copy(
+            lastWatchedAt = System.currentTimeMillis(),
+            deleted = true,
+        )
+        runCatching {
+            prefs(ctx).edit()
+                .putString(k, encode(tombstone))
+                .commit()
+        }
         bumpCache()
     }
 
     /**
+     * Tombstone every in-progress entry. Used by the "Clear All" UI
+     * button on the Continue Watching row. Tombstones sync across
+     * devices and are pruned after 14 days.
+     */
+    fun clearAll(ctx: Context) {
+        ensureCache(ctx)
+        val now = System.currentTimeMillis()
+        val ed = prefs(ctx).edit()
+        var changed = false
+        for ((k, e) in cachedEntries) {
+            if (e.deleted) continue
+            val tombstone = e.copy(lastWatchedAt = now, deleted = true)
+            ed.putString(k, encode(tombstone))
+            changed = true
+        }
+        if (changed) {
+            runCatching { ed.commit() }
+            bumpCache()
+        }
+    }
+
+    /**
+     * Hard-remove any row whose `lastWatchedAt` is older than
+     * [PRUNE_AGE_MS]. Applies to BOTH live entries (user hasn't
+     * touched it in 14 days — they don't want to see it any more)
+     * and tombstones (other devices have had plenty of time to
+     * sync). Idempotent and cheap; safe to call on every read.
+     */
+    fun pruneOld(ctx: Context) {
+        val now = System.currentTimeMillis()
+        val cutoff = now - PRUNE_AGE_MS
+        val all = prefs(ctx).all
+        val ed = prefs(ctx).edit()
+        var pruned = 0
+        for ((k, v) in all) {
+            if (v !is String) continue
+            val e = decode(v) ?: continue
+            if (e.lastWatchedAt > 0 && e.lastWatchedAt < cutoff) {
+                ed.remove(k)
+                pruned++
+            }
+        }
+        if (pruned > 0) {
+            runCatching { ed.commit() }
+            bumpCache()
+        }
+    }
+
+    /**
      * One-shot migration for a legacy CW entry that was saved
-     * with kind="movie" when it should have been "series". Deletes
-     * the old "movie:streamId" row and inserts a "series:streamId"
-     * row with the corrected parent-series title, preserving
-     * position, duration and last-watched timestamp.
-     *
-     * No-op if the entry is already correctly classified.
-     *
-     * Triggered by [com.hushtv.tv.ui.screens.home.reclassify] on
-     * the home Continue Watching row — so the data heals itself
-     * the first time the user sees the corrected entry.
+     * with kind="movie" when it should have been "series".
      */
     fun relabelMovieToSeries(
         ctx: Context,
@@ -208,10 +248,18 @@ object WatchProgressStore {
     }
 
     // Encoding: pipe-separated (unit separator inside text fields).
+    // Wire format:
+    //   streamId \u001f kind \u001f title \u001f poster \u001f
+    //   positionMs \u001f durationMs \u001f lastWatchedAt
+    //   [\u001f deleted]                ← optional 8th field, v1.44.42+
+    //
+    // Older clients writing 7 fields decode with deleted=false, so
+    // the wire format is fully backward-compatible.
     private fun encode(e: Entry): String {
         val safe = { s: String -> s.replace('\u001f', ' ').replace('|', '/') }
-        return "${e.streamId}\u001f${e.kind}\u001f${safe(e.title)}\u001f" +
+        val base = "${e.streamId}\u001f${e.kind}\u001f${safe(e.title)}\u001f" +
             "${e.poster ?: ""}\u001f${e.positionMs}\u001f${e.durationMs}\u001f${e.lastWatchedAt}"
+        return if (e.deleted) "$base\u001f1" else base
     }
 
     private fun decode(s: String): Entry? {
@@ -225,6 +273,7 @@ object WatchProgressStore {
             positionMs = parts[4].toLongOrNull() ?: 0L,
             durationMs = parts[5].toLongOrNull() ?: 0L,
             lastWatchedAt = parts[6].toLongOrNull() ?: 0L,
+            deleted = parts.getOrNull(7) == "1",
         )
     }
 }

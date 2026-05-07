@@ -277,12 +277,25 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
     // SavedStateHandle is scoped to this nav back-stack entry so
     // BACK from player → comes back on the same Sports tab.
     var currentPage by androidx.compose.runtime.saveable.rememberSaveable {
-        // Continue Watching is the natural landing page when the user
-        // has anything in progress — the "return to where you left off"
-        // moment is more valuable than any discovery row. Falls back to
-        // Discovery when CW is empty. Only applies on FIRST mount;
-        // subsequent re-mounts restore whatever the user last viewed.
-        mutableStateOf(if (hasCw) "cw" else "discovery")
+        // Initial value: prefer "discovery" because hasCw is initially
+        // false (entries load asynchronously). Once entries hydrate,
+        // the LaunchedEffect(hasCw) below auto-snaps to "cw" exactly
+        // once per app launch (gated by [autoLandedOnCw]). Subsequent
+        // re-mounts respect whatever page the user last navigated to.
+        mutableStateOf("discovery")
+    }
+    // One-shot flag that gates the auto-land-on-CW behaviour to the
+    // first time entries become available in this app process. Saved
+    // across re-mounts so navigating away from + back to Home doesn't
+    // re-snap the user off whichever page they chose.
+    var autoLandedOnCw by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(false)
+    }
+    LaunchedEffect(hasCw) {
+        if (!autoLandedOnCw && hasCw) {
+            currentPage = "cw"
+            autoLandedOnCw = true
+        }
     }
     val pageOrder = remember(hasCw) {
         buildList {
@@ -354,6 +367,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         var removePromptFor by remember {
             mutableStateOf<com.hushtv.tv.ui.screens.home.ContinueEntry?>(null)
         }
+        var clearAllPromptOpen by remember { mutableStateOf(false) }
 
         val discoveryCards = com.hushtv.tv.ui.screens.home.rememberDiscoveryCards(playlistId)
         var focusedDiscoveryCard by remember {
@@ -520,6 +534,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                             heroSection = "cw"
                         },
                         onLongPressRemove = { removePromptFor = it },
+                        onClearAll = { clearAllPromptOpen = true },
                         onDownFromRow = { currentPage = "discovery" },
                     )
                     "sports" -> com.hushtv.tv.ui.screens.sports.TVSportsPage(
@@ -660,6 +675,24 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         removePromptFor = null
                     },
                     onDismiss = { removePromptFor = null },
+                )
+            }
+
+            // Clear-All-from-Continue-Watching confirmation dialog.
+            if (clearAllPromptOpen) {
+                com.hushtv.tv.ui.screens.home.ClearAllContinueWatchingDialog(
+                    count = continueEntries.size,
+                    onConfirm = {
+                        com.hushtv.tv.data.WatchProgressStore.clearAll(ctxLocal)
+                        // Drop every entry from local handle state so
+                        // the LazyRow re-measures NOW; bumps the
+                        // version inside [rememberContinueEntries] to
+                        // re-read prefs, and ensures the row hides
+                        // cleanly because hasCw flips false.
+                        continueEntries.toList().forEach(continueHandle.remove)
+                        clearAllPromptOpen = false
+                    },
+                    onDismiss = { clearAllPromptOpen = false },
                 )
             }
         }
@@ -1496,6 +1529,7 @@ private fun CwPage(
     showNavAndFocus: () -> Unit,
     onFocusedEntryChange: (com.hushtv.tv.ui.screens.home.ContinueEntry) -> Unit,
     onLongPressRemove: (com.hushtv.tv.ui.screens.home.ContinueEntry) -> Unit,
+    onClearAll: () -> Unit,
     onDownFromRow: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -1521,6 +1555,7 @@ private fun CwPage(
                         )
                     },
                     onLongPressRemove = onLongPressRemove,
+                    onClearAll = onClearAll,
                     firstItemFocus = firstCwFocus,
                     onUpFromFirstItem = showNavAndFocus,
                     onDownFromRow = onDownFromRow,
