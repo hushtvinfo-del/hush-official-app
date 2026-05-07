@@ -1,12 +1,12 @@
 {
-  "versionCode": 438,
-  "versionName": "1.44.38",
+  "versionCode": 439,
+  "versionName": "1.44.39",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "official",
   "changelog": [
-    "App launcher label is now flavor-specific. Official installs show \"HushTV Official\" in the launcher / Settings → Apps; the bleeding-edge dev channel now shows \"HushTV Dev\" so you can tell which one you have at a glance.",
-    "Carries over all v1.44.37 fixes — DTS / AC3 / EAC3 audio support for previously-silent movies, Cloud DVR with 5-hour quota, no-EPG record block, right-edge dark-scene line glitch fix, and the long-press OK channel actions sheet."
+    "Official is now installable side-by-side with the Dev channel — Dev gets a distinct package id so the two icons coexist without replacing each other on the home screen. Official channel keeps its existing package id (com.hushtv.tv) so your playlists, favorites, and watch progress are preserved through this upgrade.",
+    "All v1.44.37 + v1.44.38 fixes still in place — DTS / AC3 / EAC3 audio for previously-silent movies, Cloud DVR with 5-hour quota, no-EPG record block, right-edge dark-scene line glitch fix, long-press OK channel actions, and distinct launcher labels for Dev vs Official."
   ]
 }

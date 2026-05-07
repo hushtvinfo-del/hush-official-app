@@ -11,8 +11,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 438
-        versionName = "1.44.38"
+        versionCode = 439
+        versionName = "1.44.39"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -78,6 +78,18 @@ android {
     productFlavors {
         create("dev") {
             dimension = "channel"
+            // v1.44.39: dev gets a distinct applicationId so it can be
+            // installed SIDE-BY-SIDE with the official channel on the
+            // same device. Result on disk:
+            //   • dev release  → com.hushtv.tv.dev
+            //   • dev debug    → com.hushtv.tv.dev.debug
+            // Existing dev users upgrading from v1.44.38 will see a
+            // NEW "HushTV Dev" install appear alongside their legacy
+            // "HushTV" — Android can't auto-replace across application-
+            // ids. The legacy install can be uninstalled manually; it
+            // won't auto-update further since this manifest URL now
+            // points at the new applicationId.
+            applicationIdSuffix = ".dev"
             buildConfigField(
                 "String",
                 "UPDATE_MANIFEST_URL",
@@ -91,6 +103,12 @@ android {
         }
         create("official") {
             dimension = "channel"
+            // v1.44.39: official KEEPS the legacy applicationId
+            // (no flavor suffix) so existing production users upgrade
+            // cleanly without losing playlists, favorites, or watch
+            // progress. Result on disk:
+            //   • official release  → com.hushtv.tv
+            //   • official debug    → com.hushtv.tv.debug
             buildConfigField(
                 "String",
                 "UPDATE_MANIFEST_URL",

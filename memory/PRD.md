@@ -1,6 +1,76 @@
 # HushTV — Product Requirements Document
 
-## v1.44.38 (DEV + OFFICIAL) — Flavor-specific launcher labels — 2026-05-07  ⬅ LATEST
+## v1.44.39 (DEV + OFFICIAL) — Side-by-side installs via distinct applicationIds — 2026-05-07  ⬅ LATEST
+
+User clarified after v1.44.38: *"I meant in the actual app install
+names I need 'HushTV Dev' and 'HushTV Official' — the actual apps
+themself."*
+
+v1.44.38 only changed the launcher label — both flavors still shared
+applicationId `com.hushtv.tv.debug`, which means installing one
+REPLACES the other and only ONE icon ever exists on a device. The
+user wanted **two separate apps** that can coexist.
+
+### What landed
+
+Added per-flavor `applicationIdSuffix` to `productFlavors` in
+`build.gradle.kts`:
+
+| Flavor   | release applicationId    | debug applicationId           |
+|----------|--------------------------|-------------------------------|
+| dev      | `com.hushtv.tv.dev`      | `com.hushtv.tv.dev.debug`     |
+| official | `com.hushtv.tv` (legacy) | `com.hushtv.tv.debug` (legacy)|
+
+Verified with aapt2 on the live APKs:
+
+```
+$ aapt2 dump packagename HushTV.apk
+com.hushtv.tv.dev.debug
+$ aapt2 dump packagename hushtv-official.apk
+com.hushtv.tv.debug
+```
+
+### Why official keeps the legacy id
+
+Existing production users on the official channel would be hit
+hardest by an applicationId change — Android refuses to "upgrade"
+across applicationIds, so they'd see a fresh install with all
+playlists / favorites / watch progress wiped. By keeping official
+on `com.hushtv.tv.debug`, all existing official users get a clean
+v1.44.39 upgrade with no data loss.
+
+Dev-channel users are smaller in number and primarily testers
+(the user themselves) so absorbing a one-time fresh-install hit
+on the dev side is the right tradeoff. Existing dev installs on
+`com.hushtv.tv.debug` will become orphaned after this update —
+the new "HushTV Dev" install lives at `com.hushtv.tv.dev.debug`
+and runs alongside it. The orphan can be uninstalled manually;
+since the dev manifest URL now resolves to the new applicationId,
+the orphan stops auto-updating.
+
+### Build + deploy
+
+versionCode 438 → 439, versionName 1.44.38 → 1.44.39. Both flavors
+built in one Gradle invocation. APKs uploaded:
+- `https://hushtv.xyz/HushTV.apk` (dev)
+- `https://hushtv.xyz/hushtv-official.apk` (official)
+
+Tagged `v1.44.39-dev`, `v1.44.39-official`. Mandatory:true on both.
+
+### Lessons preserved
+
+- For Android multi-channel distribution where users want
+  side-by-side installs, you need DIFFERENT applicationIds, not
+  just different labels. Labels are cosmetic; the OS uniqueness
+  comes from applicationId.
+- When introducing per-flavor applicationIds to an existing app,
+  choose the channel-with-most-users-to-protect to KEEP the
+  legacy id. Branching off the lower-traffic channel limits the
+  one-time-fresh-install blast radius.
+
+---
+
+## v1.44.38 (DEV + OFFICIAL) — Flavor-specific launcher labels — 2026-05-07
 
 User asked: *"I need a way to distinguish which app is dev and which app
 is official… can you make the dev app name 'HushTV Dev' and official
