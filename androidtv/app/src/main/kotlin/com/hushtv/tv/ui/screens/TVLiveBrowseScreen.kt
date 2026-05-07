@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.GridView
@@ -2059,11 +2060,29 @@ private fun TVChannelActionsDialog(
     onDismiss: () -> Unit,
 ) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     var phase by remember { mutableStateOf("menu") }  // "menu" | "reminder"
     // Read fav state inside the composable so it updates after toggle.
     var favVersion by remember { mutableStateOf(0) }
     val isFavorite = remember(favVersion, channel.streamId) {
         com.hushtv.tv.data.FavoritesStore.isFavorite(ctx, playlistId, channel.streamId)
+    }
+
+    // ── Live recording state for this channel ───────────────────────
+    // Polled once on dialog open + after toggle so the row label flips
+    // between "Record now" / "Stop recording" without leaving the
+    // dialog. Uses the same DvrApi.findActive() the OSD RecordNowChip
+    // uses, so the state is consistent across surfaces.
+    var recCheckTick by remember { mutableStateOf(0) }
+    var activeRec by remember(channel.streamId) {
+        mutableStateOf<com.hushtv.tv.data.DvrApi.Recording?>(null)
+    }
+    var recBusy by remember { mutableStateOf(false) }
+    LaunchedEffect(recCheckTick, channel.streamId, playlistId) {
+        val playlist = com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
+            ?: return@LaunchedEffect
+        val uid = com.hushtv.tv.data.DvrApi.userIdFor(playlist)
+        activeRec = com.hushtv.tv.data.DvrApi.findActive(uid, channel.title)
     }
 
     val firstMenuFocus = remember { FocusRequester() }
@@ -2121,6 +2140,86 @@ private fun TVChannelActionsDialog(
                     },
                 )
                 Spacer(Modifier.height(8.dp))
+
+                // ── Record action ──
+                // Mirrors the player OSD's RecordNowChip: red dot icon,
+                // flips label / subtitle between "Record now" and
+                // "Stop recording" depending on whether ffmpeg is
+                // currently capturing this channel for this profile.
+                val isRecording = activeRec != null
+                ActionRow(
+                    icon = Icons.Default.FiberManualRecord,
+                    iconTint = Color(0xFFEF4444),
+                    title = when {
+                        recBusy && isRecording -> "Stopping recording…"
+                        recBusy -> "Starting recording…"
+                        isRecording -> "Stop recording"
+                        else -> "Record now"
+                    },
+                    subtitle = if (isRecording)
+                        "Capture in progress — find it in My Recordings"
+                    else
+                        "Save this channel for 14 days",
+                    focusRequester = null,
+                    onClick = onClick@{
+                        if (recBusy) return@onClick
+                        val playlist = com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)
+                            ?: return@onClick
+                        val uid = com.hushtv.tv.data.DvrApi.userIdFor(playlist)
+                        val live = activeRec
+                        recBusy = true
+                        scope.launch {
+                            if (live != null) {
+                                val ok = com.hushtv.tv.data.DvrApi.delete(uid, live.rec_id)
+                                android.widget.Toast.makeText(
+                                    ctx,
+                                    if (ok)
+                                        "Stopped recording \"${channel.title}\""
+                                    else
+                                        "Couldn't stop recording — try again",
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
+                            } else {
+                                val streamUrl = com.hushtv.tv.data.XtreamApi.liveUrl(
+                                    playlist.host,
+                                    playlist.username,
+                                    playlist.password,
+                                    channel.streamId,
+                                )
+                                val nowShow = com.hushtv.tv.data.EpgService
+                                    .nowPlaying(channel.streamId)
+                                val result = com.hushtv.tv.data.DvrApi.recordNow(
+                                    userId = uid,
+                                    channelUrl = streamUrl,
+                                    channelName = channel.title,
+                                    showTitle = nowShow?.title.orEmpty(),
+                                    showEndsAtEpoch = (nowShow?.stopMs ?: 0L) / 1000L,
+                                )
+                                when (result) {
+                                    is com.hushtv.tv.data.DvrApi.RecordNowResult.Success -> {
+                                        android.widget.Toast.makeText(
+                                            ctx,
+                                            "Recording \"${channel.title}\" — find it under My Recordings.",
+                                            android.widget.Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
+                                    is com.hushtv.tv.data.DvrApi.RecordNowResult.Error -> {
+                                        android.widget.Toast.makeText(
+                                            ctx,
+                                            result.message,
+                                            android.widget.Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
+                                }
+                            }
+                            recBusy = false
+                            recCheckTick++
+                            onDismiss()
+                        }
+                    },
+                )
+                Spacer(Modifier.height(8.dp))
+
                 ActionRow(
                     icon = Icons.Default.Notifications,
                     iconTint = Cyan,

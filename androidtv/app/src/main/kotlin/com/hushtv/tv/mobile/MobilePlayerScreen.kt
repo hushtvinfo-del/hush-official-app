@@ -135,7 +135,7 @@ fun MobilePlayerScreen(
     // Player.
     val player = remember {
         com.hushtv.tv.data.PlayerBuilder.build(ctx).apply {
-            setMediaItem(MediaItem.fromUri(currentStreamUrl))
+            setMediaItem(buildMobilePlayerMediaItem(currentStreamUrl))
             prepare()
             // Subtitles default OFF on every new playback session.
             // Some HLS / MKV streams come with embedded text tracks
@@ -408,7 +408,7 @@ fun MobilePlayerScreen(
     // releasing the player so we don't blink the surface.
     LaunchedEffect(currentStreamUrl) {
         if (player.currentMediaItem?.localConfiguration?.uri?.toString() != currentStreamUrl) {
-            player.setMediaItem(MediaItem.fromUri(currentStreamUrl))
+            player.setMediaItem(buildMobilePlayerMediaItem(currentStreamUrl))
             player.prepare()
             player.playWhenReady = true
         }
@@ -836,4 +836,22 @@ private fun formatMs(ms: Long): String {
     val s = total % 60
     return if (h > 0) String.format("%d:%02d:%02d", h, m, s)
     else String.format("%02d:%02d", m, s)
+}
+
+/**
+ * Build the initial MediaItem for the mobile player. Mirrors
+ * `buildPlayerMediaItem` in the TV player — explicit MIME type for
+ * Cloud-DVR recording URLs (no extension + server rejects HEAD), default
+ * `fromUri` for everything else. Without the hint, ExoPlayer sometimes
+ * fails to wire up the Mp4Extractor and leaves the surface black even
+ * though it's downloading bytes from the recording. v1.44.32 fix.
+ */
+private fun buildMobilePlayerMediaItem(url: String): MediaItem {
+    if (com.hushtv.tv.data.DvrApi.parseRecordingUrl(url) != null) {
+        return MediaItem.Builder()
+            .setUri(url)
+            .setMimeType(androidx.media3.common.MimeTypes.VIDEO_MP4)
+            .build()
+    }
+    return MediaItem.fromUri(url)
 }

@@ -1,13 +1,13 @@
 {
-  "versionCode": 431,
-  "versionName": "1.44.31",
+  "versionCode": 432,
+  "versionName": "1.44.32",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX (app-wide nav bug) — Pressing BACK from the player or any detail screen was always returning to the Discover/Continue-Watching tab regardless of which section the user was on. Root cause: TVMainMenuScreen's currentPage state used remember() instead of rememberSaveable(), so every re-mount (after popBackStack) reset the tab. Switched to rememberSaveable so the user's selected section (Sports / Collections / Themed / Genres / etc.) survives navigation.",
-    "FIX (Sports-specific) — BACK from a player launched via the EPG picker now reopens the picker (showing the same channel list for that game) instead of jumping straight to the Sports page. BACK again exits to Sports. pickerGameId is now rememberSaveable.",
-    "Mandatory:true so v1.44.30 devices force-update."
+    "FIX (DVR playback black screen) — Tapping a completed Cloud-DVR recording opened the player but stayed on a black screen forever despite ExoPlayer downloading bytes. Root cause: DVR stream URLs have NO file extension and the server intentionally rejects HEAD requests, so MediaSourceFactory's content-type sniff couldn't pick the Mp4Extractor. Now we explicitly hint MimeTypes.VIDEO_MP4 on DVR MediaItems so the right extractor wires up immediately. Applied to both TV and Mobile players.",
+    "NEW — Long-press OK on any live channel now offers a third action: Record now / Stop recording. Same record-now semantics as the player OSD's REC chip — captures up to 1 hour by default, auto-clamps to the end of the currently-airing EPG show when known. Mirrored on the Mobile long-press sheet. Recordings show up in My Recordings just like before.",
+    "Mandatory:true so v1.44.31 devices force-update."
   ]
 }

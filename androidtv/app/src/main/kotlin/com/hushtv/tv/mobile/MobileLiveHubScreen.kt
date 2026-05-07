@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -75,6 +76,7 @@ import com.hushtv.tv.data.XtreamCategory
 import com.hushtv.tv.ui.theme.Cyan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -561,6 +563,85 @@ fun MobileLiveHubScreen(
                                 liveCategoryId = selectedCatId.ifBlank { null },
                             ),
                         )
+                    },
+                )
+
+                // ── Record action ──
+                // Same record-now / stop-recording semantics as the
+                // OSD's MobileRecordNowButton and the TV
+                // TVChannelActionsDialog. Polled once per dialog open
+                // so the label is correct even if a recording was
+                // already running before the user opened the sheet.
+                val recScope = rememberCoroutineScope()
+                var activeRec by remember(card.streamId) {
+                    mutableStateOf<com.hushtv.tv.data.DvrApi.Recording?>(null)
+                }
+                var recBusy by remember { mutableStateOf(false) }
+                LaunchedEffect(card.streamId, playlistId) {
+                    val p = playlist ?: return@LaunchedEffect
+                    val uid = com.hushtv.tv.data.DvrApi.userIdFor(p)
+                    activeRec = com.hushtv.tv.data.DvrApi.findActive(uid, card.title)
+                }
+                val isRecording = activeRec != null
+                QuickActionRow(
+                    icon = Icons.Default.FiberManualRecord,
+                    label = when {
+                        recBusy && isRecording -> "Stopping recording…"
+                        recBusy -> "Starting recording…"
+                        isRecording -> "Stop recording"
+                        else -> "Record now"
+                    },
+                    tint = Color(0xFFEF4444),
+                    onClick = onClick@{
+                        if (recBusy) return@onClick
+                        val p = playlist ?: return@onClick
+                        val uid = com.hushtv.tv.data.DvrApi.userIdFor(p)
+                        val live = activeRec
+                        recBusy = true
+                        recScope.launch {
+                            if (live != null) {
+                                val ok = com.hushtv.tv.data.DvrApi.delete(uid, live.rec_id)
+                                android.widget.Toast.makeText(
+                                    ctx,
+                                    if (ok)
+                                        "Stopped recording \"${card.title}\""
+                                    else
+                                        "Couldn't stop recording — try again",
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
+                            } else {
+                                val streamUrl = XtreamApi.liveUrl(
+                                    p.host, p.username, p.password, card.streamId,
+                                )
+                                val nowShow = com.hushtv.tv.data.EpgService
+                                    .nowPlaying(card.streamId)
+                                val result = com.hushtv.tv.data.DvrApi.recordNow(
+                                    userId = uid,
+                                    channelUrl = streamUrl,
+                                    channelName = card.title,
+                                    showTitle = nowShow?.title.orEmpty(),
+                                    showEndsAtEpoch = (nowShow?.stopMs ?: 0L) / 1000L,
+                                )
+                                when (result) {
+                                    is com.hushtv.tv.data.DvrApi.RecordNowResult.Success -> {
+                                        android.widget.Toast.makeText(
+                                            ctx,
+                                            "Recording \"${card.title}\" — find it in My Recordings.",
+                                            android.widget.Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
+                                    is com.hushtv.tv.data.DvrApi.RecordNowResult.Error -> {
+                                        android.widget.Toast.makeText(
+                                            ctx,
+                                            result.message,
+                                            android.widget.Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
+                                }
+                            }
+                            recBusy = false
+                            actionCard = null
+                        }
                     },
                 )
                 QuickActionRow(

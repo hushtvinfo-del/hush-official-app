@@ -1,6 +1,93 @@
 # HushTV — Product Requirements Document
 
-## v1.44.16 (DEV ONLY) — Perfect-fit Sports Cards via Zoned Column Layout — 2026-05-06  ⬅ LATEST
+## v1.44.32 (DEV ONLY) — DVR playback black screen fix + Record action on long-press OK — 2026-05-07  ⬅ LATEST
+
+User report: *"I have a completed recording. But when I click on it it
+won't play it just goes to a black screen. 1. Fix it so it plays. 2. Add
+an actual seek bar like we have for movies and series so we can go
+rewind and forward. 3. When you hold ok down on a channel long press,
+add to the option screen to record (same screen where Add favorites and
+set reminder is). This is all stuff we previously did already that
+disappeared and got lost."*
+
+### What landed
+
+#### Fix 1 — DVR recording playback no longer renders a black screen
+
+Root cause: Cloud-DVR stream URLs look like
+  `http://216.152.148.150/api/dvr/recordings/{rec_id}/stream?user_id=…`
+
+They have **no file extension** and the DVR server intentionally rejects
+`HEAD` requests with 405 (only `GET` with Range is supported). With
+neither signal available, ExoPlayer's `DefaultMediaSourceFactory` falls
+back to a generic extractor pipeline. For some MP4 builds that ffmpeg
+produced with `+empty_moov+frag_keyframe+faststart`, that pipeline never
+reaches a renderable state — bytes flow forever, but the surface stays
+black. Verified in nginx logs: 5 MB chunks were being pulled by both
+`HushTV/Android-ExoPlayer` and `stagefright/1.2 (Android 11)` continuously
+yet the user saw nothing.
+
+Fix: add a small helper (`buildPlayerMediaItem` on TV, `buildMobilePlayerMediaItem`
+on mobile) that detects DVR URLs via `DvrApi.parseRecordingUrl()` and
+returns a `MediaItem.Builder().setMimeType(MimeTypes.VIDEO_MP4).build()`
+in that case. For non-DVR URLs (live Xtream `.ts`, VOD `.mp4`, HLS
+`.m3u8`) the helper falls through to `MediaItem.fromUri(url)` so HLS /
+progressive routing is unchanged.
+
+Files: `TVPlayerScreen.kt`, `MobilePlayerScreen.kt`.
+
+#### Fix 2 — Seek bar on recordings
+
+The scrubber already lives in `TVPlayerScreen` for `!isLive && durationMs > 0`
+(line 1204). It just never appeared because Fix 1 prevented playback from
+ever progressing past the IDLE / BUFFERING state — `durationMs` stayed 0
+so the scrubber was excluded from layout. With Fix 1 applied, the
+existing Tivimate-style scrubber (10s nudge → 30s → 60s adaptive seek
+acceleration, floating thumbnail preview, focus-grow track 6dp → 10dp)
+shows up automatically.
+
+#### Fix 3 — "Record now" on the long-press OK channel actions sheet
+
+Both surfaces (`TVChannelActionsDialog` in `TVLiveBrowseScreen.kt` and the
+mobile `actionCard` in `MobileLiveHubScreen.kt`) gained a new red
+`FiberManualRecord` action between Favorites and Set-Reminder. State
+machine mirrors the OSD `RecordNowChip`:
+- idle → "Record now" (red icon, subtitle "Save this channel for 14 days")
+- recording → "Stop recording" (subtitle "Capture in progress — find it in My Recordings")
+- in-flight → "Starting recording…" / "Stopping recording…"
+
+On click, fires `DvrApi.recordNow(userId, channelUrl, channelName,
+showTitle, showEndsAtEpoch)` for the focused channel. EPG `nowPlaying()`
+is consulted so the duration auto-clamps to the end of the currently-
+airing show + small pad; absent EPG, the backend defaults to a 1-hour
+rolling capture. Fires a Toast on success / failure and dismisses the
+dialog. Polls `DvrApi.findActive(uid, channelName)` once on dialog open
+so the label is correct even when a recording was kicked off elsewhere.
+
+### Build + deploy
+
+- versionCode 431 → 432, versionName 1.44.31 → 1.44.32.
+- BUILD SUCCESSFUL in 2m 45s. APK 21 MB. Auto-tagged `v1.44.32-dev`.
+- Live: `https://hushtv.xyz/version.json` reports versionCode 432.
+- `mandatory: true` so v1.44.31 devices force-update on next launch.
+
+### Lessons preserved
+
+When ExoPlayer "black screens" on URLs that DON'T end in a media
+extension AND the server rejects HEAD, the answer is usually
+`MediaItem.Builder().setMimeType(...)` — never trust extension-only
+sniffing for arbitrary HTTP endpoints. Worth checking in future when
+proxying through dynamic-route backends (DVR, request-gateway, etc.).
+
+When the user reports "X has disappeared / regressed", check first
+whether the feature is still wired up and just gated behind another
+broken step. The seek bar regression here was a phantom — the bar code
+was untouched; it just couldn't render because Fix 1 was blocking
+duration from ever being known.
+
+---
+
+## v1.44.16 (DEV ONLY) — Perfect-fit Sports Cards via Zoned Column Layout — 2026-05-06
 
 User report: *"all i want to make sure is that the cards and everything else
 clearly have everything fit in them the logos - the time the game starts and the

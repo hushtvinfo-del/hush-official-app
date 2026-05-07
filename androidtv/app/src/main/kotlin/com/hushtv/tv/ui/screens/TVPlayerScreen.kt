@@ -96,7 +96,7 @@ fun TVPlayerScreen(
 
     val player = remember {
         com.hushtv.tv.data.PlayerBuilder.build(ctx).apply {
-            setMediaItem(MediaItem.fromUri(currentUrl))
+            setMediaItem(buildPlayerMediaItem(currentUrl))
             prepare()
             // Subtitles default OFF on every new playback session.
             // Some HLS / MKV streams come with embedded text tracks
@@ -1629,6 +1629,38 @@ private fun formatTime(ms: Long): String {
     val m = (totalSec % 3600) / 60
     val s = totalSec % 60
     return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%d:%02d", m, s)
+}
+
+/**
+ * Build the initial MediaItem for the player.
+ *
+ * Why this helper exists (v1.44.32 — fix DVR playback black screen)
+ * ──────────────────────────────────────────────────────────────────
+ * Cloud-DVR recording stream URLs look like
+ *   http://216.152.148.150/api/dvr/recordings/{rec_id}/stream?user_id=…
+ *
+ * They have NO file extension and the DVR server intentionally rejects
+ * HEAD requests (returns 405 Method Not Allowed) — only GETs with Range
+ * are supported. ExoPlayer's DefaultMediaSourceFactory uses the URL's
+ * path tail to pick an extractor; without an extension AND without a
+ * usable HEAD response, the factory falls back to a generic extractor
+ * pipeline that — for some MP4 builds produced by ffmpeg with
+ * `+empty_moov+frag_keyframe+faststart` — never reaches a renderable
+ * state and the user sees a black screen even though bytes are flowing.
+ *
+ * Setting an explicit MIME type tells ExoPlayer "this is video/mp4,
+ * skip the sniff" and the Mp4Extractor wires up immediately. Live
+ * Xtream URLs (which DO have `.ts` / `.m3u8` extensions) keep the
+ * default fromUri path so HLS / progressive routing isn't disturbed.
+ */
+private fun buildPlayerMediaItem(url: String): MediaItem {
+    if (com.hushtv.tv.data.DvrApi.parseRecordingUrl(url) != null) {
+        return MediaItem.Builder()
+            .setUri(url)
+            .setMimeType(androidx.media3.common.MimeTypes.VIDEO_MP4)
+            .build()
+    }
+    return MediaItem.fromUri(url)
 }
 
 @Composable
