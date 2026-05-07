@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v1.44.36 — PlayerView using TextureView surface instead of SurfaceView.
+
+  Why: SurfaceView (PlayerView's default when constructed
+  programmatically) ships video frames straight to a hardware overlay
+  plane on TV chipsets. On dark scenes, several Android TV models
+  (notably Sony Bravia, but reproduced on NVIDIA SHIELD as well — see
+  ExoPlayer issue #8394) render a 1-2 pixel bright vertical line on
+  the right edge of the video — chroma upsampling overshoot at the
+  surface boundary.
+
+  TextureView routes frames through GPU compositing instead, which
+  clamps texture sampling at the edges and eliminates the artifact.
+  Slightly more CPU/GPU but on modern TV hardware it's imperceptible.
+  Trade-off is worth it for the visible quality win.
+
+  We ALSO disable show_buffering since the branded BufferingOverlay
+  composable replaces it, and disable the controller since our OSD
+  is fully Compose-rendered.
+-->
+<androidx.media3.ui.PlayerView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:keepScreenOn="true"
+    app:surface_type="texture_view"
+    app:use_controller="false"
+    app:show_buffering="never"
+    app:resize_mode="fit" />

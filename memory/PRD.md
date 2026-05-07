@@ -1,6 +1,43 @@
 # HushTV — Product Requirements Document
 
-## v1.44.47 (OFFICIAL) — Promoted Dev → Official — 2026-02-08  ⬅ LATEST
+## v1.44.48 (DEV + OFFICIAL) — Dismiss button on the install-stage update prompt — 2026-02-08  ⬅ LATEST
+
+User reported: *"Add a dismiss button in the actual update prompt — not the prompt that asks if they want to update, but the SECOND prompt that tells them to install. In case the user clicks Cancel on the device installer, we need a dismiss button in that app prompt so they can cancel out of the prompt."*
+
+### Root cause
+`UpdateDialog.InstallingBody()` (the screen shown after the APK download finishes, while the system installer is supposed to be foregrounded) only had a frozen "Press 'Install' on the system screen" message. If the user pressed Cancel on the OS-level installer screen, our app dialog stayed up forever — the only way out was to force-kill the app.
+
+### Fix
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/update/UpdateDialog.kt`
+
+1. **Added a Dismiss button to `InstallingBody`**, full-width, focused by default so a user who came back from a cancelled OS installer can press Enter to back out in one click. Includes a clarifying line: *"If you tapped Cancel on the system installer by mistake, use Dismiss below to close this prompt — you can re-launch the update from Settings → About → Check for Updates."*
+2. **Allowed BACK to dismiss the INSTALLING state** — extended `dismissOnBackPress` and `onDismissRequest` to include `INSTALLING`. We deliberately keep DOWNLOADING and NEEDS_PERMISSION states gated (in-flight network / explicit settings flow shouldn't be auto-dismissed).
+3. The `InstallingBody` signature changed from `()` to `(onDismiss: () -> Unit)` and the call site passes through the parent `onDismiss`.
+
+### Where this comes up
+Both TV and Mobile use the same `UpdateDialog` composable (Mobile imports it from `com.hushtv.tv.update.UpdateDialog` in `MobileApp.kt`), so the fix lands on both surfaces in one change.
+
+### Files touched
+```
+app/build.gradle.kts                                                bumped to 1.44.48 / 448
+app/src/main/kotlin/com/hushtv/tv/update/UpdateDialog.kt
+_buildenv/version.json
+_buildenv/version-official.json
+```
+
+### Build + deploy (BOTH channels — user requested all changes go live to Official)
+- `assembleDevDebug` ✓
+- `assembleOfficialDebug` ✓ (combined run: BUILD SUCCESSFUL in 6m 25s)
+- Dev APK + manifest pushed → `https://hushtv.xyz/version.json` → `1.44.48 / 448` ✓
+- Official APK + manifest pushed → `https://hushtv.xyz/version-official.json` → `1.44.48 / 448` ✓
+- Legacy CamelCase mirror updated: `HushTV-Official.apk` ✓
+
+### Pod-rescheduling note for next agent
+The K8s pod was rescheduled mid-task (filesystem changed from `/dev/nvme0n5` → `/dev/nvme0n9`), which wiped the JVM and the `qemu-user-static`/`libc6-amd64-cross` aapt2-wrapper deps. Source code in `/app` survived. To recover: run `apt-get install -y openjdk-17-jdk-headless sshpass libc6-amd64-cross libgcc-s1-amd64-cross libstdc++6-amd64-cross qemu-user-static`. This is the canonical environment-restore command.
+
+---
+
+## v1.44.47 (OFFICIAL) — Promoted Dev → Official — 2026-02-08
 
 User asked: *"Please push all new changes, everything in the development app live to the official app."*
 

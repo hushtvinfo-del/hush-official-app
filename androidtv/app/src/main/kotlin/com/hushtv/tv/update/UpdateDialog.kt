@@ -133,10 +133,32 @@ fun UpdateDialog(
     }
 
     Dialog(
-        onDismissRequest = { if (ui == UpdateUiState.PROMPT) onDismiss() },
+        onDismissRequest = {
+            // BACK from the dialog is only allowed in states where
+            // we have nothing in flight that we'd cancel mid-write:
+            //   • PROMPT    — nothing started yet, safe.
+            //   • INSTALLING — the system installer is up; if the user
+            //                  cancelled it, our dialog is otherwise
+            //                  stranded forever. Letting BACK / outside
+            //                  tap close the prompt is the only sane way
+            //                  out without force-killing the app.
+            //   • FAILED    — terminal state, dismiss is the explicit
+            //                 alternative to Retry.
+            // We deliberately do NOT auto-dismiss DOWNLOADING (in-flight
+            // network) or NEEDS_PERMISSION* (we want them to see the
+            // explicit Cancel button so the flow is intentional).
+            if (
+                ui == UpdateUiState.PROMPT ||
+                ui == UpdateUiState.INSTALLING ||
+                ui == UpdateUiState.FAILED
+            ) onDismiss()
+        },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            dismissOnBackPress = ui == UpdateUiState.PROMPT || ui == UpdateUiState.FAILED,
+            dismissOnBackPress =
+                ui == UpdateUiState.PROMPT ||
+                ui == UpdateUiState.INSTALLING ||
+                ui == UpdateUiState.FAILED,
             dismissOnClickOutside = false,
         ),
     ) {
@@ -232,7 +254,7 @@ fun UpdateDialog(
                             bytesDownloaded = progressBytes.first,
                             bytesTotal = progressBytes.second,
                         )
-                        UpdateUiState.INSTALLING -> InstallingBody()
+                        UpdateUiState.INSTALLING -> InstallingBody(onDismiss = onDismiss)
                         UpdateUiState.NEEDS_PERMISSION_POST -> NeedsPermissionBody(
                             introText = "Permission was revoked. Re-enable \"Install unknown apps\" for HushTV to finish the update.",
                             onOpenSettings = {
@@ -368,7 +390,13 @@ private fun formatBytes(bytes: Long): String {
 }
 
 @Composable
-private fun InstallingBody() {
+private fun InstallingBody(onDismiss: () -> Unit) {
+    // Default focus to the Dismiss button so a user who landed here,
+    // hit Cancel on the system installer, and is staring at this
+    // dialog has a one-press way out (Enter on the focused Dismiss).
+    val dismissFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { dismissFocus.requestFocus() } }
+
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.CheckCircle, null, tint = Cyan, modifier = Modifier.size(26.dp))
         Spacer(Modifier.width(10.dp))
@@ -386,6 +414,28 @@ private fun InstallingBody() {
             )
         }
     }
+    Spacer(Modifier.height(10.dp))
+    Text(
+        "If you tapped Cancel on the system installer by mistake, " +
+            "use Dismiss below to close this prompt — you can re-launch " +
+            "the update from Settings → About → Check for Updates.",
+        color = Color(0xFF9CA3AF),
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+    )
+    Spacer(Modifier.height(18.dp))
+    // Dismiss button — required because once the system installer
+    // is up, the user might cancel it on the device. Without an
+    // explicit dismiss path our dialog stayed up forever and the only
+    // way out was to force-kill the app.
+    FlatButton(
+        text = "Dismiss",
+        primary = false,
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(dismissFocus),
+        onClick = onDismiss,
+    )
 }
 
 @Composable

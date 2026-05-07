@@ -1,0 +1,22 @@
+R_DEF: Internal format may change without notice
+local
+color bg_black
+color cyan_400
+color ic_launcher_background
+color slate_600
+color surface_elev
+color surface_navy
+color white
+drawable ic_hushtv_logo
+drawable ic_launcher_foreground
+drawable splash_empty
+drawable tv_banner
+font inter
+layout player_view_texture
+mipmap ic_launcher
+mipmap ic_launcher_round
+string app_name
+style Theme.HushTV
+style Theme.HushTV.Splash
+xml file_paths
+xml network_security_config

@@ -1,14 +1,12 @@
 {
-  "versionCode": 447,
-  "versionName": "1.44.47",
+  "versionCode": 448,
+  "versionName": "1.44.48",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Telemetry: When WatchProgressStore.save() rejects a write because the title is blank, the app now fires a one-shot diagnostic ping to the crash dashboard with kind/streamId/position/duration + breadcrumbs. Rate-limited to one ping per event-tag per app launch so a tight loop can't flood the server. This will help pinpoint exactly which player launch path was feeding empty channelName + missing PlaybackMeta if it ever happens again.",
-    "Continue Watching: Orphan blank \"SERIES\" cards are auto-cleaned on next Home open (defence-in-depth: save() rejects blank-title writes, continueWatching() filters them, pruneOld() hard-deletes them).",
-    "Side-rail focus: v1.44.42 baseline (no risky modifiers).",
-    "Continue Watching: Are-you-done prompt (Dialog-wrapped), Clear All, tombstone deletion, 14-day prune, auto-focus first CW tile."
+    "Update prompt: Added a Dismiss button to the \"Opening installer\" stage. If you cancel the system installer screen on your device, you can now back out of the in-app update prompt instead of being stuck. BACK button also dismisses this stage now.",
+    "All v1.44.42 → v1.44.47 features: Are-you-done prompt, Clear All, tombstone deletion across devices, 14-day prune, auto-focus first CW tile, orphan blank-card auto-clean, blank-title save telemetry."
   ]
 }
