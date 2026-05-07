@@ -1,6 +1,85 @@
 # HushTV — Product Requirements Document
 
-## v1.44.37 (DEV ONLY) — DTS audio support via Jellyfin Media3 FFmpeg decoder — 2026-05-07  ⬅ LATEST
+## v1.44.37 (DEV + OFFICIAL) — Promoted to official channel — 2026-05-07  ⬅ LATEST
+
+User asked: *"Can we push all the newest updates we have done now to the
+official app also and mobile version"*.
+
+### What got pushed
+
+- Built `assembleOfficialDebug` from the v1.44.37 source tree (24 MB
+  APK, includes the Jellyfin media3-ffmpeg-decoder native libs for
+  arm64 / armv7 / x86 / x86_64).
+- Mirrored the build to BOTH `hushtv-official.apk` (the URL the
+  manifest references) AND `HushTV-Official.apk` (the legacy
+  CamelCase path) on `/var/www/hushtv/` of the deploy server.
+- Replaced `version-official.json` with versionCode 437 / versionName
+  1.44.37 / `mandatory: true` and a 9-bullet user-facing changelog
+  rolled up from 1.43.99 → 1.44.37.
+
+### Mobile note
+
+There is no separate mobile APK. The same `com.hushtv.tv` package
+ships both the Android-TV-leanback and phone composables in
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/mobile/`; the
+runtime detects form factor at launch and selects the right entry
+screen. So one promote-to-official deploy covers BOTH surfaces, and
+both will pick up the v1.44.37 update on next launch via the
+update-manager polling `https://hushtv.xyz/version-official.json`.
+
+### Bug found and fixed in `promote-to-official.sh`
+
+The script was uploading the new APK to `/var/www/hushtv/HushTV-Official.apk`
+but the manifest's `apkUrl` is `https://hushtv.xyz/hushtv-official.apk`
+(lowercase). nginx served the old binary at the lowercase name —
+clients pulling the manifest were redirected to a stale APK. Fixed
+the script to upload directly to the lowercase path and mirror to
+the CamelCase path so legacy bookmarks / docs still work. First
+official promote in the v1.44 era exposed this; future runs will
+upload to the right place automatically.
+
+### Live URLs
+
+| Channel  | Manifest                                  | APK                                      | Version |
+|----------|-------------------------------------------|------------------------------------------|---------|
+| Dev      | `https://hushtv.xyz/version.json`         | `https://hushtv.xyz/HushTV.apk`          | 1.44.37 |
+| Official | `https://hushtv.xyz/version-official.json`| `https://hushtv.xyz/hushtv-official.apk` | 1.44.37 |
+
+Both are tagged: `v1.44.37-dev`, `v1.44.37-official`.
+
+### Aggregated official-channel changelog (1.43.99 → 1.44.37)
+
+(This is the user-facing changelog shown in `version-official.json`.)
+
+1. Cloud DVR is here. Record live channels, see them in My
+   Recordings (TV + Mobile), 5-hour quota per profile. Recordings
+   play back instantly on tap with a real seek bar.
+2. Sports & PPV section. Live game cards with team logos, scores
+   and broadcast times pulled from TheSportsDB, plus an EPG-driven
+   channel picker that finds which Xtream channel is airing each
+   game.
+3. Long-press OK on any live channel opens a polished actions
+   sheet — Add to Favorites, Set Reminder, Record Now in one
+   place. Mirrored on TV and Mobile.
+4. Recording is automatically blocked on channels without a
+   program guide so you never start a runaway capture by accident.
+5. Movie audio works for DTS / DTS-HD / AC3 / EAC3 / TrueHD /
+   FLAC / Opus / Vorbis tracks via FFmpeg software fallback —
+   fixes the long tail of movies that previously played silently
+   on Android TV / NVIDIA SHIELD.
+6. Right-edge bright vertical line on dark scenes is gone (player
+   surface now goes through GPU compositing).
+7. Lite Mode toggle in Settings strips heavy animations for older
+   / lower-end TV boxes.
+8. App-wide BACK navigation now correctly returns to the previous
+   tab instead of resetting to Home.
+9. Many smaller polish fixes: faster EPG loading, more reliable
+   focus on side rails, smoother poster grids, Continue Watching
+   surfaces as default first section when relevant.
+
+---
+
+## v1.44.37 (DEV ONLY) — DTS audio support via Jellyfin Media3 FFmpeg decoder — 2026-05-07
 
 User report after v1.44.36: *"Done — still no audio"* (after playing
 Blue Ruin per the telemetry-capture instructions).

@@ -1,0 +1,32 @@
+<variant
+    name="officialDebug"
+    package="com.hushtv.tv"
+    minSdkVersion="24"
+    targetSdkVersion="34"
+    mergedManifest="build/intermediates/merged_manifest/officialDebug/processOfficialDebugMainManifest/AndroidManifest.xml"
+    manifestMergeReport="build/outputs/logs/manifest-merger-official-debug-report.txt"
+    proguardFiles="build/intermediates/default_proguard_files/global/proguard-android.txt-8.5.2"
+    partialResultsDir="build/intermediates/lint_vital_partial_results/officialDebug/lintVitalAnalyzeOfficialDebug/out">
+  <buildFeatures
+      coreLibraryDesugaring="true"
+      namespacing="REQUIRED"/>
+  <sourceProviders>
+    <sourceProvider
+        manifests="src/main/AndroidManifest.xml"
+        javaDirectories="src/main/java:src/main/kotlin:src/official/java:src/debug/java:src/officialDebug/java:src/official/kotlin:src/debug/kotlin:src/officialDebug/kotlin"
+        resDirectories="src/main/res:src/official/res:src/debug/res:src/officialDebug/res"
+        assetsDirectories="src/main/assets:src/official/assets:src/debug/assets:src/officialDebug/assets"/>
+  </sourceProviders>
+  <testSourceProviders>
+  </testSourceProviders>
+  <testFixturesSourceProviders>
+  </testFixturesSourceProviders>
+  <artifact
+      classOutputs="build/intermediates/javac/officialDebug/compileOfficialDebugJavaWithJavac/classes:build/tmp/kotlin-classes/officialDebug:build/kotlinToolingMetadata:build/intermediates/compile_and_runtime_not_namespaced_r_class_jar/officialDebug/processOfficialDebugResources/R.jar"
+      type="MAIN"
+      applicationId="com.hushtv.tv.debug"
+      generatedSourceFolders="build/generated/ap_generated_sources/officialDebug/out:build/generated/source/buildConfig/official/debug"
+      generatedResourceFolders="build/generated/res/resValues/official/debug"
+      desugaredMethodsFiles="/root/.gradle/caches/transforms-4/bad93f335c54195a07ba524a59bfbad3/transformed/desugar_jdk_libs_configuration-2.1.2-desugar-lint.txt:/root/.gradle/caches/transforms-4/fc79fea1eab299389bb6ccc9e1ed2645/transformed/D8BackportedDesugaredMethods.txt">
+  </artifact>
+</variant>
