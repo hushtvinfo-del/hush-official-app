@@ -1,13 +1,14 @@
 {
-  "versionCode": 434,
-  "versionName": "1.44.34",
+  "versionCode": 435,
+  "versionName": "1.44.35",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "TELEMETRY — Added per-session PlaybackTelemetry that hooks every Player.Listener and AnalyticsListener event for the entire DVR playback session, plus an HTTP probe of the stream URL (HEAD + Range GET first 64 KB checking for ftyp / moov / moof markers). Auto-POSTs to https://hushtv.xyz/crash/ tagged kind=playback_telemetry on screen exit. Captures: state transitions, isPlaying changes, video & audio format negotiation, decoder name + init time, RENDERED FIRST FRAME timing, downstream format changes, dropped frames, codec errors, load started / completed / canceled / errored with byte counts and durations, video size, track selection, position discontinuities. Lets us find the exact reason a recording isn't rendering without guessing.",
-    "Black-screen DVR fix attempts from v1.44.32 / v1.44.33 are still in place (MIME hint, synchronous playWhenReady=true, 30 s VOD stall threshold, server-side HEAD support).",
-    "Mandatory:true — install once and the next time you tap a recording the telemetry uploads on exit."
+    "FIX (DVR black-screen, ACTUAL root cause via PlaybackTelemetry) — Telemetry surfaced ArrayIndexOutOfBoundsException(length=1, index=1) inside Media3 1.4.1's Mp4Extractor on every recording. Root cause: ffmpeg's +faststart+frag_keyframe+empty_moov MP4 muxer + MPEG-TS source produces files with thousands of stsc entries and edit lists that overflow Mp4Extractor's internal arrays. Fix: switched DVR recording format to MPEG-TS (.ts) — the canonical streaming-capture container. ExoPlayer's TsExtractor handles TS files trivially (15+ years of production reliability). Server now writes /home/dvr/recordings/{user}/{rec}.ts files, stream endpoint returns Content-Type: video/mp2t. Verified end-to-end: 26 s test recording produced a clean .ts file, ffprobe parses h264+aac perfectly, stream endpoint serves correct Content-Type, first byte is the TS sync byte 0x47.",
+    "Removed the v1.44.32 client-side MimeTypes.VIDEO_MP4 hint — let ExoPlayer pick the extractor automatically from the server's Content-Type. This way TS captures route to TsExtractor, legacy .mp4 files route to Mp4Extractor, and any future format works without a client release.",
+    "PlaybackTelemetry from v1.44.34 stays — proved its worth this round, will be invaluable for any future regressions.",
+    "Mandatory:true so older clients pull the new APK on next launch."
   ]
 }

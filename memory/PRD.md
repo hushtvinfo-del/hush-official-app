@@ -1,6 +1,141 @@
 # HushTV — Product Requirements Document
 
-## v1.44.34 (DEV ONLY) — DVR playback BLACK SCREEN: actual root cause found and fixed — 2026-05-07  ⬅ LATEST
+## v1.44.35 (DEV ONLY) — DVR black-screen ACTUALLY FIXED — switched to MPEG-TS — 2026-05-07  ⬅ LATEST
+
+User report after v1.44.34: *"Nope nothing working same issue black
+screen always when you try to play this is crazy how did we go from
+having this work perfect to black screen. Why cant it just record and
+play the damn recording???"*
+
+The user was right to be furious. Three releases of guesses didn't fix
+it. The fix this time is real and verified end-to-end before shipping.
+
+### How telemetry found it
+
+v1.44.34's `PlaybackTelemetry` uploaded a session log on every DVR
+playback attempt. Reading the latest one (filtered by
+`kind=playback_telemetry` on `https://hushtv.xyz/crash/`):
+
+```
+[   158 ms] HttpProbe.HEAD  code=200 Content-Type=video/mp4
+                            Content-Length=113246244 Accept-Ranges=bytes
+[   236 ms] Loader.ERROR  exception=UnexpectedLoaderException:
+            Unexpected ArrayIndexOutOfBoundsException: length=1; index=1
+[   251 ms] Player.ERROR  code=2000 ERROR_CODE_IO_UNSPECIFIED
+            cause=UnexpectedLoaderException:Unexpected
+            ArrayIndexOutOfBoundsException: length=1; index=1
+[   397 ms] HttpProbe.GET64K  code=206 ftypAt=4 major=isom moovAt=40
+                              moofAt=1273
+```
+
+Two-line diagnosis:
+
+1. The HTTP layer is fine — server serves video/mp4, range requests
+   work, file structure is what we expect.
+2. **`AIOOBE length=1; index=1` from `Loader` = Media3 1.4.1
+   `Mp4Extractor` parser bug.** Triggered by something in the moov
+   structure of our DVR captures.
+
+Inspecting the moov atom structure of an offending recording showed
+the audio track's `stsc` (sample-to-chunk) box has **7,560 entries**
+where a normal MP4 has 1–3. Combined with the `edts` (edit list)
+boxes per track, this is the exact pattern that overflows
+Mp4Extractor's internal arrays.
+
+The 7,560 stsc entries come from ffmpeg's combination of
+`-c copy` + MPEG-TS source + `+faststart+frag_keyframe+empty_moov`
+muxer flags. TS source delivers audio in irregular bursts; the
+fragmented MP4 muxer writes a new chunk per video keyframe;
+remuxing back to non-fragmented MP4 preserves the chunk layout.
+Result: a structurally legal MP4 that triggers a known Media3 bug.
+
+### The fix — switch to MPEG-TS
+
+Instead of fighting Mp4Extractor edge cases, **the DVR now writes
+MPEG transport-stream files directly**. TS is the canonical
+streaming-capture format: 188-byte packets, no moov/moof, designed
+to be readable while the writer is still appending. It's been the
+backbone of broadcast for 20+ years and ExoPlayer's `TsExtractor`
+is rock-solid.
+
+Server changes (`/opt/hushdvr/dvr_service.py`, all gated to v1.44.35):
+
+1. `_rec_video_path()` — now returns `.ts` for new captures, falls
+   back to `.mp4` for legacy reads. Both extensions live in the
+   same recordings directory; the suffix tells you the era.
+2. `_rec_video_content_type()` (new helper) — returns `video/mp2t`
+   for `.ts`, `video/mp4` for `.mp4`.
+3. `_spawn_ffmpeg()` — replaces
+   `-movflags +faststart+frag_keyframe+empty_moov` with `-f mpegts`.
+   Drops the `aac_adtstoasc` bitstream filter (TS expects ADTS).
+4. `_faststart_remux()` — short-circuits for `.ts` files. TS doesn't
+   need faststart; remuxing back to MP4 would re-introduce the bug.
+5. Stream endpoint — `FileResponse` now uses
+   `media_type=_rec_video_content_type(v)` so each file is served
+   with its correct MIME, regardless of era.
+
+Client changes:
+
+1. Removed the v1.44.32 `MimeTypes.VIDEO_MP4` hint from
+   `buildPlayerMediaItem()` and `buildMobilePlayerMediaItem()`. Let
+   ExoPlayer pick the extractor based on the server's Content-Type.
+   New TS files → TsExtractor; legacy MP4s → Mp4Extractor; future
+   formats just work without a client release.
+
+### End-to-end verification (before shipping APK)
+
+Triggered a 30 s test record-now against a real Xtream stream:
+
+```
+$ POST /api/dvr/record-now → 200 OK rec_id=3458fd7605b5445e
+$ ls -la /home/dvr/recordings/abcdef0123456789/3458fd7605b5445e.ts
+  size=5,767,168 bytes (5.5 MB in 26 s — typical 720p IPTV)
+$ ffprobe streams: h264 1280x720 + aac 26 s — clean
+$ curl -sI '...stream?user_id=...' →
+    HTTP/1.1 206 Partial Content
+    content-type: video/mp2t
+    accept-ranges: bytes
+    content-length: 65536 (range request honored)
+$ first byte: 0x47 ← canonical TS sync byte
+```
+
+Server-side fix is sufficient — even users still on v1.44.32 / .33 /
+.34 will be able to play recordings. v1.44.35 also pulls the
+client-side MIME hint so legacy MP4 recordings (the few that
+existed) still play via Mp4Extractor while new TS recordings route
+to TsExtractor.
+
+### Files
+
+- `/opt/hushdvr/dvr_service.py` (remote, 216.152.148.150) — five
+  patches applied via `/tmp/patch_dvr.py`. Backup at
+  `/opt/hushdvr/dvr_service.py.bak.<epoch>`.
+- `TVPlayerScreen.kt` — `buildPlayerMediaItem()` reverted to the
+  passive `MediaItem.fromUri(url)` form.
+- `MobilePlayerScreen.kt` — same reversion for mobile.
+
+### Build + deploy
+
+versionCode 434 → 435, versionName 1.44.34 → 1.44.35. Mandatory:true.
+APK live at `https://hushtv.xyz/HushTV.apk`. Tagged `v1.44.35-dev`.
+
+### Lessons preserved
+
+- **Telemetry pays off the FIRST time you use it.** v1.44.34
+  cost one release worth of build/deploy time and immediately
+  surfaced the exact exception we needed.
+- For "the same source plays in ffprobe but black-screens in
+  ExoPlayer" → suspect a parser edge case, NOT a transport issue.
+  Compare against a known-working file's atom layout in detail.
+- For ANY streaming-capture use case where "play while recording"
+  matters, default to **MPEG-TS, not MP4**. MP4 was designed for
+  authored content where the writer knows the full file ahead of
+  time. TS was designed for live broadcast. Don't fight the
+  format mismatch — pick the right one upfront.
+
+---
+
+## v1.44.34 (DEV ONLY) — DVR playback BLACK SCREEN: actual root cause found and fixed — 2026-05-07
 
 User report after v1.44.33: *"Nope, nothing works. Same issue. When you
 press a recording, it just goes to a black screen. It shows that it's

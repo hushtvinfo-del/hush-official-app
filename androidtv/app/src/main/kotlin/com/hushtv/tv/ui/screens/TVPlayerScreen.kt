@@ -1666,32 +1666,31 @@ private fun formatTime(ms: Long): String {
 /**
  * Build the initial MediaItem for the player.
  *
- * Why this helper exists (v1.44.32 — fix DVR playback black screen)
- * ──────────────────────────────────────────────────────────────────
- * Cloud-DVR recording stream URLs look like
- *   http://216.152.148.150/api/dvr/recordings/{rec_id}/stream?user_id=…
+ * v1.44.35 — DVR recordings are now MPEG-TS captures (not MP4)
  *
- * They have NO file extension and the DVR server intentionally rejects
- * HEAD requests (returns 405 Method Not Allowed) — only GETs with Range
- * are supported. ExoPlayer's DefaultMediaSourceFactory uses the URL's
- * path tail to pick an extractor; without an extension AND without a
- * usable HEAD response, the factory falls back to a generic extractor
- * pipeline that — for some MP4 builds produced by ffmpeg with
- * `+empty_moov+frag_keyframe+faststart` — never reaches a renderable
- * state and the user sees a black screen even though bytes are flowing.
+ * The DVR stream URL `/api/dvr/recordings/{rec_id}/stream?user_id=…`
+ * has no file extension. The server returns the right Content-Type
+ * (`video/mp2t` for new TS captures, `video/mp4` for legacy
+ * faststart-MP4s) on every Range GET. ExoPlayer's
+ * DefaultMediaSourceFactory uses the response's Content-Type to
+ * pick the right extractor — TsExtractor for video/mp2t,
+ * Mp4Extractor for video/mp4. We ALSO 405-rejected HEAD historically
+ * so older clients fell back to a generic pipeline; the server now
+ * answers HEAD with the same Content-Type so this works on any
+ * Media3 release that probes HEAD-first.
  *
- * Setting an explicit MIME type tells ExoPlayer "this is video/mp4,
- * skip the sniff" and the Mp4Extractor wires up immediately. Live
- * Xtream URLs (which DO have `.ts` / `.m3u8` extensions) keep the
- * default fromUri path so HLS / progressive routing isn't disturbed.
+ * Why we DON'T set MimeType client-side anymore:
+ * the previous v1.44.32 code hard-coded `MimeTypes.VIDEO_MP4` which
+ * worked while DVR captures were MP4 — but mismatched once the
+ * server switched to TS. Letting the server decide via Content-Type
+ * is the canonical pattern and keeps extractor selection automatic
+ * if we ever introduce a third format (HLS/dash/etc).
+ *
+ * For non-DVR URLs (live Xtream `.ts`, VOD `.mp4`, HLS `.m3u8`)
+ * the file extension on the URL drives extractor pick — same as
+ * before this helper existed.
  */
 private fun buildPlayerMediaItem(url: String): MediaItem {
-    if (com.hushtv.tv.data.DvrApi.parseRecordingUrl(url) != null) {
-        return MediaItem.Builder()
-            .setUri(url)
-            .setMimeType(androidx.media3.common.MimeTypes.VIDEO_MP4)
-            .build()
-    }
     return MediaItem.fromUri(url)
 }
 

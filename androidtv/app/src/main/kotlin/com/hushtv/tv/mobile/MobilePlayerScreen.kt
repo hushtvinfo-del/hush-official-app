@@ -839,19 +839,14 @@ private fun formatMs(ms: Long): String {
 }
 
 /**
- * Build the initial MediaItem for the mobile player. Mirrors
- * `buildPlayerMediaItem` in the TV player — explicit MIME type for
- * Cloud-DVR recording URLs (no extension + server rejects HEAD), default
- * `fromUri` for everything else. Without the hint, ExoPlayer sometimes
- * fails to wire up the Mp4Extractor and leaves the surface black even
- * though it's downloading bytes from the recording. v1.44.32 fix.
+ * Build the initial MediaItem for the mobile player.
+ *
+ * v1.44.35 — DVR recordings are now MPEG-TS, server picks
+ * the right Content-Type per file. We let ExoPlayer's
+ * extractor selection happen from the response Content-Type
+ * rather than hard-coding a MIME hint client-side. See the
+ * TVPlayerScreen helper for full rationale.
  */
 private fun buildMobilePlayerMediaItem(url: String): MediaItem {
-    if (com.hushtv.tv.data.DvrApi.parseRecordingUrl(url) != null) {
-        return MediaItem.Builder()
-            .setUri(url)
-            .setMimeType(androidx.media3.common.MimeTypes.VIDEO_MP4)
-            .build()
-    }
     return MediaItem.fromUri(url)
 }
