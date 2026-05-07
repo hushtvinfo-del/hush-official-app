@@ -1269,6 +1269,19 @@ library {
 }
 library {
   maven_library {
+    groupId: "org.jellyfin.media3"
+    artifactId: "media3-ffmpeg-decoder"
+    version: "1.3.1+2"
+  }
+  digests {
+    sha256: "\036\tK\353}\373p\234&/[|\305\261\370\242\357\375\034d\025Dk\022\004\363(f\257\236!n"
+  }
+  repo_index {
+    value: 1
+  }
+}
+library {
+  maven_library {
     groupId: "com.squareup.okhttp3"
     artifactId: "okhttp"
     version: "4.12.0"
@@ -2424,56 +2437,61 @@ library_dependencies {
 }
 library_dependencies {
   library_index: 112
-  library_dep_index: 113
-  library_dep_index: 2
+  library_dep_index: 104
+  library_dep_index: 96
 }
 library_dependencies {
   library_index: 113
   library_dep_index: 114
-}
-library_dependencies {
-  library_index: 114
-  library_dep_index: 0
-}
-library_dependencies {
-  library_index: 115
-  library_dep_index: 113
   library_dep_index: 2
 }
 library_dependencies {
-  library_index: 116
+  library_index: 114
   library_dep_index: 115
-  library_dep_index: 117
+}
+library_dependencies {
+  library_index: 115
+  library_dep_index: 0
+}
+library_dependencies {
+  library_index: 116
+  library_dep_index: 114
   library_dep_index: 2
 }
 library_dependencies {
   library_index: 117
-  library_dep_index: 0
+  library_dep_index: 116
+  library_dep_index: 118
+  library_dep_index: 2
 }
 library_dependencies {
   library_index: 118
-  library_dep_index: 119
-  library_dep_index: 125
   library_dep_index: 0
 }
 library_dependencies {
   library_index: 119
-  library_dep_index: 49
   library_dep_index: 120
-  library_dep_index: 121
-  library_dep_index: 75
+  library_dep_index: 126
   library_dep_index: 0
 }
 library_dependencies {
   library_index: 120
+  library_dep_index: 49
+  library_dep_index: 121
+  library_dep_index: 122
+  library_dep_index: 75
+  library_dep_index: 0
+}
+library_dependencies {
+  library_index: 121
   library_dep_index: 10
   library_dep_index: 33
   library_dep_index: 2
 }
 library_dependencies {
-  library_index: 121
+  library_index: 122
   library_dep_index: 14
-  library_dep_index: 122
+  library_dep_index: 123
   library_dep_index: 16
   library_dep_index: 49
   library_dep_index: 97
@@ -2481,39 +2499,39 @@ library_dependencies {
   library_dep_index: 24
   library_dep_index: 33
   library_dep_index: 0
-  library_dep_index: 112
   library_dep_index: 113
-}
-library_dependencies {
-  library_index: 122
-  library_dep_index: 14
-  library_dep_index: 16
-  library_dep_index: 19
-  library_dep_index: 123
-  library_dep_index: 124
+  library_dep_index: 114
 }
 library_dependencies {
   library_index: 123
   library_dep_index: 14
+  library_dep_index: 16
+  library_dep_index: 19
+  library_dep_index: 124
+  library_dep_index: 125
+}
+library_dependencies {
+  library_index: 124
+  library_dep_index: 14
   library_dep_index: 19
   library_dep_index: 16
 }
 library_dependencies {
-  library_index: 124
-  library_dep_index: 123
+  library_index: 125
+  library_dep_index: 124
   library_dep_index: 23
   library_dep_index: 16
 }
 library_dependencies {
-  library_index: 125
-  library_dep_index: 121
+  library_index: 126
+  library_dep_index: 122
   library_dep_index: 0
 }
 library_dependencies {
-  library_index: 126
+  library_index: 127
   library_dep_index: 49
-  library_dep_index: 127
-  library_dep_index: 121
+  library_dep_index: 128
+  library_dep_index: 122
   library_dep_index: 0
 }
 module_dependencies {
@@ -2535,10 +2553,11 @@ module_dependencies {
   dependency_index: 109
   dependency_index: 107
   dependency_index: 112
-  dependency_index: 115
+  dependency_index: 113
   dependency_index: 116
-  dependency_index: 118
-  dependency_index: 126
+  dependency_index: 117
+  dependency_index: 119
+  dependency_index: 127
   dependency_index: 33
 }
 repositories {

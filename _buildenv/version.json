@@ -1,15 +1,12 @@
 {
-  "versionCode": 436,
-  "versionName": "1.44.36",
+  "versionCode": 437,
+  "versionName": "1.44.37",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX (right-edge vertical line glitch on dark scenes) — Replaced PlayerView's default SurfaceView surface with a TextureView surface across both TV and Mobile players. This eliminates the 1-2 px bright vertical line on the right edge of dark frames (HW overlay chroma upsampling overshoot, ExoPlayer #8394). New res/layout/player_view_texture.xml inflated by both AndroidView wrappers.",
-    "FIX (record without EPG would silently capture for 1 h) — Long-press OK Record action and the in-player REC chip now both refuse recording on channels with no EPG, with a clear toast: \"Can't record \\\"X\\\" — this channel has no program guide. Recording is disabled until EPG is available.\" Applied on TV and Mobile.",
-    "DVR quota lowered from 20 h to 5 h per user. Server: DEFAULT_QUOTA_S 72_000 → 18_000, systemd unit Environment override matched. Skip-reason / quota-exceeded toast text updated.",
-    "Telemetry — PlaybackTelemetry now also flushes a report when video starts but no audio format / decoder ever initializes (e.g. movie like Blue Ruin reportedly has no audio). Lets us see exactly which audio format the file carries and whether the decoder rejected it, no guessing.",
-    "Mandatory:true so v1.44.35 devices upgrade automatically."
+    "FIX (no audio on Blue Ruin / DTS movies) — Telemetry caught it: audio track is audio/vnd.dts which Android (including NVIDIA SHIELD) has no native decoder for due to licensing. Added the Jellyfin-prebuilt Media3 FFmpeg audio decoder extension which provides software DTS, DTS-HD, AC3, EAC3, TrueHD, FLAC, Opus, Vorbis, ALAC, G711, AMR decoding. Same package + class names as Google's official extension so DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON picks it up via reflection — zero code changes beyond the gradle dep. APK grows ~6 MB (native libs for arm64/armv7/x86/x86_64).",
+    "Mandatory:true so v1.44.36 devices upgrade automatically and get DTS audio."
   ]
 }

@@ -1,6 +1,93 @@
 # HushTV — Product Requirements Document
 
-## v1.44.36 (DEV ONLY) — EPG-gate recording + 5h quota + right-edge glitch fix + audio telemetry — 2026-05-07  ⬅ LATEST
+## v1.44.37 (DEV ONLY) — DTS audio support via Jellyfin Media3 FFmpeg decoder — 2026-05-07  ⬅ LATEST
+
+User report after v1.44.36: *"Done — still no audio"* (after playing
+Blue Ruin per the telemetry-capture instructions).
+
+### Telemetry told us EXACTLY what was wrong
+
+`https://hushtv.xyz/crash/?since=24h&kind=playback_telemetry` had a
+fresh report from the user's NVIDIA SHIELD playing Blue Ruin:
+
+```
+[6090 ms] Player.track  type=video  id=1  codec=avc1.640029  mime=video/avc
+                        1920x808  selected=true   supported=true
+[6090 ms] Player.track  type=audio  id=2  codec=null  mime=audio/vnd.dts
+                        selected=false  supported=FALSE
+```
+
+Audio track is **DTS**. Android (including NVIDIA SHIELD) ships with
+**no native DTS decoder** — DTS is a paid-license codec and AOSP
+doesn't bundle it. ExoPlayer's `MediaCodecList.findDecoderForFormat()`
+returned no match, the track was marked unsupported, video played
+silently. The exact-bytes-of-evidence telemetry shipped in v1.44.34
+paid for itself again in one round.
+
+### The fix — Jellyfin's prebuilt Media3 FFmpeg audio decoder
+
+Google's official Media3 FFmpeg extension is documented but not
+distributed as a Maven artifact — they require you to build it from
+source and link a custom FFmpeg, which has GPL licensing
+implications. Jellyfin's media app team has long maintained a
+prebuilt mirror at `org.jellyfin.media3:media3-ffmpeg-decoder`,
+published to Maven Central, GPL-licensed (acceptable for our use),
+with the SAME package and class names (`androidx.media3.decoder.ffmpeg.*`)
+as Google's so `DefaultRenderersFactory` picks it up via reflection
+when `EXTENSION_RENDERER_MODE_ON` is set.
+
+Decoders provided:
+- DTS, DTS-HD (`audio/vnd.dts`, `audio/vnd.dts.hd`) ← Blue Ruin's case
+- AC3, EAC3, EAC3-JOC, TrueHD (Dolby family — not on Pixel etc.)
+- FLAC, ALAC (lossless)
+- Vorbis, Opus
+- G.711 (mu-law / a-law)
+- AMR-WB / -NB
+
+Native libraries cover arm64-v8a, armeabi-v7a, x86, x86_64 — all
+relevant Android TV / mobile targets. APK gain: ~6 MB (mostly the
+.so files in the AAR).
+
+### Files
+
+- `app/build.gradle.kts`:
+  - Added `implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.3.1+2")`
+    (closest to our `media3:1.4.1` — Media3 maintains binary
+    compatibility for renderer plugins across minor versions).
+  - Enabled `isCoreLibraryDesugaringEnabled = true` (required by the
+    AAR — uses `java.time` / NIO File APIs absent on pre-API 26).
+  - Added `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")`.
+
+NO Kotlin code changes needed — `DefaultRenderersFactory` already
+runs in `EXTENSION_RENDERER_MODE_ON` (see `PlayerBuilder.kt`),
+which calls `Class.forName("androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer")`
+and instantiates it as a fallback audio renderer. With the AAR on
+the classpath, that reflection succeeds; for tracks where the
+hardware MediaCodec decoder is missing or fails, the FFmpeg
+software decoder takes over transparently.
+
+### Build + deploy
+
+versionCode 436 → 437, versionName 1.44.36 → 1.44.37. Mandatory:true.
+APK live at `https://hushtv.xyz/HushTV.apk` (~21 → ~27 MB). Tagged
+`v1.44.37-dev`.
+
+### Lessons preserved
+
+- Telemetry pays off again. v1.44.36 just observed; v1.44.37
+  resolves with one targeted dependency add. No guessing, no
+  iteration cycles wasted on wrong fixes.
+- For codec-licensing-driven gaps in AOSP (DTS, AC3, certain
+  HEVC variants), the right answer is almost always the Jellyfin
+  prebuilt — it's GPL-clean, Maven-distributed, and updated
+  alongside Media3 itself.
+- `EXTENSION_RENDERER_MODE_ON` is sufficient for "fall back to
+  software decoder when no hardware decoder exists". `_PREFER`
+  would force software for everything (bad for video / battery).
+
+---
+
+## v1.44.36 (DEV ONLY) — EPG-gate recording + 5h quota + right-edge glitch fix + audio telemetry — 2026-05-07
 
 User report after v1.44.35 ("Ok works now"): four follow-up items.
 

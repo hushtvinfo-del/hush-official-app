@@ -11,8 +11,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 436
-        versionName = "1.44.36"
+        versionCode = 437
+        versionName = "1.44.37"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -111,6 +111,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // v1.44.37 — required by org.jellyfin.media3:media3-ffmpeg-decoder
+        // which uses java.time / NIO File APIs that aren't available below
+        // API 26. Desugaring backports them so we keep minSdk=24.
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -229,6 +233,17 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.media3:media3-session:1.4.1")
+    // Jellyfin's prebuilt Media3 FFmpeg audio decoder extension —
+    // adds DTS, AC3, EAC3, TrueHD, FLAC, OGG, OPUS, etc. software
+    // decoding so movies muxed with codecs the device's MediaCodec
+    // doesn't support (e.g. NVIDIA SHIELD has no DTS decoder, hits
+    // every Blue Ruin-class .mkv) still produce audio. ~6 MB APK
+    // bloat (arm64 + armv7 native libs) but the alternative is
+    // server-side transcode which is FAR more expensive.
+    // The artifact is built against Media3 1.3.1 but is binary-
+    // compatible with 1.4.x — Media3 maintains stable interfaces
+    // across minor versions for renderer plugins. v1.44.37.
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.3.1+2")
 
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -241,4 +256,7 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // Core library desugaring runtime — see compileOptions above.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
 }
