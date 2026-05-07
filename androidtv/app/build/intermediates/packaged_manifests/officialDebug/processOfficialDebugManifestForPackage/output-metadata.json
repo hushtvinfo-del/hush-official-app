@@ -4,15 +4,15 @@
     "type": "PACKAGED_MANIFESTS",
     "kind": "Directory"
   },
-  "applicationId": "com.hushtv.tv.debug",
+  "applicationId": "com.hushtv.tv.official.debug",
   "variantName": "officialDebug",
   "elements": [
     {
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 439,
-      "versionName": "1.44.39-debug",
+      "versionCode": 441,
+      "versionName": "1.44.41-debug",
       "outputFile": "AndroidManifest.xml"
     }
   ],

@@ -1,12 +1,12 @@
 {
-  "versionCode": 439,
-  "versionName": "1.44.39",
+  "versionCode": 441,
+  "versionName": "1.44.41",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "official",
   "changelog": [
-    "Official is now installable side-by-side with the Dev channel — Dev gets a distinct package id so the two icons coexist without replacing each other on the home screen. Official channel keeps its existing package id (com.hushtv.tv) so your playlists, favorites, and watch progress are preserved through this upgrade.",
-    "All v1.44.37 + v1.44.38 fixes still in place — DTS / AC3 / EAC3 audio for previously-silent movies, Cloud DVR with 5-hour quota, no-EPG record block, right-edge dark-scene line glitch fix, long-press OK channel actions, and distinct launcher labels for Dev vs Official."
+    "First-run \"Choose your layout\" screen is gone — the app now opens directly into the canonical Left Sidebar layout for Live TV / Movies / Series. No setup steps, no friction.",
+    "Carries over all v1.44.40 fixes — Dev and Official can install side-by-side for testing, distinct app icons, distinct labels (\"HushTV Official\" / \"HushTV Dev\")."
   ]
 }

@@ -4,7 +4,7 @@
     "type": "COMPATIBLE_SCREEN_MANIFEST",
     "kind": "Directory"
   },
-  "applicationId": "com.hushtv.tv.debug",
+  "applicationId": "com.hushtv.tv.official.debug",
   "variantName": "officialDebug",
   "elements": []
 }

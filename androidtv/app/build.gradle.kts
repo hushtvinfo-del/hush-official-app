@@ -11,8 +11,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 439
-        versionName = "1.44.39"
+        versionCode = 441
+        versionName = "1.44.41"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -103,12 +103,26 @@ android {
         }
         create("official") {
             dimension = "channel"
-            // v1.44.39: official KEEPS the legacy applicationId
-            // (no flavor suffix) so existing production users upgrade
-            // cleanly without losing playlists, favorites, or watch
-            // progress. Result on disk:
-            //   • official release  → com.hushtv.tv
-            //   • official debug    → com.hushtv.tv.debug
+            // v1.44.40: official ALSO gets a distinct applicationId
+            // suffix. We tried keeping it on the legacy id in v1.44.39
+            // to preserve in-place upgrades, but in practice users
+            // had legacy installs (signed with older keystores or
+            // released before applicationIdSuffix unification) that
+            // refused to accept v1.44.39-official as an "update" —
+            // Android threw "App not installed" because the signing
+            // cert didn't line up. Branching official off to its own
+            // applicationId means: regardless of what legacy app the
+            // device has at com.hushtv.tv*, the new official APK
+            // installs as a brand-new app and the user gets a guaranteed
+            // working side-by-side configuration.
+            //
+            //   • official release  → com.hushtv.tv.official
+            //   • official debug    → com.hushtv.tv.official.debug
+            //
+            // Cost: one-time fresh install (lose playlist / favorites
+            // / watch progress on first launch). Worth it for the
+            // unblocked testing flow.
+            applicationIdSuffix = ".official"
             buildConfigField(
                 "String",
                 "UPDATE_MANIFEST_URL",

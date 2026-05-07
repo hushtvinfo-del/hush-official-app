@@ -1,13 +1,13 @@
 {
-  "versionCode": 439,
-  "versionName": "1.44.39",
+  "versionCode": 441,
+  "versionName": "1.44.41",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "Dev and Official are now SEPARATE app installs that can coexist on the same device. Dev installs as 'HushTV Dev' (com.hushtv.tv.dev), official installs as 'HushTV Official' (com.hushtv.tv). Side-by-side icons, side-by-side data, no more replacing one with the other.",
-    "ONE-TIME INSTALL NOTE — When upgrading from a previous Dev install, Android will show this as a NEW app install (not an update) because the package id changed. Your old 'HushTV' icon will stick around as an orphan; uninstall it once the new 'HushTV Dev' is on your launcher and you've re-added your playlist. Official-channel users are unaffected (their package id didn't change).",
-    "Mandatory:true so devices auto-prompt to install the new dev APK."
+    "First-run \"Choose your layout\" modal is gone. Both Dev and Official now default to the Left Sidebar layout immediately on first launch — no chooser, no friction.",
+    "DEV channel keeps the Settings → Layout → Change Layout option so we can A/B between Top Bar and Left Sidebar for testing. OFFICIAL channel hides this option entirely so end users only ever see the canonical sidebar UI.",
+    "Mandatory:true so v1.44.40 dev installs upgrade automatically."
   ]
 }

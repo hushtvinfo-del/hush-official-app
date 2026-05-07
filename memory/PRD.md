@@ -1,6 +1,169 @@
 # HushTV — Product Requirements Document
 
-## v1.44.39 (DEV + OFFICIAL) — Side-by-side installs via distinct applicationIds — 2026-05-07  ⬅ LATEST
+## v1.44.41 (DEV + OFFICIAL) — First-run layout chooser retired, Layout setting locked on official — 2026-05-07  ⬅ LATEST
+
+User asked: *"I want you to disable the screen [first-launch layout
+chooser]. Make both apps default to Left Sidebar. Always default to
+Left Sidebar, do not even show the option to switch. Only in the
+development app do I want the option to switch in the settings only.
+For the official app, they shouldn't even see this and they shouldn't
+be able to switch it in settings either."*
+
+### What landed
+
+Three layered changes, all in `LayoutPrefsStore` and one consumer:
+
+1. **First-run modal retired entirely (both flavors)**.
+   `LayoutPrefsStore.firstRunShown(ctx)` now hardcoded to return `true`,
+   so the existing `var showLayoutChooser = mutableStateOf(!firstRunShown(ctx))`
+   in `TVMainMenuScreen.kt` always initialises to `false` and the
+   modal never opens. Old self-heal logic (carried over from the
+   v1.43.84 SyncEngine regression) is gone — no longer relevant.
+
+2. **Default everywhere is Left Sidebar.**
+   `LayoutPrefsStore.mode(ctx)` short-circuits to return
+   `MODE_SIDEBAR` for any non-dev build, regardless of what's
+   persisted. Belt-and-braces: even if a user upgraded from a
+   pre-1.44 build that had `MODE_TOP` written to SharedPreferences,
+   the official APK now ignores that and always returns sidebar
+   on the very first composition.
+
+3. **Settings → Layout card hidden on official.**
+   `LayoutPrefsStore.isLayoutSwitchAllowed` is `true` only when
+   `BuildConfig.UPDATE_CHANNEL == "dev"`. The "LAYOUT" section of
+   `TVSettingsScreen.kt` is now wrapped in an `if` over that flag.
+   Defensive guard added in `LayoutPrefsStore.setMode()` too —
+   if any UI code ever tries to write a layout pref on official,
+   the call is silently dropped.
+
+### Files
+
+- `LayoutPrefsStore.kt` — channel-aware `mode()`, `setMode()`,
+  `isLayoutSwitchAllowed`; `firstRunShown()` always-true.
+- `TVSettingsScreen.kt` — Layout section wrapped in
+  `if (LayoutPrefsStore.isLayoutSwitchAllowed) { … }`.
+- No changes needed to `TVMainMenuScreen.kt` — the existing
+  `!firstRunShown()` initialiser now always evaluates false.
+- No changes to `TVBrowseScreen.kt` / `TVLiveBrowseScreen.kt` —
+  their `var showLayoutChooser` declarations are dead code (never
+  set to true anywhere) so they're harmless.
+
+### Verification
+
+`/tmp/v/official.apk` classes5.dex: confirmed
+`isLayoutSwitchAllowed` and `UPDATE_CHANNEL` symbols present, the
+flavor-aware code compiled in. Both APKs verified independently:
+
+```
+DEV:
+  applicationId   com.hushtv.tv.dev.debug
+  label           HushTV Dev
+OFFICIAL:
+  applicationId   com.hushtv.tv.official.debug
+  label           HushTV Official
+```
+
+### Build + deploy
+
+versionCode 440 → 441, versionName 1.44.40 → 1.44.41. Both flavors
+built and uploaded. Tagged `v1.44.41-dev` / `v1.44.41-official`.
+
+### Lessons preserved
+
+For "feature available in dev only", the cleanest pattern is a
+single `BuildConfig.UPDATE_CHANNEL == "dev"`-driven `val isAllowed`
+in the data layer. UI consumers just check `if (isAllowed)`; data
+mutators silently no-op if not allowed. This way the behaviour is
+flavor-correct from cold start, no race conditions, no remote
+config flag to wire up.
+
+---
+
+## v1.44.40 (DEV + OFFICIAL) — Both channels branched off the legacy applicationId — 2026-05-07
+
+User report after v1.44.39: *"It won't let me install the official app and
+the development app at the same time. When I try to install the official
+app when I already have the development app… it says 'App not installed.'
+There's something conflicting between the two."*
+
+### Re-diagnosis
+
+v1.44.39 split only the dev flavor onto its own applicationId
+(`com.hushtv.tv.dev.debug`). Official kept the legacy
+`com.hushtv.tv.debug` to preserve seamless in-place upgrades for
+existing production users — but in practice that meant the new
+official APK still tried to UPDATE whatever the user already had at
+`com.hushtv.tv.debug`, including legacy installs from before our
+build keystore was unified. When the signing certificates didn't
+line up, Android refused with the generic "App not installed" error.
+
+### Fix
+
+Branched **official** off too. Both flavors now have distinct
+applicationIds:
+
+| Flavor    | release id                 | debug id                       |
+|-----------|----------------------------|--------------------------------|
+| dev       | `com.hushtv.tv.dev`        | `com.hushtv.tv.dev.debug`      |
+| official  | `com.hushtv.tv.official`   | `com.hushtv.tv.official.debug` |
+
+Both fresh installs on any device — neither collides with the other,
+neither collides with any legacy `com.hushtv.tv*` install. The user
+can install both, see two distinct icons, switch between them
+instantly.
+
+### Verification
+
+Pulled both APKs straight from the live URLs and inspected with
+`aapt2`:
+
+```
+DEV:      com.hushtv.tv.dev.debug         (label: HushTV Dev)
+OFFICIAL: com.hushtv.tv.official.debug    (label: HushTV Official)
+
+DEV authorities:
+  com.hushtv.tv.dev.debug.fileprovider
+  com.hushtv.tv.dev.debug.androidx-startup
+
+OFFICIAL authorities:
+  com.hushtv.tv.official.debug.fileprovider
+  com.hushtv.tv.official.debug.androidx-startup
+```
+
+Zero collisions. Both APKs signed with the same debug keystore so
+side-by-side coexistence is guaranteed.
+
+### One-time disruption
+
+This is a clean break for both channels. Existing installs at
+`com.hushtv.tv.debug` are now ORPHANED — manually uninstall before
+or after pulling v1.44.40, then install the new APK. Playlists /
+favorites / watch progress will need to be re-added once. After
+that, the launcher will show "HushTV Dev" and "HushTV Official"
+as two distinct icons and they'll keep auto-updating
+independently going forward.
+
+### Build + deploy
+
+versionCode 439 → 440, versionName 1.44.39 → 1.44.40. Both flavors
+built in one Gradle invocation; APKs uploaded to both channel URLs.
+Tagged `v1.44.40-dev`, `v1.44.40-official`. Mandatory:true on both.
+
+### Lessons preserved
+
+- For "two installs of the same app coexisting on one device", BOTH
+  flavors must have distinct applicationIds. Keeping one on the
+  legacy id to ease in-place upgrades trades one disruption (fresh
+  install) for another (signing-cert mismatch on legacy installs)
+  and is rarely worth it. Branch both off cleanly the first time.
+- "App not installed" with no further detail is almost always
+  applicationId / signing-cert mismatch. Use `aapt2 dump packagename`
+  on the APK and `pm list packages -f` on the device to see which
+  package is colliding.
+
+---
+
+## v1.44.39 (DEV + OFFICIAL) — Side-by-side installs via distinct applicationIds — 2026-05-07
 
 User clarified after v1.44.38: *"I meant in the actual app install
 names I need 'HushTV Dev' and 'HushTV Official' — the actual apps

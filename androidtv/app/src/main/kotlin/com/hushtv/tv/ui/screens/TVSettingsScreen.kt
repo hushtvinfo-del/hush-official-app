@@ -129,22 +129,28 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 )
             }
 
-            // ── LAYOUT ──────────────────────────────────────────────
-            item { Spacer(Modifier.height(12.dp)) }
-            item {
-                Text(
-                    "LAYOUT",
-                    color = TextSecondary, fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
-                )
-            }
-            item {
-                SettingsCard(
-                    title = "Change Layout",
-                    subtitle = "Currently using $currentLayoutLabel — applies to Live TV, Movies, Series",
-                    icon = { Icon(Icons.Default.Dashboard, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
-                    onClick = { showLayoutChooser = true },
-                )
+            // ── LAYOUT (dev channel only — v1.44.41) ───────────────
+            // Official builds lock the layout to the canonical
+            // sidebar so end users never see this section. Dev
+            // builds keep the toggle so we can A/B test future
+            // layout work without releasing.
+            if (LayoutPrefsStore.isLayoutSwitchAllowed) {
+                item { Spacer(Modifier.height(12.dp)) }
+                item {
+                    Text(
+                        "LAYOUT",
+                        color = TextSecondary, fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+                    )
+                }
+                item {
+                    SettingsCard(
+                        title = "Change Layout",
+                        subtitle = "Currently using $currentLayoutLabel — applies to Live TV, Movies, Series",
+                        icon = { Icon(Icons.Default.Dashboard, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                        onClick = { showLayoutChooser = true },
+                    )
+                }
             }
 
             // ── MY CONTENT ──────────────────────────────────────────

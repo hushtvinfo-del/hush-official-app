@@ -24,7 +24,7 @@
   <artifact
       classOutputs="build/intermediates/javac/officialDebug/compileOfficialDebugJavaWithJavac/classes:build/tmp/kotlin-classes/officialDebug:build/kotlinToolingMetadata:build/intermediates/compile_and_runtime_not_namespaced_r_class_jar/officialDebug/processOfficialDebugResources/R.jar"
       type="MAIN"
-      applicationId="com.hushtv.tv.debug"
+      applicationId="com.hushtv.tv.official.debug"
       generatedSourceFolders="build/generated/ap_generated_sources/officialDebug/out:build/generated/source/buildConfig/official/debug"
       generatedResourceFolders="build/generated/res/resValues/official/debug"
       desugaredMethodsFiles="/root/.gradle/caches/transforms-4/bad93f335c54195a07ba524a59bfbad3/transformed/desugar_jdk_libs_configuration-2.1.2-desugar-lint.txt:/root/.gradle/caches/transforms-4/fc79fea1eab299389bb6ccc9e1ed2645/transformed/D8BackportedDesugaredMethods.txt">
