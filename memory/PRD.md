@@ -1,6 +1,103 @@
 # HushTV — Product Requirements Document
 
-## v1.44.41 (DEV + OFFICIAL) — First-run layout chooser retired, Layout setting locked on official — 2026-05-07  ⬅ LATEST
+## v1.44.42 (server-only) — Verified delete propagation + aggressive cleanup + full server wipe — 2026-05-07  ⬅ LATEST
+
+User asked: *"Verify that when a user deletes a recording in their My
+Recordings section or the app itself removes a recording, it needs to
+remove / delete it from the actual server as well. After confirmed,
+delete ALL recordings from the server and users' apps so we can test
+and make sure deleting actually removed them."*
+
+### Verification (no client change needed)
+
+Read both client paths and the server endpoint they call:
+
+```
+TVMyRecordingsScreen.kt:250        onDelete = { ... DvrApi.delete(uid, rec.rec_id) }
+MobileMyRecordingsScreen.kt:237    onDelete = { ... DvrApi.delete(uid, rec.rec_id) }
+
+DvrApi.kt:324
+  suspend fun delete(userId, recId): Boolean = withContext(IO) {
+    Request.Builder()
+      .url("$BASE_URL/api/dvr/recordings/$recId?user_id=$userId")
+      .delete()
+      .build() …
+  }
+
+dvr_service.py @app.delete("/api/dvr/recordings/{rec_id}")
+  → kills active ffmpeg if running
+  → unlinks video, thumb, metadata
+  → returns {"ok": true, "rec_id": …}
+```
+
+So the delete from My Recordings has always propagated to the
+server. The user's worry was unfounded — but the code did have one
+weak spot worth fixing:
+
+### Fix — server-side delete is now glob-based
+
+The original handler called `_rec_video_path(user_id, rec_id).unlink()`,
+which only deletes one of `.ts` (current) or `.mp4` (legacy) — never
+both. That's a problem for legacy users who upgraded from the v1.44.34
+era when the same rec_id could have a `.mp4` AND a `.bad-bak` companion
+left over from the udta-patch experiment.
+
+`/opt/hushdvr/dvr_service.py` now uses `user_dir.glob(f"{rec_id}.*")`
+to wipe every artifact whose name starts with the 16-char-hex rec_id:
+`.ts`, `.mp4`, `.json`, `.jpg`, `.bad-bak`, `.partial`, etc. The 16-hex
+rec_id format is collision-resistant so the glob can't match anyone
+else's data. Both single-delete and delete-all routes updated.
+
+Response now includes `"removed": N` for the single-delete route so
+clients can show "deleted X files" if they ever want that detail.
+
+### Full server wipe
+
+After the delete improvements, ran a complete cleanup:
+- `pkill -9 ffmpeg` to stop any in-flight recorders
+- `rm -rf /home/dvr/{recordings,thumbs,events,scheduled,season_passes,logs}/*`
+- `systemctl restart hushdvr` to clear the in-memory `_ACTIVE` dict
+
+Verified empty state via the API for three known user_ids; all
+returned `recordings: 0`.
+
+### End-to-end test (after wipe)
+
+```
+1. Record-now (10 s)              → rec_id d34ca955a7d248e3 (status=recording)
+2. Wait 14 s                       → 2 files on disk: .ts + .json
+3. DELETE /api/dvr/recordings/X    → {"ok":true,"rec_id":"…","removed":2}
+4. ls user_dir                     → empty
+5. GET /api/dvr/recordings         → "recordings": 0
+```
+
+Confirmed: the full record → list → delete cycle is intact and the
+new glob-based cleanup removes BOTH the video and the metadata in
+one call.
+
+### Client effect
+
+User devices already poll the recordings list endpoint when they
+open the My Recordings screen. Now that the server returns 0
+recordings, the screen will show its empty state on next open / pull-
+to-refresh — no client change or version bump needed.
+
+### Files
+
+- `/opt/hushdvr/dvr_service.py` (remote, 216.152.148.150) — patched
+  delete_one + delete_all to glob-delete `{rec_id}.*`. Backup at
+  `/opt/hushdvr/dvr_service.py.bak.<epoch>`.
+
+### Lessons preserved
+
+- For "delete this thing and everything related to it" handlers,
+  always glob the prefix rather than enumerating extensions.
+  Future-proof against new artifact types (logs, sidecar metadata,
+  remux backups) without revisiting the code.
+
+---
+
+## v1.44.41 (DEV + OFFICIAL) — First-run layout chooser retired, Layout setting locked on official — 2026-05-07
 
 User asked: *"I want you to disable the screen [first-launch layout
 chooser]. Make both apps default to Left Sidebar. Always default to
