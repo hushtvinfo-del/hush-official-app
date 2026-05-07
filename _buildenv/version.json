@@ -1,13 +1,14 @@
 {
-  "versionCode": 446,
-  "versionName": "1.44.46",
+  "versionCode": 447,
+  "versionName": "1.44.47",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Continue Watching: Fixed orphan blank \"SERIES\" cards. WatchProgressStore now (1) refuses to save a progress entry with a blank title at all, (2) filters blank-title entries out of the Continue Watching list, and (3) hard-prunes them on the next read. Existing blank cards on your device will disappear automatically the next time you open Home — no Clear All needed.",
-    "Side-rail focus: Reverted to the v1.44.42 baseline (no focus modifiers on the rail Column) — the v1.44.43 + v1.44.44 attempts caused IllegalStateException crashes on Nvidia Shield's Compose focus engine.",
-    "Carried over from v1.44.42: Are-you-done prompt (Dialog-wrapped, D-pad navigation works), Clear All, tombstone deletion, 14-day auto-prune, auto-focus first CW tile."
+    "Telemetry: When WatchProgressStore.save() rejects a write because the title is blank, the app now fires a one-shot diagnostic ping to the crash dashboard with kind/streamId/position/duration + breadcrumbs. Rate-limited to one ping per event-tag per app launch so a tight loop can't flood the server. This will help pinpoint exactly which player launch path was feeding empty channelName + missing PlaybackMeta if it ever happens again.",
+    "Continue Watching: Orphan blank \"SERIES\" cards are auto-cleaned on next Home open (defence-in-depth: save() rejects blank-title writes, continueWatching() filters them, pruneOld() hard-deletes them).",
+    "Side-rail focus: v1.44.42 baseline (no risky modifiers).",
+    "Continue Watching: Are-you-done prompt (Dialog-wrapped), Clear All, tombstone deletion, 14-day prune, auto-focus first CW tile."
   ]
 }

@@ -1,6 +1,49 @@
 # HushTV — Product Requirements Document
 
-## v1.44.46 (DEV) — Orphan blank "SERIES" card fix — 2026-02-08  ⬅ LATEST
+## v1.44.47 (DEV) — Data-quality telemetry ping for blank-title saves — 2026-02-08  ⬅ LATEST
+
+User asked: *"Want me to also add a tiny telemetry log to the crash server when save() is rejected for a blank title?"* — Yes.
+
+### What
+Added a generic data-quality telemetry channel piggy-backing on the existing crash dashboard so non-crash events (rejected saves, hydration failures, EPG anomalies, etc.) show up next to crashes without any server changes.
+
+### Implementation
+
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/CrashReporter.kt`
+- New `reportEvent(ctx, eventName, detail?)` method.
+- Posts to the same `/crash/submit/...` endpoint with `kind=diagnostic` so the dashboard groups it correctly.
+- Payload: device, sdk, app version, captured_at, JVM-formatted trace header, `DATA-QUALITY-EVENT name=<eventName>`, optional `detail=...`, plus the existing breadcrumbs ring-buffer.
+- Rate-limited via `ConcurrentHashMap.newKeySet<String>()` of reported event names: **once per event-tag per app process**. A tight loop (e.g. periodic save tick firing every 4 s with bad metadata) hits the server exactly once per launch. Fresh launch resets — so we can also see which launches are affected vs not.
+- Best-effort, never blocks; safe from hot paths.
+
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/WatchProgressStore.kt`
+- `save()` rejection path now fires `CrashReporter.reportEvent(ctx, "watch_progress_save_blank_title", "kind=… streamId=… positionMs=… durationMs=… posterPresent=…")` ONLY when the rejection was caused by blank title (not by bogus duration/position — those are usually early-frame saves).
+
+### Why this design
+- **Zero server changes** — re-uses the `kind=diagnostic` bucket already rendered by the dashboard.
+- **No telemetry storm** — even if the bug fires every 4 s for 4 hours, the server sees one ping.
+- **Includes breadcrumbs** — so when we look at a "blank title save" event, we can see the navigation path (e.g. "live → epg → series episode → player") that led to the bad metadata. That tells us WHICH upstream code path is feeding the player an empty `channelName`.
+- **Generic** — the same `reportEvent()` can be reused for any other data-quality concern (failed TMDB hydration, EPG fetch returning 0 channels, etc.) without refactoring.
+
+### Files touched
+```
+app/build.gradle.kts                                            bumped to 1.44.47 / 447
+app/src/main/kotlin/com/hushtv/tv/data/CrashReporter.kt
+app/src/main/kotlin/com/hushtv/tv/data/WatchProgressStore.kt
+_buildenv/version.json
+```
+
+Build + deploy: `assembleDevDebug` ✓ (3m 56s), APK + manifest pushed, OTA serving 1.44.47 / 447 ✓.
+
+### How to inspect telemetry events
+The crash dashboard already groups by `kind`. Filter or scroll for `kind=diagnostic` entries containing `DATA-QUALITY-EVENT name=watch_progress_save_blank_title` — each will include the breadcrumbs trail. SSH into the OTA box and grep:
+```
+ssh root@66.163.113.147 'grep -l "watch_progress_save_blank_title" /var/hushtv-crash/$(date +%Y-%m-%d)/*.json'
+```
+
+---
+
+## v1.44.46 (DEV) — Orphan blank "SERIES" card fix — 2026-02-08
 
 User reported: *"There's a card that just says SERIES with seven minutes left. It doesn't show which series it is or any information on it, and it's a complete black screen. I did a Clear All before I exited the app, and I came back in, and this blank series card is still showing."*
 

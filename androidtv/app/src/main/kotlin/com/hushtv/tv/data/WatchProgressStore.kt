@@ -117,7 +117,31 @@ object WatchProgressStore {
         val sane = durationMs >= MIN_VALID_DURATION_MS &&
             positionMs in 0..durationMs &&
             title.isNotBlank()
-        if (!sane) return
+        if (!sane) {
+            // Telemetry: if a save was rejected ONLY because the
+            // title was blank, fire a one-shot diagnostic ping so
+            // we can spot the upstream bug feeding the player an
+            // empty channelName + missing PlaybackMeta. Rate-
+            // limited inside CrashReporter to once per app launch.
+            // We deliberately DO NOT report duration/position
+            // failures — those are usually just early-frame saves
+            // when ExoPlayer hasn't decoded a duration yet.
+            if (title.isBlank() &&
+                durationMs >= MIN_VALID_DURATION_MS &&
+                positionMs in 0..durationMs
+            ) {
+                runCatching {
+                    CrashReporter.reportEvent(
+                        ctx,
+                        "watch_progress_save_blank_title",
+                        "kind=$kind streamId=$streamId " +
+                            "positionMs=$positionMs durationMs=$durationMs " +
+                            "posterPresent=${!poster.isNullOrBlank()}",
+                    )
+                }
+            }
+            return
+        }
         val entry = Entry(
             streamId = streamId,
             kind = kind,

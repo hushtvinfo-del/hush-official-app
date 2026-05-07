@@ -44,6 +44,17 @@ object CrashReporter {
         Thread(r, "hushtv-crash-upload").apply { isDaemon = true }
     }
 
+    /**
+     * Tags of events already reported in THIS app process — used to
+     * dedup [reportEvent]. Cleared only by process death, which is the
+     * right scope: if a bug fires every second in the same launch, we
+     * still only ping the server once; if the user re-opens the app
+     * and the bug fires again, we get a fresh ping (so we can see
+     * which launches are affected vs not).
+     */
+    private val reportedEvents =
+        java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
     /** Kicks off a one-shot upload if the crash log has new content
      *  since the last successful upload. Safe to call on every app
      *  launch — no-ops if nothing's pending. */
@@ -179,6 +190,89 @@ object CrashReporter {
         if (anrLog.isNotBlank()) {
             sb.append("─── Recent anr.log tail ───\n")
             sb.append(anrLog).append("\n\n")
+        }
+
+        return buildJson {
+            put("device", device)
+            put("android_sdk", Build.VERSION.SDK_INT.toString())
+            put("app_version", BuildConfig.VERSION_NAME)
+            put("version_code", BuildConfig.VERSION_CODE.toString())
+            put("captured_at", fmtUtc.format(Date()))
+            put("installed_version", BuildConfig.VERSION_NAME)
+            put("kind", "diagnostic")
+            put("trace", sb.toString())
+        }
+    }
+
+    /**
+     * Fire-and-forget data-quality telemetry ping for non-crash
+     * events that we want to surface in the crash dashboard so we
+     * can spot recurring upstream bugs.
+     *
+     * Examples:
+     *   • [WatchProgressStore.save] rejected a save with a blank
+     *     title — points to a player launch path that didn't set
+     *     `PlaybackMeta` and was handed an empty `channelName`.
+     *   • A streaming-service hub failed to hydrate a service URL.
+     *   • An EPG feed returned 0 channels for a non-empty playlist.
+     *
+     * Sent to the same crash endpoint with `kind=diagnostic` so the
+     * existing dashboard groups it correctly without server changes.
+     *
+     * Rate-limited: once per [eventName] per app process. The first
+     * occurrence wins — subsequent calls return immediately. This
+     * means a tight loop (e.g. periodic save tick firing every 4 s
+     * with bad metadata) still only pings the server ONCE per launch
+     * but a different code path failing for a different reason still
+     * gets through.
+     *
+     * Best-effort, never blocks; failures are silent. Calling this
+     * MUST be safe even from hot paths like the player's save tick.
+     */
+    fun reportEvent(
+        ctx: Context,
+        eventName: String,
+        detail: String? = null,
+    ) {
+        // Dedup tag: just the event name. Same event firing many
+        // times in one launch hits the server once.
+        if (!reportedEvents.add(eventName)) return
+        executor.execute {
+            runCatching {
+                val payload = buildEventPayload(ctx, eventName, detail)
+                postJson(ENDPOINT, payload)
+            }.onFailure { Log.w(TAG, "event upload skipped: ${it.message}") }
+        }
+    }
+
+    private fun buildEventPayload(
+        ctx: Context,
+        eventName: String,
+        detail: String?,
+    ): String {
+        val fmtUtc = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val deviceId = runCatching {
+            Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID)
+                ?.take(8)
+        }.getOrNull() ?: "unknown"
+        val device = "${Build.MANUFACTURER}-${Build.MODEL}-$deviceId"
+            .replace(' ', '-').take(60)
+        val breadcrumbs = runCatching { EventLog.snapshot() }.getOrDefault("")
+
+        val sb = StringBuilder()
+        sb.append("===== HushTV ").append(fmtUtc.format(Date()))
+            .append(" v").append(BuildConfig.VERSION_NAME)
+            .append("#").append(BuildConfig.VERSION_CODE)
+            .append(" thread=event-").append(eventName).append(" =====\n")
+        sb.append("DATA-QUALITY-EVENT name=").append(eventName).append('\n')
+        if (!detail.isNullOrBlank()) {
+            sb.append("detail=").append(detail.take(500)).append('\n')
+        }
+        if (breadcrumbs.isNotBlank()) {
+            sb.append("\n─── Breadcrumbs (last ${breadcrumbs.lines().size}) ───\n")
+            sb.append(breadcrumbs).append("\n")
         }
 
         return buildJson {
