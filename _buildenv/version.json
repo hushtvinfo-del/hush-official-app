@@ -1,13 +1,16 @@
 {
-  "versionCode": 425,
-  "versionName": "1.44.25",
+  "versionCode": 426,
+  "versionName": "1.44.26",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
-  "releasedAt": "2026-05-06",
+  "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIRST-LAUNCH PICKER REMOVED — Pro is now the universal default for everyone. No more capability dialog on first launch, so no chance of a NVIDIA Shield (or any other device) being mis-classified as Lite.",
-    "Lite is still available — toggle from Pro Settings → APP MODE → 'Switch to Lite Mode'. Toggle is one-tap, no relaunch.",
-    "Mandatory:true so v1.44.24 devices force-update."
+    "SPORTS — EPG-DRIVEN CHANNEL PICKER (the user's idea — way better than auto-mapping). Click any game card → opens a focused sheet listing every channel from YOUR Xtream EPG that's currently airing the game. Each row shows channel name + EPG programme title + start/stop times. UP/DOWN to choose, OK to tune, BACK to dismiss.",
+    "Backend caches xmltv.php once per playlist for 4h (one-time ~8 s pull, then <100 ms in-memory searches). EPG warm fires when user opens Sports so first card click is instant.",
+    "Search: programmes whose title or description contain BOTH team names within ±30 min of game start. Canadian channels sorted first.",
+    "Replaces the auto-mapping fallback that was sending users to wrong channels (Canadiens game → 'TSN 2' which actually had wrestling). EPG is the source of truth now.",
+    "If EPG has no match, sheet shows 'No matching channels in your EPG — try Live TV or contact support' and refuses to tune anywhere wrong.",
+    "Mandatory:true so v1.44.25 devices force-update."
   ]
 }

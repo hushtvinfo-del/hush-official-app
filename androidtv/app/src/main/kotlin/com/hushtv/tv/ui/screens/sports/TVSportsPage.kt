@@ -103,6 +103,21 @@ fun TVSportsPage(
             "data home=${home != null} live=${liveChannels.size} idx=${channelIndex?.size ?: -1}"
         )
     }
+    // v1.44.27 — Warm the backend EPG cache for this playlist as
+    // soon as the user hits Sports, so the first GameChannelSheet
+    // open is <100 ms instead of waiting for an 8 s xmltv pull.
+    val ctxForWarm = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(playlistId) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val p = com.hushtv.tv.data.PlaylistStore.find(ctxForWarm, playlistId)
+                    ?: return@runCatching
+                com.hushtv.tv.data.sports.SportsApi.warmEpg(
+                    p.host, p.username, p.password,
+                )
+            }
+        }
+    }
     androidx.compose.runtime.LaunchedEffect(selectedLeague) {
         com.hushtv.tv.data.EventLog.log("sports", "league=$selectedLeague")
     }
@@ -141,6 +156,15 @@ fun TVSportsPage(
         rememberPlayablePpv(home?.ppv ?: emptyList(), channelIndex)
             .let { list -> remember(list) { list.sortedBy { it.first.start_utc } } }
 
+    // v1.44.27 — Sports channel picker. When the user clicks a game
+    // card, instead of tuning straight to a guessed channel, we
+    // open the GameChannelSheet that searches their Xtream EPG for
+    // every channel currently airing the game.
+    var pickerGame by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<SportsGame?>(null)
+    }
+
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
             .fillMaxSize()
@@ -250,6 +274,7 @@ fun TVSportsPage(
                     playlistId = playlistId,
                     items = playableGames,
                     railFocus = railFocus,
+                    onCardClick = { g -> pickerGame = g },
                     onGameFocused = { g, ch ->
                         // v1.44.10 — Use short_name (e.g. "White Sox",
                         // "Angels") in the hero title. The previous
@@ -287,6 +312,28 @@ fun TVSportsPage(
             }  // close inner Column
         }      // close bottom wrapper Box (weight 0.45)
     }          // close outer page Column
+
+        // v1.44.27 — EPG channel picker sheet, overlays everything.
+        if (pickerGame != null) {
+            val gameForSheet = pickerGame!!
+            GameChannelSheet(
+                playlistId = playlistId,
+                game = gameForSheet,
+                onDismiss = { pickerGame = null },
+                onPlay = { _, url ->
+                    val title =
+                        "${gameForSheet.away?.short_name ?: gameForSheet.away?.name ?: "?"} @ " +
+                            (gameForSheet.home?.short_name ?: gameForSheet.home?.name ?: "?")
+                    pickerGame = null
+                    nav.navigate(
+                        "player/$playlistId/" +
+                            "${android.net.Uri.encode(url)}/" +
+                            "${android.net.Uri.encode(title)}/true"
+                    )
+                },
+            )
+        }
+    }  // close outer Box overlay wrapper
 }
 
 /** Build the static league-pill list. We always lead with All / Live
@@ -328,6 +375,7 @@ private fun GameCardsRail(
     playlistId: String,
     items: List<Pair<SportsGame, MediaCard>>,
     railFocus: FocusRequester,
+    onCardClick: (SportsGame) -> Unit,
     onGameFocused: (SportsGame, MediaCard) -> Unit,
     onUpFromCard: () -> Unit,
     onDownFromRow: (() -> Unit)?,
@@ -366,7 +414,9 @@ private fun GameCardsRail(
                     onFocus = { onGameFocused(game, ch) },
                     onClick = {
                         com.hushtv.tv.data.EventLog.log("sports", "card click ${ch.title}")
-                        playLiveChannel(ctx, nav, playlistId, ch)
+                        // v1.44.27 — Show EPG channel picker instead
+                        // of tuning straight to a guessed channel.
+                        onCardClick(game)
                     },
                     focusRequester = if (idx == 0) railFocus else null,
                     onUpFromCard = onUpFromCard,

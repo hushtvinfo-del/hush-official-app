@@ -88,4 +88,114 @@ object SportsApi {
     /** Upcoming PPV events (UFC / boxing / wrestling + admin-curated). */
     fun ppv(): SportsPpvListResponse? =
         getJson<SportsPpvListResponse>("/api/sports/ppv")
+
+    /**
+     * v1.44.27 — EPG channel picker for a game.
+     *
+     * Calls /api/sports/game/{id}/channels, passing the user's
+     * Xtream creds so the backend can search the user's xmltv.php
+     * EPG. Returns a Canadian-first sorted list of channels
+     * currently airing the game (each with EPG title + start/stop).
+     *
+     * Returns null on transport / parse failure (UI surfaces a
+     * generic error). Returns empty list when the EPG genuinely
+     * has no match (UI shows "no matching channels" empty state).
+     */
+    fun gameChannels(
+        gameId: Int,
+        host: String,
+        username: String,
+        password: String,
+    ): List<SportsGameChannel>? {
+        val url = "$BASE/api/sports/game/$gameId/channels" +
+            "?host=" + java.net.URLEncoder.encode(host, "UTF-8") +
+            "&username=" + java.net.URLEncoder.encode(username, "UTF-8") +
+            "&password=" + java.net.URLEncoder.encode(password, "UTF-8")
+        val req = Request.Builder().url(url).build()
+        return runCatching {
+            http.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "gameChannels($gameId) → HTTP ${resp.code}")
+                    return@use null
+                }
+                val body = resp.body?.string().orEmpty()
+                if (body.isEmpty()) return@use null
+                val parsed = runCatching {
+                    moshi.adapter(SportsGameChannelsResponse::class.java).fromJson(body)
+                }.getOrElse {
+                    Log.w(TAG, "gameChannels parse: ${it.message}")
+                    null
+                }
+                if (parsed?.ok == true) parsed.matches.orEmpty() else emptyList()
+            }
+        }.getOrElse {
+            Log.w(TAG, "gameChannels($gameId) network: ${it.message}")
+            null
+        }
+    }
+
+    /**
+     * Pre-warm the EPG cache on the backend. Cheap (idempotent) —
+     * call once at app start so the first /game/{id}/channels call
+     * is fast.
+     */
+    fun warmEpg(host: String, username: String, password: String): Boolean {
+        val url = "$BASE/api/sports/epg/warm" +
+            "?host=" + java.net.URLEncoder.encode(host, "UTF-8") +
+            "&username=" + java.net.URLEncoder.encode(username, "UTF-8") +
+            "&password=" + java.net.URLEncoder.encode(password, "UTF-8")
+        return runCatching {
+            val req = Request.Builder().url(url)
+                .post(okhttp3.RequestBody.create(null, ByteArray(0)))
+                .build()
+            http.newCall(req).execute().use { it.isSuccessful }
+        }.getOrDefault(false)
+    }
+
+    /**
+     * Resolve an Xtream channel by display name. The EPG-given
+     * channel_name (e.g. "Sportsnet Ontario") is matched against
+     * the user's playlist via the existing token-aware fuzzy
+     * matcher used by sports auto-mapping. Returns the streamId
+     * needed to build a play URL, or null if the name doesn't
+     * resolve to any channel in the user's playlist.
+     */
+    fun findStreamIdByName(
+        ctx: android.content.Context,
+        playlistId: String,
+        name: String,
+    ): Int? {
+        if (name.isBlank()) return null
+        val p = com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId) ?: return null
+        return runCatching {
+            // getAllStreams is suspend — bridge with runBlocking.
+            // findStreamIdByName is itself called from a coroutine
+            // (LaunchedEffect in GameChannelSheet) but on Dispatchers.IO
+            // — runBlocking here is a brief synchronous bridge.
+            val streams = kotlinx.coroutines.runBlocking {
+                com.hushtv.tv.data.XtreamApi.getAllStreams(
+                    p.host, p.username, p.password, "live",
+                )
+            }
+            val index =
+                com.hushtv.tv.data.sports.SportsChannelMatcher.ChannelIndex(streams)
+            com.hushtv.tv.data.sports.SportsChannelMatcher.match(name, index)?.streamId
+        }.getOrNull()
+    }
+
+    // Wire models for /api/sports/game/{id}/channels
+    data class SportsGameChannelsResponse(
+        val ok: Boolean,
+        val reason: String? = null,
+        val matches: List<SportsGameChannel>? = null,
+    )
+
+    data class SportsGameChannel(
+        val channel_id: String,
+        val channel_name: String,
+        val programme_title: String,
+        val programme_sub: String? = null,
+        val start_utc_ms: Long,
+        val stop_utc_ms: Long,
+    )
 }
