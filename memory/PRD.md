@@ -1,6 +1,34 @@
 # HushTV — Product Requirements Document
 
-## v1.44.42 (DEV) — Continue Watching overhaul: Are-you-done prompt, Clear All, tombstone sync, 14-day prune, auto-focus — 2026-02-08  ⬅ LATEST
+## v1.44.43 (DEV) — Side-rail focus fix: LEFT always lands on Home — 2026-02-08  ⬅ LATEST
+
+User reported: *"When you navigate left to the menu it is automatically toggling Search by default — should toggle Home always by default."*
+
+### Root cause
+The rail items lived inside a `Column` with no `focusGroup()`, so Compose's 2D spatial focus search (triggered when LEFT exited the content focus group from a card near the bottom of the screen) could pick whichever rail item was vertically closest to that card. From a Continue Watching card pinned to the bottom of the screen, that was Search (2nd-to-last item).
+
+### Fix
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TVSideRail.kt`
+
+- Wrapped the rail's outer `Column` (Home → Settings) in `.focusGroup()`.
+- Added `.focusProperties { enter = { firstItemFocus } }` so ANY focus entering the rail group is redirected to the Home `RailItem` regardless of spatial proximity, last-focused item, or which key triggered the entry.
+- Added `// SAFE-FOCUS-PROPERTIES:` marker comment per the `auditFocusProperties` Gradle task — Home is always rendered (never gated by an `if`), so the requester is guaranteed attached.
+
+### Result
+Pressing LEFT from any card on any home page (Discover, Continue Watching, Streaming Services, Genres, Decades, Sports, Hush+, etc.) lands focus on Home with the cyan ring on, every time. Intra-row card navigation (LEFT/RIGHT between cards in the same row) is unaffected because the LEFT key is only redirected at the row's leftmost edge.
+
+### Files touched
+```
+app/build.gradle.kts                                              bumped to 1.44.43 / 443
+app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TVSideRail.kt
+_buildenv/version.json
+```
+
+Build + deploy: `assembleDevDebug` ✓, APK + manifest pushed, `https://hushtv.xyz/version.json` → `1.44.43 / 443` ✓. Dev only — not promoted to Official until user verifies.
+
+---
+
+## v1.44.42 (DEV) — Continue Watching overhaul: Are-you-done prompt, Clear All, tombstone sync, 14-day prune, auto-focus — 2026-02-08
 
 User asked: *"Massive updates to Continue Watching: Auto-focus first
 tile on Home, cross-device tombstone deletion, Clear All button,

@@ -1,15 +1,16 @@
 {
-  "versionCode": 442,
-  "versionName": "1.44.42",
+  "versionCode": 443,
+  "versionName": "1.44.43",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Continue Watching: Pressing BACK during a movie or series now asks \"Are you done watching?\" — pick Yes to clear the title from your list, or No to save your place and resume later. Live TV BACK keeps its existing single/double-press behaviour.",
-    "Continue Watching: A new \"Clear All\" tile sits at the end of the row so you can wipe every in-progress title at once. Confirmation dialog defaults to Cancel so you never wipe by accident.",
-    "Continue Watching: Removing a title now propagates across every device signed in to the same playlist (tombstone-based sync). The deletion shows up on your Fire Stick, your phone, and any other paired device on the next 30-second sync cycle.",
-    "Continue Watching: Anything you haven't touched in 14 days is automatically pruned from the list — keeps the row focused on what you actually still want to finish.",
-    "Continue Watching: The Home page now lands on the Continue Watching tile automatically whenever you have something in progress. First card focused, ready to resume."
+    "Side menu navigation: Pressing LEFT from any home page (Discover, Continue Watching, Streaming Services, Genres, Decades, Sports, etc.) now ALWAYS lands focus on Home — never on Search or whichever rail item was last focused. Predictable, professional rail-entry every time.",
+    "Continue Watching: Pressing BACK during a movie or series asks \"Are you done watching?\" — Yes clears the title from your list, No saves your place. Live TV BACK behaviour unchanged.",
+    "Continue Watching: New \"Clear All\" tile at the end of the row + a \"Clear All\" link on the mobile hub. Confirmation dialog defaults to Cancel.",
+    "Continue Watching: Removing a title now syncs across every device on the same playlist (tombstone-based sync). 30-second propagation cycle.",
+    "Continue Watching: 14-day auto-prune drops anything you haven't touched in two weeks.",
+    "Continue Watching: The Home page lands on the Continue Watching tile automatically whenever you have something in progress, with the first card already focused."
   ]
 }

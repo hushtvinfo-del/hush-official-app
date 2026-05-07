@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
@@ -257,6 +258,7 @@ fun TVHubRail(
  *                   use this to optionally restore focus to "where
  *                   the user came from".
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun TVSideRail(
     activeKey: String,
@@ -319,7 +321,23 @@ fun TVSideRail(
                     .weight(1f)
                     .fillMaxHeight()
                     .background(Color(0xFF05080F))
-                    .padding(vertical = 18.dp),
+                    .padding(vertical = 18.dp)
+                    // Treat the entire rail (Home → Settings) as one
+                    // focus group so 2D spatial-focus search from a
+                    // card on the right cannot pick a vertically-
+                    // closer rail item (e.g. Search if the card was
+                    // near the bottom of the screen).
+                    .focusGroup()
+                    // SAFE-FOCUS-PROPERTIES: firstItemFocus is bound
+                    // to the Home RailItem inside the items loop
+                    // below; Home is ALWAYS rendered (never gated by
+                    // an `if`), so the requester is attached for
+                    // every focus state. This forces ANY focus
+                    // entering the rail to land on Home — the
+                    // canonical entry point — regardless of which
+                    // card the user came from or which item was
+                    // last focused.
+                    .focusProperties { enter = { firstItemFocus } },
             ) {
                 BrandMark(expanded = expanded)
                 Spacer(Modifier.height(18.dp))
