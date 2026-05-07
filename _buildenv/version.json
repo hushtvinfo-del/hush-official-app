@@ -1,14 +1,13 @@
 {
-  "versionCode": 429,
-  "versionName": "1.44.29",
+  "versionCode": 430,
+  "versionName": "1.44.30",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX (likely root cause of the 'no matching channels' for every game) — bumped OkHttp read timeout 15s → 60s. The first /api/sports/game/{id}/channels call after a cold start triggers an 11s xmltv.php fetch on the backend; with a 15s read timeout the TV was timing out on slower networks BEFORE the response could come back, then silently rendering 'no matches'. Subsequent calls hit the 4-hour warm cache and return in <100ms.",
-    "DIAGNOSTICS — gameChannels() now returns a typed result (Success / NoEpgMatch / Failure). The picker shows the ACTUAL failure reason (timeout, parse error, HTTP code, etc.) instead of a generic 'no matches' message, so we can root-cause future issues from a single screenshot.",
-    "Verified backend-side: Anaheim Ducks @ Vegas Golden Knights still returns 10 channels (5 Sportsnet, TVA Sports, 4 US) — server is healthy.",
-    "Mandatory:true so v1.44.28 devices force-update."
+    "FIX — NetworkOnMainThreadException root-cause when opening the channel picker: SportsApi.gameChannels() makes a synchronous OkHttp call but I was calling it inside LaunchedEffect on Dispatchers.Main. Wrapped in withContext(Dispatchers.IO) so the network I/O runs on a worker thread. (This was the actual reason the picker showed an error every time — not a timeout.)",
+    "FIX — DISMISS button couldn't be focused. I was only requesting focus on the first ChannelRow when matches were present; in the error/empty/loading state the outer Box kept focus and the DISMISS button never received it. Now firstFocus.requestFocus() fires after every state transition (loading/matches/error), with a 50 ms yield so the FocusRequester is attached before the request.",
+    "Mandatory:true so v1.44.29 devices force-update."
   ]
 }

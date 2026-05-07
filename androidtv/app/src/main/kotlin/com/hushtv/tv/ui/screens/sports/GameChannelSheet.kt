@@ -93,7 +93,6 @@ fun GameChannelSheet(
     var matches by remember { mutableStateOf<List<SportsGameChannel>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     val firstFocus = remember { FocusRequester() }
-    val rootFocus = remember { FocusRequester() }
 
     // Hardware-Back support — the onPreviewKeyEvent handler covers
     // DPad Back from the remote, BackHandler covers hardware Back
@@ -110,19 +109,26 @@ fun GameChannelSheet(
             loading = false
             return@LaunchedEffect
         }
-        when (val result = SportsApi.gameChannels(
-            gameId = game.id,
-            host = p.host,
-            username = p.username,
-            password = p.password,
-        )) {
+        // v1.44.29 fix — gameChannels() makes a synchronous OkHttp
+        // call. LaunchedEffect runs on Dispatchers.Main by default,
+        // and Android throws NetworkOnMainThreadException when you
+        // do network I/O on the main thread. Wrap in withContext(IO).
+        val result = kotlinx.coroutines.withContext(
+            kotlinx.coroutines.Dispatchers.IO,
+        ) {
+            SportsApi.gameChannels(
+                gameId = game.id,
+                host = p.host,
+                username = p.username,
+                password = p.password,
+            )
+        }
+        when (result) {
             is SportsApi.GameChannelsResult.Success -> {
                 matches = result.matches
             }
             is SportsApi.GameChannelsResult.NoEpgMatch -> {
                 matches = emptyList()
-                // Leave error null — empty state shows the friendly
-                // "No matching channels in your EPG" message.
             }
             is SportsApi.GameChannelsResult.Failure -> {
                 matches = emptyList()
@@ -133,17 +139,17 @@ fun GameChannelSheet(
         loading = false
     }
 
-    // Force focus into the sheet on first composition. Without this,
-    // the GameCard underneath KEEPS focus and DPad navigates the
-    // hidden page. Try the first row first; if there are no rows
-    // yet (loading / empty), the root Box is focusable and grabs it.
-    LaunchedEffect(Unit) {
-        runCatching { rootFocus.requestFocus() }
-    }
-    LaunchedEffect(matches.size) {
-        if (matches.isNotEmpty()) {
-            runCatching { firstFocus.requestFocus() }
-        }
+    // Force focus to the first focusable child as soon as the
+    // sheet's content is settled. Whether that's the first
+    // ChannelRow (matches present) or the DISMISS button (loading /
+    // error / no-match), it's the same FocusRequester. Without
+    // this, the outer Box keeps focus and DPad / OK presses go to
+    // the page underneath.
+    LaunchedEffect(loading, matches.size, error) {
+        // Tiny yield so the new content has been measured + the
+        // FocusRequester is attached before we request focus.
+        kotlinx.coroutines.delay(50)
+        runCatching { firstFocus.requestFocus() }
     }
 
     Box(
@@ -154,7 +160,6 @@ fun GameChannelSheet(
             // bleed through and made users think the sheet wasn't
             // actually open.
             .background(Color(0xFF050810))
-            .focusRequester(rootFocus)
             .focusable()
             // Eat tap events so they can't reach the page beneath.
             .clickable(
