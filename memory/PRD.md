@@ -1,6 +1,33 @@
 # HushTV — Product Requirements Document
 
-## v1.44.48 (DEV + OFFICIAL) — Dismiss button on the install-stage update prompt — 2026-02-08  ⬅ LATEST
+## v1.44.49 (DEV + OFFICIAL) — New theme: Top Disney Movies of All Time — 2026-02-08  ⬅ LATEST
+
+User asked for one new themed-list entry following the exact same pattern as the existing 25 themes.
+
+### Change
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/HushThemedLists.kt`
+- Added `disney_classics_v1` to `HERO_BACKDROPS` — Lion King 1994 backdrop, TMDB original-size CDN URL `/6GF9uJs7AnbcJvyfoZyjZv063Oo.jpg` (verified live against TMDB API before adding).
+- Appended a new `theme(...)` entry after the WTF theme. ~200 entries spanning: Walt Disney Animation (Renaissance, modern, Golden Age), Pixar, Tim Burton stop-motion, Pirates of the Caribbean, National Treasure / Tron / live-action adventure, Mighty Ducks / Hocus Pocus / Disney Channel hits, Maleficent / Cruella, live-action remakes, Mary Poppins / Roger Rabbit, Muppets, 20th Century / Disney-distributed (Free Guy, Avatar), full Star Wars saga, full Marvel headliner roster.
+- Section: `BONUS`. Accent: `Sky` (cyan). Glyph: ✨.
+- Used the existing `m(title, year, ...alts)` shorthand. Added `altTitles` for known re-titlings (e.g. `"Star Wars" → "Star Wars: A New Hope" → "Star Wars: Episode IV - A New Hope"`, `"Toy Story 2"` ascii fallback, `"Lilo & Stitch" → "Lilo and Stitch"`, etc.) so Xtream re-titlings still match.
+- Deduplicated the user's list (Wish 2023 appeared twice — kept once).
+
+### Build + deploy
+- `assembleDevDebug` + `assembleOfficialDebug` ✓ (6m 6s combined)
+- Dev: `https://hushtv.xyz/version.json` → `1.44.49 / 449` ✓
+- Official: `https://hushtv.xyz/version-official.json` → `1.44.49 / 449` ✓
+
+### Pod-instability heads-up
+The K8s pod was preempted **4 times** during this task (filesystems cycled `nvme0n5 → nvme0n9 → nvme0n13 → nvme0n11 → nvme0n3 → nvme0n5`). Each preemption wipes the JVM and the qemu-x86_64/libc6-amd64-cross deps, requiring a 2-3 minute reinstall + 6 minute rebuild. Source code in `/app` survived every preemption.
+
+For the next agent: keep all environment bootstrapping + build start in **one chained bash invocation** so the build kicks off before another preemption can wipe state. Recovery one-liner:
+```
+apt-get install -y openjdk-17-jdk-headless sshpass libc6-amd64-cross libgcc-s1-amd64-cross libstdc++6-amd64-cross qemu-user-static
+```
+
+---
+
+## v1.44.48 (DEV + OFFICIAL) — Dismiss button on the install-stage update prompt — 2026-02-08
 
 User reported: *"Add a dismiss button in the actual update prompt — not the prompt that asks if they want to update, but the SECOND prompt that tells them to install. In case the user clicks Cancel on the device installer, we need a dismiss button in that app prompt so they can cancel out of the prompt."*
 
