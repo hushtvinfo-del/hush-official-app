@@ -3,6 +3,7 @@ package com.hushtv.tv.data.sports
 import android.util.Log
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -145,9 +146,11 @@ object SportsApi {
             "&username=" + java.net.URLEncoder.encode(username, "UTF-8") +
             "&password=" + java.net.URLEncoder.encode(password, "UTF-8")
         return runCatching {
-            val req = Request.Builder().url(url)
-                .post(okhttp3.RequestBody.create(null, ByteArray(0)))
-                .build()
+            val emptyBody = okhttp3.RequestBody.create(
+                "application/json".toMediaTypeOrNull(),
+                ByteArray(0),
+            )
+            val req = Request.Builder().url(url).post(emptyBody).build()
             http.newCall(req).execute().use { it.isSuccessful }
         }.getOrDefault(false)
     }
@@ -182,20 +185,4 @@ object SportsApi {
             com.hushtv.tv.data.sports.SportsChannelMatcher.match(name, index)?.streamId
         }.getOrNull()
     }
-
-    // Wire models for /api/sports/game/{id}/channels
-    data class SportsGameChannelsResponse(
-        val ok: Boolean,
-        val reason: String? = null,
-        val matches: List<SportsGameChannel>? = null,
-    )
-
-    data class SportsGameChannel(
-        val channel_id: String,
-        val channel_name: String,
-        val programme_title: String,
-        val programme_sub: String? = null,
-        val start_utc_ms: Long,
-        val stop_utc_ms: Long,
-    )
 }

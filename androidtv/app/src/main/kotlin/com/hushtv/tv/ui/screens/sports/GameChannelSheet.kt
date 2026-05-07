@@ -84,7 +84,7 @@ fun GameChannelSheet(
     val ctx = LocalContext.current
     var loading by remember { mutableStateOf(true) }
     var matches by remember {
-        mutableStateOf<List<SportsApi.SportsGameChannel>>(emptyList())
+        mutableStateOf<List<com.hushtv.tv.data.sports.SportsGameChannel>>(emptyList())
     }
     var error by remember { mutableStateOf<String?>(null) }
     val firstRowFocus = remember { FocusRequester() }

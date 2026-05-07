@@ -103,3 +103,21 @@ data class SportsLeagueResponse(
 data class SportsPpvListResponse(
     val events: List<SportsPpvEvent> = emptyList(),
 )
+
+// v1.44.27 — Wire models for /api/sports/game/{id}/channels.
+// Top-level (not nested inside SportsApi) so Moshi's
+// KotlinJsonAdapterFactory reflection handles them cleanly.
+data class SportsGameChannelsResponse(
+    val ok: Boolean = false,
+    val reason: String? = null,
+    val matches: List<SportsGameChannel>? = null,
+)
+
+data class SportsGameChannel(
+    val channel_id: String = "",
+    val channel_name: String = "",
+    val programme_title: String = "",
+    val programme_sub: String? = null,
+    val start_utc_ms: Long = 0L,
+    val stop_utc_ms: Long = 0L,
+)

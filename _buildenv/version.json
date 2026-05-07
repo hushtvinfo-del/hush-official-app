@@ -1,16 +1,14 @@
 {
-  "versionCode": 426,
-  "versionName": "1.44.26",
+  "versionCode": 427,
+  "versionName": "1.44.27",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "SPORTS — EPG-DRIVEN CHANNEL PICKER (the user's idea — way better than auto-mapping). Click any game card → opens a focused sheet listing every channel from YOUR Xtream EPG that's currently airing the game. Each row shows channel name + EPG programme title + start/stop times. UP/DOWN to choose, OK to tune, BACK to dismiss.",
-    "Backend caches xmltv.php once per playlist for 4h (one-time ~8 s pull, then <100 ms in-memory searches). EPG warm fires when user opens Sports so first card click is instant.",
-    "Search: programmes whose title or description contain BOTH team names within ±30 min of game start. Canadian channels sorted first.",
-    "Replaces the auto-mapping fallback that was sending users to wrong channels (Canadiens game → 'TSN 2' which actually had wrestling). EPG is the source of truth now.",
-    "If EPG has no match, sheet shows 'No matching channels in your EPG — try Live TV or contact support' and refuses to tune anywhere wrong.",
-    "Mandatory:true so v1.44.25 devices force-update."
+    "FIX — EPG channel picker showing 'No matching channels' for every game even though backend was returning matches. Root cause: my Moshi wire models were nested inside `object SportsApi`, which the KotlinJsonAdapterFactory reflection adapter couldn't resolve cleanly. Moved them to top-level data classes in SportsModels.kt (matching the pattern used by every other Sports response model).",
+    "Verified server-side: Anaheim Ducks @ Vegas Golden Knights returns Sportsnet East/Ontario/Pacific/West/360/World/CBC Calgary etc. all confirmed airing the right NHL programme.",
+    "Also hardened warmEpg POST to use a proper MediaType instead of deprecated null-MediaType form (newer OkHttp throws on null).",
+    "Mandatory:true so v1.44.26 devices force-update."
   ]
 }
