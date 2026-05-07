@@ -110,17 +110,25 @@ fun GameChannelSheet(
             loading = false
             return@LaunchedEffect
         }
-        try {
-            val resp = SportsApi.gameChannels(
-                gameId = game.id,
-                host = p.host,
-                username = p.username,
-                password = p.password,
-            )
-            matches = resp ?: emptyList()
-        } catch (t: Throwable) {
-            android.util.Log.e("GameChannelSheet", "fetch failed", t)
-            error = "${t.javaClass.simpleName}: ${t.message ?: "couldn't reach server"}"
+        when (val result = SportsApi.gameChannels(
+            gameId = game.id,
+            host = p.host,
+            username = p.username,
+            password = p.password,
+        )) {
+            is SportsApi.GameChannelsResult.Success -> {
+                matches = result.matches
+            }
+            is SportsApi.GameChannelsResult.NoEpgMatch -> {
+                matches = emptyList()
+                // Leave error null — empty state shows the friendly
+                // "No matching channels in your EPG" message.
+            }
+            is SportsApi.GameChannelsResult.Failure -> {
+                matches = emptyList()
+                error = result.reason
+                android.util.Log.e("GameChannelSheet", "fetch failed: ${result.reason}")
+            }
         }
         loading = false
     }

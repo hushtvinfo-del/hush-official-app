@@ -40,7 +40,13 @@ object SportsApi {
 
     private val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        // v1.44.29 — Bumped from 15 s → 60 s. The first
+        // /api/sports/game/{id}/channels call after a cold start
+        // can trigger an 11-second xmltv.php fetch on the backend
+        // before responding (full EPG download). 15 s left only
+        // 4 s of margin and was timing out on slower networks.
+        // Subsequent calls hit the warm cache and return in <100 ms.
+        .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
     private val moshi: Moshi = Moshi.Builder()
@@ -102,36 +108,60 @@ object SportsApi {
      * generic error). Returns empty list when the EPG genuinely
      * has no match (UI shows "no matching channels" empty state).
      */
+    /** Result wrapper that distinguishes the failure modes so the
+     *  picker UI can show the user a USEFUL message instead of a
+     *  generic "no matching channels". */
+    sealed class GameChannelsResult {
+        data class Success(val matches: List<SportsGameChannel>) : GameChannelsResult()
+        data class NoEpgMatch(val reason: String) : GameChannelsResult()
+        data class Failure(val reason: String) : GameChannelsResult()
+    }
+
     fun gameChannels(
         gameId: Int,
         host: String,
         username: String,
         password: String,
-    ): List<SportsGameChannel>? {
+    ): GameChannelsResult {
         val url = "$BASE/api/sports/game/$gameId/channels" +
             "?host=" + java.net.URLEncoder.encode(host, "UTF-8") +
             "&username=" + java.net.URLEncoder.encode(username, "UTF-8") +
             "&password=" + java.net.URLEncoder.encode(password, "UTF-8")
         val req = Request.Builder().url(url).build()
+        Log.i(TAG, "gameChannels($gameId) → GET $url")
         return runCatching {
             http.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) {
                     Log.w(TAG, "gameChannels($gameId) → HTTP ${resp.code}")
-                    return@use null
+                    return@use GameChannelsResult.Failure("HTTP ${resp.code}")
                 }
                 val body = resp.body?.string().orEmpty()
-                if (body.isEmpty()) return@use null
+                if (body.isEmpty()) {
+                    return@use GameChannelsResult.Failure("Empty response from server")
+                }
+                Log.i(TAG, "gameChannels($gameId) → ${body.length} bytes")
                 val parsed = runCatching {
                     moshi.adapter(SportsGameChannelsResponse::class.java).fromJson(body)
-                }.getOrElse {
-                    Log.w(TAG, "gameChannels parse: ${it.message}")
-                    null
+                }.getOrElse { e ->
+                    Log.w(TAG, "gameChannels parse: ${e.javaClass.simpleName}: ${e.message}")
+                    return@use GameChannelsResult.Failure(
+                        "Couldn't parse server response (${e.javaClass.simpleName})"
+                    )
                 }
-                if (parsed?.ok == true) parsed.matches.orEmpty() else emptyList()
+                if (parsed == null) {
+                    return@use GameChannelsResult.Failure("Empty parsed response")
+                }
+                if (parsed.ok && !parsed.matches.isNullOrEmpty()) {
+                    GameChannelsResult.Success(parsed.matches)
+                } else {
+                    GameChannelsResult.NoEpgMatch(parsed.reason ?: "no_match")
+                }
             }
-        }.getOrElse {
-            Log.w(TAG, "gameChannels($gameId) network: ${it.message}")
-            null
+        }.getOrElse { t ->
+            Log.w(TAG, "gameChannels($gameId) network: ${t.javaClass.simpleName}: ${t.message}")
+            GameChannelsResult.Failure(
+                "${t.javaClass.simpleName}: ${t.message ?: "unknown error"}"
+            )
         }
     }
 

@@ -1,16 +1,14 @@
 {
-  "versionCode": 428,
-  "versionName": "1.44.28",
+  "versionCode": 429,
+  "versionName": "1.44.29",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX — Channel picker sheet now properly TRAPS focus and DISMISSES with Back. Previously the sheet had no focus-trap so DPad UP/DOWN/LEFT/RIGHT was navigating the page underneath, and Back was exiting Sports entirely instead of just closing the sheet.",
-    "Sheet outer Box is now focusable() + grabs focus via FocusRequester on first composition; underlying LeaguePillBar/GameCardsRail can no longer receive key events while sheet is open.",
-    "Added BackHandler (covers hardware Back) in addition to the existing onPreviewKeyEvent (covers DPad Back) — both call onDismiss directly. Close behaviour is now reliable on every Android TV remote.",
-    "Loading / error / no-match empty states now have a focusable DISMISS button so focus always has a target inside the sheet — previously empty states had no focusable element and focus stayed stuck on the GameCard underneath.",
-    "Background opacity 0xE6 → 0xFF (fully opaque) so the page behind is hidden, not bleeding through dimly.",
-    "Mandatory:true so v1.44.27 devices force-update."
+    "FIX (likely root cause of the 'no matching channels' for every game) — bumped OkHttp read timeout 15s → 60s. The first /api/sports/game/{id}/channels call after a cold start triggers an 11s xmltv.php fetch on the backend; with a 15s read timeout the TV was timing out on slower networks BEFORE the response could come back, then silently rendering 'no matches'. Subsequent calls hit the 4-hour warm cache and return in <100ms.",
+    "DIAGNOSTICS — gameChannels() now returns a typed result (Success / NoEpgMatch / Failure). The picker shows the ACTUAL failure reason (timeout, parse error, HTTP code, etc.) instead of a generic 'no matches' message, so we can root-cause future issues from a single screenshot.",
+    "Verified backend-side: Anaheim Ducks @ Vegas Golden Knights still returns 10 channels (5 Sportsnet, TVA Sports, 4 US) — server is healthy.",
+    "Mandatory:true so v1.44.28 devices force-update."
   ]
 }
