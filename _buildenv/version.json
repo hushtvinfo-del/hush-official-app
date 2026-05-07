@@ -1,14 +1,13 @@
 {
-  "versionCode": 445,
-  "versionName": "1.44.45",
+  "versionCode": 446,
+  "versionName": "1.44.46",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "REVERTED: Side-rail focus redirect (1.44.43 + 1.44.44) — was causing slow/unresponsive UI and crashes on Nvidia Shield. Rail behaviour is back to v1.44.42 baseline. Will retry with a less-intrusive approach later once we have crash-report telemetry.",
-    "KEPT: Continue Watching overhaul — Are-you-done prompt (Dialog-based, D-pad navigation works correctly), Clear All, tombstone deletion, 14-day auto-prune, auto-focus first CW tile.",
-    "KEPT: \"Are you done?\" prompt is wrapped in a Compose Dialog so D-pad navigation between Yes/No works correctly inside the box.",
-    "KEPT: DO-NOT-REGRESS comment block above AreYouDoneOverlay so future prompts use the Dialog pattern."
+    "Continue Watching: Fixed orphan blank \"SERIES\" cards. WatchProgressStore now (1) refuses to save a progress entry with a blank title at all, (2) filters blank-title entries out of the Continue Watching list, and (3) hard-prunes them on the next read. Existing blank cards on your device will disappear automatically the next time you open Home — no Clear All needed.",
+    "Side-rail focus: Reverted to the v1.44.42 baseline (no focus modifiers on the rail Column) — the v1.44.43 + v1.44.44 attempts caused IllegalStateException crashes on Nvidia Shield's Compose focus engine.",
+    "Carried over from v1.44.42: Are-you-done prompt (Dialog-wrapped, D-pad navigation works), Clear All, tombstone deletion, 14-day auto-prune, auto-focus first CW tile."
   ]
 }

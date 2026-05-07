@@ -93,7 +93,15 @@ object WatchProgressStore {
     /**
      * Save progress for a movie or series episode.
      *
-     * Refuses bogus saves (durationMs < 60s or positionMs out of range).
+     * Refuses bogus saves:
+     *   • durationMs < 60s
+     *   • positionMs out of [0, durationMs]
+     *   • title is blank — without a title the home row renders an
+     *     orphan "SERIES" placeholder card with no poster, no name,
+     *     no information; clearing the list won't help because the
+     *     player's dispose-save can resurrect it. Refuse the write
+     *     here instead. (v1.44.46 fix for the bare-SERIES-card bug.)
+     *
      * Saving always clears the tombstone flag so re-watching a title
      * the user previously cleared brings it back to Continue Watching.
      */
@@ -107,7 +115,8 @@ object WatchProgressStore {
         durationMs: Long,
     ) {
         val sane = durationMs >= MIN_VALID_DURATION_MS &&
-            positionMs in 0..durationMs
+            positionMs in 0..durationMs &&
+            title.isNotBlank()
         if (!sane) return
         val entry = Entry(
             streamId = streamId,
@@ -140,15 +149,23 @@ object WatchProgressStore {
         return if (e.deleted) null else e
     }
 
-    /** Returns all in-progress titles sorted by most-recently-watched first. */
+    /** Returns all in-progress titles sorted by most-recently-watched first.
+     *
+     *  Filters out entries with a blank title — those are corrupt
+     *  saves from older builds (or from a player session that fired
+     *  before its metadata was hydrated) and would render as bare
+     *  "SERIES" / "MOVIE" placeholder cards with no poster, no name.
+     *  See [pruneOld] for the parallel hard-delete path that
+     *  garbage-collects them on the next read. */
     fun continueWatching(ctx: Context, kind: String? = null): List<Entry> {
         // Opportunistic prune — drops tombstones + stale entries older
-        // than 14 days. Cheap (single prefs scan) and only mutates if
-        // something actually expired.
+        // than 14 days + corrupt blank-title entries. Cheap (single
+        // prefs scan) and only mutates if something actually expired.
         pruneOld(ctx)
         ensureCache(ctx)
         return cachedEntries.values
             .filter { it.isInProgress }
+            .filter { it.title.isNotBlank() }
             .filter { kind == null || it.kind == kind }
             .sortedByDescending { it.lastWatchedAt }
     }
@@ -202,7 +219,9 @@ object WatchProgressStore {
 
     /**
      * Hard-remove any row whose `lastWatchedAt` is older than
-     * [PRUNE_AGE_MS]. Applies to BOTH live entries (user hasn't
+     * [PRUNE_AGE_MS], OR whose title is blank (corrupt save —
+     * would render as a bare "SERIES"/"MOVIE" placeholder card
+     * with no poster). Applies to BOTH live entries (user hasn't
      * touched it in 14 days — they don't want to see it any more)
      * and tombstones (other devices have had plenty of time to
      * sync). Idempotent and cheap; safe to call on every read.
@@ -216,7 +235,9 @@ object WatchProgressStore {
         for ((k, v) in all) {
             if (v !is String) continue
             val e = decode(v) ?: continue
-            if (e.lastWatchedAt > 0 && e.lastWatchedAt < cutoff) {
+            val isStale = e.lastWatchedAt > 0 && e.lastWatchedAt < cutoff
+            val isCorrupt = e.title.isBlank()
+            if (isStale || isCorrupt) {
                 ed.remove(k)
                 pruned++
             }

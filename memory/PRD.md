@@ -1,6 +1,40 @@
 # HushTV — Product Requirements Document
 
-## v1.44.45 (DEV) — REVERT rail focus changes (1.44.43 + 1.44.44) — 2026-02-08  ⬅ LATEST
+## v1.44.46 (DEV) — Orphan blank "SERIES" card fix — 2026-02-08  ⬅ LATEST
+
+User reported: *"There's a card that just says SERIES with seven minutes left. It doesn't show which series it is or any information on it, and it's a complete black screen. I did a Clear All before I exited the app, and I came back in, and this blank series card is still showing."*
+
+### Root cause
+`WatchProgressStore.save()` previously accepted entries with a blank `title`. The home row renders such entries as a bare placeholder card showing only the kind label ("SERIES") and a play icon, with no poster.
+
+How the bad save happens:
+- The TV player computes `saveTitle = playbackMeta?.displayTitle?.takeIf { it.isNotBlank() } ?: currentName`
+- `currentName` is initialised from the screen param `channelName`
+- Some launch paths (rare — likely from a deep link / EPG-launched series episode) hand the player an empty `channelName` AND don't set `PlaybackMeta`
+- Periodic save / dispose-time save fires with `title = ""`
+- Entry written. Home row renders the orphan card.
+
+Why Clear All didn't help: between the user pressing Clear All and exiting the app, an active player session (or a player that was about to dispose) wrote a fresh blank-title entry on top of the tombstone.
+
+### Fix
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/WatchProgressStore.kt`
+
+1. **Reject blank-title saves at the source** — `save()` adds `title.isNotBlank()` to the sanity check. No new orphan cards can ever be created.
+2. **Filter blank-title entries on read** — `continueWatching()` filters them out so older entries already on disk don't render.
+3. **Hard-prune blank-title entries** — `pruneOld()` (which runs on every Home read) deletes them outright. Since `pruneOld()` is called from `continueWatching()`, the orphan card on the user's device disappears on the very next Home open. No Clear All needed.
+
+### Files touched
+```
+app/build.gradle.kts                                bumped to 1.44.46 / 446
+app/src/main/kotlin/com/hushtv/tv/data/WatchProgressStore.kt
+_buildenv/version.json
+```
+
+Build + deploy: `assembleDevDebug` ✓ (4m 9s), APK + manifest pushed, OTA serving 1.44.46 / 446 ✓.
+
+---
+
+## v1.44.45 (DEV) — REVERT rail focus changes (1.44.43 + 1.44.44) — 2026-02-08
 
 User reported: *"REVERT THIS STEP BACK ASAP WHATEVER YOU DID MADE THE APP SLOW AND UNRESPONSIVE WITH CRASHES AS WELL. CHANGE IT BACK NOW! SEE ANDROID NVIDIA SHIELD CRASHES IN CRASH REPORTS"*
 
