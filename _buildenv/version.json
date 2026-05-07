@@ -1,14 +1,16 @@
 {
-  "versionCode": 427,
-  "versionName": "1.44.27",
+  "versionCode": 428,
+  "versionName": "1.44.28",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX — EPG channel picker showing 'No matching channels' for every game even though backend was returning matches. Root cause: my Moshi wire models were nested inside `object SportsApi`, which the KotlinJsonAdapterFactory reflection adapter couldn't resolve cleanly. Moved them to top-level data classes in SportsModels.kt (matching the pattern used by every other Sports response model).",
-    "Verified server-side: Anaheim Ducks @ Vegas Golden Knights returns Sportsnet East/Ontario/Pacific/West/360/World/CBC Calgary etc. all confirmed airing the right NHL programme.",
-    "Also hardened warmEpg POST to use a proper MediaType instead of deprecated null-MediaType form (newer OkHttp throws on null).",
-    "Mandatory:true so v1.44.26 devices force-update."
+    "FIX — Channel picker sheet now properly TRAPS focus and DISMISSES with Back. Previously the sheet had no focus-trap so DPad UP/DOWN/LEFT/RIGHT was navigating the page underneath, and Back was exiting Sports entirely instead of just closing the sheet.",
+    "Sheet outer Box is now focusable() + grabs focus via FocusRequester on first composition; underlying LeaguePillBar/GameCardsRail can no longer receive key events while sheet is open.",
+    "Added BackHandler (covers hardware Back) in addition to the existing onPreviewKeyEvent (covers DPad Back) — both call onDismiss directly. Close behaviour is now reliable on every Android TV remote.",
+    "Loading / error / no-match empty states now have a focusable DISMISS button so focus always has a target inside the sheet — previously empty states had no focusable element and focus stayed stuck on the GameCard underneath.",
+    "Background opacity 0xE6 → 0xFF (fully opaque) so the page behind is hidden, not bleeding through dimly.",
+    "Mandatory:true so v1.44.27 devices force-update."
   ]
 }
