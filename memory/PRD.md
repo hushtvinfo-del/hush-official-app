@@ -1,6 +1,43 @@
 # HushTV — Product Requirements Document
 
-## v1.44.47 (DEV) — Data-quality telemetry ping for blank-title saves — 2026-02-08  ⬅ LATEST
+## v1.44.47 (OFFICIAL) — Promoted Dev → Official — 2026-02-08  ⬅ LATEST
+
+User asked: *"Please push all new changes, everything in the development app live to the official app."*
+
+Built the Official-flavour APK from the same source tree as Dev v1.44.47 and shipped it to the OFFICIAL channel.
+
+### What's now live on the Official channel
+All v1.44.42 through v1.44.47 changes:
+
+- **Continue Watching overhaul**: "Are you done watching?" prompt on BACK during VOD (Dialog-wrapped — D-pad navigation works correctly inside the box), Clear All tile + confirmation, tombstone-based cross-device deletion, 14-day auto-prune from `lastWatchedAt`, auto-focus first CW tile on Home launch.
+- **Orphan blank "SERIES" card fix**: defence-in-depth via `save()` rejection, `continueWatching()` filter, `pruneOld()` hard-delete. Existing corrupt entries auto-clean on next Home open.
+- **Data-quality telemetry**: `CrashReporter.reportEvent()` generic channel + `WatchProgressStore.save()` hook firing on blank-title rejections. Rate-limited to one ping per event per app process. Visible in the crash dashboard under `kind=diagnostic`.
+- **Side-rail focus**: at v1.44.42 baseline (the v1.44.43 + v1.44.44 attempts that crashed Shield are NOT in this build).
+
+### Build + deploy
+```
+cd /app/androidtv && ./gradlew assembleOfficialDebug          # 3m 54s
+scp app-official-debug.apk → :/var/www/hushtv/hushtv-official.apk
+ssh : cp ... → HushTV-Official.apk                            # legacy mirror
+scp version-official.json   → :/var/www/hushtv/version-official.json
+```
+
+Verified live:
+```
+curl https://hushtv.xyz/version-official.json → 1.44.47 / 447 ✓
+curl -I https://hushtv.xyz/hushtv-official.apk → HTTP/1.1 200 OK ✓
+```
+
+### Files touched
+```
+_buildenv/version-official.json   bumped to 1.44.47 / 447 with cumulative changelog
+```
+
+(No source changes — same APK content as Dev v1.44.47, rebuilt with the `official` flavour's BuildConfig pointing at the official OTA URLs.)
+
+---
+
+## v1.44.47 (DEV) — Data-quality telemetry ping for blank-title saves — 2026-02-08
 
 User asked: *"Want me to also add a tiny telemetry log to the crash server when save() is rejected for a blank title?"* — Yes.
 

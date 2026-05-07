@@ -1,12 +1,17 @@
 {
-  "versionCode": 441,
-  "versionName": "1.44.41",
+  "versionCode": 447,
+  "versionName": "1.44.47",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": true,
-  "releasedAt": "2026-05-07",
+  "releasedAt": "2026-02-08",
   "channel": "official",
   "changelog": [
-    "First-run \"Choose your layout\" screen is gone — the app now opens directly into the canonical Left Sidebar layout for Live TV / Movies / Series. No setup steps, no friction.",
-    "Carries over all v1.44.40 fixes — Dev and Official can install side-by-side for testing, distinct app icons, distinct labels (\"HushTV Official\" / \"HushTV Dev\")."
+    "Continue Watching: Pressing BACK during a movie or series asks \"Are you done watching?\" — Yes clears the title from your list, No saves your place. Live TV BACK behaviour unchanged. Dialog properly traps D-pad navigation between Yes/No.",
+    "Continue Watching: New \"Clear All\" tile at the end of the row + a \"Clear All\" link on the mobile hub. Confirmation dialog defaults to Cancel.",
+    "Continue Watching: Removing a title now syncs across every device on the same playlist (tombstone-based sync, ~30 second propagation cycle).",
+    "Continue Watching: 14-day auto-prune drops anything you haven't touched in two weeks.",
+    "Continue Watching: Home page lands on the Continue Watching tile automatically whenever you have something in progress, with the first card already focused.",
+    "Continue Watching: Fixed orphan blank \"SERIES\" cards. Older corrupt entries on your device are auto-cleaned on the next Home open — no Clear All needed.",
+    "Telemetry: Background data-quality reporting added so any future blank-title save attempts surface in the crash dashboard with the exact navigation path that triggered it. Rate-limited to one ping per event per app launch."
   ]
 }
