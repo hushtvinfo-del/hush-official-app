@@ -105,10 +105,21 @@ fun TVPlayerScreen(
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
                 .build()
-            // Live channels auto-play. VOD will wait for the Resume-prompt
-            // decision below (if there's saved progress) or auto-play after
-            // a brief moment otherwise.
-            playWhenReady = isLive
+            // Live channels auto-play immediately.
+            //
+            // For VOD/DVR we DEFAULT to playWhenReady = true here as
+            // well — even though a Resume-prompt LaunchedEffect below
+            // can also flip this, that effect runs on the next
+            // composition frame and on slow devices the gap is large
+            // enough for the user to see a paused/black overlay
+            // before play kicks in. Setting it true synchronously at
+            // construction means: the moment prepare() resolves to
+            // STATE_READY the player auto-plays. The Resume-prompt
+            // effect below will FLIP IT BACK to false only when there
+            // is genuinely a resume decision pending (saved progress
+            // on a known VOD streamId). DVR recordings have no saved
+            // progress so they never get paused. (v1.44.33 fix.)
+            playWhenReady = true
         }
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
@@ -550,14 +561,15 @@ fun TVPlayerScreen(
         if (vodStreamId == null) {
             // DVR recordings, direct-URL playback, and any other VOD
             // source without an Xtream streamId — there's no saved
-            // progress to look up, so just start playing immediately.
-            player.playWhenReady = true
+            // progress to look up. The remember{} block already set
+            // playWhenReady=true at construction so playback is
+            // already wired to start the moment STATE_READY fires.
+            // Just mark the prompt resolved.
             resumePromptHandled = true
             return@LaunchedEffect
         }
         val saved = WatchProgressStore.get(ctx, vodStreamId, playbackKind) ?: run {
-            // No saved progress — auto-play.
-            player.playWhenReady = true
+            // No saved progress — already auto-playing.
             resumePromptHandled = true
             return@LaunchedEffect
         }
@@ -565,9 +577,13 @@ fun TVPlayerScreen(
             saved.positionMs > 5_000L &&
             saved.positionMs < saved.durationMs - 30_000L
         if (eligible) {
+            // Genuine resume decision — pause until user picks. The
+            // remember{} block defaulted to playWhenReady=true so we
+            // explicitly flip it back here.
+            player.playWhenReady = false
             resumePromptMs = saved.positionMs
         } else {
-            player.playWhenReady = true
+            // Position too close to start/end — already auto-playing.
             resumePromptHandled = true
         }
     }

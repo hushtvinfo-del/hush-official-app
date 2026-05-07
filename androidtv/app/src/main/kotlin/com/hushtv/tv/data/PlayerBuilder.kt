@@ -407,10 +407,22 @@ object PlayerBuilder {
                 val now = System.currentTimeMillis()
 
                 // 1. Long-buffer stall
+                // Live streams need quick recovery — a stuck CDN edge
+                // is the most common cause and 5 s is the sweet spot
+                // before the user channel-zaps. VOD / DVR recordings
+                // are static files: a long initial wait is normal
+                // (large moov atom over slow wifi can take 15+ s) and
+                // re-prepare()ing during that window just restarts
+                // the moov download from scratch — symptom: player
+                // never plays, OK doesn't unpause, classic "recording
+                // shows black screen forever". For VOD give the
+                // download a generous 30 s before forcing recovery.
+                val stallThresholdMs = if (isLive) STALL_BUFFER_MS_LIVE
+                    else STALL_BUFFER_MS_VOD
                 val bufStart = state.bufferingSinceMs
                 if (bufStart != 0L && player.playWhenReady &&
                     !state.recoveryInFlight &&
-                    now - bufStart > STALL_BUFFER_MS
+                    now - bufStart > stallThresholdMs
                 ) {
                     state.bufferingSinceMs = 0L
                     scheduleRecovery("stall=buffer ${now - bufStart}ms")
@@ -572,15 +584,22 @@ object PlayerBuilder {
     )
 
     /** Stall thresholds — empirically chosen.
-     *  • 5 s buffer is long enough to cover a normal ad-break
+     *  • Live: 5 s buffer is long enough to cover a normal ad-break
      *    bumper or HLS playlist refresh, but short enough that
      *    the user hasn't yet decided to channel-zap.
+     *  • VOD/DVR: 30 s. Static files don't need fast recovery — large
+     *    moov atoms (2 MB+ for an hour-long capture) can take 15-20 s
+     *    over slow WiFi before the first frame is decodable. A 5 s
+     *    threshold causes the watchdog to keep re-prepare()ing in a
+     *    loop, the moov download starts over each time, and the user
+     *    sees a black screen forever (v1.44.32 DVR playback bug).
      *  • 5 s of frozen position covers most stuck-decoder cases
      *    without false-positive on legitimate live pauses.
      *  • 15 s of clean playback before we trust the recovery and
      *    reset the attempt counter — anything shorter and we keep
      *    bouncing between failure and success. */
-    private const val STALL_BUFFER_MS = 5_000L
+    private const val STALL_BUFFER_MS_LIVE = 5_000L
+    private const val STALL_BUFFER_MS_VOD = 30_000L
     private const val STALL_FROZEN_MS = 5_000L
     private const val STABLE_PLAYBACK_MS = 15_000L
     private const val WATCHDOG_INTERVAL_MS = 1_000L

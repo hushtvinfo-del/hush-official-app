@@ -1,13 +1,12 @@
 {
-  "versionCode": 432,
-  "versionName": "1.44.32",
+  "versionCode": 433,
+  "versionName": "1.44.33",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX (DVR playback black screen) — Tapping a completed Cloud-DVR recording opened the player but stayed on a black screen forever despite ExoPlayer downloading bytes. Root cause: DVR stream URLs have NO file extension and the server intentionally rejects HEAD requests, so MediaSourceFactory's content-type sniff couldn't pick the Mp4Extractor. Now we explicitly hint MimeTypes.VIDEO_MP4 on DVR MediaItems so the right extractor wires up immediately. Applied to both TV and Mobile players.",
-    "NEW — Long-press OK on any live channel now offers a third action: Record now / Stop recording. Same record-now semantics as the player OSD's REC chip — captures up to 1 hour by default, auto-clamps to the end of the currently-airing EPG show when known. Mirrored on the Mobile long-press sheet. Recordings show up in My Recordings just like before.",
-    "Mandatory:true so v1.44.31 devices force-update."
+    "FIX (DVR playback black-screen, attempt #2) — v1.44.32 added the MIME-type hint but the recording still opened paused with a black screen and pressing OK didn't unpause. Two new root causes found: (1) playWhenReady was being set on the next composition frame via a LaunchedEffect, which on slow devices left the player visibly paused for ~1 frame and triggered the auto-reconnect's stall watchdog; (2) the watchdog's 5 s buffer threshold was tuned for live streams — for a 700 MB recording with a 2 MB moov atom, the moov download itself can take 15+ s on slow WiFi, and the watchdog kept re-prepare()ing in a loop, restarting the moov download from scratch every time. Now: playWhenReady defaults to true synchronously in the remember{} block (Resume-prompt only flips it back when there's a genuine resume decision), AND the watchdog now uses a 30 s threshold for VOD/DVR (kept 5 s for live). Net effect: completed recordings start playing within a few seconds of opening and never get into the stuck-buffer-restart loop.",
+    "Mandatory:true so v1.44.32 devices force-update."
   ]
 }

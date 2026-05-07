@@ -1,6 +1,76 @@
 # HushTV — Product Requirements Document
 
-## v1.44.32 (DEV ONLY) — DVR playback black screen fix + Record action on long-press OK — 2026-05-07  ⬅ LATEST
+## v1.44.33 (DEV ONLY) — DVR playback fix attempt #2 (multi-layer) — 2026-05-07  ⬅ LATEST
+
+User report after v1.44.32: *"Nope its still not working every recording
+comes up with a black screen it seems it opens on paused state and you
+cant unpacked the playback. So maybe that's the reason why its not
+playing it seems all are on pause and when you click pause nothing
+happens just stays showing paused black screen."*
+
+### Re-diagnosis (what I missed in v1.44.32)
+
+The MIME-type hint alone wasn't enough. Two more root causes surfaced:
+
+#### Cause 2 — `playWhenReady` set on next-frame instead of synchronously
+
+The `remember{}` block used `playWhenReady = isLive` (false for DVR).
+A `LaunchedEffect(vodStreamId)` would later flip it to `true`. On slow
+devices and inside the AndroidView surface attach gap, that produced
+a visible "paused" UI for a frame or two before play actually kicked in.
+More importantly: when buffering started before `playWhenReady` flipped,
+the auto-reconnect's stall counter latched onto a state that wouldn't
+naturally clear.
+
+#### Cause 3 — Auto-reconnect stall watchdog killing slow moov downloads
+
+`PlayerBuilder.attachAutoReconnect()` had a single 5 s
+`STALL_BUFFER_MS` threshold. For a 700 MB recording with a 2 MB moov
+atom (faststart-positioned at the head), the moov download itself can
+take 15–25 s on a typical Fire Stick / TCL / older Android-TV WiFi.
+At 5 s, the watchdog called `scheduleRecovery("stall=buffer 5012ms")`
+which re-prepare()d the player, which restarted the moov download
+from byte 0, which buffered for 5 s, which retriggered the watchdog…
+classic infinite re-prepare loop. Symptom: black screen forever, OK
+press appears to "do nothing" because the player is being torn down
+and rebuilt every 5–6 s. nginx logs showed exactly this:
+
+```
+4890624 bytes  HushTV/Android-ExoPlayer
+3823588 bytes  HushTV/Android-ExoPlayer
+... (forever)
+```
+
+### Fix layers (this release)
+
+1. **MIME hint** (carried over from v1.44.32): `MediaItem.Builder().setMimeType(VIDEO_MP4)` for DVR URLs in TV + Mobile.
+2. **`playWhenReady = true` set synchronously** at construction in the `remember{}` block. The Resume-prompt LaunchedEffect now only flips it to `false` when there's a genuine resume decision (saved progress on a known VOD streamId) and flips it back to `true` after the user picks Resume / Restart.
+3. **Stall watchdog parameterised by `isLive`**: 5 s for live (unchanged — keeps fast CDN-edge recovery), **30 s for VOD/DVR**. `STALL_BUFFER_MS_LIVE = 5_000L`, `STALL_BUFFER_MS_VOD = 30_000L`. `attachAutoReconnect` already had the `isLive` flag; threshold selection was the missing piece.
+4. **DVR server now answers HEAD requests** (defensive). Was returning 405 because FastAPI binds GET-only. Some Media3 versions probe with HEAD before the first Range GET; if it 405s they fall back to a generic extractor pipeline that doesn't always handle the file. Fix: registered the same handler under both `@app.get` and `@app.head`. Verified: HEAD now returns 200 with Content-Type: video/mp4, Content-Length, accept-ranges: bytes. No client deploys touched the server beyond this.
+
+### Files
+
+- `TVPlayerScreen.kt` — `playWhenReady = true` in remember{}; resume-prompt now flips to `false` only when prompting; comments updated to point at v1.44.33.
+- `MobilePlayerScreen.kt` — already used `playWhenReady = true`; no change needed.
+- `PlayerBuilder.kt` — split `STALL_BUFFER_MS` into `STALL_BUFFER_MS_LIVE` / `STALL_BUFFER_MS_VOD`, watchdog selects per `isLive`.
+- `dvr_service.py` (remote `216.152.148.150`) — added `@app.head` decorator to the stream endpoint. Service restarted. Backup at `/opt/hushdvr/dvr_service.py.bak.<epoch>`.
+
+### Build + deploy
+
+versionCode 432 → 433, versionName 1.44.32 → 1.44.33. Build clean
+(BUILD SUCCESSFUL in 3 m 38 s, 21 MB APK). Tagged `v1.44.33-dev`.
+Manifest at `https://hushtv.xyz/version.json` confirms 433 live.
+mandatory:true for force-update.
+
+### Lessons preserved
+
+- When ExoPlayer reports "playing" but renders nothing, ALWAYS check whether `attachAutoReconnect`'s watchdog is silently re-prepare()ing the player. nginx access logs are the fastest way to see it (constant fresh `bytes=0-` requests = re-prepare loop).
+- For VOD/DVR endpoints, **NEVER** copy live-stream stall thresholds. VOD is a static file; live is a sliding window. They have fundamentally different "is this stuck?" signals.
+- Always implement HEAD on any HTTP endpoint serving Range-supported media. Some clients probe with HEAD; rejecting it forces ugly fallback paths.
+
+---
+
+## v1.44.32 (DEV ONLY) — DVR playback black screen fix + Record action on long-press OK — 2026-05-07
 
 User report: *"I have a completed recording. But when I click on it it
 won't play it just goes to a black screen. 1. Fix it so it plays. 2. Add
