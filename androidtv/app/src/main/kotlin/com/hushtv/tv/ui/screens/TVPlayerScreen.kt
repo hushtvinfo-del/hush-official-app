@@ -962,23 +962,20 @@ fun TVPlayerScreen(
     ) {
         AndroidView(
             factory = { c ->
-                PlayerView(c).apply {
-                    useController = false
-                    // Belt-and-braces — PlayerView automatically syncs
-                    // its keepScreenOn state with the player's playback
-                    // state when this is true. The activity-level flag
-                    // above handles the buffering / paused-with-overlay
-                    // case; this view-level flag handles edge cases
-                    // where the activity flag races with screen-off.
-                    keepScreenOn = true
-                    // Hide the stock PlayerView spinner — we render
-                    // the branded `BufferingOverlay` composed below
-                    // instead. SHOW_BUFFERING_NEVER keeps the built-
-                    // in one from flashing in for a few ms during
-                    // state transitions.
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                    this.player = player
-                }
+                // v1.44.36: inflate from XML so we can use
+                // surface_type="texture_view" — the default SurfaceView
+                // produces a 1-2 pixel bright vertical line on the right
+                // edge of dark scenes (HW overlay chroma upsampling
+                // overshoot, ExoPlayer issue #8394). TextureView routes
+                // frames through GPU compositing which clamps edge
+                // sampling. See res/layout/player_view_texture.xml.
+                val view = android.view.LayoutInflater.from(c).inflate(
+                    com.hushtv.tv.R.layout.player_view_texture,
+                    null,
+                    false,
+                ) as PlayerView
+                view.player = player
+                view
             },
             update = { view ->
                 view.resizeMode = when (aspectMode) {

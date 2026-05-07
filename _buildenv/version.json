@@ -1,14 +1,15 @@
 {
-  "versionCode": 435,
-  "versionName": "1.44.35",
+  "versionCode": 436,
+  "versionName": "1.44.36",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX (DVR black-screen, ACTUAL root cause via PlaybackTelemetry) — Telemetry surfaced ArrayIndexOutOfBoundsException(length=1, index=1) inside Media3 1.4.1's Mp4Extractor on every recording. Root cause: ffmpeg's +faststart+frag_keyframe+empty_moov MP4 muxer + MPEG-TS source produces files with thousands of stsc entries and edit lists that overflow Mp4Extractor's internal arrays. Fix: switched DVR recording format to MPEG-TS (.ts) — the canonical streaming-capture container. ExoPlayer's TsExtractor handles TS files trivially (15+ years of production reliability). Server now writes /home/dvr/recordings/{user}/{rec}.ts files, stream endpoint returns Content-Type: video/mp2t. Verified end-to-end: 26 s test recording produced a clean .ts file, ffprobe parses h264+aac perfectly, stream endpoint serves correct Content-Type, first byte is the TS sync byte 0x47.",
-    "Removed the v1.44.32 client-side MimeTypes.VIDEO_MP4 hint — let ExoPlayer pick the extractor automatically from the server's Content-Type. This way TS captures route to TsExtractor, legacy .mp4 files route to Mp4Extractor, and any future format works without a client release.",
-    "PlaybackTelemetry from v1.44.34 stays — proved its worth this round, will be invaluable for any future regressions.",
-    "Mandatory:true so older clients pull the new APK on next launch."
+    "FIX (right-edge vertical line glitch on dark scenes) — Replaced PlayerView's default SurfaceView surface with a TextureView surface across both TV and Mobile players. This eliminates the 1-2 px bright vertical line on the right edge of dark frames (HW overlay chroma upsampling overshoot, ExoPlayer #8394). New res/layout/player_view_texture.xml inflated by both AndroidView wrappers.",
+    "FIX (record without EPG would silently capture for 1 h) — Long-press OK Record action and the in-player REC chip now both refuse recording on channels with no EPG, with a clear toast: \"Can't record \\\"X\\\" — this channel has no program guide. Recording is disabled until EPG is available.\" Applied on TV and Mobile.",
+    "DVR quota lowered from 20 h to 5 h per user. Server: DEFAULT_QUOTA_S 72_000 → 18_000, systemd unit Environment override matched. Skip-reason / quota-exceeded toast text updated.",
+    "Telemetry — PlaybackTelemetry now also flushes a report when video starts but no audio format / decoder ever initializes (e.g. movie like Blue Ruin reportedly has no audio). Lets us see exactly which audio format the file carries and whether the decoder rejected it, no guessing.",
+    "Mandatory:true so v1.44.35 devices upgrade automatically."
   ]
 }

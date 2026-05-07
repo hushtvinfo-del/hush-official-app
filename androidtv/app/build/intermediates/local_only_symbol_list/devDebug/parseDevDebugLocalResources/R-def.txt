@@ -12,6 +12,7 @@ drawable ic_launcher_foreground
 drawable splash_empty
 drawable tv_banner
 font inter
+layout player_view_texture
 mipmap ic_launcher
 mipmap ic_launcher_round
 string app_name

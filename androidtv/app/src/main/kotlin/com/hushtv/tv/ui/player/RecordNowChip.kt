@@ -192,12 +192,28 @@ private fun startRecording(
     setState("busy")
     scope.launch {
         val nowShow = resolveNowPlaying(playlist)
+        // v1.44.36 — block recording on channels without EPG.
+        // Without an EPG-derived end time the server falls back to a
+        // default (1 h) and the recording would silently consume up
+        // to that much of the user's quota for a channel they may
+        // have only watched briefly. Better UX is to refuse and
+        // surface a clear, actionable message.
+        if (nowShow == null) {
+            setState("idle")
+            setToast(null)
+            android.widget.Toast.makeText(
+                ctx,
+                "Can't record \"$channelName\" — this channel has no program guide. Recording is disabled until EPG is available.",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+            return@launch
+        }
         val result = DvrApi.recordNow(
             userId = uid,
             channelUrl = channelUrl,
             channelName = channelName,
-            showTitle = nowShow?.title.orEmpty(),
-            showEndsAtEpoch = (nowShow?.stopMs ?: 0L) / 1000L,
+            showTitle = nowShow.title,
+            showEndsAtEpoch = nowShow.stopMs / 1000L,
         )
         when (result) {
             is DvrApi.RecordNowResult.Success -> {

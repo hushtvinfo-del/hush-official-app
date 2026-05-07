@@ -1,6 +1,83 @@
 # HushTV — Product Requirements Document
 
-## v1.44.35 (DEV ONLY) — DVR black-screen ACTUALLY FIXED — switched to MPEG-TS — 2026-05-07  ⬅ LATEST
+## v1.44.36 (DEV ONLY) — EPG-gate recording + 5h quota + right-edge glitch fix + audio telemetry — 2026-05-07  ⬅ LATEST
+
+User report after v1.44.35 ("Ok works now"): four follow-up items.
+
+### Fix 1 — Block "record now" on channels with no EPG
+
+Without an EPG-derived end time the server fell back to a 1-hour default
+duration. User worry was that they'd accidentally schedule huge captures
+for channels that had no program info. Fix: in `RecordNowChip`,
+`TVChannelActionsDialog`, and the mobile `actionCard`, we now query
+`EpgService.nowPlaying()` and refuse the action if it returns null,
+showing the toast: *"Can't record \"X\" — this channel has no program
+guide. Recording is disabled until EPG is available."*
+
+### Fix 2 — DVR quota 20 h → 5 h
+
+`DEFAULT_QUOTA_S` 72_000 → 18_000 in `dvr_service.py`. Systemd unit
+override `Environment="DVR_QUOTA_SECONDS=72000"` updated to `18000`
+and `daemon-reload` applied. Skip-reason / quota-exceeded message
+updated to *"You have used all 5 hours of your recording quota."*
+Verified live: `GET /api/dvr/quota` now returns `quota_s=18000`.
+
+### Fix 3 — Right-edge vertical bright line on dark scenes
+
+Reproducible across all dark frames in movies / series, both TV +
+Mobile. Root cause: PlayerView's default `SurfaceView` surface routes
+frames straight to a hardware overlay plane on Android TV. On several
+chipsets (Sony Bravia, NVIDIA SHIELD, etc. — ExoPlayer issue #8394)
+the HW scaler produces 1-2 pixels of chroma upsampling overshoot at
+the right edge of the surface, which is invisible on bright frames
+but very visible on near-black scenes.
+
+Fix: switched both TV and Mobile PlayerView constructions to inflate
+from `res/layout/player_view_texture.xml`, which sets
+`app:surface_type="texture_view"`. TextureView routes frames through
+GPU compositing with proper edge-clamped texture sampling, eliminating
+the artifact. Slight CPU/GPU bump on cheap TV SoCs but imperceptible
+on the SHIELD / Fire TV / TCL hardware our users are on.
+
+### Fix 4 — Audio missing on certain movies (e.g. "Blue Ruin")
+
+Telemetry-first approach. The `PlaybackTelemetry` collector from
+v1.44.34 already hooks `onAudioInputFormatChanged` /
+`onAudioDecoderInitialized` for every session — but it only flushed
+a report for DVR sessions or sessions with explicit errors. Extended
+the flush condition: if `videoDecoderInit && !audioDecoderInit &&
+!sawAudioFormat` AND the session ran for >8 s, that's a "video plays,
+audio missing" signature → upload a report. The next time the user
+plays Blue Ruin we'll see the exact audio format the file carries
+(PCM? AC3? EAC3? DTS? language tag?) and whether the decoder
+rejected it, then ship a targeted fix without guessing.
+
+### Files
+
+- `res/layout/player_view_texture.xml` (new) — PlayerView with
+  `surface_type="texture_view"`, `use_controller="false"`,
+  `show_buffering="never"`, `resize_mode="fit"`.
+- `TVPlayerScreen.kt`, `MobilePlayerScreen.kt` — inflate the new
+  layout instead of constructing PlayerView programmatically.
+- `RecordNowChip.kt` — refuse recording when EPG is null.
+- `TVLiveBrowseScreen.kt` — `TVChannelActionsDialog` Record action
+  refuses recording when EPG is null.
+- `MobileLiveHubScreen.kt` — mobile `actionCard` Record action
+  refuses recording when EPG is null.
+- `PlaybackTelemetry.kt` — `audioDecoderInit`, `videoDecoderInit`,
+  `sawAudioFormat` tracking; `flushIfDvr` extended with
+  `audioMissing` heuristic.
+- `/opt/hushdvr/dvr_service.py` (remote) — DEFAULT_QUOTA_S 5 h,
+  skip-reason text updated. Systemd Environment line aligned.
+
+### Build + deploy
+
+versionCode 435 → 436, versionName 1.44.35 → 1.44.36. Mandatory:true.
+APK live at `https://hushtv.xyz/HushTV.apk`. Tagged `v1.44.36-dev`.
+
+---
+
+## v1.44.35 (DEV ONLY) — DVR black-screen ACTUALLY FIXED — switched to MPEG-TS — 2026-05-07
 
 User report after v1.44.34: *"Nope nothing working same issue black
 screen always when you try to play this is crazy how did we go from

@@ -68,6 +68,10 @@
         "source": "com.hushtv.tv.app-main-8:/font/inter.ttf"
     },
     {
+        "merged": "com.hushtv.tv.app-devDebug-4:/layout_player_view_texture.xml.flat",
+        "source": "com.hushtv.tv.app-main-8:/layout/player_view_texture.xml"
+    },
+    {
         "merged": "com.hushtv.tv.app-devDebug-4:/mipmap-hdpi_ic_launcher.png.flat",
         "source": "com.hushtv.tv.app-main-8:/mipmap-hdpi/ic_launcher.png"
     },

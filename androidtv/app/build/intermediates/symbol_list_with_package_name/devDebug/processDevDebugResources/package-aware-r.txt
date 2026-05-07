@@ -604,6 +604,7 @@ layout notification_template_media
 layout notification_template_media_custom
 layout notification_template_part_chronometer
 layout notification_template_part_time
+layout player_view_texture
 layout splash_screen_view
 mipmap ic_launcher
 mipmap ic_launcher_round

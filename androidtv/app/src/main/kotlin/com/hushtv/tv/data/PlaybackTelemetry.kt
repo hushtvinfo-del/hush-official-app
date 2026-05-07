@@ -69,6 +69,9 @@ class PlaybackTelemetry private constructor(
     private val eventCount = AtomicInteger(0)
     private val firstFrameRendered = AtomicBoolean(false)
     private val flushed = AtomicBoolean(false)
+    private val audioDecoderInit = AtomicBoolean(false)
+    private val videoDecoderInit = AtomicBoolean(false)
+    private val sawAudioFormat = AtomicBoolean(false)
     @Volatile private var detached = false
 
     private val playerListener = object : Player.Listener {
@@ -195,6 +198,7 @@ class PlaybackTelemetry private constructor(
             format: Format,
             decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?,
         ) {
+            sawAudioFormat.set(true)
             log("Renderer.audio.format", formatStr(format))
         }
         override fun onVideoDecoderInitialized(
@@ -203,6 +207,7 @@ class PlaybackTelemetry private constructor(
             initializedTimestampMs: Long,
             initializationDurationMs: Long,
         ) {
+            videoDecoderInit.set(true)
             log(
                 "Renderer.video.decoder",
                 "name=$decoderName initMs=$initializationDurationMs",
@@ -214,6 +219,7 @@ class PlaybackTelemetry private constructor(
             initializedTimestampMs: Long,
             initializationDurationMs: Long,
         ) {
+            audioDecoderInit.set(true)
             log(
                 "Renderer.audio.decoder",
                 "name=$decoderName initMs=$initializationDurationMs",
@@ -298,23 +304,34 @@ class PlaybackTelemetry private constructor(
     }
 
     /** Submit telemetry to the crash server. Idempotent — we only
-     *  flush once per session. Only emits a report for DVR URLs and
-     *  for any session that produced a `Player.ERROR`, to keep the
-     *  signal-to-noise high on the dashboard. */
+     *  flush once per session. We emit a report for any session that
+     *  is suspicious from a debugging POV:
+     *   • DVR sessions (always — used to drive forward DVR fixes).
+     *   • Any Player.ERROR / Renderer.ERROR / Loader.ERROR.
+     *   • A video-decoder-init session that didn't see any audio
+     *     format AND ran for more than 8 s — strong signal that
+     *     the audio track is silently unavailable on this device
+     *     (e.g. AC3/EAC3 missing decoder, malformed audio format).
+     *     v1.44.36 — debugging "Blue Ruin has no audio". */
     private fun flushIfDvr(reason: String) {
         if (!flushed.compareAndSet(false, true)) return
-        // Emit only if it's likely a debugging-worthy session.
         val hasError = events.contains("Player.ERROR") ||
             events.contains("Renderer.video.ERROR") ||
+            events.contains("Renderer.audio.ERROR") ||
             events.contains("Loader.ERROR")
-        if (!isDvr && !hasError) return
+        val sessionMs = System.currentTimeMillis() - attachedAtMs
+        val audioMissing = videoDecoderInit.get() &&
+            !audioDecoderInit.get() &&
+            !sawAudioFormat.get() &&
+            sessionMs > 8_000L
+        if (!isDvr && !hasError && !audioMissing) return
         executor.execute {
-            runCatching { upload(reason, hasError) }
+            runCatching { upload(reason, hasError, audioMissing) }
                 .onFailure { Log.w(TAG, "upload failed ${it.message}") }
         }
     }
 
-    private fun upload(flushReason: String, hasError: Boolean) {
+    private fun upload(flushReason: String, hasError: Boolean, audioMissing: Boolean) {
         val fmtUtc = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
@@ -333,7 +350,11 @@ class PlaybackTelemetry private constructor(
             .append(" thread=playback-telemetry =====\n")
         sb.append("PLAYBACK-TELEMETRY flushReason=").append(flushReason)
             .append(" firstFrame=").append(firstFrameRendered.get())
+            .append(" videoDecoderInit=").append(videoDecoderInit.get())
+            .append(" audioDecoderInit=").append(audioDecoderInit.get())
+            .append(" sawAudioFormat=").append(sawAudioFormat.get())
             .append(" hasError=").append(hasError)
+            .append(" audioMissing=").append(audioMissing)
             .append(" eventCount=").append(eventCount.get()).append('\n')
         sb.append("device=").append(device).append('\n')
         sb.append("android_sdk=").append(Build.VERSION.SDK_INT).append('\n')

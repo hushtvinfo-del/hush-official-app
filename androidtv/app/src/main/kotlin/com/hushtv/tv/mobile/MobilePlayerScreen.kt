@@ -505,11 +505,16 @@ fun MobilePlayerScreen(
     ) {
         AndroidView(
             factory = {
-                PlayerView(it).apply {
-                    useController = false
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                    this.player = player
-                }
+                // v1.44.36: TextureView surface fixes right-edge bright
+                // vertical line on dark scenes — see XML layout for full
+                // rationale. Mirrors the TVPlayerScreen change.
+                val view = android.view.LayoutInflater.from(it).inflate(
+                    com.hushtv.tv.R.layout.player_view_texture,
+                    null,
+                    false,
+                ) as PlayerView
+                view.player = player
+                view
             },
             modifier = Modifier.fillMaxSize(),
             update = { pv -> pv.player = player },

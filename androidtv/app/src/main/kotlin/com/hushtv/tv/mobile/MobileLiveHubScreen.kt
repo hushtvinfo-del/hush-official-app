@@ -615,12 +615,23 @@ fun MobileLiveHubScreen(
                                 )
                                 val nowShow = com.hushtv.tv.data.EpgService
                                     .nowPlaying(card.streamId)
+                                // v1.44.36 — refuse to record without EPG.
+                                if (nowShow == null) {
+                                    android.widget.Toast.makeText(
+                                        ctx,
+                                        "Can't record \"${card.title}\" — this channel has no program guide. Recording is disabled until EPG is available.",
+                                        android.widget.Toast.LENGTH_LONG,
+                                    ).show()
+                                    recBusy = false
+                                    actionCard = null
+                                    return@launch
+                                }
                                 val result = com.hushtv.tv.data.DvrApi.recordNow(
                                     userId = uid,
                                     channelUrl = streamUrl,
                                     channelName = card.title,
-                                    showTitle = nowShow?.title.orEmpty(),
-                                    showEndsAtEpoch = (nowShow?.stopMs ?: 0L) / 1000L,
+                                    showTitle = nowShow.title,
+                                    showEndsAtEpoch = nowShow.stopMs / 1000L,
                                 )
                                 when (result) {
                                     is com.hushtv.tv.data.DvrApi.RecordNowResult.Success -> {
