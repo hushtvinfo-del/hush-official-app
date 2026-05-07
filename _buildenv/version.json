@@ -1,12 +1,13 @@
 {
-  "versionCode": 433,
-  "versionName": "1.44.33",
+  "versionCode": 434,
+  "versionName": "1.44.34",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX (DVR playback black-screen, attempt #2) — v1.44.32 added the MIME-type hint but the recording still opened paused with a black screen and pressing OK didn't unpause. Two new root causes found: (1) playWhenReady was being set on the next composition frame via a LaunchedEffect, which on slow devices left the player visibly paused for ~1 frame and triggered the auto-reconnect's stall watchdog; (2) the watchdog's 5 s buffer threshold was tuned for live streams — for a 700 MB recording with a 2 MB moov atom, the moov download itself can take 15+ s on slow WiFi, and the watchdog kept re-prepare()ing in a loop, restarting the moov download from scratch every time. Now: playWhenReady defaults to true synchronously in the remember{} block (Resume-prompt only flips it back when there's a genuine resume decision), AND the watchdog now uses a 30 s threshold for VOD/DVR (kept 5 s for live). Net effect: completed recordings start playing within a few seconds of opening and never get into the stuck-buffer-restart loop.",
-    "Mandatory:true so v1.44.32 devices force-update."
+    "TELEMETRY — Added per-session PlaybackTelemetry that hooks every Player.Listener and AnalyticsListener event for the entire DVR playback session, plus an HTTP probe of the stream URL (HEAD + Range GET first 64 KB checking for ftyp / moov / moof markers). Auto-POSTs to https://hushtv.xyz/crash/ tagged kind=playback_telemetry on screen exit. Captures: state transitions, isPlaying changes, video & audio format negotiation, decoder name + init time, RENDERED FIRST FRAME timing, downstream format changes, dropped frames, codec errors, load started / completed / canceled / errored with byte counts and durations, video size, track selection, position discontinuities. Lets us find the exact reason a recording isn't rendering without guessing.",
+    "Black-screen DVR fix attempts from v1.44.32 / v1.44.33 are still in place (MIME hint, synchronous playWhenReady=true, 30 s VOD stall threshold, server-side HEAD support).",
+    "Mandatory:true — install once and the next time you tap a recording the telemetry uploads on exit."
   ]
 }

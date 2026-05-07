@@ -176,6 +176,22 @@ fun TVPlayerScreen(
         onDispose { mon.detach() }
     }
 
+    // ─── Playback telemetry (v1.44.34) ──────────────────────────────
+    // Captures Player + AnalyticsListener events for the entire
+    // session and POSTs them to the crash server with
+    // kind=playback_telemetry on dispose. Used for tracking down DVR
+    // playback issues without guessing — view at
+    // https://hushtv.xyz/crash/?since=24h .
+    DisposableEffect(player, currentUrl) {
+        val tel = com.hushtv.tv.data.PlaybackTelemetry.attach(
+            ctx, player,
+            streamUrl = currentUrl,
+            isLive = isLive,
+            channelName = currentName,
+        )
+        onDispose { tel.detach() }
+    }
+
     // ── OpenSubtitles plumbing ──────────────────────────────────────
     // The detail screen stashes the title / season / episode in
     // [SubtitleSearchContext] right before navigating here. We consume

@@ -1,6 +1,148 @@
 # HushTV — Product Requirements Document
 
-## v1.44.33 (DEV ONLY) — DVR playback fix attempt #2 (multi-layer) — 2026-05-07  ⬅ LATEST
+## v1.44.34 (DEV ONLY) — DVR playback BLACK SCREEN: actual root cause found and fixed — 2026-05-07  ⬅ LATEST
+
+User report after v1.44.33: *"Nope, nothing works. Same issue. When you
+press a recording, it just goes to a black screen. It shows that it's
+not even playing. It just comes up paused… we need to just figure this
+out without guessing, and find the exact error. There's gotta be a way
+we can create logs and then send the logs to the crash report server.
+You analyze it and fix it."*
+
+The user was right. v1.44.32 + v1.44.33 were guesses that helped (MIME
+hint, sync playWhenReady, lenient VOD stall threshold) but did not
+fix the actual root cause. This release adds proper telemetry, AND we
+used existing freeze-monitor logs to find the smoking gun.
+
+### Root cause — `ERROR_CODE_PARSING_CONTAINER_MALFORMED`
+
+Pulled from the freeze-monitor crash dashboard
+(`https://hushtv.xyz/crash/?since=24h`) — every DVR playback session
+since v1.44.32 reports:
+
+```
+[freeze-monitor] onPlayerError code=3001
+                 name=ERROR_CODE_PARSING_CONTAINER_MALFORMED
+url=http://216.152.148.150/api/dvr/recordings/.../stream
+```
+
+Inspected the actual MP4 atom tree of an offending recording:
+
+```
+ftyp(32)
+moov(341578)
+  mvhd(108)
+  trak(272177)   ← video, fully populated stbl
+  trak(69187)    ← audio, fully populated stbl
+  udta(98)
+    meta(90)         ← THIS IS THE PROBLEM
+      [first 4 bytes of meta payload: 0x00000000]
+```
+
+The `meta` atom inside `udta` is FFmpeg's iTunes-style metadata
+container (carries `©too=Lavf60.16.100`). Per ISO/IEC 14496-12 it's
+a **FullBox** — first 4 bytes after the header are version (1 byte)
++ flags (3 bytes), THEN child atoms. Per the older QuickTime spec
+it's NOT a FullBox — children start immediately.
+
+**Media3 1.4.1's `Mp4Extractor` parses `meta` in QuickTime mode**
+when found inside `udta`. It reads the first 4 bytes after `meta`
+header as the start of a child atom — sees size=0 type=`\x00\x00\x00!`
+— invalid → throws ERROR_CODE_PARSING_CONTAINER_MALFORMED. Black
+screen forever on every recording.
+
+This explains *everything*:
+- Why `playWhenReady = true` "didn't help" — the player was being
+  put into ERROR state immediately by the parser.
+- Why pressing OK / Play "did nothing" — once in ERROR state, the
+  controls can't kick the player out without a re-prepare.
+- Why the auto-reconnect kept retrying — `ERROR_CODE_PARSING_*` is
+  in `RECOVERABLE_ERRORS` set so it kept re-prepare()ing.
+- Why ffprobe / VLC / FFmpeg play the file fine — they all parse
+  `meta` as ISO BMFF FullBox, the FFmpeg-correct way.
+
+### The fix — surgical `udta` → `free` rename, server-side
+
+`free` atoms are valid MP4 no-ops that every parser ignores. `udta`
+sits AFTER both traks in moov, so renaming it preserves every
+sample table the player needs. The patch is **4 bytes per file**:
+overwrite the ASCII type field at the udta header with `free`.
+
+Implementation: added `_strip_udta_to_free()` helper to
+`/opt/hushdvr/dvr_service.py` on the DVR host. Walks the atom
+tree, finds every `udta` atom (top level + inside `moov`), and
+overwrites just the type bytes in-place. Called automatically as
+the last step of `_faststart_remux()` so all FUTURE recordings
+auto-patch on completion.
+
+Applied to all 5 existing completed recordings on the server
+(`/home/dvr/recordings/*/*.mp4`) — all 5 patched successfully.
+
+### Telemetry shipped this release
+
+Even though the root cause is now fixed, we shipped a proper
+`PlaybackTelemetry` class anyway because the freeze-monitor's
+3 s threshold sometimes hides interesting events. New behaviour:
+
+- Hooks **every** `Player.Listener` event (state, isPlaying,
+  playWhenReady, video size, tracks, timeline, error, position
+  discontinuity).
+- Hooks **every** relevant `AnalyticsListener` event (load
+  started / completed / canceled / errored, video & audio input
+  format changed, decoder name + init time, downstream format
+  change, dropped frames, codec errors, RENDERED FIRST FRAME).
+- Issues an HTTP probe of the stream URL (HEAD + Range GET first
+  64 KB, looking for ftyp / moov / moof markers) so we can tell
+  network failures from container failures.
+- POSTs to the crash server tagged `kind=playback_telemetry`
+  on screen exit. Capped at 800 events / session to bound size.
+
+The telemetry will help us catch any future regressions in
+seconds, not after multi-round black-screen guessing games.
+
+### Files
+
+- `/opt/hushdvr/dvr_service.py` (remote, 216.152.148.150) — added
+  `_strip_udta_to_free()` helper, called from `_faststart_remux()`.
+  Backup at `/opt/hushdvr/dvr_service.py.bak.<epoch>`.
+- `PlaybackTelemetry.kt` (new, 562 lines) — TV+Mobile per-session
+  telemetry hooked into `TVPlayerScreen`.
+- `TVPlayerScreen.kt` — `DisposableEffect` that attaches the
+  telemetry alongside the existing `PlaybackFreezeMonitor`.
+
+### Build + deploy
+
+versionCode 433 → 434, versionName 1.44.33 → 1.44.34. mandatory:true.
+APK live at `https://hushtv.xyz/HushTV.apk`. Tagged `v1.44.34-dev`.
+
+### Important note for users
+
+Server-side fix means the user's EXISTING v1.44.32 / v1.44.33
+client should also be able to play recordings now without an APK
+update — re-tap a recording and it should start playing. Updating
+to v1.44.34 only adds the telemetry plumbing for future debugging.
+
+### Lessons preserved
+
+- "ExoPlayer black screen + isPlaying=false + Play button
+  unresponsive" almost always = parser threw the player into
+  ERROR state during initial moov read. The `freeze-monitor`'s
+  PlayerError trace will tell you the error code; look it up in
+  `androidx.media3.common.PlaybackException` constants.
+- ERROR_CODE_PARSING_CONTAINER_MALFORMED in particular is rare
+  for files generated by FFmpeg unless ffmpeg's userdata writer
+  emits a struct that the player parses in a different mode than
+  the writer used. `udta>meta` is the most common offender —
+  ffmpeg writes ISO BMFF, some parsers read QuickTime.
+- When an MP4 file plays in ffprobe / VLC but black-screens in
+  ExoPlayer, the answer is almost certainly a non-mainstream atom
+  inside moov. `python -c "..."` atom dumper is your friend.
+- Telemetry early. If we'd had `PlaybackTelemetry` two iterations
+  ago we'd have fixed this in one round, not three.
+
+---
+
+## v1.44.33 (DEV ONLY) — DVR playback fix attempt #2 (multi-layer) — 2026-05-07
 
 User report after v1.44.32: *"Nope its still not working every recording
 comes up with a black screen it seems it opens on paused state and you
