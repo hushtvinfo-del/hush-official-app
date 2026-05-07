@@ -68,6 +68,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -321,6 +322,21 @@ def _init_db() -> None:
                 ON sports_games(league_id, start_utc);
             CREATE INDEX IF NOT EXISTS sports_games_start_idx
                 ON sports_games(start_utc);
+            -- v1.44.26 — TheSportsDB-given broadcaster table.
+            -- One row per (event, broadcaster, country) triple
+            -- because TheSportsDB returns multi-row TV listings
+            -- (game X is on TSN1 in CA, TNT in US, BeIN Max 6 in FR…).
+            CREATE TABLE IF NOT EXISTS sports_broadcasts (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                sportsdb_id   TEXT NOT NULL,
+                channel_name  TEXT NOT NULL,
+                country       TEXT,
+                logo_url      TEXT,
+                updated_ts    INTEGER NOT NULL,
+                UNIQUE(sportsdb_id, channel_name, country)
+            );
+            CREATE INDEX IF NOT EXISTS sports_broadcasts_event_idx
+                ON sports_broadcasts(sportsdb_id);
             CREATE TABLE IF NOT EXISTS sports_ppv (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 source          TEXT NOT NULL,          -- 'sportsdb' | 'manual'
@@ -881,7 +897,240 @@ def prune_old() -> int:
         return (r1.rowcount or 0) + (r2.rowcount or 0)
 
 
+# ── Broadcasts ingestion (v1.44.26) ────────────────────────────────
+# TheSportsDB exposes a separate `eventstv.php?d=YYYY-MM-DD&s=<sport>`
+# endpoint that returns one row per (event × broadcaster × country).
+# The richer per-event `lookuptv.php?id=<event>` works too but is
+# 1 HTTP call per game (would burn 200+ req per refresh). The bulk
+# date+sport endpoint covers 7 days of slate in 7 × 6 sports = 42
+# requests, well within our Business-tier 120 req/min budget.
+
+# TheSportsDB sport names used by /eventstv.php?s=...
+_SPORT_BY_LEAGUE_SLUG: Dict[str, str] = {
+    "nhl":   "Ice_Hockey",
+    "mlb":   "Baseball",
+    "nba":   "Basketball",
+    "ncaab": "Basketball",
+    "nfl":   "American_Football",
+    "ncaaf": "American_Football",
+    "cfl":   "American_Football",
+    "ufc":   "Fighting",
+    "mls":   "Soccer",
+    "epl":   "Soccer",
+    "ucl":   "Soccer",
+    "f1":    "Motorsport",
+}
+
+
+def refresh_broadcasts_for_window(days: int = 7) -> int:
+    """Pull broadcaster lists for every active league for the next
+    [days] days. Returns the # of (event × channel) pairs upserted.
+
+    Strategy: union the unique sport names across all active leagues
+    (nhl/ahl/khl all map to 'Ice_Hockey'), then for each (date, sport)
+    pair hit `/eventstv.php?d=YYYY-MM-DD&s=<sport>`. Filter results
+    to events whose `idEvent` is in our `sports_games` table. Dedupe
+    by (sportsdb_id, channel_name, country) so we can keep CA + US
+    + UK rows for the same game.
+    """
+    today = datetime.now(timezone.utc).date()
+    dates = [today + timedelta(days=i) for i in range(days)]
+
+    with _conn() as c:
+        active_slugs = [r["slug"] for r in c.execute(
+            "SELECT slug FROM sports_leagues WHERE active=1").fetchall()]
+    sports = sorted({
+        _SPORT_BY_LEAGUE_SLUG[s] for s in active_slugs
+        if s in _SPORT_BY_LEAGUE_SLUG
+    })
+    if not sports:
+        return 0
+
+    # Cache the set of known event ids so we don't waste rows on
+    # broadcasts for events we don't track (e.g. international
+    # divisions returned by 'Soccer' that we don't ingest).
+    with _conn() as c:
+        known_ids = {
+            row["sportsdb_id"]
+            for row in c.execute(
+                "SELECT sportsdb_id FROM sports_games "
+                "WHERE start_utc >= ?",
+                (int((today - timedelta(days=2)).strftime("%s")) * 1000,),
+            ).fetchall()
+        }
+    if not known_ids:
+        return 0
+
+    inserted = 0
+    now_ms = int(time.time() * 1000)
+
+    with _conn() as c:
+        for d in dates:
+            for sport in sports:
+                params = {"d": d.isoformat(), "s": sport}
+                data = _sportsdb_get("eventstv.php", params)
+                rows = data.get("tvevents") or []
+                for row in rows:
+                    sdb_id = (row.get("idEvent") or "").strip()
+                    if not sdb_id or sdb_id not in known_ids:
+                        continue
+                    ch = (row.get("strChannel") or "").strip()
+                    if not ch:
+                        continue
+                    country = (row.get("strCountry")
+                               or row.get("strEventCountry") or "").strip() or None
+                    logo = (row.get("strLogo") or "").strip() or None
+                    c.execute(
+                        "INSERT INTO sports_broadcasts "
+                        "(sportsdb_id, channel_name, country, logo_url, updated_ts) "
+                        "VALUES (?, ?, ?, ?, ?) "
+                        "ON CONFLICT(sportsdb_id, channel_name, country) "
+                        "DO UPDATE SET logo_url=excluded.logo_url, "
+                        "              updated_ts=excluded.updated_ts",
+                        (sdb_id, ch, country, logo, now_ms),
+                    )
+                    inserted += 1
+                # Spread requests at ~2/sec — Business tier is 60/min,
+                # but other refreshers (schedules, scores) share the
+                # budget. 500 ms gives them headroom without making
+                # the broadcasts pull glacial.
+                time.sleep(0.5)
+    return inserted
+
+
+# Cache of (game_id) → ordered Canadian-first channel list, scoped
+# to a single resolver request. Keyed on the connection object so
+# we don't bleed across requests.
+def _broadcasts_for_game(c: sqlite3.Connection, game_id: int) -> List[str]:
+    """Fetch all known broadcasters for a game from sports_broadcasts,
+    Canadian-first sorted. Channels are de-duplicated case-insensitive
+    (preserving original casing of the first occurrence)."""
+    rows = c.execute(
+        "SELECT b.channel_name, b.country FROM sports_broadcasts b "
+        "JOIN sports_games g ON g.sportsdb_id = b.sportsdb_id "
+        "WHERE g.id = ?",
+        (game_id,),
+    ).fetchall()
+    if not rows:
+        return []
+    # Canada rows first by `country` field, then by name preference.
+    ca = [r["channel_name"] for r in rows if (r["country"] or "").lower() in (
+        "canada", "ca",
+    )]
+    rest = [r["channel_name"] for r in rows if (r["country"] or "").lower() not in (
+        "canada", "ca",
+    )]
+    # Within each bucket, run the broadcaster-name pattern sort so
+    # e.g. a Sportsnet US affiliate (rare) gets demoted under TSN1.
+    ca_sorted = _canadian_first_sorted(ca)
+    rest_sorted = _canadian_first_sorted(rest)
+    seen = set()
+    out: List[str] = []
+    for n in ca_sorted + rest_sorted:
+        k = n.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(n)
+    return out
+
+
 # ── Channel resolution ─────────────────────────────────────────────
+
+# v1.44.26 — TheSportsDB `strChannel` auto-mapping.
+#
+# TheSportsDB returns a comma/slash/pipe/ampersand separated list of
+# broadcasters per event (e.g. "TSN1, ESPN+, NHL Network" for a NHL
+# game with Canadian + US + streaming feeds). We auto-extract that
+# list, sort it Canadian-first per user direction, and use it as a
+# resolver tier between admin event-overrides and admin team-maps.
+#
+# This means a game gets the SAME broadcaster TheSportsDB knows it's
+# on without an admin having to manually map every team / fixture.
+# The per-team admin map still applies when TheSportsDB doesn't
+# return a broadcaster (rare but happens for friendlies, lower
+# divisions, etc.). Per-game admin overrides still win above
+# everything (the manual-fix escape hatch).
+
+_CANADIAN_BROADCASTER_PATTERNS = [
+    # Highest priority Canadian broadcasters, in rough preference
+    # order (regional > national premium > national basic).
+    "sportsnet",   # Sportsnet One, East, West, Pacific, 360, etc.
+    "tsn",         # TSN 1-5 + TSN+
+    "rds",         # French Canadian
+    "tva sports",  # French Canadian premium
+    "citytv",
+    "city tv",
+    "ctv",
+    "cbc",
+    "global",
+    "bnn",
+    "fubo",        # FuboTV Canada
+]
+
+# Tokens that indicate a US-only broadcaster — explicitly DEPRIORITIZED
+# so a Canadian match wins even when Canadian and US co-broadcast.
+_US_BROADCASTER_PATTERNS = [
+    "espn", "fox", "nbc", "cbs", "abc", "tnt", "tbs", "usa network",
+    "nfl network", "nba tv", "nhl network", "mlb network",
+    "peacock", "paramount", "amazon", "apple", "max ",
+]
+
+
+def _split_tsdb_channels(raw: Optional[str]) -> List[str]:
+    """Split TheSportsDB's strChannel string into a clean ordered
+    list of broadcaster names. Handles comma / slash / pipe /
+    ampersand / semicolon separators and trims whitespace.
+    """
+    if not raw:
+        return []
+    # Replace common separator chars with commas, then split.
+    cleaned = re.sub(r"[/|&;]", ",", raw)
+    parts = [p.strip() for p in cleaned.split(",")]
+    # Filter empties + dedupe preserving order.
+    seen: set[str] = set()
+    out: List[str] = []
+    for p in parts:
+        if not p:
+            continue
+        key = p.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
+def _is_canadian_broadcaster(name: str) -> bool:
+    n = name.lower()
+    return any(p in n for p in _CANADIAN_BROADCASTER_PATTERNS)
+
+
+def _is_us_only_broadcaster(name: str) -> bool:
+    n = name.lower()
+    return (
+        any(p in n for p in _US_BROADCASTER_PATTERNS)
+        and not any(p in n for p in _CANADIAN_BROADCASTER_PATTERNS)
+    )
+
+
+def _canadian_first_sorted(names: List[str]) -> List[str]:
+    """Return [names] reordered as: Canadian → neutral/intl → US-only.
+    Preserves original order within each bucket so TheSportsDB's
+    natural priority within Canadian channels is kept."""
+    canadian: List[str] = []
+    neutral: List[str] = []
+    us_only: List[str] = []
+    for n in names:
+        if _is_canadian_broadcaster(n):
+            canadian.append(n)
+        elif _is_us_only_broadcaster(n):
+            us_only.append(n)
+        else:
+            neutral.append(n)
+    return canadian + neutral + us_only
+
+
 def _resolve_channel(
     c: sqlite3.Connection,
     league_slug: str,
@@ -890,9 +1139,21 @@ def _resolve_channel(
     game_id: Optional[int] = None,
 ) -> Optional[str]:
     """Return the best-match channel name for a game, or None if none.
-    Lookup order:  event override -> team map -> league fallback.
+
+    Lookup order (v1.44.26):
+        1. Per-game admin override (manual escape hatch).
+        2. TheSportsDB `strChannel`, Canadian-first sorted (NEW).
+        3. Team map (admin).
+        4. League fallback (admin).
+
+    Returning the FIRST candidate from each tier — the client-side
+    [SportsChannelMatcher] then maps that string ("TSN 1") to the
+    user's actual Xtream channel ("CA: TSN 1 HD" / "TSN1 FHD" /
+    etc) using token + digit-word fuzzy matching. If the matcher
+    can't find an Xtream channel, the game is hidden client-side
+    (a missing channel doesn't help anyone).
     """
-    # 1. Per-game override
+    # 1. Per-game admin override (highest — manual fix wins everything)
     if game_id is not None:
         r = c.execute(
             "SELECT channel_name FROM sports_channel_map "
@@ -903,7 +1164,17 @@ def _resolve_channel(
         if r:
             return r["channel_name"]
 
-    # 2. Team map — try home first (canonical "home broadcaster")
+    # 2. TheSportsDB-given broadcaster (v1.44.26 — read from the
+    #    sports_broadcasts table populated by refresh_broadcasts_for_window).
+    #    Returns the FIRST Canadian-priority candidate. The client-side
+    #    SportsChannelMatcher then maps that string to the user's
+    #    Xtream channel ("TSN 1" → "CA: TSN 1 HD") via fuzzy match.
+    if game_id is not None:
+        cands = _broadcasts_for_game(c, game_id)
+        if cands:
+            return cands[0]
+
+    # 3. Team map — try home first (canonical "home broadcaster")
     for team_id in (home_team_id, away_team_id):
         if team_id is None:
             continue
@@ -916,7 +1187,7 @@ def _resolve_channel(
         if r:
             return r["channel_name"]
 
-    # 3. League fallback
+    # 4. League fallback
     r = c.execute(
         "SELECT channel_name FROM sports_channel_map "
         "WHERE scope='league' AND scope_id=? AND active=1 "
@@ -955,6 +1226,7 @@ def _worker_loop() -> None:
     last_schedule = 0.0
     last_live = 0.0
     last_ppv = 0.0
+    last_broadcasts = 0.0
     while True:
         now = time.time()
         try:
@@ -982,6 +1254,19 @@ def _worker_loop() -> None:
                 except Exception:
                     log.exception("ppv refresh failed")
                 last_ppv = now
+            # v1.44.26 — Refresh TheSportsDB broadcaster lists every
+            # 30 minutes. The endpoint is rate-friendly (≈42 req per
+            # full window throttled at 2 req/s = ~21 s wall time).
+            # 30 min cadence keeps the broadcaster lineup fresh as
+            # TheSportsDB publishes / updates feeds throughout the
+            # day on game days.
+            if now - last_broadcasts > 30 * 60:
+                try:
+                    n = refresh_broadcasts_for_window(days=7)
+                    log.info("sports broadcasts refresh upserted %d rows", n)
+                except Exception:
+                    log.exception("broadcasts refresh failed")
+                last_broadcasts = now
         except Exception:
             log.exception("worker loop iteration failed")
         time.sleep(30)
