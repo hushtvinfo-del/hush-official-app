@@ -156,12 +156,21 @@ fun TVSportsPage(
         rememberPlayablePpv(home?.ppv ?: emptyList(), channelIndex)
             .let { list -> remember(list) { list.sortedBy { it.first.start_utc } } }
 
-    // v1.44.27 — Sports channel picker. When the user clicks a game
-    // card, instead of tuning straight to a guessed channel, we
-    // open the GameChannelSheet that searches their Xtream EPG for
-    // every channel currently airing the game.
-    var pickerGame by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf<SportsGame?>(null)
+    // v1.44.31 — `rememberSaveable` so the picker reappears when
+    // user navigates BACK from the player. Previous behaviour: tap
+    // game → picker → tap channel → player → BACK → user landed on
+    // raw Sports page (picker was gone). Now: BACK from player →
+    // picker reopens with the same game; BACK again → Sports.
+    //
+    // We persist just the game id (Int is trivially saveable);
+    // SportsGame as a whole is not Parcelable. The id is looked up
+    // against the fresh `playableGames` list on re-mount below.
+    var pickerGameId by androidx.compose.runtime.saveable.rememberSaveable {
+        androidx.compose.runtime.mutableStateOf<Int?>(null)
+    }
+    val pickerGame: SportsGame? = remember(pickerGameId, playableGames) {
+        val id = pickerGameId ?: return@remember null
+        playableGames.firstOrNull { it.first.id == id }?.first
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -274,7 +283,7 @@ fun TVSportsPage(
                     playlistId = playlistId,
                     items = playableGames,
                     railFocus = railFocus,
-                    onCardClick = { g -> pickerGame = g },
+                    onCardClick = { g -> pickerGameId = g.id },
                     onGameFocused = { g, ch ->
                         // v1.44.10 — Use short_name (e.g. "White Sox",
                         // "Angels") in the hero title. The previous
@@ -315,16 +324,20 @@ fun TVSportsPage(
 
         // v1.44.27 — EPG channel picker sheet, overlays everything.
         if (pickerGame != null) {
-            val gameForSheet = pickerGame!!
+            val gameForSheet = pickerGame
             GameChannelSheet(
                 playlistId = playlistId,
                 game = gameForSheet,
-                onDismiss = { pickerGame = null },
+                onDismiss = { pickerGameId = null },
                 onPlay = { _, url ->
                     val title =
                         "${gameForSheet.away?.short_name ?: gameForSheet.away?.name ?: "?"} @ " +
                             (gameForSheet.home?.short_name ?: gameForSheet.home?.name ?: "?")
-                    pickerGame = null
+                    // v1.44.31 — DO NOT clear pickerGameId here. We
+                    // want it preserved so when the user presses BACK
+                    // from the player, the picker reappears with the
+                    // same game. The picker is dismissed only by an
+                    // explicit DISMISS / Back press inside the sheet.
                     nav.navigate(
                         "player/$playlistId/" +
                             "${android.net.Uri.encode(url)}/" +

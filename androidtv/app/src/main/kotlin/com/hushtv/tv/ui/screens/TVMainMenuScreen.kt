@@ -270,11 +270,18 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
 
     val ctxLocal = androidx.compose.ui.platform.LocalContext.current
 
-    var currentPage by remember(hasCw) {
+    // v1.44.31 — `rememberSaveable` instead of `remember` so the
+    // selected page survives navigation. Previously, leaving the
+    // menu (player / detail screen / settings) and pressing BACK
+    // re-mounted the menu and reset the page to "cw" or "discovery".
+    // SavedStateHandle is scoped to this nav back-stack entry so
+    // BACK from player → comes back on the same Sports tab.
+    var currentPage by androidx.compose.runtime.saveable.rememberSaveable {
         // Continue Watching is the natural landing page when the user
         // has anything in progress — the "return to where you left off"
         // moment is more valuable than any discovery row. Falls back to
-        // Discovery when CW is empty.
+        // Discovery when CW is empty. Only applies on FIRST mount;
+        // subsequent re-mounts restore whatever the user last viewed.
         mutableStateOf(if (hasCw) "cw" else "discovery")
     }
     val pageOrder = remember(hasCw) {

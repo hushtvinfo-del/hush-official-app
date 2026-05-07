@@ -1,13 +1,13 @@
 {
-  "versionCode": 430,
-  "versionName": "1.44.30",
+  "versionCode": 431,
+  "versionName": "1.44.31",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-05-07",
   "channel": "dev",
   "changelog": [
-    "FIX — NetworkOnMainThreadException root-cause when opening the channel picker: SportsApi.gameChannels() makes a synchronous OkHttp call but I was calling it inside LaunchedEffect on Dispatchers.Main. Wrapped in withContext(Dispatchers.IO) so the network I/O runs on a worker thread. (This was the actual reason the picker showed an error every time — not a timeout.)",
-    "FIX — DISMISS button couldn't be focused. I was only requesting focus on the first ChannelRow when matches were present; in the error/empty/loading state the outer Box kept focus and the DISMISS button never received it. Now firstFocus.requestFocus() fires after every state transition (loading/matches/error), with a 50 ms yield so the FocusRequester is attached before the request.",
-    "Mandatory:true so v1.44.29 devices force-update."
+    "FIX (app-wide nav bug) — Pressing BACK from the player or any detail screen was always returning to the Discover/Continue-Watching tab regardless of which section the user was on. Root cause: TVMainMenuScreen's currentPage state used remember() instead of rememberSaveable(), so every re-mount (after popBackStack) reset the tab. Switched to rememberSaveable so the user's selected section (Sports / Collections / Themed / Genres / etc.) survives navigation.",
+    "FIX (Sports-specific) — BACK from a player launched via the EPG picker now reopens the picker (showing the same channel list for that game) instead of jumping straight to the Sports page. BACK again exits to Sports. pickerGameId is now rememberSaveable.",
+    "Mandatory:true so v1.44.30 devices force-update."
   ]
 }
