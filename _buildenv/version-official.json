@@ -1,13 +1,13 @@
 {
-  "versionCode": 449,
-  "versionName": "1.44.49",
+  "versionCode": 451,
+  "versionName": "1.44.51",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "official",
   "changelog": [
-    "New theme: \"Top Disney Movies of All Time\" — 200+ titles spanning Walt Disney Animation, Pixar, Golden-Age classics, Pirates, live-action remakes, Muppets, Star Wars and Marvel. Tile shows the iconic Lion King hero backdrop.",
-    "Update prompt: Dismiss button on the install stage so you can back out if you cancel the system installer.",
-    "Continue Watching: Are-you-done prompt, Clear All, tombstone deletion across devices, 14-day prune, auto-focus first CW tile, orphan blank-card auto-clean."
+    "Continue Watching: Phantom card titled \"Series\" / \"Movie\" with no poster — FIXED PROPERLY this time. The previous fix only blocked blank titles, but the bug was a literal kind word. New build (1) blocks the save at the source, (2) filters it from the row, AND (3) tombstones existing bad entries so the deletion syncs across every device on your playlist via the cloud sync server. Should disappear automatically on first launch — no Clear All needed.",
+    "Fire TV stability (P0): Live TV decoder churn fix from 1.44.50.",
+    "All v1.44.42 → v1.44.50 features still in place."
   ]
 }

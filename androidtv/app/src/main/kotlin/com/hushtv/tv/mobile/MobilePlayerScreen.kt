@@ -427,8 +427,19 @@ fun MobilePlayerScreen(
 
     // Switching channels (or to a new movie) — swap the media item without
     // releasing the player so we don't blink the surface.
+    //
+    // Round-1A (v1.44.50): explicit stop()+clearMediaItems() before
+    // setMediaItem so the previous source's MediaCodec ref releases
+    // BEFORE we queue the new one. Critical for low-RAM Fire Stick
+    // SKUs during channel +/- zapping. See TVLiveBrowseScreen.kt for
+    // the full RCA.
     LaunchedEffect(currentStreamUrl) {
         if (player.currentMediaItem?.localConfiguration?.uri?.toString() != currentStreamUrl) {
+            runCatching {
+                player.stop()
+                player.clearMediaItems()
+            }
+            kotlinx.coroutines.delay(16) // 1 frame so the codec releases
             player.setMediaItem(buildMobilePlayerMediaItem(currentStreamUrl))
             player.prepare()
             player.playWhenReady = true

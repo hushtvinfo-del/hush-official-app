@@ -36,6 +36,29 @@ object WatchProgressStore {
      *  for sibling devices to come online and observe a tombstone. */
     private const val PRUNE_AGE_MS = 14L * 24 * 60 * 60 * 1000
 
+    /**
+     * Sentinel titles that should NEVER appear in Continue Watching.
+     * These are the literal words "Movie" / "Series" / "movie" /
+     * "series" — kind labels, not real titles. Any entry carrying one
+     * of these is a corrupt save from a buggy upstream code path
+     * (most commonly: a deep-link launch that handed the player
+     * `channelName = "Series"` while `PlaybackMeta` was unset, then
+     * a periodic / dispose save fired with that string).
+     *
+     * v1.44.46 only rejected fully-blank titles. v1.44.51 widens the
+     * block to these sentinels too. We additionally TOMBSTONE any
+     * such entry already on disk (rather than just hard-delete)
+     * so the deletion propagates via SyncEngine to every device on
+     * the same playlist — fixing the user-reported bug where the
+     * bad card kept coming back from the cloud after Clear All.
+     */
+    private val KIND_SENTINEL_TITLES = setOf(
+        "Movie", "movie", "MOVIE",
+        "Series", "series", "SERIES",
+        "Episode", "episode", "EPISODE",
+        "Show", "show", "SHOW",
+    )
+
     data class Entry(
         val streamId: Int,
         val kind: String,          // "movie" | "series"
@@ -116,25 +139,31 @@ object WatchProgressStore {
     ) {
         val sane = durationMs >= MIN_VALID_DURATION_MS &&
             positionMs in 0..durationMs &&
-            title.isNotBlank()
+            title.isNotBlank() &&
+            title.trim() !in KIND_SENTINEL_TITLES
         if (!sane) {
             // Telemetry: if a save was rejected ONLY because the
-            // title was blank, fire a one-shot diagnostic ping so
-            // we can spot the upstream bug feeding the player an
-            // empty channelName + missing PlaybackMeta. Rate-
-            // limited inside CrashReporter to once per app launch.
-            // We deliberately DO NOT report duration/position
-            // failures — those are usually just early-frame saves
-            // when ExoPlayer hasn't decoded a duration yet.
-            if (title.isBlank() &&
+            // title was blank or a kind-sentinel, fire a one-shot
+            // diagnostic ping so we can spot the upstream bug
+            // feeding the player an empty channelName + missing
+            // PlaybackMeta. Rate-limited inside CrashReporter to
+            // once per app launch. We deliberately DO NOT report
+            // duration/position failures — those are usually just
+            // early-frame saves when ExoPlayer hasn't decoded a
+            // duration yet.
+            val titleProblem = title.isBlank() || title.trim() in KIND_SENTINEL_TITLES
+            if (titleProblem &&
                 durationMs >= MIN_VALID_DURATION_MS &&
                 positionMs in 0..durationMs
             ) {
                 runCatching {
                     CrashReporter.reportEvent(
                         ctx,
-                        "watch_progress_save_blank_title",
-                        "kind=$kind streamId=$streamId " +
+                        if (title.isBlank())
+                            "watch_progress_save_blank_title"
+                        else
+                            "watch_progress_save_sentinel_title",
+                        "kind=$kind streamId=$streamId title='$title' " +
                             "positionMs=$positionMs durationMs=$durationMs " +
                             "posterPresent=${!poster.isNullOrBlank()}",
                     )
@@ -175,21 +204,24 @@ object WatchProgressStore {
 
     /** Returns all in-progress titles sorted by most-recently-watched first.
      *
-     *  Filters out entries with a blank title — those are corrupt
-     *  saves from older builds (or from a player session that fired
-     *  before its metadata was hydrated) and would render as bare
-     *  "SERIES" / "MOVIE" placeholder cards with no poster, no name.
-     *  See [pruneOld] for the parallel hard-delete path that
-     *  garbage-collects them on the next read. */
+     *  Filters out entries with a blank title OR a kind-sentinel title
+     *  ("Movie", "Series", etc.) — those are corrupt saves from older
+     *  builds (or from a player session that fired before its metadata
+     *  was hydrated) and would render as bare placeholder cards with
+     *  no poster, no name. See [pruneOld] for the parallel
+     *  tombstone-then-delete path that garbage-collects them on the
+     *  next read AND propagates the deletion to other devices via
+     *  SyncEngine. */
     fun continueWatching(ctx: Context, kind: String? = null): List<Entry> {
         // Opportunistic prune — drops tombstones + stale entries older
-        // than 14 days + corrupt blank-title entries. Cheap (single
+        // than 14 days, AND tombstones any kind-sentinel-title corrupt
+        // entry so the deletion syncs across devices. Cheap (single
         // prefs scan) and only mutates if something actually expired.
         pruneOld(ctx)
         ensureCache(ctx)
         return cachedEntries.values
             .filter { it.isInProgress }
-            .filter { it.title.isNotBlank() }
+            .filter { it.title.isNotBlank() && it.title.trim() !in KIND_SENTINEL_TITLES }
             .filter { kind == null || it.kind == kind }
             .sortedByDescending { it.lastWatchedAt }
     }
@@ -243,12 +275,21 @@ object WatchProgressStore {
 
     /**
      * Hard-remove any row whose `lastWatchedAt` is older than
-     * [PRUNE_AGE_MS], OR whose title is blank (corrupt save —
-     * would render as a bare "SERIES"/"MOVIE" placeholder card
-     * with no poster). Applies to BOTH live entries (user hasn't
-     * touched it in 14 days — they don't want to see it any more)
-     * and tombstones (other devices have had plenty of time to
-     * sync). Idempotent and cheap; safe to call on every read.
+     * [PRUNE_AGE_MS]. For corrupt entries (blank title OR title
+     * equals one of [KIND_SENTINEL_TITLES]) we instead **tombstone**
+     * them (set `deleted = true` with `lastWatchedAt = now`) so the
+     * SyncEngine propagates the deletion to every other device on
+     * the same playlist via standard LWW merge. The tombstone itself
+     * is then hard-pruned 14 days later by the normal age check.
+     *
+     * This fixes the v1.44.50-and-earlier user-reported bug where a
+     * corrupt CW entry (e.g. literal title="Series") kept reappearing
+     * after Clear All — it was being re-downloaded from the cloud
+     * because another device on the playlist still had it. By writing
+     * a fresh-timestamp tombstone, we guarantee LWW resolves to the
+     * deletion on every device's next sync cycle.
+     *
+     * Idempotent and cheap; safe to call on every read.
      */
     fun pruneOld(ctx: Context) {
         val now = System.currentTimeMillis()
@@ -256,19 +297,46 @@ object WatchProgressStore {
         val all = prefs(ctx).all
         val ed = prefs(ctx).edit()
         var pruned = 0
+        var tombstoned = 0
         for ((k, v) in all) {
             if (v !is String) continue
             val e = decode(v) ?: continue
             val isStale = e.lastWatchedAt > 0 && e.lastWatchedAt < cutoff
-            val isCorrupt = e.title.isBlank()
-            if (isStale || isCorrupt) {
-                ed.remove(k)
-                pruned++
+            val isCorrupt = !e.deleted &&
+                (e.title.isBlank() || e.title.trim() in KIND_SENTINEL_TITLES)
+            when {
+                isStale -> {
+                    ed.remove(k)
+                    pruned++
+                }
+                isCorrupt -> {
+                    // Tombstone (don't hard-delete) so the deletion
+                    // syncs to other devices via LWW. The tombstone
+                    // itself will hard-prune in 14 days.
+                    val tombstone = e.copy(
+                        lastWatchedAt = now,
+                        deleted = true,
+                    )
+                    ed.putString(k, encode(tombstone))
+                    tombstoned++
+                }
             }
         }
-        if (pruned > 0) {
+        if (pruned > 0 || tombstoned > 0) {
             runCatching { ed.commit() }
             bumpCache()
+            // Telemetry — fires once per app launch even if multiple
+            // entries got tombstoned. Helps us see how widely the
+            // upstream bug spreads across the user base.
+            if (tombstoned > 0) {
+                runCatching {
+                    CrashReporter.reportEvent(
+                        ctx,
+                        "watch_progress_corrupt_entry_tombstoned",
+                        "tombstoned=$tombstoned pruned=$pruned",
+                    )
+                }
+            }
         }
     }
 

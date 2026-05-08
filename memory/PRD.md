@@ -1,6 +1,132 @@
 # HushTV — Product Requirements Document
 
-## v1.44.49 (DEV + OFFICIAL) — New theme: Top Disney Movies of All Time — 2026-02-08  ⬅ LATEST
+## v1.44.51 (DEV + OFFICIAL) — Phantom "Series" / "Movie" CW card — REAL fix — 2026-02-08  ⬅ LATEST
+
+User reported: *"This blank series, 7 minutes left card keeps coming up every time I open the app. It doesn't matter how many times I delete it or clear all. I even made a new profile and logged into a new profile and it's still coming up."*
+
+### Why v1.44.46's fix didn't work
+v1.44.46 only blocked saves where `title.isBlank()`. But the bad entry's title was the **literal word "Series"** (capital S — the kind label). Non-blank → passed all guards → kept appearing.
+
+And critically: even when the user's local Clear All wrote a tombstone, the bad entry kept being **re-downloaded from the cloud sync server**. Either another device on the playlist still had it, OR a code path on some build was re-creating it on every launch. New profiles using the same Xtream credentials = same SyncEngine bucket = same bad entry.
+
+### Fix (`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/WatchProgressStore.kt`)
+
+1. **Sentinel set defined**:
+   ```kotlin
+   private val KIND_SENTINEL_TITLES = setOf(
+       "Movie", "movie", "MOVIE",
+       "Series", "series", "SERIES",
+       "Episode", "episode", "EPISODE",
+       "Show", "show", "SHOW",
+   )
+   ```
+2. **`save()` rejects** titles that match the sentinel set (in addition to blank). Telemetry: new event tag `watch_progress_save_sentinel_title` includes `kind=… streamId=… title='…' positionMs=… durationMs=… posterPresent=…`.
+3. **`continueWatching()` filters** sentinel-titled entries so existing bad data on disk doesn't render even before prune runs.
+4. **`pruneOld()` TOMBSTONES** sentinel-titled entries (instead of just hard-deleting). The tombstone has `lastWatchedAt = now`, so when SyncEngine pushes on the next 30 s cycle the LWW merge resolves to deletion on every other device on the playlist. The tombstone itself is hard-pruned 14 days later by the normal age check. New telemetry tag `watch_progress_corrupt_entry_tombstoned` fires once per launch with the count.
+
+### What this fixes for the user
+- The phantom "Series" card disappears on first Home open after install (filter + tombstone).
+- The deletion now propagates through the cloud to every other device on the playlist, breaking the loop.
+- Even if some old build of the app on a different device keeps re-creating the bad entry, every 1.44.51+ device will tombstone it on each Home open and sync the tombstone — with a fresh `lastWatchedAt` it always wins LWW.
+- Future bad saves are blocked at the source.
+
+### Files touched
+```
+app/build.gradle.kts                                          bumped to 1.44.51 / 451
+app/src/main/kotlin/com/hushtv/tv/data/WatchProgressStore.kt
+_buildenv/version.json
+_buildenv/version-official.json
+```
+
+Build + deploy: `assembleDevDebug` ✓, `assembleOfficialDebug` ✓ (3m 8s — second run was fast thanks to cached transforms after the disk-janitor scan).
+- Dev: `https://hushtv.xyz/version.json` → `1.44.51 / 451` ✓
+- Official: `https://hushtv.xyz/version-official.json` → `1.44.51 / 451` ✓
+
+---
+
+## v1.44.50 (DEV + OFFICIAL) — Fire TV reboot fix: hardware-decoder churn elimination — 2026-02-08
+
+User report: *"Fire TV Stick / 4K / 4K Max devices completely reboot when scrolling through the Live TV channel list. Confirmed visually on video. Investigate crash dashboard first, then fix."*
+
+### Phase 1 — Crash dashboard analysis
+68 Fire TV crash reports across 15 unique Amazon device IDs (AFTMM/AFTR/AFTKM/AFTKA/AFTSSS/AFTKMST/AFTTI43) over 4 days, versions v1.43.68 through v1.44.49.
+
+**Key signature** (11 reports): `PLAYBACK-TELEMETRY flushReason=detach firstFrame=false videoDecoderInit=false audioDecoderInit=false` — player attached, never initialised a decoder, then torn down. Indicates rapid attach/detach cycles overwhelming the codec.
+
+**Key data point** from a user-initiated diagnostic on AFTKM (Fire TV 4K Max): `memory_free_mb=0 total_mb=52 max_mb=384` — JVM heap pressure visible (Fire Stick caps heap at 384 MB vs 512 MB on Shield).
+
+**Other signatures**: 52x `ERROR_CODE_IO_BAD_HTTP_STATUS` (provider IO, not our bug), 5x `ERROR_CODE_BEHIND_LIVE_WINDOW`, 2x `ERROR_CODE_DECODING_FAILED`. **Zero** native crashes / OOM / SIGSEGV / mediaserver deaths in our reports — but a kernel-level reboot would not surface in our JVM crash reporter.
+
+### Phase 2 — Fix (Round 1 + Round 4 per user direction, applied globally)
+
+#### Smoking gun
+`TVLiveBrowseScreen.kt`, `MobileLiveHubScreen.kt`, `TVPlayerScreen.kt`, `MobilePlayerScreen.kt` all called:
+```kotlin
+player.setMediaItem(MediaItem.fromUri(url))
+player.prepare()
+player.play()
+```
+**without** an explicit `stop()` + `clearMediaItems()` first. The native MediaCodec pool held the previous source open during the new prepare(), so during fast scroll/zap the codec pool accumulated references faster than GC could release them. On low-RAM Fire Stick SKUs this manifested as decoder pool exhaustion → `MediaCodec.release()` taking 100+ms while the new one prepared → Fire OS watchdog flagging the process unresponsive → device reboot.
+
+#### Round 1A — Safe swap (4 files)
+Before each `setMediaItem()`:
+```kotlin
+runCatching { player.stop(); player.clearMediaItems() }
+delay(16)  // 1 frame so the codec actually releases
+player.setMediaItem(...)
+player.prepare()
+player.play()
+```
+Applied to:
+- `TVLiveBrowseScreen.kt` — preview player swap on focus settle
+- `MobileLiveHubScreen.kt` — preview swap on tap
+- `TVPlayerScreen.kt::playChannel` — fullscreen channel zap (channel +/-, last channel toggle)
+- `MobilePlayerScreen.kt` — fullscreen channel switch via `currentStreamUrl`
+
+#### Round 1B — Mute by default, unmute after 2s (TVLiveBrowseScreen)
+- Preview player initialised with `volume = 0f` instead of `1f`.
+- Each focus-settle re-mutes immediately (so a held D-pad never bursts intermediate channel audio).
+- After the 1500 ms preview debounce + safe swap, a separate `previewAudioUnmuteJob` coroutine waits another 2000 ms and only then sets `volume = 1f` IF the user is still on the same channel.
+- Cancelled on focus shift, channels-pane focus loss, lifecycle pause.
+
+#### Round 1C — Debounce 600 ms → 1500 ms (TVLiveBrowseScreen)
+Doubles the time before a scroll triggers a player swap. Combined with audio mute (1B), the preview still feels snappy — visual element only, no audio decoder spin-up on transient hovers.
+
+#### Round 4 — Diagnostic telemetry (TVLiveBrowseScreen)
+Two new event tags piggy-backing on the existing `CrashReporter.reportEvent()` channel:
+- `preview_swap_too_fast` — fires if two preview swaps land within 200 ms (debounce got bypassed somehow). Includes `manufacturer/model`.
+- `preview_swap_low_heap` — fires if JVM free memory drops below 24 MB during a swap. Includes `freeMb/maxMb/manufacturer/model`.
+
+Both rate-limited to one ping per event-tag per app process. Visible in the crash dashboard under `kind=diagnostic`. Lets us SEE whether the hypothesis is correct after this OTA lands.
+
+### Files touched
+```
+app/build.gradle.kts                                              bumped to 1.44.50 / 450
+app/src/main/kotlin/com/hushtv/tv/ui/screens/TVLiveBrowseScreen.kt   safe-swap + mute + debounce + telemetry
+app/src/main/kotlin/com/hushtv/tv/ui/screens/TVPlayerScreen.kt        safe-swap on playChannel()
+app/src/main/kotlin/com/hushtv/tv/mobile/MobileLiveHubScreen.kt       safe-swap on selectedStreamId
+app/src/main/kotlin/com/hushtv/tv/mobile/MobilePlayerScreen.kt        safe-swap on currentStreamUrl
+_buildenv/version.json                                             dev manifest
+_buildenv/version-official.json                                    official manifest
+```
+
+### Build + deploy
+- `assembleDevDebug` + `assembleOfficialDebug` ✓ (5m 39s combined)
+- Dev: `https://hushtv.xyz/version.json` → `1.44.50 / 450` ✓
+- Official: `https://hushtv.xyz/version-official.json` → `1.44.50 / 450` ✓
+
+### Verification path
+- Watch the crash dashboard over the next 24-48 h.
+- Look for: a drop in `flushReason=detach firstFrame=false videoDecoderInit=false` reports.
+- Look for: `preview_swap_too_fast` or `preview_swap_low_heap` events that pinpoint any remaining device-specific bottleneck.
+
+### What's deferred (Round 2 + Round 3 — apply ONLY if Round 1 doesn't fix the reboots)
+- Round 2: Glide `RGB_565` + `override(180, 180)` for channel logos + `MemoryCategory.LOW`.
+- Round 3: Reduce semi-transparent layer count on TVLiveBrowseScreen.
+
+---
+
+## v1.44.49 (DEV + OFFICIAL) — New theme: Top Disney Movies of All Time — 2026-02-08
 
 User asked for one new themed-list entry following the exact same pattern as the existing 25 themes.
 

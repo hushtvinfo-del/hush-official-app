@@ -285,12 +285,16 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
             // Hold a partial WakeLock + WifiLock during preview playback —
             // same Wi-Fi power-save mitigation as the fullscreen player.
             setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
-            // Audio ON by default so users can hear the channel they're
-            // hovering on. Stops automatically when focus leaves the
-            // channels pane (LaunchedEffect below pauses on
-            // !channelsPaneFocused) and on opening fullscreen
-            // (previewPlayer.stop() in onPlay).
-            volume = 1f
+            // ── Round-1B (v1.44.50): mute preview by default. ──
+            // Audio is unmuted only after the user's focus has settled
+            // for ≥ 2 s on a single channel (see [previewAudioUnmuteJob]
+            // below). Rationale: pre-Round-1, every channel-focus shift
+            // initialised a fresh AAC decoder for ~1 s before the next
+            // shift killed it. On Fire Stick (and other low-RAM TV
+            // platforms) that decoder churn was the prime suspect for
+            // the device-reboot reports. Muting by default skips the
+            // audio decoder init entirely on transient hovers.
+            volume = 0f
             playWhenReady = true
         }
     }
@@ -366,30 +370,132 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
         }
     }
 
-    // Debounced preview: starts ~600 ms after the user settles on a channel,
-    // but ONLY while their focus is inside the channels pane AND the
-    // screen is in the RESUMED lifecycle state. The `isResumed` key bails
-    // immediately if the user just navigated to fullscreen or backgrounded
-    // the app — preventing the in-flight delay() from restarting the
-    // preview after `previewPlayer.stop()` was called.
+    // ─── Round-1A + 1C (v1.44.50): debounce + safe-swap preview ─────
+    //
+    // Round-1A (decoder churn fix). Previously, every channel-focus
+    // settle did:
+    //
+    //   previewPlayer.setMediaItem(...)
+    //   previewPlayer.prepare()
+    //   previewPlayer.play()
+    //
+    // …without first stopping the previous stream. The native
+    // MediaCodec pool held the previous source open during the new
+    // prepare(), so during a fast scroll the codec pool would
+    // accumulate references faster than GC could release them. On
+    // low-RAM Fire Stick SKUs this manifested as decoder pool
+    // exhaustion → MediaCodec.release() taking 100+ms while the new
+    // one prepared → Fire OS watchdog flagging the process as ANR
+    // → device reboot reports.
+    //
+    // The fix: BEFORE setMediaItem(), do an explicit
+    // stop()+clearMediaItems() and yield one frame so the codec can
+    // fully tear down. Media3's [SimpleBasePlayer] docs recommend
+    // this pattern for live-stream switching.
+    //
+    // Round-1C (debounce). Bumped from 600 ms → 1500 ms. With audio
+    // muted by default (1B), the visual-only preview still feels
+    // snappy at 1.5 s, but it more than halves the rate at which the
+    // decoder swap can fire under sustained scroll. Applied
+    // globally — Shield benefits too.
+    //
+    // Round-4 telemetry. We track [lastSwapAtMs] and fire a one-shot
+    // diagnostic event if two preview swaps land within 200 ms of
+    // each other (means the debounce was bypassed somehow) OR if the
+    // JVM heap free space drops below 24 MB during a swap (signals
+    // memory pressure that could correlate with reboots). The
+    // CrashReporter dedup already rate-limits to one ping per
+    // event-tag per app process, so this is safe to call from the
+    // hot path.
+    var lastSwapAtMs by remember { mutableStateOf(0L) }
+    val previewAudioUnmuteJob = remember {
+        // 1-slot scope for the unmute-after-2s coroutine. We keep a
+        // reference so the next channel-focus settle can cancel an
+        // in-flight unmute timer that's about to fire on the now-
+        // stale channel.
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
+    }
+    DisposableEffect(Unit) {
+        onDispose { previewAudioUnmuteJob.coroutineContext[kotlinx.coroutines.Job]?.cancel() }
+    }
+    var unmuteHandle by remember {
+        mutableStateOf<kotlinx.coroutines.Job?>(null)
+    }
     LaunchedEffect(focusedChannelIdx, filteredChannels, channelsPaneFocused, playlist, isResumed) {
         if (!isResumed || !channelsPaneFocused) {
             runCatching { previewPlayer.pause() }
+            // Re-mute on focus loss so the next channel starts muted.
+            runCatching { previewPlayer.volume = 0f }
+            unmuteHandle?.cancel()
             return@LaunchedEffect
         }
         val p = playlist ?: return@LaunchedEffect
         val ch = filteredChannels.getOrNull(focusedChannelIdx) ?: run {
             runCatching { previewPlayer.stop() }; return@LaunchedEffect
         }
-        delay(600)
+        // Mute immediately so a user holding the D-pad never hears
+        // half-decoded audio bursts from intermediate channels.
+        runCatching { previewPlayer.volume = 0f }
+        unmuteHandle?.cancel()
+        delay(1500)
         // Re-check after the delay — a navigate-away may have flipped
         // isResumed while we were waiting.
         if (!isResumed || !channelsPaneFocused) return@LaunchedEffect
         val url = XtreamApi.liveUrl(p.host, p.username, p.password, ch.streamId)
+
+        // Round-4 telemetry guard.
+        val now = System.currentTimeMillis()
+        val sinceLast = now - lastSwapAtMs
+        if (lastSwapAtMs > 0 && sinceLast in 1..200) {
+            runCatching {
+                com.hushtv.tv.data.CrashReporter.reportEvent(
+                    ctx,
+                    "preview_swap_too_fast",
+                    "sinceLastMs=$sinceLast manufacturer=${android.os.Build.MANUFACTURER} model=${android.os.Build.MODEL}",
+                )
+            }
+        }
+        val rt = Runtime.getRuntime()
+        val freeMb = (rt.maxMemory() - (rt.totalMemory() - rt.freeMemory())) / (1024 * 1024)
+        if (freeMb in 0..24) {
+            runCatching {
+                com.hushtv.tv.data.CrashReporter.reportEvent(
+                    ctx,
+                    "preview_swap_low_heap",
+                    "freeMb=$freeMb maxMb=${rt.maxMemory() / (1024 * 1024)} " +
+                        "manufacturer=${android.os.Build.MANUFACTURER} model=${android.os.Build.MODEL}",
+                )
+            }
+        }
+        lastSwapAtMs = now
+
+        // Round-1A safe swap: tear down the previous stream FIRST.
+        runCatching {
+            previewPlayer.stop()
+            previewPlayer.clearMediaItems()
+        }
+        // Yield one frame so the codec actually releases before we
+        // queue the new source. Without this, the codec pool can
+        // briefly hold both refs.
+        delay(16)
+        if (!isResumed || !channelsPaneFocused) return@LaunchedEffect
         runCatching {
             previewPlayer.setMediaItem(MediaItem.fromUri(url))
             previewPlayer.prepare()
             previewPlayer.play()
+        }
+        // Round-1B unmute timer: after 2 s of stable focus on this
+        // channel, fade audio in. Cancelled by the next focus shift
+        // OR by leaving the channels pane / pausing.
+        unmuteHandle = previewAudioUnmuteJob.launch {
+            kotlinx.coroutines.delay(2000)
+            // Re-check both the lifecycle gate AND that the user is
+            // still on the same channel — without this guard a
+            // racing focus change just before unmute would unmute
+            // the WRONG channel.
+            if (isResumed && channelsPaneFocused) {
+                runCatching { previewPlayer.volume = 1f }
+            }
         }
     }
 

@@ -457,6 +457,17 @@ fun TVPlayerScreen(
         currentUrl = url
         currentName = ch.title
         currentNumber = number
+        // Round-1A (v1.44.50): explicit stop()+clearMediaItems() before
+        // setMediaItem so the previous channel's MediaCodec ref releases
+        // BEFORE we queue the next one. Critical for low-RAM Fire Stick
+        // SKUs during channel +/- zapping or last-channel toggle, where
+        // rapid swaps without an explicit teardown would accumulate
+        // codec refs in the native pool. See TVLiveBrowseScreen.kt for
+        // the full RCA.
+        runCatching {
+            player.stop()
+            player.clearMediaItems()
+        }
         player.setMediaItem(MediaItem.fromUri(url))
         player.prepare()
         player.playWhenReady = true

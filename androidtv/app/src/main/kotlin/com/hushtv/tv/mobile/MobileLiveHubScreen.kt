@@ -225,11 +225,22 @@ fun MobileLiveHubScreen(
     DisposableEffect(Unit) { onDispose { player.release() } }
 
     // Swap media item whenever the channel selection changes.
+    //
+    // Round-1A (v1.44.50): explicit stop()+clearMediaItems() before
+    // setMediaItem so the previous stream's MediaCodec ref releases
+    // BEFORE we queue the new one. Without this, rapid taps could
+    // accumulate codec refs in the native pool. See TVLiveBrowseScreen
+    // for the full RCA writeup.
     val currentChannel = channels.firstOrNull { it.streamId == selectedStreamId }
     LaunchedEffect(selectedStreamId) {
         val card = channels.firstOrNull { it.streamId == selectedStreamId } ?: return@LaunchedEffect
         val p = playlist ?: return@LaunchedEffect
         val url = XtreamApi.liveUrl(p.host, p.username, p.password, card.streamId)
+        runCatching {
+            player.stop()
+            player.clearMediaItems()
+        }
+        kotlinx.coroutines.delay(16) // 1 frame so the codec releases
         player.setMediaItem(MediaItem.fromUri(url))
         player.prepare()
         player.playWhenReady = true
