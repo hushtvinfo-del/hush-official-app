@@ -39,6 +39,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import com.hushtv.tv.data.MediaCard
 import com.hushtv.tv.data.LiveSessionStore
 import com.hushtv.tv.data.PlaylistStore
@@ -146,6 +147,7 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
         if (hasHub) add(PageDef("hub", "WELCOME BACK", "For You", Cyan))
         add(PageDef("discovery", "CURATED FOR YOU", "Discover", Cyan))
         add(PageDef("themes", "MOODS & THEMES", "Themes", Color(0xFFEC4899)))
+        add(PageDef("sports", "LIVE SPORTS & PPV", "Sports", Color(0xFFF59E0B)))
         add(PageDef("ss_movies", "STREAMING SERVICES", "Movies", Color(0xFFEF4444)))
         add(PageDef("ss_series", "STREAMING SERVICES", "Series", Color(0xFF22D3EE)))
         add(PageDef("collections", "FRANCHISES & SAGAS", "Collections", Color(0xFFA855F7)))
@@ -155,6 +157,7 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
     }
 
     val pagerState = rememberPagerState { pages.size }
+    val coroutineScope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize().background(Color(0xFF05080F))) {
         // ── Header ──
@@ -187,24 +190,62 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
             }
         }
 
-        // ── Page dots ──
-        Row(
-            Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+        // ── Section tab bar ──
+        // Replaces the previous tiny dot-indicator. The dots were
+        // invisibly small on a tablet, so users couldn't discover
+        // there were multiple pages — they thought Home was just
+        // "Discover" and that the Themes / Sports sections didn't
+        // exist. The horizontally-scrollable tab strip makes every
+        // section name visible and tappable, and works regardless of
+        // whether swipe-paging is wired correctly on a given device.
+        //
+        // Auto-scrolls to keep the active tab visible. Tap any tab
+        // to animate to that page.
+        val tabRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+        LaunchedEffect(pagerState.currentPage) {
+            // Center the active tab in view (when offscreen).
+            runCatching {
+                tabRowState.animateScrollToItem(
+                    index = pagerState.currentPage.coerceIn(0, pages.size - 1)
+                        .coerceAtLeast(0),
+                )
+            }
+        }
+        androidx.compose.foundation.lazy.LazyRow(
+            state = tabRowState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            pages.forEachIndexed { idx, _ ->
+            items(pages, key = { it.id }) { p ->
+                val idx = pages.indexOf(p)
                 val selected = idx == pagerState.currentPage
                 Box(
                     Modifier
-                        .padding(horizontal = 3.dp)
-                        .size(
-                            width = if (selected) 20.dp else 6.dp,
-                            height = 6.dp,
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            if (selected) p.accent.copy(alpha = 0.18f)
+                            else Color(0x10FFFFFF)
                         )
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (selected) Cyan else Color(0x33FFFFFF))
-                )
+                        .clickable {
+                            coroutineScope.launch {
+                                runCatching {
+                                    pagerState.animateScrollToPage(idx)
+                                }
+                            }
+                        }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        p.title,
+                        color = if (selected) p.accent else Color(0xFFCBD5E1),
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp,
+                    )
+                }
             }
         }
 
@@ -282,6 +323,7 @@ fun MobileHomeScreen(nav: NavController, playlistId: String) {
                 )
                 "discovery" -> DiscoveryPageMobile(nav, playlistId, discoveryCards, titleBlock)
                 "themes" -> ThemesPageMobile(nav, playlistId, titleBlock)
+                "sports" -> SportsPlaceholderPage(titleBlock)
                 "ss_movies" -> StreamingServicesPage(nav, playlistId, ssMovies, "movie", titleBlock)
                 "ss_series" -> StreamingServicesPage(nav, playlistId, ssSeries, "series", titleBlock)
                 "collections" -> CollectionsPageMobile(nav, playlistId, collections, titleBlock)
@@ -1532,3 +1574,59 @@ private fun BackdropCard(
         }
     }
 }
+
+// ──────────────────────────────────────────────────────────
+//  PAGE: Sports (placeholder for v1.44.53)
+//  The full mobile port from TVSportsPage lands in 1.44.54+.
+// ──────────────────────────────────────────────────────────
+@Composable
+private fun SportsPlaceholderPage(titleBlock: @Composable () -> Unit) {
+    androidx.compose.foundation.lazy.LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 4.dp),
+    ) {
+        item { titleBlock() }
+        item {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFFF59E0B).copy(alpha = 0.18f),
+                                Color(0xFFEF4444).copy(alpha = 0.10f),
+                            ),
+                        )
+                    )
+                    .padding(24.dp),
+            ) {
+                Column {
+                    Text(
+                        "COMING SOON",
+                        color = Color(0xFFF59E0B),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.5.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Live Sports & PPV",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Live games, upcoming schedule, results and PPV — already on TV, rolling out to mobile in the next update.",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                    )
+                }
+            }
+        }
+    }
+}
+

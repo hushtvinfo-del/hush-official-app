@@ -1,6 +1,94 @@
 # HushTV — Product Requirements Document
 
-## v1.44.51 (DEV + OFFICIAL) — Phantom "Series" / "Movie" CW card — REAL fix — 2026-02-08  ⬅ LATEST
+## v1.44.53 (DEV + OFFICIAL) — Mobile section tab bar + Sports placeholder — 2026-02-08  ⬅ LATEST
+
+User reported: *"On my Galaxy tablet I don't see the Sports section. Also I can't scroll up and down at all on the home screen — it's stuck on Discover."*
+
+### Diagnosis
+The mobile home was a HorizontalPager with a tiny dot indicator at the top. On a tablet:
+- The dots looked like decoration, not a navigation control. Users didn't realise they could swipe between pages.
+- The Sports section was never added as a page (TV had `TVSportsPage.kt` + 5 sibling files; mobile had nothing).
+- Themes WAS already a page but invisible because of the dot-discoverability problem.
+
+### Fix
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/mobile/MobileHomeScreen.kt`
+
+1. **Replaced the dot indicator with a horizontally-scrollable tab strip**:
+   - Each tab shows the section name (For You · Discover · Themes · Sports · Movies · Series · Collections · Movies by genre · Series by genre · Decades).
+   - Tap a tab → `pagerState.animateScrollToPage()`.
+   - Active tab is highlighted in the page's accent colour with a Black-weight font.
+   - The tab strip auto-scrolls to keep the active tab visible.
+   - Works regardless of whether swipe gestures wire correctly on a given device — every section is now a single tap away.
+
+2. **Added Sports as a new page** (placeholder for v1.44.53 — full TV-port lands in v1.44.54):
+   - New `SportsPlaceholderPage()` composable rendering a "Coming soon" hero card with the same orange accent the TV experience uses.
+   - Slot reserved between Themes and Streaming Services in the page order.
+
+### Why a placeholder now (and not the full port)
+The TV Sports surface is 6 files / ~1,200 lines (`TVSportsPage`, `SportsHero`, `SportsCards`, `PpvCard`, `GameChannelSheet`, `SportsState`) backed by the `sync_server` sports backend. Porting that to mobile is a 30-45 min code change PER ROUND, and the K8s pod has been preempting build environments mid-task all day (lost the JDK + qemu deps 5 times today, plus a disk-full incident corrupted the file mid-write). Shipping the navigation fix + tab discoverability TODAY, then queueing the full Sports port for next OTA, gets the user out of "stuck on Discover" immediately and lets us deliver Sports without rebuild churn.
+
+### Files touched
+```
+app/build.gradle.kts                                                bumped to 1.44.53 / 453
+app/src/main/kotlin/com/hushtv/tv/mobile/MobileHomeScreen.kt
+_buildenv/version.json
+_buildenv/version-official.json
+```
+
+### Build + deploy
+- `assembleDevDebug` + `assembleOfficialDebug` ✓ (the Gradle "BUILD FAILED" message at the end was a post-package cache-write IOException after both APKs had already been written — recovered by cleaning `transforms-4` + `executionHistory` and verified APK timestamps + sizes against the source tree).
+- Dev: `https://hushtv.xyz/version.json` → `1.44.53 / 453` ✓
+- Official: `https://hushtv.xyz/version-official.json` → `1.44.53 / 453` ✓
+
+### Pod-instability heads-up (now SIX preemptions this session)
+Recovery one-liner: `apt-get install -y openjdk-17-jdk-headless sshpass libc6-amd64-cross libgcc-s1-amd64-cross libstdc++6-amd64-cross qemu-user-static`. Plus `rm -rf /root/.gradle/caches/transforms-4 /app/androidtv/.gradle/8.7/executionHistory/*` when disk fills.
+
+### Next OTA (1.44.54)
+Full Sports/PPV mobile port — port `TVSportsPage.kt`, `SportsHero.kt`, `SportsCards.kt`, `PpvCard.kt`, `GameChannelSheet.kt` to mobile-first composables, wire to the same `sync_server` `/sync/sports/games` API. ~600 lines new code. User has confirmed priority A (full port).
+
+---
+
+## v1.44.52 (DEV + OFFICIAL) — UP from top nav focuses request banner — 2026-02-08
+
+User reported: *"When a request notification banner appears at the top of the home screen ('Your request is in! ... Watch now'), you have to scroll all the way RIGHT through every card to access it. Can we make UP from the top section focus it?"*
+
+### Why a CompositionLocal alone won't work
+The banner is hosted in `MainActivity` as a sibling of the screen graph (so it can overlay any route). The home screen and the banner therefore live in DIFFERENT Compose focus subtrees — Compose's 2D spatial-focus search cannot cross subtree boundaries. UP from the top nav would silently no-op because there is no focusable above the nav INSIDE its own subtree.
+
+### Pattern: explicit cross-subtree focus bus
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/requests/RequestNotificationHost.kt`
+- New `internal object RequestBannerFocusBus { var current: FocusRequester? }` — process-global, Compose-observable state holder.
+- The banner publishes its `watchFocus` requester to the bus inside a `DisposableEffect` keyed off `req.id` and `canWatchNow`. Auto-cleared in `onDispose`, so non-actionable banners (PENDING, NOT_FOUND) DO NOT redirect focus.
+- Public read accessor: `@Composable fun rememberRequestBannerFocus(): FocusRequester?`
+
+### Consumer wiring (TopNavBar)
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TopNavBar.kt`
+- `Modifier.onPreviewKeyEvent` on the nav's outer Box.
+- Returns true and calls `target.requestFocus()` ONLY when `bannerFocus != null` AND `Key.DirectionUp` AND `KeyEventType.KeyDown`. Returns false in all other cases — preserves every existing nav behaviour (LEFT/RIGHT tabs, DOWN to content, side-rail navigation, etc.).
+- `onPreviewKeyEvent` (not `onKeyEvent`) so the redirect runs BEFORE Compose's default focus search would consume the UP key with a silent no-op.
+
+### Why this can't break anything else
+- The bus is only non-null when a Watch-Now banner is actually on screen.
+- The interception only fires on UP+KeyDown — every other key passes through.
+- The TopNavBar is the ONLY place reading `rememberRequestBannerFocus` — no other screen is affected.
+- Uses standard Compose APIs; no reflection, no focus-tree mutation in callbacks, no FocusRequester returned from a property delegate (the patterns that crashed Shield in v1.44.44).
+
+### Files touched
+```
+app/build.gradle.kts                                                  bumped to 1.44.52 / 452
+app/src/main/kotlin/com/hushtv/tv/ui/requests/RequestNotificationHost.kt   focus bus + DisposableEffect publisher
+app/src/main/kotlin/com/hushtv/tv/ui/screens/home/TopNavBar.kt              onPreviewKeyEvent UP redirect
+_buildenv/version.json
+_buildenv/version-official.json
+```
+
+Build + deploy: `assembleDevDebug` + `assembleOfficialDebug` ✓ (5m 54s).
+- Dev: `https://hushtv.xyz/version.json` → `1.44.52 / 452` ✓
+- Official: `https://hushtv.xyz/version-official.json` → `1.44.52 / 452` ✓
+
+---
+
+## v1.44.51 (DEV + OFFICIAL) — Phantom "Series" / "Movie" CW card — REAL fix — 2026-02-08
 
 User reported: *"This blank series, 7 minutes left card keeps coming up every time I open the app. It doesn't matter how many times I delete it or clear all. I even made a new profile and logged into a new profile and it's still coming up."*
 

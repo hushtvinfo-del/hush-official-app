@@ -11,8 +11,8 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 451,
-      "versionName": "1.44.51-debug",
+      "versionCode": 453,
+      "versionName": "1.44.53-debug",
       "outputFile": "app-dev-debug.apk"
     }
   ],

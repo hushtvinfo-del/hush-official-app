@@ -75,6 +75,59 @@ sealed class WatchTarget {
 }
 
 /**
+ * Composition-local exposing the [FocusRequester] of the currently-
+ * visible request banner's "Watch now" button. `null` means the
+ * banner is not on screen.
+ *
+ * Why this exists: the banner is hosted as a sibling of the main
+ * screen graph in `MainActivity` (so it can overlay any route),
+ * which means the home screen and the banner live in DIFFERENT
+ * focus subtrees. Compose's 2D spatial-focus search cannot cross
+ * those subtrees, so a UP key from the home page's top nav will
+ * never naturally land on the banner — the user has to tab all
+ * the way RIGHT through every card to reach it.
+ *
+ * Solution: expose the requester via this local so any screen can
+ * opt in to "UP at the topmost row → focus the banner" navigation.
+ * Read it with [LocalRequestNotificationFocus.current]; if non-null
+ * AND the user pressed UP from your topmost focusable, call
+ * `requester.requestFocus()` and consume the key event.
+ *
+ * The banner publishes itself to this local from inside its
+ * `AnimatedVisibility` block, so it is automatically `null` while
+ * the slide-out animation is finishing. Defaults to `null` when
+ * no banner host is mounted.
+ */
+val LocalRequestNotificationFocus =
+    androidx.compose.runtime.compositionLocalOf<FocusRequester?> { null }
+
+/**
+ * Process-global state holder for the banner's focus requester.
+ *
+ * Why a top-level object instead of a CompositionLocalProvider tree
+ * scope: the banner host is mounted as a sibling of the main app
+ * graph in `MainActivity`, so wrapping the graph in a Provider would
+ * require restructuring `MainActivity`. The mutableStateOf instead
+ * lets the banner publish itself once and any screen read it
+ * without coupling. Reads are Compose-observable so screens
+ * recompose when the banner appears/disappears.
+ *
+ * The banner sets this to its `watchFocus` requester when visible
+ * AND `canWatchNow` (so we don't direct focus to a banner that has
+ * no actionable button, e.g. PENDING/NOT_FOUND statuses), and
+ * clears it on dismiss / animate-out.
+ */
+internal object RequestBannerFocusBus {
+    var current: FocusRequester? by androidx.compose.runtime.mutableStateOf(null)
+}
+
+/** Public read-only accessor — non-null exactly when a focusable
+ *  request banner is on-screen. */
+@Composable
+fun rememberRequestBannerFocus(): FocusRequester? =
+    RequestBannerFocusBus.current
+
+/**
  * Background poller + slide-down banner that surfaces "Your request
  * is now available!" notifications for content the admin has marked
  * `added` or `already_available` since the last cold start.
@@ -178,7 +231,6 @@ fun RequestNotificationHost(
                 delay(180)
                 runCatching { watchFocus.requestFocus() }
             }
-
             // Tone the banner per status — added is green, in-progress
             // is cyan, not-found is amber. Keeps the same shape so
             // one user can never mistake one for the other.
@@ -196,6 +248,19 @@ fun RequestNotificationHost(
             }
             val canWatchNow = req.status == ContentRequestApi.Status.ADDED ||
                 req.status == ContentRequestApi.Status.ALREADY_AVAILABLE
+
+            // Publish the watch-now focus requester to the global bus
+            // ONLY while a Watch-Now button is actually rendered. Other
+            // screens read this via [rememberRequestBannerFocus] and use
+            // it to route UP key events from their topmost focusable to
+            // the banner. Cleared when the banner exits the composition
+            // (status changes / dismiss / lifecycle).
+            androidx.compose.runtime.DisposableEffect(req.id, canWatchNow) {
+                if (canWatchNow) {
+                    RequestBannerFocusBus.current = watchFocus
+                }
+                onDispose { RequestBannerFocusBus.current = null }
+            }
 
             Box(
                 Modifier

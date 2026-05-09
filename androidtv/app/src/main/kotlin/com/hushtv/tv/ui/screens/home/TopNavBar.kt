@@ -42,6 +42,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -165,10 +170,47 @@ fun TopNavBar(
     layoutHint: String? = null,
     onLayoutHintClick: (() -> Unit)? = null,
 ) {
+    // If a request-fulfilled banner is currently on screen, expose its
+    // focus requester here so UP from the top nav can route to it.
+    // Null when no banner is visible — UP becomes a no-op (default
+    // Compose 2D-search behaviour, which simply does nothing because
+    // there's no focusable above the nav). See
+    // [com.hushtv.tv.ui.requests.LocalRequestNotificationFocus] for
+    // the full rationale on why we route via a global state holder
+    // rather than CompositionLocal.
+    val bannerFocus = com.hushtv.tv.ui.requests.rememberRequestBannerFocus()
     Box(
         Modifier
             .fillMaxWidth()
             .height(72.dp)
+            // ─── UP-key interception ─────────────────────────────────
+            // Pressing UP from any tab in the top nav (Home, Live,
+            // Movies, etc.) jumps focus directly to the request banner
+            // when one is on screen. Without this, the user would have
+            // to D-pad RIGHT through every focusable on the banner row
+            // — which on TV with no banner visible at the same vertical
+            // height would never even be reachable spatially.
+            //
+            // We deliberately use `onPreviewKeyEvent` (not
+            // `onKeyEvent`) so this fires BEFORE the tab's own focus
+            // search runs — without this, Compose would null-route the
+            // UP since no focusable exists in the same subtree above
+            // the nav, and the key would be silently consumed.
+            //
+            // Returns false (lets the event continue) when there's no
+            // banner OR the user is moving in a direction that ISN'T
+            // up — preserves all existing nav behaviour.
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) {
+                    return@onPreviewKeyEvent false
+                }
+                val target = bannerFocus
+                if (target != null && ev.key == Key.DirectionUp) {
+                    runCatching { target.requestFocus() }
+                    return@onPreviewKeyEvent true
+                }
+                false
+            }
             // Solid container — gives the tabs their own framed zone
             // against any backdrop art. Keep it just dark enough that
             // dropped contrast is never an issue; still faintly shows

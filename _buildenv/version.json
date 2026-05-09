@@ -1,13 +1,13 @@
 {
-  "versionCode": 451,
-  "versionName": "1.44.51",
+  "versionCode": 453,
+  "versionName": "1.44.53",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Continue Watching: Phantom card titled \"Series\" / \"Movie\" with no poster — FIXED PROPERLY this time. The previous fix only blocked blank titles, but the bug was a literal kind word. New build (1) blocks saves with that title at the source, (2) filters them from the row, AND (3) tombstones existing bad entries on the next Home open so the deletion syncs across every device on your playlist via the cloud sync server. Should disappear automatically on first launch — no Clear All needed.",
-    "Fire TV stability (P0): Live TV decoder churn fix from 1.44.50.",
-    "All v1.44.42 → v1.44.50 features still in place."
+    "Mobile / tablet Home: Replaced the tiny page-dot indicator with a horizontally-scrollable section tab bar. Every section name (For You, Discover, Themes, Sports, Movies, Series, Collections, Genres, Decades) is now visible and tappable — no more guessing where Themes lives or whether you can swipe between pages.",
+    "Mobile: Sports tab added as a placeholder for v1.44.53 — full Live Sports & PPV mobile experience ports from TV in v1.44.54.",
+    "All v1.44.42 → v1.44.52 features still in place."
   ]
 }
