@@ -1,5 +1,30 @@
 # HushTV — Product Requirements Document
 
+## v1.44.53 — SUCCESSFULLY DEPLOYED to Dev + Official — 2026-02-08 (this session)
+
+After multiple build environment failures in the previous session (disk exhaustion,
+missing JDK, missing qemu-user-static, missing libc6-amd64-cross), this session
+finally got v1.44.53 compiled and pushed to both channels:
+
+  • Dev:      https://hushtv.xyz/HushTV.apk           (versionCode 453)
+  • Official: https://hushtv.xyz/hushtv-official.apk  (versionCode 453)
+
+### Build env permanent fix applied this session
+The pod has 9.8 GB on /app but 88 GB free on the overlay root filesystem. Symlinked
+the disk-greedy Gradle directories OUT of /app:
+
+  /root/.gradle              -> /var/gradle-home
+  /app/androidtv/.gradle     -> /var/androidtv-gradle
+  /app/androidtv/app/build   -> /var/androidtv-build
+
+This frees /app from Gradle pressure entirely. Future builds in this pod will not
+hit "No space left on device" even with a fresh transforms cache. (If the pod is
+re-scheduled and these symlinks are wiped, recreate them before building.)
+
+Also reinstalled missing host packages: `openjdk-17-jdk-headless`, `sshpass`,
+`qemu-user-static`, `libc6-amd64-cross`, `libgcc-s1-amd64-cross`,
+`libstdc++6-amd64-cross` (required for the aapt2 x86_64 binary on this ARM64 pod).
+
 ## v1.44.53 (DEV + OFFICIAL) — Mobile section tab bar + Sports placeholder — 2026-02-08  ⬅ LATEST
 
 User reported: *"On my Galaxy tablet I don't see the Sports section. Also I can't scroll up and down at all on the home screen — it's stuck on Discover."*
