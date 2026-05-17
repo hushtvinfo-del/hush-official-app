@@ -1,12 +1,13 @@
 {
-  "versionCode": 457,
-  "versionName": "1.44.57",
+  "versionCode": 458,
+  "versionName": "1.44.58",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "official",
   "changelog": [
-    "Moods & Themes pack refreshed: the 50 weakly-matched 'additional' rows from v1.44.55 are GONE. Replaced with 18 hand-curated theme rows from the v3 curated pack — Movies Based On Video Games, Movies Based On Comic Books, Movies Ahead Of Their Time, Movies That Predicted The Future, Movies With The Best Villains, Movies With Anti-Heroes, Movies About AI Gone Wrong / Parallel Universes / Memory Loss / Escaping Prison / Gambling / Heists / Con Artists / Serial Killers / Cults / Loneliness, Movies Everyone Quotes, Cult Classic Movies. Original 26 hand-curated rows are unchanged.",
-    "All v1.44.56 features (CBC sports blacklist, Sports back-nav fix) still in place."
+    "Sports games rail: games whose primary broadcaster doesn't strict-match a channel in your playlist (e.g. NHL game where the API says broadcaster=CBC and your playlist's CBC has a slightly different name) are NO LONGER dropped from the league rail. The card paints with the API channel name; clicking opens the per-game picker which does its own broader EPG lookup and offers every actually-playable channel (minus blacklisted patterns).",
+    "Clarification: the CBC blacklist added in v1.44.56 only ever affected the per-game channel picker — it did NOT cause games to disappear from the rail. The strict primary-broadcaster match was a pre-existing behaviour that is now relaxed.",
+    "All v1.44.57 features (curated Moods & Themes pack v5, CBC picker blacklist, Sports back-nav fix) still in place."
   ]
 }

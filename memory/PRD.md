@@ -1,6 +1,19 @@
 # HushTV — Product Requirements Document
 
-## v1.44.57 — Curated Theme Pack Refresh (Dev + Official LIVE) — 2026-02-08
+## v1.44.58 — Sports games rail no longer drops CBC-broadcast games (Dev + Official LIVE) — 2026-02-08
+
+### What landed
+- **`rememberPlayableGames` filter relaxed**: previously a game whose API-supplied primary broadcaster (e.g. "CBC") didn't strict-token-match a channel in the user's playlist was dropped via `mapNotNull`. Net effect: NHL Habs-vs-Bills games and similar Canadian-broadcast games never appeared in the league rail. Now every game whose API record carries a broadcaster string is included in the rail. If the strict match fails, a synthetic `MediaCard` is attached (streamId=0, title=API channel name) so the card paints. At click time the existing `GameChannelSheet` does its own per-game EPG lookup via `SportsApi.gameChannels()` and offers every actually-playable channel (minus blacklisted patterns).
+- **PPV rail unchanged**: PPV cards tune directly via `playLiveChannel` (no picker sheet), so they still require a real playlist match. Synthetic cards are scoped to the game rail only.
+- **Clarification documented**: The v1.44.56 CBC blacklist only ever affected the per-game channel picker (`GameChannelSheet`). User reports that it was hiding entire games from the schedule were a misattribution — the real cause was the strict primary-broadcaster filter, which is now fixed.
+
+### Files changed
+- MODIFIED `ui/screens/sports/SportsState.kt`:
+  - `rememberPlayableGames` no longer requires a successful `SportsChannelMatcher.match`; falls back to a synthetic MediaCard.
+  - New helper `syntheticChannelCard(name)` builds a stub MediaCard with `streamId=0`.
+  - `rememberPlayablePpv` kept strict (PPV needs a real match to tune).
+
+## v1.44.57 — Curated Theme Pack Refresh — 2026-02-08
 
 ### What landed
 - **DELETED the 50 weakly-matched "additional" theme rows** from v1.44.55 that shipped with random shared-pool movie assignments. Catalog no longer shows: Movies Everyone Should Watch Once, Movies That Get Better Every Rewatch, Movies That Feel Like A Dream, Movies About Obsession / Addiction / Heists (the previous pack version) / Cults / Isolation / Space / End Of World / Virtual Reality / etc. — all of them are gone.
