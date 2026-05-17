@@ -766,6 +766,35 @@ def _apply_v2_livescore(c: sqlite3.Connection, ev: Dict[str, Any]) -> bool:
     score_home_str = str(score_home) if score_home is not None else None
     score_away_str = str(score_away) if score_away is not None else None
     now_ms = int(time.time() * 1000)
+
+    # v1.44.60 — Sanity-check upstream livescore data against the
+    # game's known start time. TheSportsDB's livescore endpoint can
+    # (rarely but observably) ship a game as `Final` with a score
+    # BEFORE the puck/ball actually drops — for example when the
+    # CDN serves cached "previous game in the series" data under
+    # the new event's idEvent. If we trust that, we mark a future
+    # game as completed and hide it from the upcoming-games rail.
+    #
+    # Guard: if the upstream wants to promote a game to `final`
+    # but the game's stored start time is more than 1 h in the
+    # future, REJECT the update. The game will keep its existing
+    # status (scheduled). 1 h gives a buffer for clock skew and
+    # for the rare game that runs short / forfeits early.
+    if status == "final":
+        existing = c.execute(
+            "SELECT start_utc FROM sports_games WHERE sportsdb_id=?",
+            (str(sdb_id),),
+        ).fetchone()
+        if existing and existing["start_utc"] is not None:
+            if int(existing["start_utc"]) > now_ms + 60 * 60 * 1000:
+                log.warning(
+                    "rejecting upstream 'final' livescore for future game: "
+                    "sdb_id=%s start_utc=%s score=%s-%s now=%s",
+                    sdb_id, existing["start_utc"],
+                    score_home_str, score_away_str, now_ms,
+                )
+                return False
+
     res = c.execute(
         "UPDATE sports_games SET "
         "  status=?, "
@@ -1455,8 +1484,12 @@ def sports_home(
             games: List[Dict[str, Any]] = []
             for r in rows:
                 g = _game_to_dict(c, r)
-                if g["channel"] is None:
-                    continue
+                # v1.44.60 — DO NOT drop games with no resolved
+                # broadcaster (matches the same behaviour applied to
+                # /league/{slug} in v1.44.59). The Android client
+                # paints them with a "Channel TBD" synthetic card;
+                # tapping invokes the per-game EPG sheet which does
+                # its own broadcaster lookup.
                 games.append(g)
             if games:
                 buckets.append({

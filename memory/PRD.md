@@ -1,6 +1,26 @@
 # HushTV — Product Requirements Document
 
-## v1.44.59 — REAL fix for missing MTL vs BUF NHL game (Dev + Official LIVE + Backend deployed) — 2026-02-08
+## v1.44.60 — Backend safeguard against false-final livescore + investigation — 2026-02-08
+
+### Issue investigated
+User reported the MTL vs BUF NHL game still missing after v1.44.59. Root cause was a different upstream bug: TheSportsDB's `/api/v2/json/livescore/4380` was returning the May 17 game as `strProgress="Final"` with `intHomeScore=3, intAwayScore=8` even though the game's puck-drop was still 4.5 h in the future. Our `_apply_v2_livescore` faithfully applied this corrupted update, marking a future game as completed. The user's sports rail (which prioritizes "scheduled" over "final" status) was hiding the bogus-final game from the upcoming view.
+
+### Backend fix (deployed, no APK required)
+- `_apply_v2_livescore`: reject upstream `final` updates when the game's stored `start_utc` is more than 1 h in the future. Logs a warning so future occurrences are visible in journalctl.
+- `/api/sports/home`: dropped the same `if g["channel"] is None: continue` filter we already removed from `/league/{slug}` in v1.44.59 (parallel bug, same fix).
+- Manual one-shot DB revert: `UPDATE sports_games SET status='scheduled', score_home=NULL, score_away=NULL WHERE id=1338` — game now back to "upcoming" state.
+
+### Verification
+```
+/api/sports/league/nhl  → Buffalo Sabres @ Montreal Canadiens  Sun May 17 23:00 UTC  CBC  status=scheduled  ✓
+/api/sports/home → hero contains "Sabres @ Canadiens · Sun May 17 23:00 UTC · scheduled"  ✓
+```
+DB stayed at `status='scheduled'` after a full livescore refresh cycle — safeguard is rejecting upstream's bad data and logging the rejection.
+
+### Important note about the date
+The user said the game was "May 18 tomorrow at 7:30 p.m. EST". Both TheSportsDB and our derived schedule have it on **May 17 23:00 UTC = 7 p.m. EDT / 6 p.m. EST tonight (May 17)**. No NHL games are listed for May 18 in TheSportsDB at all (only AHL/KHL/world championships). The user is off by one day — there's no upstream data to surface for May 18 NHL.
+
+## v1.44.59 — REAL fix for missing MTL vs BUF NHL game — 2026-02-08
 
 ### Root cause (took 2 versions to find)
 The Buffalo Sabres @ Montreal Canadiens game wasn't visible despite being in TheSportsDB. **Three combining backend bugs**:
