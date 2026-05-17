@@ -1,12 +1,13 @@
 {
-  "versionCode": 463,
-  "versionName": "1.44.63",
+  "versionCode": 464,
+  "versionName": "1.44.64",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "official",
   "changelog": [
-    "Live player: subtle 'Reconnecting…' pill appears in the top-left corner the moment the auto-reconnect watchdog kicks off recovery (error / 4 s buffer stall / live STATE_ENDED). Auto-dismisses when the picture is back or after 8 s as a safety net. Tells users the freeze isn't on their end — the app is already handling it.",
-    "All v1.44.62 features still in place (full source rebuild on recovery, STATE_ENDED handling, tightened stall thresholds)."
+    "URGENT FIX for v1.44.62/63 regression: full-screen channels were caught in an infinite reconnect loop. The stall watchdog was firing during normal initial buffering (4-8 s on busy live feeds), the new full-source-rebuild restarted buffering, and we looped forever. Now the watchdog only counts buffering as a stall AFTER the player has reached STATE_READY at least once. Initial channel-load buffering is no longer treated as a stall.",
+    "STATE_ENDED / STATE_IDLE handlers are likewise gated on hasBeenReady — our own recovery's clearMediaItems() / stop() transient state no longer re-triggers recovery.",
+    "Mini-preview was always unaffected (it doesn't use this watchdog)."
   ]
 }

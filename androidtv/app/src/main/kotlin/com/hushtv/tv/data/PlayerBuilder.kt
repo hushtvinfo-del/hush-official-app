@@ -383,14 +383,21 @@ object PlayerBuilder {
                 // v1.44.62 — Keep our snapshot in sync when the user
                 // zaps channels (TVPlayerScreen calls
                 // setMediaItem(MediaItem.fromUri(newUrl))).
-                if (mediaItem != null) {
+                //
+                // v1.44.64 — Only reset state for a GENUINE user
+                // channel change. Our own recovery code calls
+                // clearMediaItems() + setMediaItem(item) which also
+                // fires this listener; resetting state in that case
+                // would clear the recovery counter mid-recovery and
+                // allow the give-up cap to be bypassed indefinitely.
+                if (mediaItem != null && !state.recoveryInFlight) {
                     snapshotItem = mediaItem
-                    // Reset retry budget on a fresh channel so a new
-                    // stream gets full attempts.
+                    // Fresh channel: re-arm everything.
                     state.attempts = 0
                     state.recoveryNotified = false
                     state.bufferingSinceMs = 0L
                     state.lastPosCheckMs = 0L
+                    state.hasBeenReady = false
                 }
             }
 
@@ -405,6 +412,10 @@ object PlayerBuilder {
                         state.readySinceMs = 0L
                     }
                     Player.STATE_READY -> {
+                        // First time we ever reach READY → arm the
+                        // stall watchdog. Initial channel-load
+                        // buffering before this point is NOT a stall.
+                        state.hasBeenReady = true
                         state.bufferingSinceMs = 0L
                         state.recoveryInFlight = false
                         if (state.pendingSeek) {
@@ -436,7 +447,16 @@ object PlayerBuilder {
                         // away (subject to backoff); if we're offline,
                         // the network callback will pick it up when we
                         // come back.
+                        //
+                        // v1.44.64 — Also skip if we've never been
+                        // READY yet — the player's initial state IS
+                        // IDLE before the first prepare(), and our
+                        // recovery's own stop() also goes through
+                        // IDLE briefly. recoveryInFlight catches the
+                        // recovery case but not the initial-state
+                        // case during the very first channel load.
                         if (state.recoveryInFlight) return
+                        if (!state.hasBeenReady) return
                         if (isOnline(ctx)) {
                             scheduleRecovery("state=IDLE")
                         } else {
@@ -454,12 +474,21 @@ object PlayerBuilder {
                         // (provider stopped publishing segments) or
                         // the source decided the manifest was
                         // exhausted. Either way the only fix is a
-                        // full source rebuild. We previously
-                        // ignored this state entirely, which is
-                        // exactly the "Sportsnet East froze, had
-                        // to back out and re-enter" failure mode
-                        // the user reported.
-                        if (isLive && !state.recoveryInFlight) {
+                        // full source rebuild.
+                        //
+                        // v1.44.64 — Gate on `hasBeenReady`. A
+                        // STATE_ENDED reaching us BEFORE we've ever
+                        // been READY almost always means our own
+                        // recovery code called clearMediaItems()
+                        // and the listener fired transiently while
+                        // the player was being rebuilt — NOT a real
+                        // upstream-died signal. Treating it as one
+                        // caused infinite recovery loops on channel
+                        // open (v1.44.62/63 regression: user reported
+                        // "channels keep reconnecting unwatchable").
+                        if (isLive && state.hasBeenReady &&
+                            !state.recoveryInFlight
+                        ) {
                             scheduleRecovery("state=ENDED (live)")
                         }
                     }
@@ -490,11 +519,22 @@ object PlayerBuilder {
                 // never plays, OK doesn't unpause, classic "recording
                 // shows black screen forever". For VOD give the
                 // download a generous 30 s before forcing recovery.
+                //
+                // v1.44.64 — Gate on `hasBeenReady`. Initial channel-
+                // load buffering (which can legitimately take 4-8 s
+                // on busy live streams like Sportsnet East / TSN HD)
+                // must NOT be treated as a stall. Before this gate
+                // was added, the watchdog would fire recovery on
+                // every channel open, the full-source-rebuild from
+                // v1.44.62 would restart buffering from scratch,
+                // and we'd infinite-loop into the user's reported
+                // "channels keep reconnecting unwatchable" bug.
                 val stallThresholdMs = if (isLive) STALL_BUFFER_MS_LIVE
                     else STALL_BUFFER_MS_VOD
                 val bufStart = state.bufferingSinceMs
                 if (bufStart != 0L && player.playWhenReady &&
                     !state.recoveryInFlight &&
+                    state.hasBeenReady &&
                     now - bufStart > stallThresholdMs
                 ) {
                     state.bufferingSinceMs = 0L
@@ -502,9 +542,14 @@ object PlayerBuilder {
                 }
 
                 // 2. Frozen position in READY
+                // v1.44.64 — Also gated on `hasBeenReady`. Belt-and-
+                // braces: STATE_READY implies hasBeenReady=true so
+                // in practice this guard is redundant, but it
+                // documents intent.
                 if (player.playbackState == Player.STATE_READY &&
                     player.playWhenReady &&
                     !state.recoveryInFlight &&
+                    state.hasBeenReady &&
                     state.bufferingSinceMs == 0L
                 ) {
                     val pos = runCatching { player.currentPosition }.getOrDefault(0L)
@@ -611,6 +656,13 @@ object PlayerBuilder {
         var savedPositionMs = 0L
         var pendingSeek = false
         var recoveryNotified = false
+        /** v1.44.64 — Set true the first time the player reaches
+         *  STATE_READY for a given media item. Gates the stall
+         *  watchdog so initial channel-load buffering (which can
+         *  legitimately take 4–8 s on busy live streams) is NOT
+         *  treated as a stall. Resets to false on every legitimate
+         *  user-initiated channel change. */
+        var hasBeenReady = false
     }
 
     /** 1 s → 2 s → 4 s → 8 s, capped at [MAX_BACKOFF_MS]. */

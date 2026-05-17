@@ -1,6 +1,32 @@
 # HushTV — Product Requirements Document
 
-## v1.44.63 — "Reconnecting…" pill on live freezes (Dev + Official LIVE) — 2026-02-08
+## v1.44.64 — URGENT regression fix: infinite reconnect loop on channel open (Dev + Official LIVE) — 2026-02-08
+
+### What went wrong in v1.44.62/63
+v1.44.62 swapped the recovery action from bare `player.prepare()` to a full source rebuild (`stop → clearMediaItems → setMediaItem → prepare → seekToDefaultPosition → play`). This is the right fix for wedged HLS sources during a real freeze. **But** it had a fatal interaction with the stall watchdog:
+
+1. User opens a live channel in full-screen player.
+2. Initial buffering takes 4-8 s (normal for busy upstream feeds like Sportsnet East / TSN HD).
+3. At 4 s the stall watchdog fires: "buffering for >4 s → recovery!"
+4. Recovery's `stop()` puts the player in STATE_IDLE.
+5. `setMediaItem` + `prepare()` restarts buffering from the beginning.
+6. 4 s later → watchdog fires again. Infinite loop. Channel never plays.
+
+Plus a secondary bug: my `clearMediaItems()` call during recovery fires `onMediaItemTransition(null)` then `onMediaItemTransition(item)`. My listener was resetting the retry counter on every transition (intended for user channel zaps), bypassing the 50-retry give-up cap.
+
+Mini preview was always fine — different code path, never attached this watchdog.
+
+### Fix (v1.44.64)
+- Added `state.hasBeenReady: Boolean` flag, set true the first time the player reaches STATE_READY for the current media item.
+- Stall watchdog (buffer stall + frozen position) **only counts as a stall AFTER `hasBeenReady=true`**. Initial channel-load buffering no longer triggers recovery.
+- `STATE_ENDED` and `STATE_IDLE` recovery paths also gated on `hasBeenReady`. Catches the case where our own `stop()` / `clearMediaItems()` puts the player through these states transiently.
+- `onMediaItemTransition` now **skips state reset when `recoveryInFlight == true`**. Only genuine user channel zaps re-arm the watchdog. Internal source rebuilds preserve the retry counter so the give-up safety net actually works.
+- `onMediaItemTransition` now also resets `hasBeenReady = false` on a real user channel change, so the new channel gets a fresh initial-load grace period.
+
+### Files changed
+- MODIFIED `data/PlayerBuilder.kt` — `ReconnectState.hasBeenReady` field, gating in all three state handlers + watchdog, recovery-aware `onMediaItemTransition`.
+
+## v1.44.63 — "Reconnecting…" pill — 2026-02-08
 
 ### What landed
 - New `onRecoveryStart` callback in `PlayerBuilder.attachAutoReconnect` — fires the moment the watchdog kicks off recovery (error / 4 s buffer stall / live STATE_ENDED / IDLE), passing the reason for telemetry.
