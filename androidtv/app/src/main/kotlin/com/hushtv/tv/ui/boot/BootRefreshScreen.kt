@@ -46,9 +46,11 @@ import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.TextPrimary
 import com.hushtv.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
@@ -327,6 +329,19 @@ fun BootRefreshScreen(onDone: () -> Unit) {
             // matches the user-requested "curate when I open the
             // themes section, not before" behavior.
             com.hushtv.tv.data.ThemedMatchCache.primeAsync(ctx, playlist)
+
+            // v1.44.54 — background-refresh the remote themed pack
+            // (https://hushtv.xyz/themes_pack.json). This is how new
+            // "Moods & Themes" rows reach users without an APK
+            // build. If the remote pack is newer than what we
+            // already have in prefs, the catalog's "extra" rows
+            // change on next app open. Silent no-op if the network
+            // is down or the pack hasn't changed.
+            GlobalScope.launch(Dispatchers.IO) {
+                runCatching {
+                    com.hushtv.tv.data.ThemePackLoader.refreshRemote(ctx)
+                }
+            }
 
             // Decade-year prime — kicked off async (NOT blocking
             // boot). 90 years × ~250 candidates is heavier than

@@ -1,6 +1,25 @@
 # HushTV — Product Requirements Document
 
-## v1.44.53 — SUCCESSFULLY DEPLOYED to Dev + Official — 2026-02-08 (this session)
+## v1.44.54 — Moods & Themes is now hot-patch-ready — 2026-02-08 (this session)
+
+### What landed
+- **Pack-driven theme expansion**: Themes can now be added to "Moods & Themes" without an APK build. v1.44.54 ships a bundled `assets/themes_pack.json` (26 themes, 1,552 ranked movie rows from user-supplied pack v2) AND auto-fetches `https://hushtv.xyz/themes_pack.json` on every cold boot. Any newer remote pack overlays the bundled one. Future themes = upload a JSON, users see them on next app open.
+- **Slug-to-legacy-id map**: All 26 pack entries shadow existing hardcoded themes 1:1 (`based_on_true_stories` → `true_stories_v1`, etc.). The hardcoded curation always wins (richer altTitles, year disambiguation, hand-picked TMDB hero backdrops). Truly NEW slugs in future packs auto-append as "extra" themes with palette/glyph derived from slug hash + fallback hero.
+- **Back-press scroll preservation** in `TVThemedDetailScreen`: when the user opens a movie and presses back, they return to the exact same grid scroll offset + focused poster they were on. Implemented via the new `ThemedScrollMemory` singleton (3 ints per visited theme; `synchronized(map)` writes; survives Compose re-mount across nav). Replaces the old behavior where the grid hard-reset to top + first tile on every back-press.
+
+### Files added/changed
+- NEW `assets/themes_pack.json` (75 KB slim format: `themes`, `items` arrays)
+- NEW `data/ThemePackLoader.kt` — bundled+remote loader, hash-based metadata fallback, refresh throttle (12 h)
+- NEW `data/ThemedScrollMemory.kt` — per-theme grid/focus state, survives nav back-pops
+- MODIFIED `data/HushThemedLists.kt` — `val all` is now a getter that merges hardcoded + pack extras (no callsite changes)
+- MODIFIED `HushTVApp.kt` — calls `ThemePackLoader.loadBundledSync` on app start
+- MODIFIED `ui/boot/BootRefreshScreen.kt` — kicks `ThemePackLoader.refreshRemote` background coroutine after lib prime
+- MODIFIED `ui/screens/TVThemedDetailScreen.kt` — `rememberLazyGridState` seeded from `ThemedScrollMemory`; `rememberSaveable` for `focusedIndex`; saves state on poster click + on dispose
+
+### Build env permanently fixed (carry-over from v1.44.53 session)
+Symlinks: `/root/.gradle` → `/var/gradle-home`, `/app/androidtv/.gradle` → `/var/androidtv-gradle`, `/app/androidtv/app/build` → `/var/androidtv-build`. Moves Gradle's heavy caches off the 9.8 GB `/app` volume onto the 107 GB overlay root. If the pod reschedules and wipes these (along with JDK + qemu deps), re-install: `apt-get install -y openjdk-17-jdk-headless sshpass qemu-user-static libc6-amd64-cross libgcc-s1-amd64-cross libstdc++6-amd64-cross` and re-create the three /var dirs + symlinks before building.
+
+## v1.44.53 — SUCCESSFULLY DEPLOYED to Dev + Official — 2026-02-08
 
 After multiple build environment failures in the previous session (disk exhaustion,
 missing JDK, missing qemu-user-static, missing libc6-amd64-cross), this session

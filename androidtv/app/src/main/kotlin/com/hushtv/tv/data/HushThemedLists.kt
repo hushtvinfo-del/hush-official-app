@@ -199,7 +199,15 @@ object HushThemedLists {
             ?: error("Missing hero backdrop URL for theme '$id' — add one to HERO_BACKDROPS"),
     )
 
-    val all: List<ThemedList> = listOf(
+    /**
+     * Hardcoded curation — preserved verbatim so we don't regress
+     * on any of the hand-picked altTitles / year disambiguations /
+     * hero backdrops the existing 25 themes ship with. The
+     * "extra" themes loaded by [ThemePackLoader] (which can be
+     * hot-patched without an APK build) are merged into [all] via
+     * the getter below.
+     */
+    private val hardcoded: List<ThemedList> = listOf(
 
         // ── Narrative & Story ─────────────────────────────────
         theme(
@@ -2632,6 +2640,27 @@ object HushThemedLists {
             ),
         ),
     )
+
+    /**
+     * Effective theme catalog = hardcoded curation + any "extra"
+     * themes the [ThemePackLoader] has been able to bring in from
+     * the bundled `assets/themes_pack.json` (or a remote hot-patch
+     * at `https://hushtv.xyz/themes_pack.json`).
+     *
+     * The merge is computed every read but it's just two list refs
+     * concatenated — Kotlin's `+` on List allocates a single new
+     * list, no per-element work. Cheap enough to keep this a getter
+     * (no manual cache invalidation needed when the pack refreshes
+     * mid-session).
+     *
+     * NOTE on API stability: all 5 existing callers used to read
+     * [all]. They continue to work unchanged — the property name is
+     * preserved; only the body switched from `val = listOf(...)` to
+     * a computed `get()`.
+     */
+    val all: List<ThemedList>
+        get() = if (ThemePackLoader.extraThemes().isEmpty()) hardcoded
+                else hardcoded + ThemePackLoader.extraThemes()
 
     /**
      * Resolve a [ThemedList] against the user's library. Pure

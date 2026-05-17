@@ -1,13 +1,13 @@
 {
-  "versionCode": 453,
-  "versionName": "1.44.53",
+  "versionCode": 454,
+  "versionName": "1.44.54",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Mobile / tablet Home: Replaced the tiny page-dot indicator with a horizontally-scrollable section tab bar. Every section name (For You, Discover, Themes, Sports, Movies, Series, Collections, Genres, Decades) is now visible and tappable — no more guessing where Themes lives or whether you can swipe between pages.",
-    "Mobile: Sports tab added as a placeholder for v1.44.53 — full Live Sports & PPV mobile experience ports from TV in v1.44.54.",
-    "All v1.44.42 → v1.44.52 features still in place."
+    "Moods & Themes is now ready for hot-patched expansion. Themes can be added in a new `themes_pack.json` (bundled in the APK + hot-patched from https://hushtv.xyz/themes_pack.json) without needing an APK build. v1.44.54 ships with the 26-row populated pack v2 bundled.",
+    "Themed-detail back-press: scroll position and focused poster are now preserved when you back out of a movie. The grid stays exactly where you left it instead of jumping back to the top.",
+    "Pack-driven themes auto-merge with the 25 hand-curated themes. Slug collisions defer to the hand-curation (richer altTitles + per-title year disambiguation)."
   ]
 }

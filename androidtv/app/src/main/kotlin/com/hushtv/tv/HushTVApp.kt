@@ -50,6 +50,12 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // If a crash was captured during the last session, POST it to
         // the server in the background. Silent-no-op if nothing's new.
         com.hushtv.tv.data.CrashReporter.uploadIfPending(this)
+        // v1.44.54 — load the themed-pack bundle from APK assets so
+        // any "extra" Moods & Themes rows are merged into
+        // HushThemedLists.all on the first composition. Cheap
+        // (~20 ms, runs once). Remote refresh is kicked off later
+        // by BootRefreshScreen alongside the main library prime.
+        com.hushtv.tv.data.ThemePackLoader.loadBundledSync(this)
         // v1.44.3 — start the ANR watchdog. Detects main-thread freezes
         // >4s and writes a stack trace to anr.log so the next launch
         // can ship it. Closes the diagnostic gap that ate v1.44.0–.2:

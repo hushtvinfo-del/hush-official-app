@@ -30,10 +30,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +60,7 @@ import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.ThemedHeroMetaCache
 import com.hushtv.tv.data.ThemedLibraryMatch
 import com.hushtv.tv.data.ThemedList
+import com.hushtv.tv.data.ThemedScrollMemory
 import com.hushtv.tv.ui.screens.home.BackToHomeChip
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Inter
@@ -125,7 +128,22 @@ fun TVThemedDetailScreen(
     val matchesReady = cachedMatches != null
 
     val firstFocus = remember { FocusRequester() }
-    var focusedIndex by remember { mutableStateOf(0) }
+    val restoreFocusReq = remember { FocusRequester() }
+
+    // v1.44.54 — restore the user's last position when they come
+    // back from a movie detail page. The triple is
+    //   (firstVisibleItemIndex, firstVisibleItemScrollOffset, focusedIndex)
+    // and was written before nav.navigate(moviedetail/...).
+    val saved: Triple<Int, Int, Int>? = remember(themeId) {
+        ThemedScrollMemory.load(themeId)
+    }
+    var focusedIndex by rememberSaveable(themeId) {
+        mutableStateOf(saved?.third ?: 0)
+    }
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(
+        initialFirstVisibleItemIndex = saved?.first ?: 0,
+        initialFirstVisibleItemScrollOffset = saved?.second ?: 0,
+    )
     val focusedMatch = matches.getOrNull(focusedIndex)
 
     // Lazy TMDB metadata for the focused poster — debounced 250 ms
@@ -148,13 +166,35 @@ fun TVThemedDetailScreen(
         }
     }
 
-    // Auto-focus the first poster as soon as the matches list is
-    // available. Wrapped in a small delay so the FocusRequester is
-    // attached before we request focus.
-    LaunchedEffect(matches.isNotEmpty()) {
+    // Auto-focus on entry. If we have a saved focused index from a
+    // previous visit to this theme, restore it via [restoreFocusReq]
+    // (the tile at the saved index attaches that FocusRequester).
+    // Otherwise fall back to the first tile.
+    LaunchedEffect(matches.isNotEmpty(), themeId) {
         if (matches.isNotEmpty()) {
             delay(180)
-            runCatching { firstFocus.requestFocus() }
+            runCatching {
+                if (saved != null && saved.third in matches.indices) {
+                    restoreFocusReq.requestFocus()
+                } else {
+                    firstFocus.requestFocus()
+                }
+            }
+        }
+    }
+
+    // Persist scroll + focus on every meaningful change so a
+    // subsequent nav-back (which re-mounts this composable) can
+    // restore the exact spot the user was at. Cheap — three ints
+    // into a HashMap, off the rendering hot path.
+    androidx.compose.runtime.DisposableEffect(themeId, focusedIndex) {
+        onDispose {
+            ThemedScrollMemory.save(
+                themeId = themeId,
+                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset,
+                focusedIndex = focusedIndex,
+            )
         }
     }
 
@@ -227,6 +267,7 @@ fun TVThemedDetailScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(7),
+                    state = gridState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(0.58f),
@@ -244,12 +285,29 @@ fun TVThemedDetailScreen(
                         key = { it.streamId },
                     ) { match ->
                         val idx = matches.indexOf(match)
+                        val savedFocusIdx = saved?.third ?: 0
+                        val focusMod = when {
+                            idx == 0 -> Modifier.focusRequester(firstFocus)
+                            idx == savedFocusIdx && saved != null
+                                -> Modifier.focusRequester(restoreFocusReq)
+                            else -> Modifier
+                        }
                         ThemedPosterTile(
                             match = match,
                             accent = theme.accent,
-                            focusModifier = if (idx == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                            focusModifier = focusMod,
                             onFocus = { focusedIndex = idx },
                             onClick = {
+                                // Snapshot the user's exact position
+                                // BEFORE the nav transition so a
+                                // subsequent back-press lands them
+                                // on the same poster.
+                                ThemedScrollMemory.save(
+                                    themeId = themeId,
+                                    firstVisibleItemIndex = gridState.firstVisibleItemIndex,
+                                    firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset,
+                                    focusedIndex = idx,
+                                )
                                 nav.navigate(
                                     "moviedetail/$playlistId/" +
                                         "${match.streamId}/" +
