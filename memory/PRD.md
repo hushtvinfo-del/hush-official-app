@@ -1,6 +1,24 @@
 # HushTV — Product Requirements Document
 
-## v1.44.61 — Score-display fix + refresh cadences tightened (Backend deployed) — 2026-02-08
+## v1.44.62 — Live stream self-healing hardened (Dev + Official LIVE) — 2026-02-08
+
+### Root cause of "Sportsnet East froze, had to exit channel"
+The existing `attachAutoReconnect` watchdog in `PlayerBuilder.kt` did detect errors and stalls correctly, BUT the recovery action was inadequate for the most common Xtream-live failure modes:
+
+1. **Recovery only called `player.prepare()`**. For a wedged HLS/TS source — where ExoPlayer's MediaSource believes it's already prepared (after a bad segment / exhausted manifest) — `prepare()` is a no-op or fails silently. The picture stays frozen.
+2. **`STATE_ENDED` was ignored**. For a live stream STATE_ENDED is a contradiction (live never ends) — it always means the source bailed out. The watchdog logged "/* normal VOD end — ignore */" and did nothing, leaving the user staring at a frozen frame.
+
+### Fix (v1.44.62)
+- **Full source rebuild on recovery**: `stop() → clearMediaItems() → setMediaItem(item) → prepare() → seekToDefaultPosition() (for live) → playWhenReady = true`. Forces a fresh HTTP fetch + new ExtractorMediaSource. Snaps the user back to live edge instead of resuming 30s behind.
+- **STATE_ENDED on live triggers recovery** instead of being ignored.
+- **MediaItem snapshot stays current** via `onMediaItemTransition` listener — so when the user zaps channels (CH+/-), the watchdog uses the post-zap URL for any subsequent recovery.
+- **Stall thresholds tightened**: live buffer 5s → 4s, frozen position 5s → 4s. Picture comes back ~1s sooner on transient hiccups.
+
+### Files changed
+- MODIFIED `data/PlayerBuilder.kt` — `attachAutoReconnect` hardened (full source rebuild, STATE_ENDED handling, MediaItem snapshot).
+- MODIFIED `ui/screens/TVPlayerScreen.kt` — comment-only documenting which watchdog is in effect.
+
+## v1.44.61 — Score-display fix + refresh cadences — 2026-02-08
 
 ### What was wrong
 - TheSportsDB's `intHomeScore`/`intAwayScore` ship as **`null`** (not `"0"`) for teams that haven't yet scored in a live game. Confirmed for Jays @ Tigers IN5: their endpoint sends `intAwayScore=4, intHomeScore=null`. Our `_apply_v2_livescore` used `COALESCE(?, score_home)` on the UPDATE which preserved the previous null → game showed "4 - —" forever.

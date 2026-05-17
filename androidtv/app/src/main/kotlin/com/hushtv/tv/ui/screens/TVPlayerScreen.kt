@@ -497,6 +497,15 @@ fun TVPlayerScreen(
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
     var controlsTick by remember { mutableStateOf(0) }
+
+    // v1.44.62 — Live-stream self-healing watchdog is implemented in
+    // PlayerBuilder.attachAutoReconnect (wired above at line 154).
+    // The recovery path was hardened in this version to do a full
+    // source teardown (stop → clearMediaItems → setMediaItem →
+    // prepare → seekToDefaultPosition → play) instead of just
+    // re-prepare(), and to treat STATE_ENDED on a live stream as a
+    // failure case that triggers recovery (instead of being
+    // ignored as a "normal VOD end").
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }

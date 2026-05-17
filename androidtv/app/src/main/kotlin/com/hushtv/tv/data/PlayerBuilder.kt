@@ -284,6 +284,15 @@ object PlayerBuilder {
         val handler = Handler(Looper.getMainLooper())
         val state = ReconnectState()
 
+        // v1.44.62 — Snapshot the MediaItem at attach time so the
+        // recovery path can do a full stop → clearMediaItems →
+        // setMediaItem → prepare → seekToDefaultPosition. Calling
+        // just player.prepare() is insufficient for certain
+        // wedged states (HLS source exhausted, codec stuck post-
+        // error). We refresh this snapshot every time the user
+        // zaps channels so the watchdog uses the latest URL.
+        var snapshotItem: MediaItem? = player.currentMediaItem
+
         fun scheduleRecovery(reason: String) {
             // Already a recovery in flight? Skip — we'll get another
             // signal if it failed.
@@ -305,6 +314,11 @@ object PlayerBuilder {
             state.savedPositionMs = if (!isLive) {
                 runCatching { player.currentPosition }.getOrDefault(0L)
             } else 0L
+            // v1.44.62 — Re-snapshot the MediaItem in case it
+            // changed (user zapped channels) since attach.
+            runCatching { player.currentMediaItem }
+                .getOrNull()
+                ?.let { snapshotItem = it }
             EventLog.log(
                 "auto-reconnect",
                 "$channelName retry=${state.attempts} reason=$reason " +
@@ -313,10 +327,28 @@ object PlayerBuilder {
             handler.postDelayed({
                 if (state.disposed) return@postDelayed
                 runCatching {
+                    // v1.44.62 — Hard source rebuild instead of bare
+                    // prepare(). For wedged HLS / TS sources, calling
+                    // prepare() alone can be a no-op (the MediaSource
+                    // believes it's already prepared) or fail
+                    // silently. The full teardown forces a fresh
+                    // HTTP fetch and a new ExtractorMediaSource.
+                    val item = snapshotItem ?: player.currentMediaItem
+                    player.stop()
+                    player.clearMediaItems()
+                    if (item != null) {
+                        player.setMediaItem(item)
+                    }
                     player.prepare()
-                    if (!isLive && state.savedPositionMs > 0L) {
-                        // Set a flag — actual seek happens on next
-                        // STATE_READY so the buffer is ready first.
+                    if (isLive) {
+                        // Snap back to the live edge so the user
+                        // catches up to "now" rather than resuming
+                        // 20-30 s behind.
+                        player.seekToDefaultPosition()
+                    } else if (state.savedPositionMs > 0L) {
+                        // VOD: set a flag — actual seek happens on
+                        // next STATE_READY so the buffer is ready
+                        // first.
                         state.pendingSeek = true
                     }
                     if (!player.playWhenReady) player.playWhenReady = true
@@ -334,6 +366,24 @@ object PlayerBuilder {
                         "auto-reconnect",
                         "$channelName non-recoverable code=${error.errorCodeName}",
                     )
+                }
+            }
+
+            override fun onMediaItemTransition(
+                mediaItem: MediaItem?,
+                reason: Int,
+            ) {
+                // v1.44.62 — Keep our snapshot in sync when the user
+                // zaps channels (TVPlayerScreen calls
+                // setMediaItem(MediaItem.fromUri(newUrl))).
+                if (mediaItem != null) {
+                    snapshotItem = mediaItem
+                    // Reset retry budget on a fresh channel so a new
+                    // stream gets full attempts.
+                    state.attempts = 0
+                    state.recoveryNotified = false
+                    state.bufferingSinceMs = 0L
+                    state.lastPosCheckMs = 0L
                 }
             }
 
@@ -389,7 +439,23 @@ object PlayerBuilder {
                             )
                         }
                     }
-                    Player.STATE_ENDED -> { /* normal VOD end — ignore */ }
+                    Player.STATE_ENDED -> {
+                        // v1.44.62 — For a LIVE stream, STATE_ENDED
+                        // is a contradiction in terms — live streams
+                        // never end. When this fires for live, the
+                        // upstream HLS playlist either bottomed out
+                        // (provider stopped publishing segments) or
+                        // the source decided the manifest was
+                        // exhausted. Either way the only fix is a
+                        // full source rebuild. We previously
+                        // ignored this state entirely, which is
+                        // exactly the "Sportsnet East froze, had
+                        // to back out and re-enter" failure mode
+                        // the user reported.
+                        if (isLive && !state.recoveryInFlight) {
+                            scheduleRecovery("state=ENDED (live)")
+                        }
+                    }
                 }
             }
         }
@@ -584,23 +650,27 @@ object PlayerBuilder {
     )
 
     /** Stall thresholds — empirically chosen.
-     *  • Live: 5 s buffer is long enough to cover a normal ad-break
+     *  • Live: 4 s buffer is long enough to cover a normal ad-break
      *    bumper or HLS playlist refresh, but short enough that
-     *    the user hasn't yet decided to channel-zap.
+     *    the user hasn't yet decided to channel-zap. Tightened
+     *    from 5 s in v1.44.62 — the average viewer has decided to
+     *    leave by ~6-7 s of a black screen, so getting recovery
+     *    started a second earlier matters.
      *  • VOD/DVR: 30 s. Static files don't need fast recovery — large
      *    moov atoms (2 MB+ for an hour-long capture) can take 15-20 s
      *    over slow WiFi before the first frame is decodable. A 5 s
      *    threshold causes the watchdog to keep re-prepare()ing in a
      *    loop, the moov download starts over each time, and the user
      *    sees a black screen forever (v1.44.32 DVR playback bug).
-     *  • 5 s of frozen position covers most stuck-decoder cases
-     *    without false-positive on legitimate live pauses.
+     *  • 4 s of frozen position (down from 5 s) covers most
+     *    stuck-decoder cases without false-positive on legitimate
+     *    live pauses.
      *  • 15 s of clean playback before we trust the recovery and
      *    reset the attempt counter — anything shorter and we keep
      *    bouncing between failure and success. */
-    private const val STALL_BUFFER_MS_LIVE = 5_000L
+    private const val STALL_BUFFER_MS_LIVE = 4_000L
     private const val STALL_BUFFER_MS_VOD = 30_000L
-    private const val STALL_FROZEN_MS = 5_000L
+    private const val STALL_FROZEN_MS = 4_000L
     private const val STABLE_PLAYBACK_MS = 15_000L
     private const val WATCHDOG_INTERVAL_MS = 1_000L
     private const val MAX_BACKOFF_MS = 10_000L

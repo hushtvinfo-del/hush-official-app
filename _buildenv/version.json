@@ -1,13 +1,15 @@
 {
-  "versionCode": 459,
-  "versionName": "1.44.59",
+  "versionCode": 462,
+  "versionName": "1.44.62",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Sports schedule fix (the REAL one for the missing MTL vs BUF game): backend was filtering out any game where TheSportsDB hadn't published a broadcaster yet, AND was storing midnight UTC for games with empty strTime (making them look like past games). Both fixed: backend now stores empty-time games at 23:00 UTC (~7pm EDT, the typical NA prime-time slot), widens past-lookback to 30h, and no longer drops games with null channel.",
-    "Android: the games rail now also shows games with no resolved broadcaster — the per-game picker handles channel resolution on tap.",
-    "All v1.44.58 features still in place (game rail no longer requires strict primary-match, CBC picker blacklist, themes pack v5, Sports back-nav fix)."
+    "Live stream self-healing — Sportsnet East / TSN HD / etc. no longer require backing out and re-entering a channel when they freeze. Recovery now does a full source rebuild (stop → clearMediaItems → setMediaItem → prepare → seek-to-live → play) instead of just re-prepare(). Catches the wedged-HLS case where prepare() alone is a no-op.",
+    "Live stream STATE_ENDED is now treated as a failure (it's a contradiction in terms for a live feed) and triggers recovery instead of being ignored. Was the root cause of the 'froze, had to exit channel' reports.",
+    "Recovery stall threshold tightened from 5 s → 4 s for live, so the picture comes back ~1 s sooner on a CDN edge hiccup.",
+    "MediaItem snapshot in the recovery loop is now refreshed when the user zaps channels (CH+/-), so post-zap recovery uses the correct new URL.",
+    "Server: live score display fixed for games with a team at 0 (was showing blank where TheSportsDB sends null). Refresh cadences tightened: schedule 15→5 min, broadcasts 30→15 min, PPV 6h→1h."
   ]
 }
