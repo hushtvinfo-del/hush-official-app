@@ -185,11 +185,18 @@ fun rememberPlayableGames(
         }
         value = withContext(Dispatchers.Default) {
             games.mapNotNull { g ->
-                val ch = g.channel ?: return@mapNotNull null
-                val match = if (index != null && !index.isEmpty) {
+                // v1.44.59 — backend may now return games with
+                // channel=null when TheSportsDB hasn't yet published
+                // a broadcaster for the game. We still want to show
+                // the card; the user can tap it and the per-game
+                // GameChannelSheet does its own broader EPG lookup.
+                val ch = g.channel ?: ""
+                val match = if (ch.isNotBlank() && index != null && !index.isEmpty) {
                     SportsChannelMatcher.match(ch, index)
                 } else null
-                val card = match ?: syntheticChannelCard(ch)
+                val card = match ?: syntheticChannelCard(
+                    name = if (ch.isNotBlank()) ch else "Channel TBD",
+                )
                 g to card
             }
         }

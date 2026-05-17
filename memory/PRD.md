@@ -1,6 +1,34 @@
 # HushTV — Product Requirements Document
 
-## v1.44.58 — Sports games rail no longer drops CBC-broadcast games (Dev + Official LIVE) — 2026-02-08
+## v1.44.59 — REAL fix for missing MTL vs BUF NHL game (Dev + Official LIVE + Backend deployed) — 2026-02-08
+
+### Root cause (took 2 versions to find)
+The Buffalo Sabres @ Montreal Canadiens game wasn't visible despite being in TheSportsDB. **Three combining backend bugs**:
+1. TheSportsDB shipped the event with `dateEvent=2026-05-17` and `strTime=""` (no published puck-drop). `_utc_ts` defaulted to `T00:00:00`, storing the game at midnight UTC May 17 — i.e. 8 p.m. EDT the **previous** evening, NOT tomorrow night EST as the user expected.
+2. The `/league/{slug}` endpoint's past-lookback was only 6 h. At 17:56 UTC May 17, the game (stored at 00:00 UTC May 17 = 17h in the past) fell outside the window and got dropped.
+3. The `/league/{slug}` endpoint also dropped any game with `channel is None` (no resolved broadcaster mapping yet). Even if (1) and (2) hadn't applied, the game would have been silently filtered.
+
+### Backend fixes (deployed to `/opt/hushtv-sync/sports_module.py`, service restarted, admin refresh triggered)
+- `_utc_ts`: empty `strTime` now defaults to `23:00 UTC` (~7 p.m. EDT / 6 p.m. EST — typical NA prime time), instead of midnight UTC.
+- `/league/{slug}`: widened past-lookback from 6 h → 30 h.
+- `/league/{slug}`: REMOVED the `if g["channel"] is None: continue` drop. Games with no resolved broadcaster now reach the client, which handles them via synthetic MediaCards.
+
+### Android v1.44.59 fix
+- `rememberPlayableGames` in `SportsState.kt` now accepts games where `g.channel` is null. Synthetic card uses "Channel TBD" label. Tap → `GameChannelSheet` performs its own per-game EPG lookup independent of the primary broadcaster string.
+
+### Verified live state
+```
+/api/sports/league/nhl?days=14 →
+  Buffalo Sabres @ Montreal Canadiens   Sun May 17 23:00 UTC | CBC   ← was missing
+  Vegas Golden Knights @ Colorado Avalanche   Thu May 21 23:00 UTC | SportsNet Ontario
+  Vegas Golden Knights @ Colorado Avalanche   Sat May 23 23:00 UTC | SPORTSNET
+  Colorado Avalanche @ Vegas Golden Knights   Mon May 25 23:00 UTC | SPORTSNET
+  Colorado Avalanche @ Vegas Golden Knights   Tue May 26 20:00 UTC | SPORTSNET
+```
+
+Production sync server now serves Buffalo @ Montreal at `https://hushtv.xyz/api/sports/league/nhl`. The CBC picker blacklist from v1.44.56 still applies — clicking the MTL game offers TSN / Sportsnet alternates (when in EPG), CBC is hidden from the picker as configured.
+
+## v1.44.58 — Sports games rail relaxation — 2026-02-08
 
 ### What landed
 - **`rememberPlayableGames` filter relaxed**: previously a game whose API-supplied primary broadcaster (e.g. "CBC") didn't strict-token-match a channel in the user's playlist was dropped via `mapNotNull`. Net effect: NHL Habs-vs-Bills games and similar Canadian-broadcast games never appeared in the league rail. Now every game whose API record carries a broadcaster string is included in the rail. If the strict match fails, a synthetic `MediaCard` is attached (streamId=0, title=API channel name) so the card paints. At click time the existing `GameChannelSheet` does its own per-game EPG lookup via `SportsApi.gameChannels()` and offers every actually-playable channel (minus blacklisted patterns).

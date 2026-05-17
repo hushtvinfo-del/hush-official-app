@@ -1,13 +1,13 @@
 {
-  "versionCode": 458,
-  "versionName": "1.44.58",
+  "versionCode": 459,
+  "versionName": "1.44.59",
   "apkUrl": "https://hushtv.xyz/hushtv-official.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "official",
   "changelog": [
-    "Sports games rail: games whose primary broadcaster doesn't strict-match a channel in your playlist (e.g. NHL game where the API says broadcaster=CBC and your playlist's CBC has a slightly different name) are NO LONGER dropped from the league rail. The card paints with the API channel name; clicking opens the per-game picker which does its own broader EPG lookup and offers every actually-playable channel (minus blacklisted patterns).",
-    "Clarification: the CBC blacklist added in v1.44.56 only ever affected the per-game channel picker — it did NOT cause games to disappear from the rail. The strict primary-broadcaster match was a pre-existing behaviour that is now relaxed.",
-    "All v1.44.57 features (curated Moods & Themes pack v5, CBC picker blacklist, Sports back-nav fix) still in place."
+    "Sports schedule fix (the REAL one for the missing MTL vs BUF game): backend was filtering out any game where TheSportsDB hadn't published a broadcaster yet, AND was storing midnight UTC for games with empty strTime (making them look like past games). Both fixed: backend now stores empty-time games at 23:00 UTC (~7pm EDT, the typical NA prime-time slot), widens past-lookback to 30h, and no longer drops games with null channel.",
+    "Android: the games rail now also shows games with no resolved broadcaster — the per-game picker handles channel resolution on tap.",
+    "All v1.44.58 features still in place (game rail no longer requires strict primary-match, CBC picker blacklist, themes pack v5, Sports back-nav fix)."
   ]
 }
