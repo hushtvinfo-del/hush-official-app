@@ -1,6 +1,27 @@
 # HushTV — Product Requirements Document
 
-## v1.44.60 — Backend safeguard against false-final livescore + investigation — 2026-02-08
+## v1.44.60 (revised) — Reverted v1.44.59 strTime change; final cleanup — 2026-02-08
+
+### Investigation timeline (this session)
+1. User reported: "MTL vs BUF NHL game missing." Initial fix (v1.44.58) relaxed the strict primary-broadcaster match in `rememberPlayableGames`. Didn't help.
+2. v1.44.59: discovered the game's `start_utc` was midnight UTC and outside the 6 h lookback. "Fixed" by defaulting empty `strTime` to 23:00 UTC AND widening lookback to 30 h. Game appeared in the API — but with the WRONG timestamp.
+3. v1.44.60 (first attempt): caught that upstream's livescore was applying `Final 3-8` to what we thought was a future game. Added a safeguard rejecting future-final livescore updates.
+4. **v1.44.60 (revised, this round)**: user screenshot revealed the truth. Series is **tied 3-3**, the 8-3 final was **game 6 on May 16 evening** (Atlantic Time), and game 7 is tomorrow May 18 at 8:30 PM Atlantic. TheSportsDB's `dateEvent="2026-05-17"` + empty `strTime` corresponds to **game 6 played May 16 8 PM EDT / 9 PM ADT** (which becomes May 17 00:00 UTC). My v1.44.59 "default to 23:00 UTC" change was incorrectly pushing that COMPLETED game forward by 23 h, making it look like tonight's game.
+
+### Final state (backend deployed, no APK rebuild)
+- `_utc_ts`: **REVERTED** to original midnight-UTC default for missing `strTime`. Past games stay correctly dated; future games TheSportsDB hasn't time-stamped get correctly bucketed when their strTime is published.
+- `/league/{slug}`: **REVERTED** past-lookback split by status (scheduled: 5 h past, live: always, final: 6 h past). Keeps just-completed game results briefly visible without polluting the upcoming view with multi-day-old finals.
+- `/api/sports/home`: kept the null-channel filter removal (correct fix).
+- `_apply_v2_livescore`: kept the future-final safeguard (correct fix — even with proper times, upstream can briefly misroute scores).
+- DB cleanup: row 1338 (game 6) now correctly shows `status=final, score 3-8` at the proper May 17 00:00 UTC timestamp.
+
+### Why game 7 still isn't visible
+TheSportsDB literally hasn't published it yet. Confirmed via three endpoints (`eventsnext.php` by league + by team, `eventsseason.php` for the full 2025-26 season). They typically add the next playoff game within a few hours of the previous one finishing. Our 15-min schedule refresh will pick it up automatically when they do.
+
+### About timezones
+Times are stored in UTC in the database. The Android client renders them in the user's device timezone via `Instant.ofEpochMilli` (which honours system locale). EDT users see EDT, ADT users see ADT. No client-side TZ bug to fix.
+
+## v1.44.59 — Sports games rail / time-window fixes (superseded by v1.44.60 revision) — 2026-02-08
 
 ### Issue investigated
 User reported the MTL vs BUF NHL game still missing after v1.44.59. Root cause was a different upstream bug: TheSportsDB's `/api/v2/json/livescore/4380` was returning the May 17 game as `strProgress="Final"` with `intHomeScore=3, intAwayScore=8` even though the game's puck-drop was still 4.5 h in the future. Our `_apply_v2_livescore` faithfully applied this corrupted update, marking a future game as completed. The user's sports rail (which prioritizes "scheduled" over "final" status) was hiding the bogus-final game from the upcoming view.

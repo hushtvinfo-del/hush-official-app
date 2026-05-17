@@ -402,35 +402,32 @@ def _sportsdb_get(path: str, params: Optional[Dict[str, Any]] = None,
 def _utc_ts(iso: Optional[str], time_str: Optional[str] = None) -> Optional[int]:
     """Parse TheSportsDB's date+time (both strings) → UTC epoch ms.
 
-    v1.44.59 — when TheSportsDB ships a `dateEvent` with no `strTime`
-    (common for games TheSportsDB hasn't yet finalized a tip-time for,
-    e.g. playoff TBD slots), the historical fallback was 00:00:00 UTC.
-    That timestamp is BEFORE the typical NA evening game time and was
-    causing today-or-tomorrow games to get filtered out by the
-    `/league/{slug}` endpoint's time-window guard (which only looked
-    back 6 h). We now default missing times to 23:00 UTC so a
-    "tonight's NHL game" with no published puck-drop is stored at
-    23:00 UTC ≈ 7 p.m. EDT / 6 p.m. EST — close to the empirical
-    norm — and stays inside any reasonable visibility window.
+    Note on missing times
+    ─────────────────────
+    TheSportsDB sometimes ships an event with `dateEvent` filled and
+    `strTime` empty. Their `dateEvent` is **already in UTC** (verified
+    against playoff series start times: e.g. a 7 p.m. ET puck-drop
+    on May 14 shows as `dateEvent=2026-05-14 strTime=23:00:00`,
+    confirming UTC). When `strTime` is missing the date alone is the
+    best signal we have — we honour it as-is at 00:00 UTC.
+
+    (v1.44.59 briefly tried to "fix" empty times by defaulting them
+    to 23:00 UTC. That created a worse bug: past games whose
+    strTime was already missing got pushed forward by 23 h, making
+    just-completed playoff games look like "tonight's game." Now
+    reverted — see v1.44.60 changelog.)
     """
     if not iso:
         return None
     try:
         # TheSportsDB is inconsistent: sometimes just a date, sometimes
         # date + separate time field. We accept both.
-        time_blank = not (time_str and time_str.strip() and time_str.strip() != "00:00:00")
         if time_str and "T" not in iso:
             combined = f"{iso}T{time_str}"
         else:
             combined = iso
         if "T" not in combined:
-            # No time component at all → default to 23:00 UTC (see
-            # docstring above for rationale).
-            combined = f"{combined}T23:00:00"
-        elif time_blank and combined.endswith("T00:00:00"):
-            # Time was literally "00:00:00" — treat as missing and
-            # apply the same evening fallback.
-            combined = combined.replace("T00:00:00", "T23:00:00")
+            combined = f"{combined}T00:00:00"
         # Strip any trailing Z or +HH:MM — assume TheSportsDB is already UTC.
         combined = combined.rstrip("Z").split("+", 1)[0]
         dt = datetime.fromisoformat(combined)
@@ -1577,32 +1574,36 @@ def sports_league(slug: str, days: int = Query(7, ge=1, le=30)) -> Dict[str, Any
         ).fetchone()
         if not lg:
             raise HTTPException(404, f"league {slug} not found")
-        # v1.44.59 — widen the past-lookback from 6 h to 30 h. Games
-        # that TheSportsDB ships with no `strTime` are stored at
-        # 23:00 UTC of dateEvent (see `_utc_ts`), but games TheSportsDB
-        # already moved to `dateEvent = TODAY` with a missing strTime
-        # were previously slipping outside the 6 h backstop. 30 h
-        # covers any same-day game in any NA time zone without
-        # bleeding into yesterday's actual finals.
+        # v1.44.60 — Past-lookback window split by status:
+        #   - scheduled (upcoming) games: keep up to 5 h past start
+        #     so a live-but-not-yet-marked-live game still shows.
+        #   - live games: always include regardless of how old.
+        #   - final games: keep up to 6 h past start so the user can
+        #     check the result for a just-finished game; older
+        #     finals get pruned (see prune_old / home aggregator).
         rows = c.execute(
             "SELECT * FROM sports_games "
-            "WHERE league_id=? AND start_utc BETWEEN ? AND ? "
-            "ORDER BY start_utc",
-            (lg["id"], now - 30 * 3600 * 1000, horizon),
+            "WHERE league_id=? AND ("
+            "       status='live' "
+            "    OR (status='scheduled' AND start_utc > ? AND start_utc < ?) "
+            "    OR (status='final' AND start_utc > ?) "
+            "    ) "
+            "ORDER BY CASE status WHEN 'live' THEN 0 "
+            "                     WHEN 'scheduled' THEN 1 "
+            "                     ELSE 2 END, "
+            "         start_utc",
+            (
+                lg["id"],
+                now - 5 * 3600 * 1000,
+                horizon,
+                now - 6 * 3600 * 1000,
+            ),
         ).fetchall()
         games: List[Dict[str, Any]] = []
         for r in rows:
             g = _game_to_dict(c, r)
-            # v1.44.59 — DO NOT filter out games whose primary
-            # broadcaster hasn't been resolved yet. Previously this
-            # endpoint silently dropped any game with channel=None;
-            # users saw the league page as nearly empty whenever the
-            # broadcast feed lagged behind the schedule feed (common
-            # for playoff TBDs / cross-conference games). The Android
-            # client now handles channel=None gracefully (synthetic
-            # MediaCard at click time, GameChannelSheet does its own
-            # per-game EPG search) so the empty-channel case is the
-            # client's call.
+            # Null-channel guard removed in v1.44.59 — Android client
+            # handles missing broadcasters via the per-game picker.
             games.append(g)
     return {"league": dict(lg), "games": games, "count": len(games)}
 
