@@ -1,13 +1,13 @@
 {
-  "versionCode": 454,
-  "versionName": "1.44.54",
+  "versionCode": 455,
+  "versionName": "1.44.55",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Moods & Themes is now ready for hot-patched expansion. Themes can be added in a new `themes_pack.json` (bundled in the APK + hot-patched from https://hushtv.xyz/themes_pack.json) without needing an APK build. v1.44.54 ships with the 26-row populated pack v2 bundled.",
-    "Themed-detail back-press: scroll position and focused poster are now preserved when you back out of a movie. The grid stays exactly where you left it instead of jumping back to the top.",
-    "Pack-driven themes auto-merge with the 25 hand-curated themes. Slug collisions defer to the hand-curation (richer altTitles + per-title year disambiguation)."
+    "50 NEW Moods & Themes rows: Movies Everyone Should Watch Once, Movies That Feel Like A Dream, Movies Based On Video Games / Comics / Mythology / Urban Legends, Movies That Predicted The Future, Best Villains / Anti-Heroes / Monologues, Movies About Obsession / Addiction / AI Gone Wrong / Parallel Universes / Memory Loss / Heists / Cults / Isolation / Space / End Of World / Virtual Reality / Fame / Greed / Loneliness / Fatherhood / Motherhood / Hope / Redemption / Philosophy / 80s / 90s / 2000s — and 20+ more.",
+    "On-launch first-paint fix: pack-extra themes now load their movie matches automatically when the remote pack arrives, so you see real posters on the very first time you open Moods & Themes after the OTA install (no more 'Curating…' empty state on first launch).",
+    "All v1.44.54 features still in place (back-press scroll preservation, hot-patch theme pack)."
   ]
 }

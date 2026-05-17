@@ -147,8 +147,13 @@ object ThemePackLoader {
 
     /**
      * Background refresh of the remote pack. Idempotent + throttled
-     * to [REFRESH_MS]. Caller is responsible for re-priming
-     * [ThemedMatchCache] afterwards if the pack changes.
+     * to [REFRESH_MS].
+     *
+     * On a successful refresh that returns a non-empty [derived],
+     * this also primes [ThemedMatchCache] entries for the
+     * pack-extra themes so they paint with real movies on the
+     * FIRST catalog open (instead of a "Curating…" empty state
+     * that would persist until the next cold launch).
      */
     suspend fun refreshRemote(ctx: Context): Boolean = withContext(Dispatchers.IO) {
         val sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -161,11 +166,29 @@ object ThemePackLoader {
         if (remote.version < (cached?.version ?: 0)) return@withContext false
 
         cached = remote
-        derived = derive(remote)
+        val newDerived = derive(remote)
+        derived = newDerived
         sp.edit()
             .putString(KEY_BLOB, text)
             .putLong(KEY_FETCHED_AT, now)
             .apply()
+
+        // Prime ThemedMatchCache for the new pack-extra themes so
+        // the FIRST catalog open paints with real movies instead of
+        // a "Curating…" placeholder. Safe if LibraryIndex hasn't
+        // been primed yet — `matchAgainstLibrary` will just return
+        // empty matches and the catalog screen will defensively
+        // re-prime on entry.
+        if (newDerived.isNotEmpty()) {
+            for (theme in newDerived) {
+                val matches = runCatching {
+                    HushThemedLists.matchAgainstLibrary(theme)
+                }.getOrDefault(emptyList())
+                withContext(Dispatchers.Main) {
+                    ThemedMatchCache.snapshot[theme.id] = matches
+                }
+            }
+        }
         true
     }
 

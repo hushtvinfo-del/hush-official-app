@@ -1,6 +1,17 @@
 # HushTV — Product Requirements Document
 
-## v1.44.54 — Moods & Themes is now hot-patch-ready — 2026-02-08 (this session)
+## v1.44.55 — 50 NEW Moods & Themes rows (Dev + Official LIVE) — 2026-02-08 (this session)
+
+### What landed
+- **50 NEW themes** from user-supplied "Additional 100 Theme Pack" merged into the bundled `assets/themes_pack.json` (v3 = 76 themes / 3,141 ranked movies). The OTA-server copy at `https://hushtv.xyz/themes_pack.json` was also updated, so even users still on v1.44.54 will see the 50 new themes on their next cold launch.
+- **Examples of new rows**: Movies Everyone Should Watch Once, Movies That Feel Like A Dream, Based On Video Games / Comics / Mythology, Movies That Predicted The Future, Best Villains / Anti-Heroes / Monologues, Movies About Obsession / Addiction / AI Gone Wrong / Parallel Universes / Memory Loss / Heists / Cults / Isolation / Space / End Of World / Virtual Reality / Fame / Greed / Loneliness / Fatherhood / Motherhood / Hope / Redemption / Philosophy / 80s / 90s / 2000s — and 20+ more.
+- **First-paint fix**: When `ThemePackLoader.refreshRemote()` succeeds and brings in pack-extra themes, it now ALSO primes those themes' library matches into `ThemedMatchCache.snapshot` (running `HushThemedLists.matchAgainstLibrary` for each new theme on the IO dispatcher). Previously these themes appeared with empty grids on the first cold launch after the remote pack arrived, because `ThemedMatchCache.primeAsync` had already returned for the run.
+
+### Files changed (this version)
+- `app/src/main/assets/themes_pack.json` — bumped to v3 (76 themes / 3,141 items, 147 KB)
+- `data/ThemePackLoader.kt` — `refreshRemote` now primes the match cache for newly-derived pack themes before returning
+
+## v1.44.54 — Moods & Themes is now hot-patch-ready — 2026-02-08
 
 ### What landed
 - **Pack-driven theme expansion**: Themes can now be added to "Moods & Themes" without an APK build. v1.44.54 ships a bundled `assets/themes_pack.json` (26 themes, 1,552 ranked movie rows from user-supplied pack v2) AND auto-fetches `https://hushtv.xyz/themes_pack.json` on every cold boot. Any newer remote pack overlays the bundled one. Future themes = upload a JSON, users see them on next app open.
