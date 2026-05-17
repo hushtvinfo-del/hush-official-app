@@ -1,6 +1,20 @@
 # HushTV — Product Requirements Document
 
-## v1.44.56 — Sports: CBC blacklist + Back-nav fix (Dev + Official LIVE) — 2026-02-08
+## v1.44.57 — Curated Theme Pack Refresh (Dev + Official LIVE) — 2026-02-08
+
+### What landed
+- **DELETED the 50 weakly-matched "additional" theme rows** from v1.44.55 that shipped with random shared-pool movie assignments. Catalog no longer shows: Movies Everyone Should Watch Once, Movies That Get Better Every Rewatch, Movies That Feel Like A Dream, Movies About Obsession / Addiction / Heists (the previous pack version) / Cults / Isolation / Space / End Of World / Virtual Reality / etc. — all of them are gone.
+- **ADDED 18 hand-curated theme rows** from the user-supplied `hushtv_curated_additional_theme_pack_v3.zip` (no random shared-pool — actual relevant titles per theme):
+  - Movies Based On Video Games (33 curated) · Movies Based On Comic Books (37) · Movies Ahead Of Their Time (39) · Movies That Predicted The Future (32) · Movies With The Best Villains (31) · Movies With Anti-Heroes (29) · Movies About AI Gone Wrong (27) · Movies About Parallel Universes (29) · Movies About Memory Loss (25) · Movies About Escaping Prison (27) · Movies About Gambling (27) · Movies About Heists (29) · Movies About Con Artists (25) · Movies About Serial Killers (27) · Movies About Cults (26) · Movies About Loneliness (26) · Movies Everyone Quotes (36) · Cult Classic Movies (34)
+- **All 25 hardcoded original themes unchanged** (`HushThemedLists.hardcoded`). Disney included as `disney_classics_v1`.
+- **Pre-existing Disney-duplicate fix**: discovered while wiring this pack — the v2 pack used slug `top_disney_movies` but `SLUG_TO_LEGACY_ID` mapped `top_disney_movies_of_all_time`. So since v1.44.54 a duplicate Disney theme was bleeding through. Fixed by dropping the Disney pack entry entirely from the live pack JSON (still served via hardcoded `disney_classics_v1`). v5 pack on OTA is the source of truth.
+
+### Pack pipeline state
+- Bundled in v1.44.57 APK: `assets/themes_pack.json` v5 (43 themes, 2,017 ranked items, ~104 KB)
+- OTA-server live override: `https://hushtv.xyz/themes_pack.json` v5 (same)
+- Existing v1.44.55+ users pick up the new pack on next cold launch via `ThemePackLoader.refreshRemote` (cache busted by version increment).
+
+## v1.44.56 — Sports: CBC blacklist + Back-nav fix — 2026-02-08
 
 ### What landed
 - **Sports channel blacklist**: `data/sports/SportsChannelBlacklist.kt` filters channels out of the per-game `GameChannelSheet` results by name pattern (case-insensitive, word-boundary aware). CBC is the initial entry — add more patterns by appending strings to the `PATTERNS` list. Applied client-side AFTER `SportsApi.gameChannels` returns, so only the picker is affected (Live TV browse / other surfaces are untouched).

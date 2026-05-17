@@ -1,13 +1,12 @@
 {
-  "versionCode": 456,
-  "versionName": "1.44.56",
+  "versionCode": 457,
+  "versionName": "1.44.57",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Sports: CBC channels are no longer shown in per-game channel results. Filter lives in data/sports/SportsChannelBlacklist.kt — add more patterns there to block additional feeds.",
-    "Sports back nav: pressing BACK from a sports player now returns directly to the main Sports page instead of re-opening the channel picker. The 'search results' style sheet stays dismissed once a channel is selected.",
-    "All v1.44.55 features (76 Moods & Themes rows, scroll preservation, hot-patchable theme pack) still in place."
+    "Moods & Themes pack refreshed: the 50 weakly-matched 'additional' rows from v1.44.55 are GONE. Replaced with 18 hand-curated theme rows from the v3 curated pack — Movies Based On Video Games, Movies Based On Comic Books, Movies Ahead Of Their Time, Movies That Predicted The Future, Movies With The Best Villains, Movies With Anti-Heroes, Movies About AI Gone Wrong / Parallel Universes / Memory Loss / Escaping Prison / Gambling / Heists / Con Artists / Serial Killers / Cults / Loneliness, Movies Everyone Quotes, Cult Classic Movies. Original 26 hand-curated rows are unchanged.",
+    "All v1.44.56 features (CBC sports blacklist, Sports back-nav fix) still in place."
   ]
 }
