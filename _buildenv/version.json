@@ -1,13 +1,13 @@
 {
-  "versionCode": 464,
-  "versionName": "1.44.64",
+  "versionCode": 465,
+  "versionName": "1.44.65",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "URGENT FIX for v1.44.62/63 regression: full-screen channels were caught in an infinite reconnect loop. The stall watchdog was firing during normal initial buffering (4-8 s on busy live feeds), the new full-source-rebuild restarted buffering, and we looped forever. Now the watchdog only counts buffering as a stall AFTER the player has reached STATE_READY at least once. Initial channel-load buffering is no longer treated as a stall.",
-    "STATE_ENDED / STATE_IDLE handlers are likewise gated on hasBeenReady — our own recovery's clearMediaItems() / stop() transient state no longer re-triggers recovery.",
-    "Mini-preview was always unaffected (it doesn't use this watchdog)."
+    "Reverted the aggressive recovery behaviour from v1.44.62-64. Buffer-stall threshold raised from 4 s → 20 s (live) and frozen-position from 4 s → 15 s. STATE_ENDED-on-live recovery removed. Recovery now uses a bare player.prepare() (the stable behaviour from before v1.44.62) instead of a full source rebuild.",
+    "'Reconnecting…' pill no longer shows on the first retry attempt — only from the 2nd attempt onward. Most freezes resolve invisibly on the first attempt.",
+    "Full-screen player now matches the mini-preview's reliability."
   ]
 }

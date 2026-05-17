@@ -285,13 +285,10 @@ object PlayerBuilder {
         val handler = Handler(Looper.getMainLooper())
         val state = ReconnectState()
 
-        // v1.44.62 — Snapshot the MediaItem at attach time so the
-        // recovery path can do a full stop → clearMediaItems →
-        // setMediaItem → prepare → seekToDefaultPosition. Calling
-        // just player.prepare() is insufficient for certain
-        // wedged states (HLS source exhausted, codec stuck post-
-        // error). We refresh this snapshot every time the user
-        // zaps channels so the watchdog uses the latest URL.
+        // v1.44.65 — Reverted the explicit MediaItem snapshot. The
+        // bare prepare() recovery path doesn't need it; ExoPlayer
+        // already knows what to re-prepare.
+        @Suppress("UNUSED_VARIABLE")
         var snapshotItem: MediaItem? = player.currentMediaItem
 
         fun scheduleRecovery(reason: String) {
@@ -309,23 +306,20 @@ object PlayerBuilder {
             state.recoveryInFlight = true
             state.attempts += 1
             val backoff = backoffMsFor(state.attempts)
-            // v1.44.63 — Notify the UI that recovery just kicked off
-            // so the player can show a subtle "Reconnecting…" pill.
-            // Fires on EVERY retry attempt (not just the first) —
-            // this is intentional: each retry restarts the visible
-            // pill timer in the UI so users see continuous feedback.
-            handler.post { onRecoveryStart?.invoke(reason) }
+            // v1.44.65 — Only fire the "Reconnecting…" UI pill from
+            // the 2nd attempt onward. The first attempt is usually
+            // invisibly fast (1-2 s of a re-prepare) and showing the
+            // pill for every transient blip was annoying users.
+            // If the first attempt resolves, no pill ever appears.
+            if (state.attempts >= 2) {
+                handler.post { onRecoveryStart?.invoke(reason) }
+            }
             // Save the current position so we can seek back after
             // re-prepare for VOD. For live, this is effectively a
             // no-op — we never re-seek.
             state.savedPositionMs = if (!isLive) {
                 runCatching { player.currentPosition }.getOrDefault(0L)
             } else 0L
-            // v1.44.62 — Re-snapshot the MediaItem in case it
-            // changed (user zapped channels) since attach.
-            runCatching { player.currentMediaItem }
-                .getOrNull()
-                ?.let { snapshotItem = it }
             EventLog.log(
                 "auto-reconnect",
                 "$channelName retry=${state.attempts} reason=$reason " +
@@ -334,28 +328,26 @@ object PlayerBuilder {
             handler.postDelayed({
                 if (state.disposed) return@postDelayed
                 runCatching {
-                    // v1.44.62 — Hard source rebuild instead of bare
-                    // prepare(). For wedged HLS / TS sources, calling
-                    // prepare() alone can be a no-op (the MediaSource
-                    // believes it's already prepared) or fail
-                    // silently. The full teardown forces a fresh
-                    // HTTP fetch and a new ExtractorMediaSource.
-                    val item = snapshotItem ?: player.currentMediaItem
-                    player.stop()
-                    player.clearMediaItems()
-                    if (item != null) {
-                        player.setMediaItem(item)
-                    }
+                    // v1.44.65 — Reverted to bare prepare(). The
+                    // "full source rebuild" (stop/clear/setMediaItem/
+                    // prepare/seek) added in v1.44.62 was the right
+                    // fix for one rare wedged-HLS edge case but it
+                    // caused two big regressions:
+                    //   1. Channel-open buffering would trip the
+                    //      stall watchdog, the rebuild would restart
+                    //      buffering from zero, infinite loop.
+                    //   2. Even when it didn't loop, transient
+                    //      buffer hiccups during normal playback
+                    //      caused a 2-3 s reload visible to the user.
+                    // ExoPlayer's official docs say "after a
+                    // recoverable error, call prepare() to retry" —
+                    // and this is what was working stably for many
+                    // versions before v1.44.62. We trust ExoPlayer
+                    // to do the right thing.
                     player.prepare()
-                    if (isLive) {
-                        // Snap back to the live edge so the user
-                        // catches up to "now" rather than resuming
-                        // 20-30 s behind.
-                        player.seekToDefaultPosition()
-                    } else if (state.savedPositionMs > 0L) {
-                        // VOD: set a flag — actual seek happens on
-                        // next STATE_READY so the buffer is ready
-                        // first.
+                    if (!isLive && state.savedPositionMs > 0L) {
+                        // Set a flag — actual seek happens on next
+                        // STATE_READY so the buffer is ready first.
                         state.pendingSeek = true
                     }
                     if (!player.playWhenReady) player.playWhenReady = true
@@ -467,30 +459,16 @@ object PlayerBuilder {
                         }
                     }
                     Player.STATE_ENDED -> {
-                        // v1.44.62 — For a LIVE stream, STATE_ENDED
-                        // is a contradiction in terms — live streams
-                        // never end. When this fires for live, the
-                        // upstream HLS playlist either bottomed out
-                        // (provider stopped publishing segments) or
-                        // the source decided the manifest was
-                        // exhausted. Either way the only fix is a
-                        // full source rebuild.
-                        //
-                        // v1.44.64 — Gate on `hasBeenReady`. A
-                        // STATE_ENDED reaching us BEFORE we've ever
-                        // been READY almost always means our own
-                        // recovery code called clearMediaItems()
-                        // and the listener fired transiently while
-                        // the player was being rebuilt — NOT a real
-                        // upstream-died signal. Treating it as one
-                        // caused infinite recovery loops on channel
-                        // open (v1.44.62/63 regression: user reported
-                        // "channels keep reconnecting unwatchable").
-                        if (isLive && state.hasBeenReady &&
-                            !state.recoveryInFlight
-                        ) {
-                            scheduleRecovery("state=ENDED (live)")
-                        }
+                        // v1.44.65 — Reverted: STATE_ENDED on a live
+                        // stream is theoretically a contradiction,
+                        // but in practice firing recovery here was
+                        // too aggressive and contributed to the
+                        // "constantly reconnecting" regression.
+                        // ExoPlayer raises onPlayerError for real
+                        // upstream failures, which is the path we
+                        // trust. If a live stream genuinely reaches
+                        // STATE_ENDED without an error, the user
+                        // can channel-zap manually.
                     }
                 }
             }
@@ -709,27 +687,28 @@ object PlayerBuilder {
     )
 
     /** Stall thresholds — empirically chosen.
-     *  • Live: 4 s buffer is long enough to cover a normal ad-break
-     *    bumper or HLS playlist refresh, but short enough that
-     *    the user hasn't yet decided to channel-zap. Tightened
-     *    from 5 s in v1.44.62 — the average viewer has decided to
-     *    leave by ~6-7 s of a black screen, so getting recovery
-     *    started a second earlier matters.
-     *  • VOD/DVR: 30 s. Static files don't need fast recovery — large
-     *    moov atoms (2 MB+ for an hour-long capture) can take 15-20 s
-     *    over slow WiFi before the first frame is decodable. A 5 s
-     *    threshold causes the watchdog to keep re-prepare()ing in a
-     *    loop, the moov download starts over each time, and the user
-     *    sees a black screen forever (v1.44.32 DVR playback bug).
-     *  • 4 s of frozen position (down from 5 s) covers most
-     *    stuck-decoder cases without false-positive on legitimate
-     *    live pauses.
-     *  • 15 s of clean playback before we trust the recovery and
-     *    reset the attempt counter — anything shorter and we keep
-     *    bouncing between failure and success. */
-    private const val STALL_BUFFER_MS_LIVE = 4_000L
+     *
+     * v1.44.65 (after user-reported regression of v1.44.62-64):
+     * thresholds dialed back to a CONSERVATIVE baseline. The mini
+     * player has no watchdog at all and "works perfectly" per user
+     * — so the bar for the full-screen player firing recovery has
+     * to be much higher than 4-5 seconds. Most buffer stalls on
+     * live HLS sources resolve in 2-3 s on their own; only the
+     * truly wedged cases need our help.
+     *
+     *  • Live: 20 s buffer stall. Only fires if a freeze has lasted
+     *    long enough that the user has definitely noticed (the
+     *    average viewer mentally writes off a stream at ~15-20 s).
+     *    A network blip / ad-break bumper / playlist refresh never
+     *    takes this long, so false-positives effectively go to zero.
+     *  • VOD/DVR: 30 s (unchanged — large moov atoms over slow Wi-Fi
+     *    can take 15-20 s to download).
+     *  • Frozen position: 15 s (up from 4 s) — same rationale as
+     *    buffer stall.
+     *  • 15 s of clean playback before we reset the attempt counter. */
+    private const val STALL_BUFFER_MS_LIVE = 20_000L
     private const val STALL_BUFFER_MS_VOD = 30_000L
-    private const val STALL_FROZEN_MS = 4_000L
+    private const val STALL_FROZEN_MS = 15_000L
     private const val STABLE_PLAYBACK_MS = 15_000L
     private const val WATCHDOG_INTERVAL_MS = 1_000L
     private const val MAX_BACKOFF_MS = 10_000L

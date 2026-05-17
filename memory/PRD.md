@@ -1,6 +1,21 @@
 # HushTV — Product Requirements Document
 
-## v1.44.64 — URGENT regression fix: infinite reconnect loop on channel open (Dev + Official LIVE) — 2026-02-08
+## v1.44.65 — Reverted aggressive recovery; matches mini-player stability (Dev + Official LIVE) — 2026-02-08
+
+### Final shape of the recovery loop (back to stable behaviour)
+- **Buffer stall (live)**: 20 s threshold (was 4 s in v1.44.62-64, was 5 s historically).
+- **Buffer stall (VOD/DVR)**: 30 s (unchanged).
+- **Frozen position**: 15 s (was 4 s in v1.44.62-64, was 5 s historically).
+- **Recovery action**: `player.prepare()` — bare, no source rebuild. (Was full `stop → clearMediaItems → setMediaItem → prepare → seekToDefaultPosition → play` in v1.44.62-64; reverted because that behaviour combined with the 4 s threshold was the root of the "constantly reconnecting" complaint.)
+- **STATE_ENDED on live**: NO LONGER triggers recovery. (Was added in v1.44.62; turned out to be over-eager. ExoPlayer's `onPlayerError` catches actual upstream failures.)
+- **"Reconnecting…" pill**: only renders from the 2nd retry attempt onward. The first attempt is usually invisibly fast, no need to alarm the user.
+
+### Why this is the right end state
+- Mini preview has no watchdog at all and works perfectly. The watchdog should only kick in when there's NO chance of natural recovery — i.e., the stream has been frozen for 15-20 seconds (the threshold where the average user reaches for the remote).
+- The original v1.44.61 thresholds (5 s) were fine for years. v1.44.62 dropped them to 4 s AND added a destructive full-source-rebuild as the recovery action. The combination was the problem, not either change in isolation.
+- We keep the genuine improvements from this session: `onRecoveryStart` callback for the pill, retry counter that survives `onMediaItemTransition` during recovery, etc. We just dialled the sensitivity way down.
+
+## v1.44.64 — Buffering-during-initial-load gating fix (intermediate; superseded by v1.44.65) — 2026-02-08
 
 ### What went wrong in v1.44.62/63
 v1.44.62 swapped the recovery action from bare `player.prepare()` to a full source rebuild (`stop → clearMediaItems → setMediaItem → prepare → seekToDefaultPosition → play`). This is the right fix for wedged HLS sources during a real freeze. **But** it had a fatal interaction with the stall watchdog:
