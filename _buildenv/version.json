@@ -1,13 +1,13 @@
 {
-  "versionCode": 455,
-  "versionName": "1.44.55",
+  "versionCode": 456,
+  "versionName": "1.44.56",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "50 NEW Moods & Themes rows: Movies Everyone Should Watch Once, Movies That Feel Like A Dream, Movies Based On Video Games / Comics / Mythology / Urban Legends, Movies That Predicted The Future, Best Villains / Anti-Heroes / Monologues, Movies About Obsession / Addiction / AI Gone Wrong / Parallel Universes / Memory Loss / Heists / Cults / Isolation / Space / End Of World / Virtual Reality / Fame / Greed / Loneliness / Fatherhood / Motherhood / Hope / Redemption / Philosophy / 80s / 90s / 2000s — and 20+ more.",
-    "On-launch first-paint fix: pack-extra themes now load their movie matches automatically when the remote pack arrives, so you see real posters on the very first time you open Moods & Themes after the OTA install (no more 'Curating…' empty state on first launch).",
-    "All v1.44.54 features still in place (back-press scroll preservation, hot-patch theme pack)."
+    "Sports: CBC channels are no longer shown in per-game channel results. Filter lives in data/sports/SportsChannelBlacklist.kt — add more patterns there to block additional feeds.",
+    "Sports back nav: pressing BACK from a sports player now returns directly to the main Sports page instead of re-opening the channel picker. The 'search results' style sheet stays dismissed once a channel is selected.",
+    "All v1.44.55 features (76 Moods & Themes rows, scroll preservation, hot-patchable theme pack) still in place."
   ]
 }

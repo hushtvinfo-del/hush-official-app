@@ -125,7 +125,13 @@ fun GameChannelSheet(
         }
         when (result) {
             is SportsApi.GameChannelsResult.Success -> {
-                matches = result.matches
+                // v1.44.56 — drop any channel whose name matches the
+                // per-app blacklist (e.g. CBC). Keeps the picker
+                // focused on the broadcast feeds the user actually
+                // wants. See data/sports/SportsChannelBlacklist.kt.
+                matches = result.matches.filterNot {
+                    com.hushtv.tv.data.sports.SportsChannelBlacklist.isBlocked(it.channel_name)
+                }
             }
             is SportsApi.GameChannelsResult.NoEpgMatch -> {
                 matches = emptyList()

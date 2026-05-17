@@ -1,6 +1,17 @@
 # HushTV — Product Requirements Document
 
-## v1.44.55 — 50 NEW Moods & Themes rows (Dev + Official LIVE) — 2026-02-08 (this session)
+## v1.44.56 — Sports: CBC blacklist + Back-nav fix (Dev + Official LIVE) — 2026-02-08
+
+### What landed
+- **Sports channel blacklist**: `data/sports/SportsChannelBlacklist.kt` filters channels out of the per-game `GameChannelSheet` results by name pattern (case-insensitive, word-boundary aware). CBC is the initial entry — add more patterns by appending strings to the `PATTERNS` list. Applied client-side AFTER `SportsApi.gameChannels` returns, so only the picker is affected (Live TV browse / other surfaces are untouched).
+- **Sports back-nav**: `pickerGameId` is now cleared BEFORE `nav.navigate("player/...")`. Earlier (v1.44.31) we kept the sheet alive on purpose so Back from the player would re-show the picker. User feedback said that felt like landing on a "search results" page when they expected to return to the main Sports view. v1.44.56 dismisses the sheet at the moment of channel selection so `nav.popBackStack()` on Back from the player lands directly on the Sports page.
+
+### Files changed
+- NEW `data/sports/SportsChannelBlacklist.kt` (operator-owned blocklist; word-boundary regex)
+- MODIFIED `ui/screens/sports/GameChannelSheet.kt` — filter matches via `SportsChannelBlacklist.isBlocked` on `Success` result
+- MODIFIED `ui/screens/sports/TVSportsPage.kt` — clear `pickerGameId` before navigating to player (replaces the v1.44.31 "preserve" logic)
+
+## v1.44.55 — 50 NEW Moods & Themes rows — 2026-02-08
 
 ### What landed
 - **50 NEW themes** from user-supplied "Additional 100 Theme Pack" merged into the bundled `assets/themes_pack.json` (v3 = 76 themes / 3,141 ranked movies). The OTA-server copy at `https://hushtv.xyz/themes_pack.json` was also updated, so even users still on v1.44.54 will see the 50 new themes on their next cold launch.

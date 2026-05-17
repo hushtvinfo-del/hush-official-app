@@ -333,11 +333,18 @@ fun TVSportsPage(
                     val title =
                         "${gameForSheet.away?.short_name ?: gameForSheet.away?.name ?: "?"} @ " +
                             (gameForSheet.home?.short_name ?: gameForSheet.home?.name ?: "?")
-                    // v1.44.31 — DO NOT clear pickerGameId here. We
-                    // want it preserved so when the user presses BACK
-                    // from the player, the picker reappears with the
-                    // same game. The picker is dismissed only by an
-                    // explicit DISMISS / Back press inside the sheet.
+                    // v1.44.56 — close the picker BEFORE navigating
+                    // to the player. Earlier (v1.44.31) we kept the
+                    // picker open on the assumption that users would
+                    // want to come back to it; in practice users
+                    // expect Back from the sports player to land
+                    // directly on the main Sports page (not on the
+                    // "search results"-style channel list). Clearing
+                    // pickerGameId pops the sheet out of the
+                    // composition tree so when nav.popBackStack()
+                    // runs on Back from the player, there's nothing
+                    // to re-show — Sports is what they see.
+                    pickerGameId = null
                     nav.navigate(
                         "player/$playlistId/" +
                             "${android.net.Uri.encode(url)}/" +
