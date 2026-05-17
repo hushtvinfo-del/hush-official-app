@@ -1,6 +1,23 @@
 # HushTV — Product Requirements Document
 
-## v1.44.60 (revised) — Reverted v1.44.59 strTime change; final cleanup — 2026-02-08
+## v1.44.61 — Score-display fix + refresh cadences tightened (Backend deployed) — 2026-02-08
+
+### What was wrong
+- TheSportsDB's `intHomeScore`/`intAwayScore` ship as **`null`** (not `"0"`) for teams that haven't yet scored in a live game. Confirmed for Jays @ Tigers IN5: their endpoint sends `intAwayScore=4, intHomeScore=null`. Our `_apply_v2_livescore` used `COALESCE(?, score_home)` on the UPDATE which preserved the previous null → game showed "4 - —" forever.
+- The Phillies@Pirates (`None-2`), Bosox@Braves (`6-None`) and similar one-sided games were all hit by the same bug.
+
+### Backend fix (deployed)
+- `_apply_v2_livescore`: when status is being set to `live`, coerce missing scores to `0`. Limited to live games — scheduled/final still respect upstream nulls (e.g. rain-cancelled games).
+- Refresh cadences tightened to take fuller advantage of the business-premium tier:
+  - **Live scores: 60 s** (unchanged — already at the limit of TheSportsDB's CDN refresh interval)
+  - **Schedule: 5 min** (down from 15 min) — new playoff games appear within minutes of upstream publication
+  - **Broadcasts: 15 min** (down from 30 min) — feed lineups stay current through game day
+  - **PPV: 60 min** (down from 6 hr) — PPV announcements show up almost instantly
+
+### Verified live now
+`/api/sports/home` shows **Toronto Blue Jays @ Detroit Tigers  score=0-4  status=live** within 70 s of deployment.
+
+## v1.44.60 (revised) — Reverted v1.44.59 strTime change — 2026-02-08
 
 ### Investigation timeline (this session)
 1. User reported: "MTL vs BUF NHL game missing." Initial fix (v1.44.58) relaxed the strict primary-broadcaster match in `rememberPlayableGames`. Didn't help.

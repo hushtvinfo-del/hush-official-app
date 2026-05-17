@@ -103,9 +103,30 @@ LOGO_PUBLIC_BASE = os.environ.get("SPORTS_LOGO_PUBLIC_BASE",
                                   "https://hushtv.xyz/sports/teams")
 
 # Ingestion cadences.
-REFRESH_SCHEDULE_SEC = 15 * 60      # Fetch upcoming schedules
+#
+# v1.44.61 — Tightened from previous values to take fuller advantage
+# of the TheSportsDB business-premium tier (no per-key rate-limit on
+# v1 endpoints, livescore updates every 2 min on their CDN). Cadence
+# rationale per endpoint:
+#
+#   • Livescore (60 s) — Their CDN refreshes ≤120 s, so 60 s polling
+#     gives us the next data point as soon as it exists without
+#     wasted calls. Going under 60 s yields zero benefit.
+#   • Schedule (5 min) — Down from 15 min. Catches just-published
+#     playoff next-games (TheSportsDB typically adds the next game
+#     within 1–3 h of the previous one ending; 5 min cadence means
+#     users see new games within minutes of upstream publication
+#     instead of waiting up to 14 min for the next refresh window).
+#   • PPV (60 min) — Down from 6 h. PPV / UFC / boxing announcements
+#     often happen hours-not-days ahead; 60 min is plenty fresh
+#     without hammering the API for low-velocity data.
+#   • Broadcasts (15 min) — Down from 30 min. The per-event
+#     broadcaster list updates throughout game day as feeds add /
+#     drop. Still throttled to ≤2 req/s inside the call so a single
+#     refresh window doesn't burst.
+REFRESH_SCHEDULE_SEC = 5 * 60       # Fetch upcoming schedules
 REFRESH_LIVE_SEC = 60               # V2 livescore endpoint — 1 call per league, can poll fast
-REFRESH_PPV_SEC = 6 * 60 * 60       # Fetch PPV / UFC / boxing events
+REFRESH_PPV_SEC = 60 * 60           # Fetch PPV / UFC / boxing events
 
 # Window we keep games for. Everything else gets pruned to keep the
 # home-screen query fast.
@@ -760,6 +781,26 @@ def _apply_v2_livescore(c: sqlite3.Connection, ev: Dict[str, Any]) -> bool:
 
     score_home = ev.get("intHomeScore")
     score_away = ev.get("intAwayScore")
+    # v1.44.61 — TheSportsDB returns `intHomeScore`/`intAwayScore`
+    # as `null` (not "0") for teams that haven't yet scored in a
+    # game that IS in progress. Empirically observed: Jays-Tigers
+    # IN5 ships `intAwayScore=4, intHomeScore=null` even though
+    # Detroit has 0 runs.
+    #
+    # Without normalisation, our COALESCE-update below preserves
+    # whatever was previously stored (typically also null), so the
+    # card paints "Jays 4 - Tigers —" forever.
+    #
+    # Fix: when the game IS live (we just decided status='live'),
+    # coerce a missing score to "0" so the user sees the correct
+    # scoreline. We only do this for live games — for `scheduled`
+    # or `final` updates we still respect upstream's null (e.g. a
+    # rain-cancelled game has no score in either column).
+    if status == "live":
+        if score_home is None:
+            score_home = 0
+        if score_away is None:
+            score_away = 0
     score_home_str = str(score_home) if score_home is not None else None
     score_away_str = str(score_away) if score_away is not None else None
     now_ms = int(time.time() * 1000)
@@ -1308,13 +1349,12 @@ def _worker_loop() -> None:
                 except Exception:
                     log.exception("ppv refresh failed")
                 last_ppv = now
-            # v1.44.26 — Refresh TheSportsDB broadcaster lists every
-            # 30 minutes. The endpoint is rate-friendly (≈42 req per
-            # full window throttled at 2 req/s = ~21 s wall time).
-            # 30 min cadence keeps the broadcaster lineup fresh as
-            # TheSportsDB publishes / updates feeds throughout the
-            # day on game days.
-            if now - last_broadcasts > 30 * 60:
+            # v1.44.61 — Refresh broadcaster lists every 15 min
+            # (down from 30 min). Feeds get added/dropped throughout
+            # game day; tighter cadence keeps "where can I watch
+            # this?" current. Still throttled to ≤2 req/s inside the
+            # call so a single window doesn't burst the API.
+            if now - last_broadcasts > 15 * 60:
                 try:
                     n = refresh_broadcasts_for_window(days=7)
                     log.info("sports broadcasts refresh upserted %d rows", n)
