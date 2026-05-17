@@ -151,13 +151,28 @@ fun TVPlayerScreen(
     // states happen routinely. Reconnects with backoff, listens for
     // network re-availability, and preserves VOD position.
     val recoveryToast = com.hushtv.tv.ui.player.rememberRecoveryToastState()
+    // v1.44.63 — Live "Reconnecting…" pill state. Set true the
+    // moment the auto-reconnect watchdog kicks off recovery; cleared
+    // when the picture is back (onRecovered) or after 8 s as a
+    // safety net so we never leave a stale pill on screen.
+    var reconnectingVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(reconnectingVisible) {
+        if (reconnectingVisible) {
+            delay(8000)
+            reconnectingVisible = false
+        }
+    }
     DisposableEffect(player, currentName, isLive) {
         val recon = com.hushtv.tv.data.PlayerBuilder.attachAutoReconnect(
             ctx = ctx,
             player = player,
             channelName = currentName,
             isLive = isLive,
-            onRecovered = { recoveryToast.fire() },
+            onRecoveryStart = { reconnectingVisible = true },
+            onRecovered = {
+                reconnectingVisible = false
+                recoveryToast.fire()
+            },
         )
         onDispose { recon.dispose() }
     }
@@ -1067,6 +1082,55 @@ fun TVPlayerScreen(
                 .align(Alignment.TopCenter)
                 .padding(top = 36.dp),
         )
+
+        // v1.44.63 — "Reconnecting…" pill, anchored top-left.
+        // Shown the moment the auto-reconnect watchdog starts a
+        // recovery cycle (error, stall >4 s, or live STATE_ENDED).
+        // Auto-dismisses when onRecovered fires (STATE_READY post-
+        // recovery) or after an 8 s safety net.
+        //
+        // Why top-left: top-center is reserved for the "Reconnected"
+        // success toast (above) and top-right is reserved for the
+        // settings/quality menu. Top-left was free except for the
+        // channel-zap chip (below) which only appears while the
+        // user is typing a channel number — the two cases don't
+        // overlap in practice.
+        AnimatedVisibility(
+            visible = reconnectingVisible && zapLabel == null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 48.dp, top = 36.dp),
+        ) {
+            Surface(
+                color = Color(0xE6000000),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.border(1.dp, Cyan, RoundedCornerShape(20.dp)),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Subtle spinner using a Compose-only progress
+                    // indicator. Sized small so the pill stays
+                    // unobtrusive (the pill is informational, not
+                    // commanding attention).
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier
+                            .padding(end = 10.dp)
+                            .size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = Cyan,
+                    )
+                    androidx.compose.material3.Text(
+                        text = "Reconnecting…",
+                        color = Color.White,
+                        style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+        }
 
         // Channel-zap toast
         AnimatedVisibility(

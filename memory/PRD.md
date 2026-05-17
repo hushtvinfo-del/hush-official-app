@@ -1,6 +1,18 @@
 # HushTV — Product Requirements Document
 
-## v1.44.62 — Live stream self-healing hardened (Dev + Official LIVE) — 2026-02-08
+## v1.44.63 — "Reconnecting…" pill on live freezes (Dev + Official LIVE) — 2026-02-08
+
+### What landed
+- New `onRecoveryStart` callback in `PlayerBuilder.attachAutoReconnect` — fires the moment the watchdog kicks off recovery (error / 4 s buffer stall / live STATE_ENDED / IDLE), passing the reason for telemetry.
+- `TVPlayerScreen` shows a subtle **"Reconnecting…" pill** in the top-left corner of the player whenever a recovery cycle is in flight. Small (~14 dp) cyan spinner + "Reconnecting…" label in a black rounded surface. Anchored top-left so it doesn't collide with the top-center "Reconnected" success toast or the top-right quality menu.
+- Auto-dismisses on `onRecovered` (picture back) or after an 8 s safety net so the pill can't get stuck on screen if recovery exhausts retries.
+- Hidden when the channel-zap chip is active (the two share the top-left corner; zap chip wins because it's user-initiated).
+
+### Files changed
+- MODIFIED `data/PlayerBuilder.kt` — added `onRecoveryStart` callback fired inside `scheduleRecovery` for every attempt.
+- MODIFIED `ui/screens/TVPlayerScreen.kt` — wired `reconnectingVisible` state + rendered the pill alongside `ReconnectedToast`.
+
+## v1.44.62 — Live stream self-healing hardened — 2026-02-08
 
 ### Root cause of "Sportsnet East froze, had to exit channel"
 The existing `attachAutoReconnect` watchdog in `PlayerBuilder.kt` did detect errors and stalls correctly, BUT the recovery action was inadequate for the most common Xtream-live failure modes:

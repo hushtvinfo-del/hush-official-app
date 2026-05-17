@@ -278,6 +278,7 @@ object PlayerBuilder {
         player: ExoPlayer,
         channelName: String,
         isLive: Boolean,
+        onRecoveryStart: ((reason: String) -> Unit)? = null,
         onRecovered: (() -> Unit)? = null,
         onMaxRetriesExceeded: (() -> Unit)? = null,
     ): Disposable {
@@ -308,6 +309,12 @@ object PlayerBuilder {
             state.recoveryInFlight = true
             state.attempts += 1
             val backoff = backoffMsFor(state.attempts)
+            // v1.44.63 — Notify the UI that recovery just kicked off
+            // so the player can show a subtle "Reconnecting…" pill.
+            // Fires on EVERY retry attempt (not just the first) —
+            // this is intentional: each retry restarts the visible
+            // pill timer in the UI so users see continuous feedback.
+            handler.post { onRecoveryStart?.invoke(reason) }
             // Save the current position so we can seek back after
             // re-prepare for VOD. For live, this is effectively a
             // no-op — we never re-seek.
