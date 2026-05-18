@@ -180,10 +180,14 @@ fun CanadaLockScreen(
             .background(
                 Brush.verticalGradient(colors = listOf(BgBlack, SurfaceNavy, BgBlack)),
             ),
-        contentAlignment = Alignment.TopCenter,
     ) {
         if (paidSuccess) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing),
+                contentAlignment = Alignment.Center,
+            ) {
                 PaidSuccessPanel(sz, renewMode = renewMode)
             }
             return@Box
@@ -191,11 +195,16 @@ fun CanadaLockScreen(
 
         Column(
             modifier = Modifier
-                .widthIn(max = sz.maxContentWidth)
-                .padding(horizontal = sz.pageHorizontal, vertical = sz.pageVertical)
-                .verticalScroll(rememberScrollState()),
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = sz.pageHorizontal, vertical = sz.pageVertical),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Column(
+                modifier = Modifier.widthIn(max = sz.maxContentWidth),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
             HeaderBlock(sz, amountCad, renewMode = renewMode)
 
             Spacer(Modifier.height(sz.gap))
@@ -288,6 +297,7 @@ fun CanadaLockScreen(
                 Spacer(Modifier.height(sz.gap))
 
                 FooterText(sz, emailTo, xtreamUsername)
+            }
             }
         }
     }
@@ -779,12 +789,29 @@ private data class Sizes(
 private fun sizesFor(widthDp: Int): Sizes = when {
     widthDp < 380 -> Sizes(           // small phones
         maxContentWidth = 600.dp,
+        pageHorizontal = 14.dp,
+        pageVertical = 12.dp,
+        gap = 10.dp,
+        headerIcon = 44.dp,
+        title = 20.sp,
+        subtitle = 13.sp,
+        h3 = 15.sp,
+        body = 13.sp,
+        bodySmall = 11.sp,
+        labelSmall = 10.sp,
+        orderId = 30.sp,
+        email = 14.sp,
+        buttonHeight = 48.dp,
+        qr = 160.dp,
+    )
+    widthDp < 600 -> Sizes(           // normal phones
+        maxContentWidth = 600.dp,
         pageHorizontal = 16.dp,
-        pageVertical = 20.dp,
-        gap = 14.dp,
-        headerIcon = 56.dp,
+        pageVertical = 14.dp,
+        gap = 12.dp,
+        headerIcon = 48.dp,
         title = 22.sp,
-        subtitle = 14.sp,
+        subtitle = 13.sp,
         h3 = 16.sp,
         body = 14.sp,
         bodySmall = 12.sp,
@@ -792,41 +819,24 @@ private fun sizesFor(widthDp: Int): Sizes = when {
         orderId = 36.sp,
         email = 15.sp,
         buttonHeight = 52.dp,
-        qr = 180.dp,
-    )
-    widthDp < 600 -> Sizes(           // normal phones
-        maxContentWidth = 600.dp,
-        pageHorizontal = 20.dp,
-        pageVertical = 24.dp,
-        gap = 16.dp,
-        headerIcon = 64.dp,
-        title = 26.sp,
-        subtitle = 15.sp,
-        h3 = 18.sp,
-        body = 15.sp,
-        bodySmall = 13.sp,
-        labelSmall = 12.sp,
-        orderId = 44.sp,
-        email = 17.sp,
-        buttonHeight = 56.dp,
-        qr = 220.dp,
+        qr = 190.dp,
     )
     widthDp < 900 -> Sizes(           // tablets / foldables
         maxContentWidth = 720.dp,
         pageHorizontal = 32.dp,
-        pageVertical = 36.dp,
-        gap = 20.dp,
-        headerIcon = 72.dp,
-        title = 32.sp,
-        subtitle = 16.sp,
-        h3 = 20.sp,
-        body = 17.sp,
-        bodySmall = 14.sp,
-        labelSmall = 13.sp,
-        orderId = 52.sp,
-        email = 20.sp,
-        buttonHeight = 60.dp,
-        qr = 260.dp,
+        pageVertical = 32.dp,
+        gap = 18.dp,
+        headerIcon = 64.dp,
+        title = 30.sp,
+        subtitle = 15.sp,
+        h3 = 19.sp,
+        body = 16.sp,
+        bodySmall = 13.sp,
+        labelSmall = 12.sp,
+        orderId = 48.sp,
+        email = 19.sp,
+        buttonHeight = 56.dp,
+        qr = 240.dp,
     )
     else -> Sizes(                    // TV / large desktop
         maxContentWidth = 880.dp,

@@ -1,12 +1,13 @@
 {
-  "versionCode": 472,
-  "versionName": "1.44.72",
+  "versionCode": 473,
+  "versionName": "1.44.73",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "FIXED: payment screen RuntimeException — the JSON adapter for the order-create request was missing because the Moshi reflection factory wasn't registered. All Canada-payment network calls now work correctly.",
-    "After OTA-updating to this version the lock screen will generate your Order Number normally; no further action needed."
+    "FIXED: payment screen layout on mobile — content was rendering under the system status/nav bars and scrolling was broken. Now uses proper window-inset padding and a full-height scrollable container — you can scroll the whole flow and tap every button on any device.",
+    "Tightened spacing/font sizes on phones so most of the flow fits without scrolling at all.",
+    "TV/tablet rendering is unchanged."
   ]
 }
