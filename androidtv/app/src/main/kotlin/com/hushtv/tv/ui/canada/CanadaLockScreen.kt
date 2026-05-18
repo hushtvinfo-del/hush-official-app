@@ -366,74 +366,89 @@ private fun StepCard(
     valueIsEmail: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    // Three fixed-weight rows ensure the badge / instruction / value
+    // blocks sit at IDENTICAL y-positions across all three step cards —
+    // no matter what each card's content actually measures to (the email
+    // card in particular auto-shrinks, which previously knocked SpaceBetween
+    // out of alignment with steps 1 and 3).
     Column(
         modifier = modifier
             .background(SurfaceNavy, RoundedCornerShape(20.dp))
             .border(2.dp, Cyan, RoundedCornerShape(20.dp))
             .padding(sz.cardPad),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Step number badge
+        // Top zone — step number badge.
         Box(
-            modifier = Modifier
-                .size(sz.badge)
-                .background(Cyan, RoundedCornerShape(50)),
+            modifier = Modifier.fillMaxWidth().weight(0.9f),
             contentAlignment = Alignment.Center,
         ) {
-            Text("$number", color = BgBlack,
-                fontWeight = FontWeight.Black, fontSize = sz.badgeText)
+            Box(
+                modifier = Modifier
+                    .size(sz.badge)
+                    .background(Cyan, RoundedCornerShape(50)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("$number", color = BgBlack,
+                    fontWeight = FontWeight.Black, fontSize = sz.badgeText)
+            }
         }
 
-        // Instruction line
-        Text(
-            instruction,
-            color = TextPrimary,
-            fontSize = sz.instruction,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        // Value block (label + big value)
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth(),
+        // Middle zone — instruction line. Centered both axes.
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(2.0f),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
-                valueLabel,
-                color = Cyan,
-                fontSize = sz.label,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
+                instruction,
+                color = TextPrimary,
+                fontSize = sz.instruction,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = (sz.instruction.value * 1.2f).sp,
+                modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(6.dp))
-            if (valueIsEmail) {
-                // The recipient email card uses an auto-shrinking text so a
-                // long address like Hushtv.info@gmail.com never wraps onto
-                // two lines on narrower TVs / tablets. Compose has no
-                // built-in autoSize yet, so we measure-and-step-down the
-                // font size until the string fits the card width.
-                AutoFitSingleLineText(
-                    text = value,
-                    maxFontSize = sz.value,
-                    minFontSize = sz.tiny,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Black,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
+        }
+
+        // Bottom zone — small label + big value, centered.
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(2.1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text(
-                    value,
-                    color = TextPrimary,
-                    fontSize = sz.value,
-                    fontWeight = FontWeight.Black,
-                    fontFamily = if (valueIsMonospace) FontFamily.Monospace else FontFamily.Default,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier.fillMaxWidth(),
+                    valueLabel,
+                    color = Cyan,
+                    fontSize = sz.label,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
                 )
+                Spacer(Modifier.height(6.dp))
+                if (valueIsEmail) {
+                    AutoFitSingleLineText(
+                        text = value,
+                        maxFontSize = sz.value,
+                        minFontSize = sz.tiny,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Text(
+                        value,
+                        color = TextPrimary,
+                        fontSize = sz.value,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = if (valueIsMonospace) FontFamily.Monospace else FontFamily.Default,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }

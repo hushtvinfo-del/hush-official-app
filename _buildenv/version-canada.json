@@ -1,13 +1,11 @@
 {
-  "versionCode": 476,
-  "versionName": "1.44.76",
+  "versionCode": 477,
+  "versionName": "1.44.77",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "FIXED: stale $40 amount shown on cached orders — the app now always re-fetches the current server amount (so the testing $5 price actually appears).",
-    "FIXED: long recipient email no longer wraps onto two lines — auto-shrinks until it fits the card on one line, on any device.",
-    "FIXED: header (HushTV Canada + subtitle) is now properly centered on screen — lock icon + title on top row, subtitle centered below."
+    "FIXED: Step 2 content no longer drifts out of alignment with Steps 1 and 3 — every card now uses fixed-weight sections (badge / instruction / value) so the badges, instructions, labels, and values all sit at the EXACT same y-position regardless of how short or long the value text is."
   ]
 }
