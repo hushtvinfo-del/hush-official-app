@@ -1,13 +1,13 @@
 {
-  "versionCode": 473,
-  "versionName": "1.44.73",
+  "versionCode": 474,
+  "versionName": "1.44.74",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "FIXED: payment screen layout on mobile — content was rendering under the system status/nav bars and scrolling was broken. Now uses proper window-inset padding and a full-height scrollable container — you can scroll the whole flow and tap every button on any device.",
-    "Tightened spacing/font sizes on phones so most of the flow fits without scrolling at all.",
-    "TV/tablet rendering is unchanged."
+    "FIXED: pressing Back from the payment screen now properly exits the app (same as pressing Back on the Home screen). You're no longer trapped.",
+    "NEW: visible \"Exit App\" button at the bottom of the payment screen for users on TV/devices where the Back button is unreliable.",
+    "FIXED: HushTV no longer lets the system screensaver / DPMS kick in while the app is open. The screen stays on while you're using HushTV — releases automatically when you switch apps so your device still sleeps normally when HushTV is in the background. Applies to ALL flavors (Dev/Official/Canada) on ALL devices."
   ]
 }

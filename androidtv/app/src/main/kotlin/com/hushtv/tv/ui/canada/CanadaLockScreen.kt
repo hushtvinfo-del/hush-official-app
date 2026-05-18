@@ -70,6 +70,19 @@ fun CanadaLockScreen(
     renewMode: Boolean = false,
 ) {
     val ctx = LocalContext.current
+    // Back from the lock screen exits the whole app — same behaviour
+    // as pressing Back from the normal Home screen. Without this the
+    // user is trapped on the paywall and cannot escape to launcher,
+    // which (combined with system screensavers) was forcing hard
+    // power-cycles. For renewMode (opened from Settings), we just
+    // pop the back stack so they return to where they came from.
+    androidx.activity.compose.BackHandler {
+        if (renewMode) {
+            onUnlocked()  // exits the renewal flow → returns to Settings
+        } else {
+            (ctx as? android.app.Activity)?.finish()
+        }
+    }
     val clip: ClipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val config = LocalConfiguration.current
@@ -296,7 +309,10 @@ fun CanadaLockScreen(
 
                 Spacer(Modifier.height(sz.gap))
 
-                FooterText(sz, emailTo, xtreamUsername)
+                FooterText(sz, emailTo, xtreamUsername, onExit = {
+                    if (renewMode) onUnlocked()
+                    else (ctx as? android.app.Activity)?.finish()
+                })
             }
             }
         }
@@ -550,15 +566,24 @@ private fun WaitingForPaymentRow(sz: Sizes, focus: FocusRequester, onCheckNow: (
 }
 
 @Composable
-private fun FooterText(sz: Sizes, emailTo: String, username: String) {
+private fun FooterText(sz: Sizes, emailTo: String, username: String, onExit: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Logged in as: $username", color = TextSecondary, fontSize = sz.bodySmall)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             "Need help? Contact $emailTo",
             color = TextSecondary,
             fontSize = sz.bodySmall,
         )
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(
+            onClick = onExit,
+            modifier = Modifier.heightIn(min = sz.buttonHeight),
+            border = BorderStroke(1.dp, BorderSlate),
+        ) {
+            Text("Exit App", color = TextSecondary,
+                fontSize = sz.body, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 

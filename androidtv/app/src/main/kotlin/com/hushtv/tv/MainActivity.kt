@@ -56,6 +56,16 @@ class MainActivity : ComponentActivity() {
         // splash background — the animated wordmark is rendered by Compose.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Keep the screen ON while HushTV is in the foreground. Without
+        // this flag the device's system screensaver / DPMS kicks in
+        // after a few minutes of UI-only inactivity (e.g. user staring
+        // at the Canada payment lock screen waiting for Interac to
+        // deliver) and on some TV boxes the screensaver can NOT be
+        // dismissed back to the app, forcing a hard power-cycle. The
+        // flag is automatically released when the activity is paused
+        // (user switches apps), so it does NOT prevent the device from
+        // sleeping once HushTV is in the background.
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // Phase 2 / Phase 3 — start the DVR event poller so scheduled
         // recordings, completions, and skipped-due-to-conflict events
         // surface as Android system notifications.
