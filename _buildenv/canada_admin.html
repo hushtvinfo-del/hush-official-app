@@ -121,6 +121,33 @@
         </table>
       </div>
     </div>
+
+    <!-- Inbound from Base44 (v1.44.85) — live feed of manual CDN-fee
+         events admins fire from inside Base44 (cash payments, fixes,
+         revokes). HMAC-signed via X-Base44-Signature. -->
+    <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-bold text-slate-300">📥 Inbound from Base44 (manual CDN-fee events)</h3>
+        <button onclick="loadInbox()" class="text-cyan-400 hover:text-cyan-300 text-xs">↻ Refresh</button>
+      </div>
+      <div class="overflow-x-auto rounded-lg border border-slate-800">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+            <tr>
+              <th class="text-left px-3 py-2">Received</th>
+              <th class="text-left px-3 py-2">Event Type</th>
+              <th class="text-left px-3 py-2">Username</th>
+              <th class="text-left px-3 py-2">Status</th>
+              <th class="text-left px-3 py-2">Applied / Error</th>
+              <th class="text-left px-3 py-2">Event ID</th>
+            </tr>
+          </thead>
+          <tbody id="inbox-tbody">
+            <tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- ─────────────────── LICENSES TAB ─────────────────── -->
@@ -391,8 +418,40 @@ async function loadStats() {
           </td>
         </tr>`).join("");
     }
+    loadInbox();
   } catch (e) {
     toast("Stats: " + e.message, "error");
+  }
+}
+
+// ── Base44 inbound webhook inbox ──
+async function loadInbox() {
+  try {
+    const d = await api("GET", "/base44/inbox?limit=20");
+    const rows = d.rows || [];
+    if (rows.length === 0) {
+      $("inbox-tbody").innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">No webhook events yet. Base44 will fire one when an admin marks CDN fee paid/revoked there.</td></tr>`;
+      return;
+    }
+    $("inbox-tbody").innerHTML = rows.map(r => {
+      const cls = r.status === "applied" ? "text-emerald-400"
+                : r.status === "ignored" ? "text-slate-400"
+                : "text-rose-400";
+      const label = r.status === "applied" ? "✓ applied"
+                  : r.status === "ignored" ? "○ ignored"
+                  : "✗ failed";
+      const detail = r.applied || r.error || "—";
+      return `<tr class="border-t border-slate-800 hover:bg-slate-800/30">
+        <td class="px-3 py-2 text-slate-300 whitespace-nowrap">${fmtRelative(r.received_at)}</td>
+        <td class="px-3 py-2 text-slate-200">${r.event_type}</td>
+        <td class="px-3 py-2 font-mono">${r.xtream_username || "—"}</td>
+        <td class="px-3 py-2"><span class="${cls} text-xs font-semibold">${label}</span></td>
+        <td class="px-3 py-2 text-slate-400 text-xs">${detail}</td>
+        <td class="px-3 py-2 text-slate-600 font-mono text-[10px]">${r.event_id.substring(0,32)}</td>
+      </tr>`;
+    }).join("");
+  } catch (e) {
+    $("inbox-tbody").innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`;
   }
 }
 

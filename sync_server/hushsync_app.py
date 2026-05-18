@@ -157,6 +157,7 @@ def _startup() -> None:
         import canada_payment_module  # type: ignore
         app.include_router(canada_payment_module.router)
         app.include_router(canada_payment_module.admin_router)
+        app.include_router(canada_payment_module.webhook_router)
         canada_payment_module.start_poller()
         log.info("HushTV canada payment module mounted, poller running")
     except Exception as e:

@@ -11,12 +11,13 @@ pending orders. On a match the order flips to `paid` and a 1-year
 license is granted to the associated xtream_username.
 
 Storage: re-uses the existing sync SQLite DB at /var/hushtv-sync/sync.sqlite3
-in five tables:
-  - canada_orders         (order_id PK, xtream_username, status, …)
-  - canada_licenses       (xtream_username PK, paid_at, expires_at)
-  - canada_processed_emails (uid PK)   — idempotency for IMAP poller
-  - canada_devices        — heartbeat tracking per device per user (v1.44.82)
-  - canada_admin_events   — audit log for manual extends, revokes, reminders (v1.44.82)
+in six tables:
+  - canada_orders                — order_id PK, status, etc.
+  - canada_licenses              — xtream_username PK, expires_at
+  - canada_processed_emails      — IMAP idempotency
+  - canada_devices               — per-device heartbeats (admin)
+  - canada_admin_events          — audit log for admin actions
+  - canada_base44_events_inbox   — incoming Base44 webhook idempotency
 
 Routes mounted under /api/canada/* by hushsync_app.py.
 """
@@ -24,8 +25,11 @@ from __future__ import annotations
 
 import csv
 import email
+import hashlib
+import hmac
 import imaplib
 import io
+import json
 import logging
 import os
 import random
@@ -39,7 +43,7 @@ from email.message import EmailMessage, Message
 from typing import Optional
 
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -141,6 +145,23 @@ def _init_schema() -> None:
                 ON canada_admin_events(xtream_username);
             CREATE INDEX IF NOT EXISTS canada_admin_events_at_idx
                 ON canada_admin_events(at DESC);
+
+            -- v1.44.85 — Idempotency + audit for inbound Base44 webhooks
+            -- (CDN-fee paid/revoked events fired by Base44 when an
+            -- admin manually marks payment status on a user record).
+            CREATE TABLE IF NOT EXISTS canada_base44_events_inbox (
+                event_id        TEXT PRIMARY KEY,
+                event_type      TEXT NOT NULL,
+                received_at     INTEGER NOT NULL,
+                processed_at    INTEGER,
+                xtream_username TEXT,
+                raw_payload     TEXT NOT NULL,
+                status          TEXT NOT NULL DEFAULT 'received',
+                applied         TEXT,
+                error           TEXT
+            );
+            CREATE INDEX IF NOT EXISTS canada_base44_inbox_recv_idx
+                ON canada_base44_events_inbox(received_at DESC);
             """
         )
         # Add message_id column for stable cross-session idempotency.
@@ -689,6 +710,262 @@ def heartbeat(req: HeartbeatReq) -> dict:
     return {"ok": True, "at": now}
 
 
+# ── Inbound Base44 webhook (CDN-fee manual events) ─────────────────
+#
+# Base44 hits this endpoint when an admin clicks "mark CDN fee paid" /
+# "revoke" inside the Base44 CMS (cash payments, manual fixes, etc).
+# We mirror the action into our SQLite license table so the user is
+# unlocked in the Android app within seconds.
+#
+# Security:
+#   • HMAC-SHA256 of the raw body using the shared CDN_WEBHOOK_SECRET
+#     env var. Constant-time compared.
+#   • Timestamp window — reject events older than ±5 min (replay).
+#   • Idempotency — every event_id is recorded; duplicates return
+#     the previously-cached response.
+#   • Defence-in-depth — the endpoint lives at /api/base44/* which is
+#     publicly reachable but otherwise locked-down behind the HMAC.
+
+WEBHOOK_SECRET = os.environ.get("CDN_WEBHOOK_SECRET", "")
+WEBHOOK_TS_TOLERANCE_S = int(
+    os.environ.get("BASE44_WEBHOOK_TIMESTAMP_TOLERANCE_S", "300")
+)
+
+# Separate router so the path stays clean (`/api/base44/webhook`)
+# instead of e.g. `/api/canada/base44/webhook`.
+webhook_router = APIRouter(prefix="/api/base44", tags=["base44-webhook"])
+
+
+def _verify_hmac(raw_body: bytes, signature_header: str) -> bool:
+    """Constant-time-compare the X-Base44-Signature header against
+    `sha256=<hex>` of HMAC-SHA256(secret, raw_body). Returns True on
+    match. False if header missing/malformed or secret unset."""
+    if not WEBHOOK_SECRET or not signature_header:
+        return False
+    expected = hmac.new(
+        WEBHOOK_SECRET.encode("utf-8"), raw_body, hashlib.sha256,
+    ).hexdigest()
+    # Accept "sha256=<hex>" or bare "<hex>" formats — be permissive on
+    # input, strict on comparison.
+    provided = signature_header.strip()
+    if provided.lower().startswith("sha256="):
+        provided = provided[7:]
+    return hmac.compare_digest(expected, provided.lower().strip())
+
+
+def _revoke_license_for(c: sqlite3.Connection, xtream_username: str) -> int:
+    """Delete the license row. Returns rows affected."""
+    cur = c.execute(
+        "DELETE FROM canada_licenses WHERE xtream_username=?",
+        (xtream_username,),
+    )
+    return cur.rowcount
+
+
+def _inbox_cached(c: sqlite3.Connection, event_id: str) -> Optional[dict]:
+    """Return the previously-stored response payload for this event_id
+    if we've seen it before, else None."""
+    row = c.execute(
+        "SELECT status, applied, error, xtream_username "
+        "FROM canada_base44_events_inbox WHERE event_id=?",
+        (event_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "ok": row["status"] in ("applied", "ignored"),
+        "duplicate": True,
+        "event_id": event_id,
+        "applied": row["applied"],
+        "xtream_username": row["xtream_username"],
+        "error": row["error"],
+    }
+
+
+def _inbox_persist(
+    c: sqlite3.Connection, event_id: str, event_type: str,
+    raw_body: bytes, xtream_username: Optional[str],
+    status: str, applied: Optional[str] = None, error: Optional[str] = None,
+) -> None:
+    now = _now_ms()
+    c.execute(
+        """INSERT INTO canada_base44_events_inbox
+            (event_id, event_type, received_at, processed_at,
+             xtream_username, raw_payload, status, applied, error)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(event_id) DO UPDATE SET
+             processed_at = excluded.processed_at,
+             status       = excluded.status,
+             applied      = excluded.applied,
+             error        = excluded.error""",
+        (
+            event_id, event_type, now, now, xtream_username,
+            raw_body.decode("utf-8", errors="replace")[:8000],
+            status, applied, error,
+        ),
+    )
+
+
+@webhook_router.post("/webhook")
+async def base44_webhook(
+    request: Request,
+    x_base44_signature: Optional[str] = Header(None),
+    x_base44_timestamp: Optional[str] = Header(None),
+) -> dict:
+    """Inbound Base44 webhook. See module docstring for protocol."""
+    raw = await request.body()
+
+    # 1. Signature verification — bail before any work if it fails.
+    if not _verify_hmac(raw, x_base44_signature or ""):
+        log.warning("base44 webhook: bad signature (sig=%s)", (x_base44_signature or "")[:16])
+        raise HTTPException(401, "invalid signature")
+
+    # 2. Timestamp window — protect against replays.
+    if x_base44_timestamp:
+        try:
+            ts = int(x_base44_timestamp)
+            drift = abs(int(time.time()) - ts)
+            if drift > WEBHOOK_TS_TOLERANCE_S:
+                raise HTTPException(401, f"timestamp drift {drift}s exceeds tolerance")
+        except ValueError:
+            raise HTTPException(400, "bad X-Base44-Timestamp")
+
+    # 3. Parse body.
+    try:
+        body = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise HTTPException(400, f"bad JSON: {e}")
+
+    event_id = (body.get("event_id") or "").strip()
+    event_type = (body.get("event_type") or "").strip()
+    user = (body.get("xtream_username") or "").strip().lower()
+    if not event_id:
+        raise HTTPException(400, "event_id required")
+    if not event_type:
+        raise HTTPException(400, "event_type required")
+
+    with _conn() as c:
+        # 4. Idempotency — return cached response if we've seen this event.
+        cached = _inbox_cached(c, event_id)
+        if cached is not None:
+            log.info("base44 webhook DUPLICATE event_id=%s", event_id)
+            return cached
+
+        # 5. Dispatch by event_type.
+        try:
+            if event_type == "cdn_fee_granted_manually":
+                if not user:
+                    raise ValueError("xtream_username required for grant")
+                months = int(body.get("months") or 12)
+                if months < 1 or months > 120:
+                    raise ValueError(f"months out of range: {months}")
+                # Re-use the same +N-months math as the manual admin
+                # extend endpoint, so cash payments are treated identically
+                # to Interac ones.
+                now = _now_ms()
+                row = _get_license_row(c, user)
+                base = max(int(row["expires_at"]) if row else 0, now)
+                new_expires = base + months * 30 * 24 * 60 * 60 * 1000
+                c.execute(
+                    """INSERT INTO canada_licenses
+                        (xtream_username, paid_at, expires_at, last_order_id)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(xtream_username) DO UPDATE SET
+                         paid_at=excluded.paid_at,
+                         expires_at=excluded.expires_at,
+                         last_order_id=excluded.last_order_id""",
+                    (user, now, new_expires, f"BASE44_MANUAL_{event_id[:32]}"),
+                )
+                actor = (body.get("actor") or "base44").strip()[:80]
+                reason = (body.get("reason") or "").strip()[:160]
+                method = (body.get("payment_method") or "").strip()[:32]
+                amount = body.get("amount_cad")
+                detail = (
+                    f"+{months}m via base44 actor={actor} "
+                    f"method={method} amount={amount} reason={reason}"
+                )
+                c.execute(
+                    "INSERT INTO canada_admin_events "
+                    "(at, action, xtream_username, actor, detail) "
+                    "VALUES (?, 'base44_inbound_grant', ?, ?, ?)",
+                    (now, user, actor, detail[:500]),
+                )
+                applied = f"license_granted_{months}m"
+                resp = {
+                    "ok": True,
+                    "event_id": event_id,
+                    "applied": applied,
+                    "xtream_username": user,
+                    "new_expires_at_ms": new_expires,
+                }
+                _inbox_persist(c, event_id, event_type, raw, user, "applied", applied)
+                return resp
+
+            elif event_type == "cdn_fee_revoked":
+                if not user:
+                    raise ValueError("xtream_username required for revoke")
+                n = _revoke_license_for(c, user)
+                actor = (body.get("actor") or "base44").strip()[:80]
+                reason = (body.get("reason") or "").strip()[:160]
+                c.execute(
+                    "INSERT INTO canada_admin_events "
+                    "(at, action, xtream_username, actor, detail) "
+                    "VALUES (?, 'base44_inbound_revoke', ?, ?, ?)",
+                    (_now_ms(), user, actor,
+                     f"affected_rows={n} reason={reason}"[:500]),
+                )
+                applied = f"license_revoked (rows={n})"
+                _inbox_persist(c, event_id, event_type, raw, user, "applied", applied)
+                return {"ok": True, "event_id": event_id, "applied": applied,
+                        "xtream_username": user}
+
+            elif event_type == "xtream_username_changed":
+                old = (body.get("old_xtream_username") or "").strip().lower()
+                if not old or not user:
+                    raise ValueError(
+                        "both old_xtream_username and xtream_username required",
+                    )
+                cur = c.execute(
+                    "UPDATE canada_licenses SET xtream_username=? WHERE xtream_username=?",
+                    (user, old),
+                )
+                # Also rename device + audit rows for continuity.
+                c.execute(
+                    "UPDATE canada_devices SET xtream_username=? WHERE xtream_username=?",
+                    (user, old),
+                )
+                applied = f"renamed {old}→{user} (rows={cur.rowcount})"
+                c.execute(
+                    "INSERT INTO canada_admin_events "
+                    "(at, action, xtream_username, actor, detail) "
+                    "VALUES (?, 'base44_inbound_rename', ?, ?, ?)",
+                    (_now_ms(), user, (body.get("actor") or "base44")[:80],
+                     applied[:500]),
+                )
+                _inbox_persist(c, event_id, event_type, raw, user, "applied", applied)
+                return {"ok": True, "event_id": event_id, "applied": applied}
+
+            else:
+                # Forward-compatible: store unknown events but don't
+                # error — Base44 may add new event_types in the future.
+                _inbox_persist(c, event_id, event_type, raw, user, "ignored",
+                               f"unknown event_type: {event_type}")
+                log.warning("base44 webhook: unknown event_type=%s", event_type)
+                return {"ok": True, "event_id": event_id, "ignored": True,
+                        "reason": f"unknown event_type: {event_type}"}
+
+        except (ValueError, HTTPException) as e:
+            err = str(e.detail if isinstance(e, HTTPException) else e)
+            _inbox_persist(c, event_id, event_type, raw, user, "failed",
+                           error=err)
+            raise HTTPException(400, err)
+        except Exception as e:
+            log.exception("base44 webhook failed: %s", e)
+            _inbox_persist(c, event_id, event_type, raw, user, "failed",
+                           error=f"{type(e).__name__}: {e}"[:500])
+            raise HTTPException(500, f"internal error: {e}")
+
+
 # ── Admin endpoints (gated by X-Admin-Token) ────────────────────────
 admin_router = APIRouter(prefix="/api/admin/canada", tags=["canada-admin"])
 
@@ -1233,6 +1510,43 @@ def admin_events(
                 }
                 for r in rows
             ]
+        }
+
+
+@admin_router.get("/base44/inbox")
+def admin_base44_inbox(
+    x_admin_token: Optional[str] = Header(None),
+    status: Optional[str] = None,
+    limit: int = 100,
+) -> dict:
+    """List inbound webhook events from Base44. Powers the new
+    "Inbound from Base44" section in the admin Revenue tab."""
+    _check_admin(x_admin_token)
+    limit = max(1, min(500, limit))
+    sql = "SELECT * FROM canada_base44_events_inbox"
+    params: list = []
+    if status:
+        sql += " WHERE status=?"
+        params.append(status)
+    sql += " ORDER BY received_at DESC LIMIT ?"
+    params.append(limit)
+    with _conn() as c:
+        rows = c.execute(sql, params).fetchall()
+        return {
+            "count": len(rows),
+            "rows": [
+                {
+                    "event_id": r["event_id"],
+                    "event_type": r["event_type"],
+                    "received_at": int(r["received_at"]),
+                    "processed_at": int(r["processed_at"]) if r["processed_at"] else None,
+                    "xtream_username": r["xtream_username"],
+                    "status": r["status"],
+                    "applied": r["applied"],
+                    "error": r["error"],
+                }
+                for r in rows
+            ],
         }
 
 

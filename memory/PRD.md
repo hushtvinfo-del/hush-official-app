@@ -1,5 +1,69 @@
 # HushTV — Product Requirements Document
 
+## v1.44.85 — Base44 → HushTV reverse webhook (LIVE) — 2026-02-08
+
+### Closed the loop
+When an admin marks a CDN fee paid/revoked **inside Base44** (cash payments, manual fixes, chargebacks), Base44 now webhooks us at `POST /api/base44/webhook` and HushTV mirrors the action into its license table within milliseconds. Same plumbing as the outbound, just in reverse.
+
+### The shared secret
+Generated and deployed in one shot — Base44 needs this value pasted into their `CDN_WEBHOOK_SECRET` setting:
+
+```
+CDN_WEBHOOK_SECRET=164da4f7999cfe3408d728db01f943c2e335a1a3a55acd50
+```
+
+Stored on prod at `/etc/systemd/system/hushtv-sync.service.d/base44.conf` as `Environment=CDN_WEBHOOK_SECRET=…`. **The user must paste it into Base44's webhook config for the integration to activate.**
+
+### Endpoint
+- **URL**: `POST https://hushtv.xyz/api/base44/webhook`
+- **Headers**:
+  - `X-Base44-Signature: sha256=<hex HMAC-SHA256 of raw body using CDN_WEBHOOK_SECRET>`
+  - `X-Base44-Timestamp: <unix seconds>` (replay protection, ±5 min)
+- **Body**: `{event_id, event_type, occurred_at, xtream_username, ...}`
+- **Behavior on receipt**:
+  1. Verify HMAC (constant-time compare). 401 if mismatch.
+  2. Verify timestamp window. 401 if >5 min drift.
+  3. Idempotency check by `event_id` — duplicates return cached response.
+  4. Dispatch by `event_type`:
+     - `cdn_fee_granted_manually` — grant N-month license (default 12)
+     - `cdn_fee_revoked` — delete license
+     - `xtream_username_changed` — rename license + device rows (uses `old_xtream_username` field)
+     - Unknown types → store + return `ignored:true` (forward-compatible)
+  5. Log into `canada_admin_events` AND `canada_base44_events_inbox`.
+
+### Defence layers
+- **HMAC signature** — leaked URL alone can't grant licenses.
+- **Timestamp tolerance** (±5 min) — replay protection.
+- **Idempotency** — Base44 retries on slow response won't double-grant.
+- **TLS termination** at nginx (encrypted in transit).
+- **Forward-compatible** — unknown event types stored but don't error so Base44 can ship new events without breaking us.
+
+### Admin UI
+New "📥 Inbound from Base44" section at the bottom of the Revenue tab in `/admin`. Live feed of last 20 webhook events with status pills (`✓ applied` / `○ ignored` / `✗ failed`), event_type, username, applied summary, event_id.
+
+### Verified end-to-end (8 tests)
+| Test | Result |
+|---|---|
+| Missing signature | 401 ✓ |
+| Bad signature | 401 ✓ |
+| Valid GRANT for testuser-e2e | 200 + license row with `days_remaining=359` ✓ |
+| Same event_id replay | 200 with `duplicate:true`, no double-grant ✓ |
+| License visible at `/api/canada/license/testuser-e2e` | `paid:true` ✓ |
+| REVOKE event | 200 + license deleted ✓ |
+| Stale timestamp (10 min old) | 401 (`timestamp drift 702s exceeds tolerance`) ✓ |
+| Test data cleaned | inbox + audit log purged ✓ |
+
+### Files modified
+- `/app/sync_server/canada_payment_module.py` — added `hmac`/`hashlib`/`json` imports, `WEBHOOK_SECRET` env, `_verify_hmac()`, `_inbox_cached()`, `_inbox_persist()`, new `webhook_router` with `POST /api/base44/webhook`, new `GET /api/admin/canada/base44/inbox` admin endpoint, new `canada_base44_events_inbox` table.
+- `/app/sync_server/hushsync_app.py` — registered `webhook_router`.
+- `/app/_buildenv/canada_admin.html` — added "Inbound from Base44" section + `loadInbox()` JS.
+- Nginx — added `/api/base44/` location block proxying to 5056.
+- Systemd drop-in — added `Environment=CDN_WEBHOOK_SECRET=…`.
+- All deployed to 66.163.113.147; service restarted; nginx reloaded.
+
+---
+
+
 ## v1.44.84 — Base44 CMS payment-sync integration (LIVE) — 2026-02-08
 
 ### What landed
