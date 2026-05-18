@@ -45,7 +45,7 @@ GMAIL_PASS = os.environ.get("INTERAC_GMAIL_APP_PASSWORD", "")
 ADMIN_TOKEN = os.environ.get("SPORTS_ADMIN_TOKEN", "")
 
 # Business constants
-EXPECTED_AMOUNT_CAD = 40.00          # the single, fixed CDN proxy fee
+EXPECTED_AMOUNT_CAD = 5.00           # TESTING price — bump back to 40.00 when going live
 ORDER_TTL_MS = 60 * 60 * 1000        # 60 minutes for user to pay
 LICENSE_YEAR_MS = 365 * 24 * 60 * 60 * 1000
 INTERAC_SENDER = "notify@payments.interac.ca"
