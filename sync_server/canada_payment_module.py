@@ -43,6 +43,8 @@ from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+import base44_module
+
 log = logging.getLogger("canada_payment")
 
 DB_PATH = os.environ.get("HUSHSYNC_DB", "/var/hushtv-sync/sync.sqlite3")
@@ -454,6 +456,28 @@ def _process_single_email(c, uid: str, raw_msg_bytes: bytes) -> str:
     _record_processed(c, uid, message_id, order_id, amount, sender_name, "paid")
     log.info("Interac payment matched: order_id=%s user=%s amount=%.2f",
              order_id, row["xtream_username"], amount)
+
+    # v1.44.84 — Push the payment confirmation to Base44 so the user's
+    # CDN-fee fields update and the branded confirmation email goes out.
+    # Best-effort: failures are queued in canada_base44_retry by the
+    # module — the in-app license grant above already succeeded
+    # regardless. Re-fetch the license row to get the freshly-computed
+    # expires_at (may be the original paid_at+1y, or +2y if this was
+    # an early renewal).
+    try:
+        lic = _get_license_row(c, row["xtream_username"])
+        expires_at_ms = int(lic["expires_at"]) if lic else now + LICENSE_YEAR_MS
+        base44_module.record_payment_sync(
+            c,
+            xtream_username=row["xtream_username"],
+            order_id=order_id,
+            amount_cad=amount,
+            paid_at_ms=now,
+            expires_at_ms=expires_at_ms,
+            interac_sender=_clean_sender(sender_name),
+        )
+    except Exception as e:
+        log.exception("base44 push failed for order=%s: %s", order_id, e)
     return "paid"
 
 
@@ -1220,8 +1244,88 @@ def admin_force_poll(x_admin_token: Optional[str] = Header(None)) -> dict:
     return {"scan": s}
 
 
+# ── Base44 resync + queue inspection ────────────────────────────────
+@admin_router.get("/base44/queue")
+def admin_base44_queue(
+    x_admin_token: Optional[str] = Header(None),
+    status: Optional[str] = None,
+    limit: int = 200,
+) -> dict:
+    """List the Base44 retry queue. Status: pending | failed | succeeded."""
+    _check_admin(x_admin_token)
+    limit = max(1, min(1000, limit))
+    sql = "SELECT * FROM canada_base44_retry"
+    params: list = []
+    if status:
+        sql += " WHERE status=?"
+        params.append(status)
+    sql += " ORDER BY last_attempt_at DESC LIMIT ?"
+    params.append(limit)
+    with _conn() as c:
+        rows = c.execute(sql, params).fetchall()
+        return {
+            "count": len(rows),
+            "rows": [
+                {
+                    "id": int(r["id"]),
+                    "order_id": r["order_id"],
+                    "xtream_username": r["xtream_username"],
+                    "first_attempt_at": int(r["first_attempt_at"]),
+                    "last_attempt_at": int(r["last_attempt_at"]),
+                    "next_attempt_at": int(r["next_attempt_at"]),
+                    "attempts": int(r["attempts"]),
+                    "status": r["status"],
+                    "last_error": r["last_error"],
+                }
+                for r in rows
+            ],
+        }
+
+
+class Base44ResyncReq(BaseModel):
+    order_id: str
+    actor: Optional[str] = None
+
+
+@admin_router.post("/base44/resync")
+def admin_base44_resync(
+    req: Base44ResyncReq,
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Force-push a single paid order to Base44. Useful when:
+      • Base44 was down at payment time and the retry queue gave up.
+      • A pre-Base44 historical payment needs back-filling.
+      • The admin updated user details in Base44 and wants HushTV to
+        re-trigger the confirmation email.
+    """
+    _check_admin(x_admin_token)
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM canada_orders WHERE order_id=? AND status='paid'",
+            (req.order_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "paid order not found")
+        lic = _get_license_row(c, row["xtream_username"])
+        expires_at_ms = int(lic["expires_at"]) if lic else (
+            int(row["paid_at"]) + LICENSE_YEAR_MS
+        )
+    result = base44_module.resync_one(
+        xtream_username=row["xtream_username"],
+        order_id=row["order_id"],
+        amount_cad=float(row["interac_amount"]) if row["interac_amount"] else 0.0,
+        paid_at_ms=int(row["paid_at"]),
+        expires_at_ms=expires_at_ms,
+        interac_sender=_clean_sender(row["interac_sender"]),
+        actor=req.actor or "admin",
+    )
+    return result
+
+
 # Schema init on import so `import canada_payment_module` is enough.
 try:
     _init_schema()
+    base44_module.init_schema()
+    base44_module.start_retry_worker()
 except Exception as e:  # pragma: no cover
     log.exception("canada_payment_module schema init failed: %s", e)

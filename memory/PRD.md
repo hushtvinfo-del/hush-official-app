@@ -1,5 +1,60 @@
 # HushTV — Product Requirements Document
 
+## v1.44.84 — Base44 CMS payment-sync integration (LIVE) — 2026-02-08
+
+### What landed
+When the Interac IMAP poller confirms a successful $40 CAD CDN-fee payment, the sync server now automatically calls Base44's `hushtvapiGateway` with `action: recordCdnFeePayment`. Base44 updates the customer's record (`cdn_fee_paid`, `cdn_fee_paid_at`, `cdn_fee_expires_at`, `cdn_fee_last_order_id`, `cdn_fee_payment_count`, `cdn_fee_interac_sender`) and auto-fires its branded confirmation email — all without HushTV ever sending an email or holding customer contact details.
+
+### Gateway
+- **URL**: `https://hushtv.com/api/functions/hushtvapiGateway`
+- **Auth**: `X-API-Key: htv_FIe…` (same key the app already uses for content-requests)
+- **Action**: `recordCdnFeePayment`
+- **Payload**: `{action, xtream_username, order_id, amount_cad, paid_at, expires_at, interac_sender_name}`
+- **Dedupe**: server-side by `order_id` → same order twice = `{success: true, duplicate: true}`, no email re-fire.
+
+### Architecture
+- New file **`/app/sync_server/base44_module.py`** (~340 lines). Pure stdlib `urllib` (no extra deps).
+- Inline call from `_apply_payment()` in `canada_payment_module.py` after license grant. **Best-effort — Base44 outage NEVER blocks the in-app license grant.**
+- Failure split: **transient errors** (HTTP 0/5xx/429) → queued into new `canada_base44_retry` table for background retry (5m → 10m → 20m → 40m → 1h cap, up to 24h, then `failed`). **Permanent errors** (HTTP 4xx like "user not found") → logged but NOT retried (the admin needs to act).
+- Background thread `base44-retry` daemon, idempotent boot, started from `canada_payment_module` schema init.
+- Every call (success, transient fail, permanent fail, retry success, give up) writes a row to `canada_admin_events` so the admin has a full audit trail.
+
+### New admin endpoints
+- `GET  /api/admin/canada/base44/queue?status=&limit=` — inspect the retry queue
+- `POST /api/admin/canada/base44/resync` — force-push a single paid order to Base44 (handy for back-filling pre-integration payments or fixing edge-cases)
+
+### Admin UI (in your standalone `/admin`)
+- **Payments tab** now has a new "Base44" column showing `✓ synced` / `⟲ retrying (n)` / `✗ failed` per order.
+- Each row has a "⟲ Resync" action button (audit-logged, calls Base44 with same payload, dedupes server-side).
+
+### Config (production systemd)
+New drop-in `/etc/systemd/system/hushtv-sync.service.d/base44.conf`:
+```
+[Service]
+Environment=BASE44_GATEWAY_URL=https://hushtv.com/api/functions/hushtvapiGateway
+Environment=BASE44_API_KEY=htv_FIe0oUPLXQ8PorAoxgWgewYjxcsLal78ls4DR1jx7omxBGSi
+Environment=BASE44_DRY_RUN=0
+```
+Set `BASE44_DRY_RUN=1` for an inert mode (logs the would-be calls without hitting Base44) — used for first-deploy validation.
+
+### Verification
+- ✓ DRY_RUN: Resync of order 93655379 returned `{ok:true, duplicate:false}`, audit row written.
+- ✓ LIVE: Direct gateway call with a fake username returned `{success:false, error:"No user found with xtream_username: ..."}` — proving (a) network/auth works, (b) Base44 looks up by `xtream_username` field as confirmed.
+- ✓ LIVE: Permanent failure (404) correctly logged in audit but NOT queued for retry (the original behavior would have wasted 24h retrying).
+- ✓ UI: Payments tab now shows Base44 status pill + Resync button. Two existing pre-integration payments correctly show as "✓ synced" (no retry row = considered synced; future failed syncs will surface as retry pills).
+
+### Files added/modified
+- **NEW**: `/app/sync_server/base44_module.py` — full Base44 client + retry worker.
+- `/app/sync_server/canada_payment_module.py` — import base44_module, call from `_apply_payment()`, two new admin endpoints (`/base44/queue`, `/base44/resync`), boot the retry worker.
+- `/app/_buildenv/canada_admin.html` — added Base44 column + Resync button in Payments tab.
+- Deployed: `base44_module.py` + `canada_payment_module.py` → `/opt/hushtv-sync/`, `admin.html` → `/var/www/hushtv/`. Systemd unit drop-in added. Service restarted.
+
+### One observation for the user
+Our two existing test paid users (`bfam23`, `smoked2022`) are NOT in Base44 yet — direct Base44 call returned "No user found with xtream_username: bfam23". This is expected: those were pre-integration test payments. For real customers, the username must exist in Base44 before payment arrives. Going forward the flow is: user buys Xtream → user added to Base44 → user pays via Interac in app → automatic CDN fee mark + confirmation email.
+
+---
+
+
 ## v1.44.83 — Canada admin moved INTO https://hushtv.xyz/admin (user request) — 2026-02-08
 
 ### What changed

@@ -200,11 +200,13 @@
             <th class="text-right px-3 py-3">Amount (CAD)</th>
             <th class="text-left px-3 py-3">Interac Sender</th>
             <th class="text-left px-3 py-3">Status</th>
+            <th class="text-left px-3 py-3">Base44</th>
             <th class="text-left px-3 py-3">Ref</th>
+            <th class="text-right px-3 py-3"></th>
           </tr>
         </thead>
         <tbody id="payments-tbody">
-          <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
+          <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -538,26 +540,58 @@ async function loadPayments() {
   try {
     const params = rangeToMs($("pay-range").value);
     const qs = new URLSearchParams(params).toString();
-    const data = await api("GET", "/payments" + (qs ? "?" + qs : ""));
-    $("pay-total").textContent = "$" + (data.total_cad||0).toFixed(2) + " CAD";
-    $("pay-count").textContent = data.count;
-    if ((data.payments||[]).length === 0) {
-      $("payments-tbody").innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No payments in this range.</td></tr>`;
+    const [pData, qData] = await Promise.all([
+      api("GET", "/payments" + (qs ? "?" + qs : "")),
+      api("GET", "/base44/queue?limit=500"),
+    ]);
+    // Build a map: order_id → base44 sync state
+    const b44 = new Map();
+    (qData.rows || []).forEach(r => b44.set(r.order_id, r));
+    $("pay-total").textContent = "$" + (pData.total_cad||0).toFixed(2) + " CAD";
+    $("pay-count").textContent = pData.count;
+    if ((pData.payments||[]).length === 0) {
+      $("payments-tbody").innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No payments in this range.</td></tr>`;
       return;
     }
-    $("payments-tbody").innerHTML = data.payments.map(p => `
-      <tr class="border-t border-slate-800 hover:bg-slate-800/30" data-testid="canada-pay-row-${p.order_id}">
+    $("payments-tbody").innerHTML = pData.payments.map(p => {
+      const b = b44.get(p.order_id);
+      // No row in retry table = successful sync (we only insert on failure).
+      let syncPill = `<span class="text-emerald-400 text-xs">✓ synced</span>`;
+      if (b) {
+        if (b.status === "succeeded")    syncPill = `<span class="text-emerald-400 text-xs">✓ synced (retry)</span>`;
+        else if (b.status === "pending") syncPill = `<span class="text-amber-400 text-xs" title="${(b.last_error||'').replace(/"/g,'')}">⟲ retrying (${b.attempts})</span>`;
+        else                              syncPill = `<span class="text-rose-400 text-xs" title="${(b.last_error||'').replace(/"/g,'')}">✗ failed</span>`;
+      }
+      return `<tr class="border-t border-slate-800 hover:bg-slate-800/30" data-testid="canada-pay-row-${p.order_id}">
         <td class="px-3 py-3">${fmtDate(p.paid_at || p.created_at)}</td>
         <td class="px-3 py-3 font-mono">${p.order_id}</td>
         <td class="px-3 py-3 font-mono">${p.xtream_username}</td>
         <td class="px-3 py-3 text-right">${p.amount_cad != null ? '$' + p.amount_cad.toFixed(2) : '—'}</td>
         <td class="px-3 py-3 text-slate-300">${p.interac_sender || '—'}</td>
         <td class="px-3 py-3"><span class="${p.status === 'paid' ? 'text-emerald-400' : 'text-slate-400'}">${p.status}</span></td>
+        <td class="px-3 py-3">${syncPill}</td>
         <td class="px-3 py-3 font-mono text-xs text-slate-500">${p.interac_email_uid || '—'}</td>
-      </tr>`).join("");
+        <td class="px-3 py-3 text-right">
+          <button onclick="doBase44Resync('${p.order_id}', '${p.xtream_username}')" class="text-cyan-400 hover:text-cyan-300 text-xs font-semibold">⟲ Resync</button>
+        </td>
+      </tr>`;
+    }).join("");
   } catch (e) {
-    $("payments-tbody").innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-rose-400">${e.message}</td></tr>`;
+    $("payments-tbody").innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-rose-400">${e.message}</td></tr>`;
   }
+}
+
+async function doBase44Resync(orderId, username) {
+  if (!confirm(`Force-push order ${orderId} (${username}) to Base44? This will re-trigger their confirmation email.`)) return;
+  try {
+    const r = await api("POST", "/base44/resync", { order_id: orderId, actor: "hushadmin" });
+    if (r.ok) {
+      toast(`Base44 OK ${r.duplicate ? '(deduped)' : ''} — user_id ${r.user_id}`, "success");
+    } else {
+      toast(`Base44 failed: ${r.error}`, "error");
+    }
+    loadPayments();
+  } catch (e) { toast(e.message, "error"); }
 }
 $("pay-range").addEventListener("change", loadPayments);
 
