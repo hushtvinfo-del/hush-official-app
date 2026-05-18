@@ -880,7 +880,29 @@ async def base44_webhook(
 
     # 1. Signature verification — bail before any work if it fails.
     if not _verify_hmac(raw, x_base44_signature or ""):
-        log.warning("base44 webhook: bad signature (sig=%s)", (x_base44_signature or "")[:16])
+        # v1.44.91 — emit a one-line diagnostic on every signature
+        # failure so the partner can see exactly what we computed for
+        # the same body. Secret is never logged. Body is truncated to
+        # 200 chars (event_id + a few fields, no secrets transit here).
+        if WEBHOOK_SECRET:
+            try:
+                expected = hmac.new(
+                    WEBHOOK_SECRET.encode("utf-8"), raw, hashlib.sha256,
+                ).hexdigest()
+            except Exception:
+                expected = "<error computing>"
+        else:
+            expected = "<no secret set>"
+        body_preview = raw[:200].decode("utf-8", errors="replace")
+        log.warning(
+            "base44 webhook BAD SIG | provided=%s | expected=sha256=%s | "
+            "body_len=%d | content_type=%s | body_first200=%r",
+            (x_base44_signature or "<none>"),
+            expected,
+            len(raw),
+            request.headers.get("content-type", ""),
+            body_preview,
+        )
         raise HTTPException(401, "invalid signature")
 
     # 2. Parse body up-front so we can fall back to occurred_at for the
