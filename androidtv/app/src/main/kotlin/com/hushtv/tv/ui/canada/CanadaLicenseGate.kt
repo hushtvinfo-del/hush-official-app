@@ -10,26 +10,36 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.hushtv.tv.BuildConfig
 import com.hushtv.tv.data.CanadaLicenseClient
+import com.hushtv.tv.data.LastProfileStore
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Wraps the rest of the app for the `canada` flavor only. On every launch:
- *   1. If no playlist is configured yet → render [content] (the normal
- *      add-account / picker flow). The lock kicks in AFTER the user has
- *      logged into their playlist.
- *   2. Otherwise → fetch /api/canada/license/{xtream_username}. If paid,
- *      render [content]. If unpaid, render [CanadaLockScreen].
- *   3. Re-checks every 30 minutes while in foreground, so a license that
- *      expires mid-session locks the app on the next check.
+ * Wraps the rest of the app for the `canada` flavor only.
  *
- * For Dev / Official flavors this composable is a no-op pass-through, so
- * `MainActivity` can wrap unconditionally without compile-time forking.
+ * Two distinct gating modes operate in parallel:
+ *
+ *   PRE-LOGIN: No playlist configured yet → just renders `content` so the
+ *   user can add their Xtream account. The lock screen has no username
+ *   to anchor against at this point.
+ *
+ *   POST-LOGIN: As soon as ANY playlist exists in `PlaylistStore`, we
+ *   resolve its xtream_username and call /api/canada/license/{user}.
+ *   If unlicensed → render `CanadaLockScreen` instead of `content`, and
+ *   keep polling the server every 5 seconds for payment confirmation.
+ *
+ * Implementation: a single forever-coroutine polls every 2 s. It cheaply
+ * compares the current "active username" against the previous one and
+ * re-checks the license whenever the username changes (i.e. the user
+ * just added or switched a playlist). It also re-checks every 30 minutes
+ * to catch licenses that EXPIRE mid-session.
+ *
+ * For Dev / Official this composable is a no-op pass-through, so
+ * MainActivity can wrap unconditionally without compile-time forking.
  */
 @Composable
 fun CanadaLicenseGate(content: @Composable () -> Unit) {
@@ -39,76 +49,68 @@ fun CanadaLicenseGate(content: @Composable () -> Unit) {
     }
 
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var state by remember { mutableStateOf<GateState>(GateState.Checking) }
-    var refreshTick by remember { mutableIntStateOf(0) }
+    // null = checking / pre-login.  empty string = no playlist yet.
+    var currentUser by remember { mutableStateOf<String?>(null) }
+    // null = unknown (checking).  true = paid.  false = unpaid.
+    var licensed by remember { mutableStateOf<Boolean?>(null) }
 
-    LaunchedEffect(refreshTick) {
-        val playlist = withContext(Dispatchers.IO) {
-            // Use the most recently used playlist (or first available) to derive
-            // the xtream_username. Lock is per-playlist-username so a single $40
-            // covers any number of devices logged into that same Xtream account.
-            val lastId = LastProfileStoreSafe(ctx)
-            val all = PlaylistStore.getAll(ctx)
-            val active = all.firstOrNull { it.id == lastId } ?: all.firstOrNull()
-            active
-        }
-        if (playlist == null) {
-            state = GateState.NoAccount
-            return@LaunchedEffect
-        }
-        val res = withContext(Dispatchers.IO) {
-            CanadaLicenseClient.fetchLicense(ctx, playlist.username)
-        }
-        state = when (res) {
-            is CanadaLicenseClient.LicenseState.Paid -> GateState.Unlocked
-            is CanadaLicenseClient.LicenseState.Unpaid -> GateState.Locked(playlist.username)
-            is CanadaLicenseClient.LicenseState.NoNetwork -> {
-                // Genuine offline + no cached "paid": still show lock screen
-                // (which itself handles offline by displaying the saved order
-                // if any). User can re-try once network returns.
-                GateState.Locked(playlist.username)
-            }
-            is CanadaLicenseClient.LicenseState.Error -> GateState.Locked(playlist.username)
-        }
-    }
-
-    // Periodic re-check while in foreground.
     LaunchedEffect(Unit) {
+        var lastUser = ""
+        var lastFullCheckMs = 0L
         while (true) {
-            delay(30L * 60 * 1000)
-            refreshTick += 1
+            val playlists = withContext(Dispatchers.IO) { PlaylistStore.getAll(ctx) }
+            val lastId = withContext(Dispatchers.IO) {
+                runCatching { LastProfileStore.load(ctx) }.getOrNull()
+            }
+            val active = playlists.firstOrNull { it.id == lastId } ?: playlists.firstOrNull()
+            val u = active?.username?.trim()?.lowercase().orEmpty()
+
+            val usernameChanged = u != lastUser
+            val periodicRefresh =
+                u.isNotEmpty() && System.currentTimeMillis() - lastFullCheckMs > 30L * 60_000
+
+            if (usernameChanged) {
+                lastUser = u
+                currentUser = if (u.isEmpty()) "" else u
+                if (u.isEmpty()) {
+                    licensed = null  // pre-login pass-through
+                } else {
+                    licensed = null  // force re-check
+                }
+            }
+
+            if (u.isNotEmpty() && (usernameChanged || licensed == null || periodicRefresh)) {
+                val res = withContext(Dispatchers.IO) {
+                    CanadaLicenseClient.fetchLicense(ctx, u)
+                }
+                licensed = when (res) {
+                    is CanadaLicenseClient.LicenseState.Paid -> true
+                    is CanadaLicenseClient.LicenseState.Unpaid -> false
+                    is CanadaLicenseClient.LicenseState.NoNetwork -> false
+                    is CanadaLicenseClient.LicenseState.Error -> false
+                }
+                lastFullCheckMs = System.currentTimeMillis()
+            }
+
+            delay(2000)
         }
     }
 
-    when (val s = state) {
-        GateState.Checking -> {
-            Box(
-                modifier = Modifier.fillMaxSize().background(BgBlack),
-                contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator(color = Cyan) }
-        }
-        GateState.NoAccount -> content()
-        GateState.Unlocked -> content()
-        is GateState.Locked -> CanadaLockScreen(
-            xtreamUsername = s.username,
-            onUnlocked = {
-                scope.launch {
-                    state = GateState.Unlocked
-                    // re-prime cache on success
-                    refreshTick += 1
-                }
-            },
+    val u = currentUser
+    when {
+        // Pre-login: no playlist yet — let the user reach the add-account flow.
+        u == null || u.isEmpty() -> content()
+        // Playlist exists, license unknown — show a lightweight loader.
+        licensed == null -> Box(
+            modifier = Modifier.fillMaxSize().background(BgBlack),
+            contentAlignment = Alignment.Center,
+        ) { CircularProgressIndicator(color = Cyan) }
+        // Licensed → app proceeds normally.
+        licensed == true -> content()
+        // Unpaid OR offline → hard-lock with the payment screen.
+        else -> CanadaLockScreen(
+            xtreamUsername = u,
+            onUnlocked = { licensed = true },
         )
     }
 }
-
-private sealed class GateState {
-    object Checking : GateState()
-    object NoAccount : GateState()
-    object Unlocked : GateState()
-    data class Locked(val username: String) : GateState()
-}
-
-private fun LastProfileStoreSafe(ctx: android.content.Context): String? =
-    runCatching { com.hushtv.tv.data.LastProfileStore.load(ctx) }.getOrNull()

@@ -11,8 +11,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 467
-        versionName = "1.44.67"
+        versionCode = 469
+        versionName = "1.44.69"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -314,6 +314,11 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // ZXing — QR-code encoder for the Canada lock-screen Order ID card.
+    // Pure-Java, ~500 KB. We only need the BitMatrix output and draw it
+    // ourselves via Compose Canvas — no Android/Bitmap dependency surface.
+    implementation("com.google.zxing:core:3.5.3")
 
     // Core library desugaring runtime — see compileOptions above.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")

@@ -2,6 +2,7 @@ package com.hushtv.tv.ui.canada
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -11,9 +12,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,13 +29,15 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hushtv.tv.data.CanadaLicenseClient
@@ -53,12 +57,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Lock screen shown on the HushTV Canada flavor BEFORE the user can enter
- * the app. Displays a $40 CAD / year Interac e-Transfer payment flow and
- * polls the server every 5 s for confirmation.
- *
- * After successful payment the [onUnlocked] callback fires and the host
- * activity drops the lock and renders the rest of the app.
+ * Responsive payment lock screen — scales from a 320-dp phone to a 1080-p
+ * TV. Designed for non-technical users: large readable text, plain
+ * language, big buttons, copy-to-clipboard helpers everywhere, manual
+ * "Check now" button so impatient users don't think the app is broken
+ * while the IMAP poller catches up.
  */
 @Composable
 fun CanadaLockScreen(
@@ -68,17 +71,22 @@ fun CanadaLockScreen(
     val ctx = LocalContext.current
     val clip: ClipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    val config = LocalConfiguration.current
+
+    // Responsive sizing: phone <600dp, tablet 600-840dp, TV/Desktop >840dp.
+    val w = config.screenWidthDp
+    val sz = remember(w) { sizesFor(w) }
 
     var loading by remember { mutableStateOf(true) }
     var orderId by remember { mutableStateOf<String?>(null) }
     var emailTo by remember { mutableStateOf("Hushtv.info@gmail.com") }
     var amountCad by remember { mutableStateOf(40.0) }
     var error by remember { mutableStateOf<String?>(null) }
-    var copied by remember { mutableStateOf(false) }
+    var copiedField by remember { mutableStateOf<String?>(null) }
     var paidSuccess by remember { mutableStateOf(false) }
     val payButtonFocus = remember { FocusRequester() }
 
-    // 1) Create or reuse an order on first composition.
+    // 1) Create or re-use a pending order.
     LaunchedEffect(xtreamUsername) {
         loading = true
         error = null
@@ -93,9 +101,7 @@ fun CanadaLockScreen(
             when {
                 resp?.already_licensed == true -> {
                     paidSuccess = true
-                    delay(900)
-                    onUnlocked()
-                    return@LaunchedEffect
+                    delay(900); onUnlocked(); return@LaunchedEffect
                 }
                 resp?.order != null -> {
                     orderId = resp.order.order_id
@@ -106,7 +112,7 @@ fun CanadaLockScreen(
                     )
                 }
                 else -> {
-                    error = "Could not reach payment server. Check your internet and try again."
+                    error = "Couldn't connect to our server. Check your internet, then tap Try Again."
                 }
             }
             loading = false
@@ -122,12 +128,9 @@ fun CanadaLockScreen(
             if (resp?.order?.status == "paid" && resp.license?.paid == true) {
                 paidSuccess = true
                 CanadaLicenseClient.clearPendingOrder(ctx, xtreamUsername)
-                delay(1500)
-                onUnlocked()
-                return@LaunchedEffect
+                delay(1500); onUnlocked(); return@LaunchedEffect
             }
             if (resp?.order?.status == "expired") {
-                // Re-create a fresh order.
                 CanadaLicenseClient.clearPendingOrder(ctx, xtreamUsername)
                 val fresh = withContext(Dispatchers.IO) {
                     CanadaLicenseClient.createOrder(xtreamUsername)
@@ -142,277 +145,319 @@ fun CanadaLockScreen(
         }
     }
 
-    // Animated pulse on the order id card so users notice it even on a TV across the room.
     val infinite = rememberInfiniteTransition(label = "pulse")
     val pulse by infinite.animateFloat(
-        initialValue = 0.97f,
-        targetValue = 1.03f,
+        initialValue = 0.985f, targetValue = 1.015f,
         animationSpec = infiniteRepeatable(
-            tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            tween(durationMillis = 1500, easing = FastOutSlowInEasing),
             RepeatMode.Reverse,
         ),
         label = "pulse",
     )
 
     LaunchedEffect(orderId, loading) {
-        if (orderId != null && !loading) {
-            runCatching { payButtonFocus.requestFocus() }
-        }
+        if (orderId != null && !loading) runCatching { payButtonFocus.requestFocus() }
+    }
+
+    fun copy(label: String, value: String) {
+        clip.setText(AnnotatedString(value))
+        copiedField = label
+        scope.launch { delay(2000); if (copiedField == label) copiedField = null }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    colors = listOf(BgBlack, SurfaceNavy, BgBlack),
-                ),
+                Brush.verticalGradient(colors = listOf(BgBlack, SurfaceNavy, BgBlack)),
             ),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.TopCenter,
     ) {
         if (paidSuccess) {
-            PaidSuccessPanel()
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                PaidSuccessPanel(sz)
+            }
             return@Box
         }
 
         Column(
             modifier = Modifier
-                .widthIn(max = 880.dp)
-                .padding(horizontal = 48.dp, vertical = 48.dp)
+                .widthIn(max = sz.maxContentWidth)
+                .padding(horizontal = sz.pageHorizontal, vertical = sz.pageVertical)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = null,
-                    tint = Cyan,
-                    modifier = Modifier.size(36.dp),
-                )
-                Text(
-                    "HushTV Canada — Annual CDN Proxy Fee",
-                    color = TextPrimary,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Black,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "One-time $${String.format("%.0f", amountCad)} CAD / year via Interac e-Transfer",
-                color = TextSecondary,
-                fontSize = 16.sp,
-            )
+            HeaderBlock(sz, amountCad)
 
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(sz.gap))
 
             if (loading) {
-                CircularProgressIndicator(color = Cyan)
+                CircularProgressIndicator(color = Cyan, modifier = Modifier.size(40.dp))
                 Spacer(Modifier.height(12.dp))
-                Text("Preparing your order…", color = TextSecondary)
-            } else if (error != null && orderId == null) {
-                ErrorPanel(error!!) {
+                Text("Getting your Order Number ready…", color = TextSecondary, fontSize = sz.body)
+            } else if (orderId == null && error != null) {
+                ErrorPanel(sz, error!!) {
                     scope.launch {
-                        loading = true
-                        error = null
+                        loading = true; error = null
                         val resp = withContext(Dispatchers.IO) {
                             CanadaLicenseClient.createOrder(xtreamUsername)
                         }
                         if (resp?.order != null) {
                             orderId = resp.order.order_id
+                            emailTo = resp.email_to ?: emailTo
                             CanadaLicenseClient.savePendingOrder(
                                 ctx, xtreamUsername, resp.order.order_id, resp.order.expires_at,
                             )
                         } else {
-                            error = "Still can't reach the payment server. Check your internet."
+                            error = "Still no connection. Make sure your Wi-Fi is on, then try again."
                         }
                         loading = false
                     }
                 }
             } else if (orderId != null) {
-                OrderCard(orderId!!, pulse) {
-                    clip.setText(AnnotatedString(orderId!!))
-                    copied = true
-                    scope.launch { delay(1800); copied = false }
-                }
-                Spacer(Modifier.height(20.dp))
+                // ─── Order ID card (the hero) ─────────────────────────
+                OrderIdCard(sz, orderId!!, pulse,
+                    copied = copiedField == "order",
+                    onCopy = { copy("order", orderId!!) })
 
-                InstructionsPanel(
-                    orderId = orderId!!,
-                    emailTo = emailTo,
-                    amountCad = amountCad,
-                )
+                Spacer(Modifier.height(sz.gap))
 
-                Spacer(Modifier.height(24.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(
-                        color = Cyan,
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                    )
-                    Text(
-                        "Waiting for your Interac e-Transfer… checking every 5 seconds.",
-                        color = TextSecondary,
-                        fontSize = 14.sp,
-                    )
+                // ─── QR shortcut card (Phone-only) ────────────────────
+                // Renders for phones / tablets ONLY. TVs (>= 900 dp) hide
+                // it — you can't scan a QR off your own TV with the same
+                // device, and we don't want the user wasting time on the
+                // remote trying.
+                if (config.screenWidthDp < 900) {
+                    QrShortcutCard(sz, orderId!!, emailTo, amountCad)
+                    Spacer(Modifier.height(sz.gap))
                 }
 
-                Spacer(Modifier.height(24.dp))
+                // ─── Email "Send To" card ─────────────────────────────
+                EmailRecipientCard(sz, emailTo,
+                    copied = copiedField == "email",
+                    onCopy = { copy("email", emailTo) })
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(
-                        onClick = {
-                            clip.setText(AnnotatedString(orderId!!))
-                            copied = true
-                            scope.launch { delay(1800); copied = false }
-                        },
-                        modifier = Modifier.focusRequester(payButtonFocus),
-                        colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = BgBlack),
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (copied) "Copied!" else "Copy Order ID", fontWeight = FontWeight.Bold)
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                val resp = withContext(Dispatchers.IO) {
-                                    CanadaLicenseClient.pollOrder(orderId!!)
-                                }
-                                if (resp?.order?.status == "paid") {
-                                    paidSuccess = true
-                                    CanadaLicenseClient.clearPendingOrder(ctx, xtreamUsername)
-                                    delay(1500)
-                                    onUnlocked()
-                                }
-                            }
-                        },
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Check now")
+                Spacer(Modifier.height(sz.gap))
+
+                // ─── Amount card ──────────────────────────────────────
+                AmountCard(sz, amountCad)
+
+                Spacer(Modifier.height(sz.gap))
+
+                // ─── Plain-language instructions ──────────────────────
+                InstructionsPanel(sz, orderId!!, emailTo, amountCad)
+
+                Spacer(Modifier.height(sz.gap))
+
+                // ─── Status indicator + manual check ──────────────────
+                WaitingForPaymentRow(sz, payButtonFocus) {
+                    scope.launch {
+                        val resp = withContext(Dispatchers.IO) {
+                            CanadaLicenseClient.pollOrder(orderId!!)
+                        }
+                        if (resp?.order?.status == "paid") {
+                            paidSuccess = true
+                            CanadaLicenseClient.clearPendingOrder(ctx, xtreamUsername)
+                            delay(1500); onUnlocked()
+                        }
                     }
                 }
+
+                Spacer(Modifier.height(sz.gap))
+
+                FooterText(sz, emailTo, xtreamUsername)
             }
-
-            Spacer(Modifier.height(32.dp))
-            Text(
-                "Need help? Contact ${emailTo}",
-                color = TextSecondary,
-                fontSize = 12.sp,
-            )
         }
     }
 }
 
+// ─── Building blocks ──────────────────────────────────────────────────
+
 @Composable
-private fun OrderCard(orderId: String, pulse: Float, onCopy: () -> Unit) {
+private fun HeaderBlock(sz: Sizes, amountCad: Double) {
     Box(
         modifier = Modifier
-            .scale(pulse)
-            .fillMaxWidth()
-            .background(SurfaceNavy, RoundedCornerShape(20.dp))
-            .border(2.dp, Cyan, RoundedCornerShape(20.dp))
-            .padding(horizontal = 32.dp, vertical = 24.dp),
+            .size(sz.headerIcon)
+            .background(CyanFocusBg, RoundedCornerShape(50))
+            .border(2.dp, Cyan, RoundedCornerShape(50)),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "YOUR ORDER ID",
-                color = Cyan,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 4.sp,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                orderId,
-                color = TextPrimary,
-                fontSize = 56.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 6.sp,
-                fontFamily = FontFamily.Monospace,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Include this in the Interac \"Message\" field",
-                color = TextSecondary,
-                fontSize = 13.sp,
-            )
-        }
+        Icon(Icons.Default.Lock, null, tint = Cyan, modifier = Modifier.size(sz.headerIcon / 2))
+    }
+    Spacer(Modifier.height(16.dp))
+    Text(
+        "HushTV Canada",
+        color = TextPrimary,
+        fontSize = sz.title,
+        fontWeight = FontWeight.Black,
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "One-time setup",
+        color = Cyan,
+        fontSize = sz.subtitle,
+        fontWeight = FontWeight.Bold,
+    )
+    Spacer(Modifier.height(12.dp))
+    Text(
+        "Send $${formatAmount(amountCad)} CAD by Interac e-Transfer to start using the app.",
+        color = TextPrimary,
+        fontSize = sz.body,
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "Valid for 1 year. Works on as many devices as you want.",
+        color = TextSecondary,
+        fontSize = sz.bodySmall,
+    )
+}
+
+@Composable
+private fun OrderIdCard(sz: Sizes, orderId: String, pulse: Float, copied: Boolean, onCopy: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(pulse)
+            .background(SurfaceNavy, RoundedCornerShape(20.dp))
+            .border(3.dp, Cyan, RoundedCornerShape(20.dp))
+            .padding(horizontal = 20.dp, vertical = sz.gap),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        StepBadge(1)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Your Order Number",
+            color = Cyan,
+            fontSize = sz.labelSmall,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            orderId,
+            color = TextPrimary,
+            fontSize = sz.orderId,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 4.sp,
+            fontFamily = FontFamily.Monospace,
+        )
+        Spacer(Modifier.height(12.dp))
+        BigCopyButton(sz, "Copy Order Number", copied, onCopy)
     }
 }
 
 @Composable
-private fun InstructionsPanel(orderId: String, emailTo: String, amountCad: Double) {
+private fun EmailRecipientCard(sz: Sizes, email: String, copied: Boolean, onCopy: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(SurfaceElev, RoundedCornerShape(16.dp))
             .border(1.dp, BorderSlate, RoundedCornerShape(16.dp))
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        StepBadge(2)
+        Spacer(Modifier.height(8.dp))
         Text(
-            "How to pay",
-            color = TextPrimary,
-            fontSize = 18.sp,
+            "Send the e-Transfer to this email",
+            color = Cyan,
+            fontSize = sz.labelSmall,
             fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
         )
-        Step(1, "Open your bank app and select Interac e-Transfer (also called \"Send Money\").")
-        Step(2, "Send exactly $${String.format("%.2f", amountCad)} CAD to: ", highlight = emailTo)
-        Step(3, "In the e-Transfer Message field, type: ", highlight = orderId)
-        Step(4, "Send. The app will unlock automatically within 1–2 minutes of the bank confirming the deposit.")
-        Spacer(Modifier.height(4.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(CyanFocusBg, RoundedCornerShape(10.dp))
-                .padding(12.dp),
-        ) {
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Email, null, tint = Cyan, modifier = Modifier.size(sz.body.value.dp + 4.dp))
+            Spacer(Modifier.width(8.dp))
             Text(
-                "Make sure the Message field contains ONLY the 8-digit Order ID. Do not add extra text.",
+                email,
                 color = TextPrimary,
-                fontSize = 13.sp,
+                fontSize = sz.email,
+                fontWeight = FontWeight.Bold,
             )
         }
+        Spacer(Modifier.height(12.dp))
+        BigCopyButton(sz, "Copy Email", copied, onCopy)
     }
 }
 
 @Composable
-private fun Step(num: Int, text: String, highlight: String? = null) {
-    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .background(Cyan, RoundedCornerShape(50)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("$num", color = BgBlack, fontWeight = FontWeight.Black, fontSize = 14.sp)
-        }
+private fun AmountCard(sz: Sizes, amountCad: Double) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceElev, RoundedCornerShape(16.dp))
+            .border(1.dp, BorderSlate, RoundedCornerShape(16.dp))
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        StepBadge(3)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Send this amount",
+            color = Cyan,
+            fontSize = sz.labelSmall,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "$${formatAmount(amountCad)}",
+            color = TextPrimary,
+            fontSize = sz.orderId,
+            fontWeight = FontWeight.Black,
+        )
+        Text(
+            "Canadian Dollars (CAD)",
+            color = TextSecondary,
+            fontSize = sz.bodySmall,
+        )
+    }
+}
+
+@Composable
+private fun InstructionsPanel(sz: Sizes, orderId: String, emailTo: String, amountCad: Double) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceElev.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+            .border(1.dp, BorderSlate, RoundedCornerShape(16.dp))
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("How to pay — step by step", color = TextPrimary,
+            fontSize = sz.h3, fontWeight = FontWeight.Bold)
+        InstructionLine(sz, "1.", "Open your bank's app or website on your phone or computer.")
+        InstructionLine(sz, "2.", "Find the option called \"Send Money\" or \"Interac e-Transfer\".")
+        InstructionLine(sz, "3.", "Send $${formatAmount(amountCad)} CAD to:", emphasis = emailTo)
+        InstructionLine(sz, "4.", "When the bank asks for a \"Message\", type this number:", emphasis = orderId)
+        InstructionLine(sz, "5.", "Confirm and send. That's it — this screen will unlock by itself when the bank delivers the money (usually 1 to 3 minutes).")
+        Spacer(Modifier.height(4.dp))
+        WarningStripe(sz)
+    }
+}
+
+@Composable
+private fun InstructionLine(sz: Sizes, num: String, text: String, emphasis: String? = null) {
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(num, color = Cyan, fontSize = sz.body, fontWeight = FontWeight.Black,
+            modifier = Modifier.widthIn(min = 24.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text, color = TextPrimary, fontSize = 15.sp)
-            if (highlight != null) {
-                Spacer(Modifier.height(4.dp))
+            Text(text, color = TextPrimary, fontSize = sz.body)
+            if (emphasis != null) {
+                Spacer(Modifier.height(6.dp))
                 Box(
                     modifier = Modifier
-                        .background(BgBlack, RoundedCornerShape(8.dp))
-                        .border(1.dp, Cyan, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .background(BgBlack, RoundedCornerShape(10.dp))
+                        .border(2.dp, Cyan, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
                     Text(
-                        highlight,
+                        emphasis,
                         color = Cyan,
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
+                        fontSize = sz.body,
                     )
                 }
             }
@@ -421,46 +466,291 @@ private fun Step(num: Int, text: String, highlight: String? = null) {
 }
 
 @Composable
-private fun ErrorPanel(message: String, onRetry: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(Icons.Default.HourglassEmpty, contentDescription = null, tint = Red, modifier = Modifier.size(48.dp))
-        Spacer(Modifier.height(12.dp))
-        Text(message, color = TextPrimary, fontSize = 16.sp)
-        Spacer(Modifier.height(16.dp))
-        Button(
-            onClick = onRetry,
-            colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = BgBlack),
+private fun WarningStripe(sz: Sizes) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CyanFocusBg, RoundedCornerShape(10.dp))
+            .border(1.dp, Cyan, RoundedCornerShape(10.dp))
+            .padding(12.dp),
+    ) {
+        Text(
+            "Important: type the Order Number in the Message box EXACTLY. Do not add any other words. That's how we find your payment.",
+            color = TextPrimary,
+            fontSize = sz.bodySmall,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun WaitingForPaymentRow(sz: Sizes, focus: FocusRequester, onCheckNow: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceNavy, RoundedCornerShape(16.dp))
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator(color = Cyan, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            Text("Waiting for your e-Transfer…", color = TextPrimary, fontSize = sz.body,
+                fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("We check every 5 seconds. The app will unlock by itself.",
+            color = TextSecondary, fontSize = sz.bodySmall)
+        Spacer(Modifier.height(14.dp))
+        OutlinedButton(
+            onClick = onCheckNow,
+            modifier = Modifier.focusRequester(focus).heightIn(min = sz.buttonHeight),
+            border = BorderStroke(2.dp, Cyan),
         ) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.Refresh, null, tint = Cyan, modifier = Modifier.size(sz.body.value.dp + 4.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Try again", fontWeight = FontWeight.Bold)
+            Text("Check now", color = Cyan, fontSize = sz.body, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun PaidSuccessPanel() {
+private fun FooterText(sz: Sizes, emailTo: String, username: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Logged in as: $username", color = TextSecondary, fontSize = sz.bodySmall)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Need help? Contact $emailTo",
+            color = TextSecondary,
+            fontSize = sz.bodySmall,
+        )
+    }
+}
+
+@Composable
+private fun BigCopyButton(sz: Sizes, label: String, copied: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = sz.buttonHeight),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (copied) Green else Cyan,
+            contentColor = BgBlack,
+        ),
+    ) {
+        Icon(
+            if (copied) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
+            null,
+            modifier = Modifier.size(sz.body.value.dp + 4.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (copied) "Copied!" else label,
+            fontWeight = FontWeight.Black,
+            fontSize = sz.body,
+        )
+    }
+}
+
+@Composable
+private fun StepBadge(num: Int) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .background(Cyan, RoundedCornerShape(50)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("$num", color = BgBlack, fontWeight = FontWeight.Black, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun QrShortcutCard(sz: Sizes, orderId: String, emailTo: String, amountCad: Double) {
+    // Payload: a mailto: link with the Order ID in the subject. Most QR
+    // scanners (and Google Lens / the stock Android camera app) recognise
+    // mailto: URIs and offer to open an email app — many Canadian banking
+    // apps also accept a scanned email address when "Add Recipient" is
+    // open. Either way the user gets the email + Order ID pre-filled.
+    val payload = remember(orderId, emailTo, amountCad) {
+        val subject = java.net.URLEncoder.encode(
+            "HushTV CAD$${formatAmount(amountCad)} - Order $orderId",
+            "UTF-8",
+        ).replace("+", "%20")
+        val body = java.net.URLEncoder.encode(
+            "Interac e-Transfer\nSend to: $emailTo\nAmount: \$${formatAmount(amountCad)} CAD\nMessage: $orderId",
+            "UTF-8",
+        ).replace("+", "%20")
+        "mailto:$emailTo?subject=$subject&body=$body"
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceElev, RoundedCornerShape(16.dp))
+            .border(1.dp, BorderSlate, RoundedCornerShape(16.dp))
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "Or scan with another phone",
+            color = Cyan,
+            fontSize = sz.labelSmall,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
+        )
+        Spacer(Modifier.height(10.dp))
+        // White padded box around the QR — critical for scan reliability;
+        // a dark/coloured frame next to the QR confuses cheap phone cameras.
+        Box(
+            modifier = Modifier
+                .background(androidx.compose.ui.graphics.Color.White, RoundedCornerShape(12.dp))
+                .padding(12.dp),
+        ) {
+            QrCode(content = payload, size = sz.qr)
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Point another phone's camera at this code. It opens an email with the address, amount, and Order Number ready to copy.",
+            color = TextPrimary,
+            fontSize = sz.bodySmall,
+        )
+    }
+}
+
+@Composable
+private fun ErrorPanel(sz: Sizes, message: String, onRetry: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Default.WifiOff, null, tint = Red, modifier = Modifier.size(64.dp))
+        Spacer(Modifier.height(12.dp))
+        Text(message, color = TextPrimary, fontSize = sz.body)
+        Spacer(Modifier.height(20.dp))
+        Button(
+            onClick = onRetry,
+            modifier = Modifier.heightIn(min = sz.buttonHeight),
+            colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = BgBlack),
+        ) {
+            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(sz.body.value.dp + 4.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Try again", fontWeight = FontWeight.Black, fontSize = sz.body)
+        }
+    }
+}
+
+@Composable
+private fun PaidSuccessPanel(sz: Sizes) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     AnimatedVisibility(visible = visible) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(48.dp),
+            modifier = Modifier.padding(32.dp),
         ) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Green, modifier = Modifier.size(96.dp))
+            Icon(Icons.Default.CheckCircle, null, tint = Green, modifier = Modifier.size(96.dp))
             Spacer(Modifier.height(20.dp))
             Text(
-                "Payment received — welcome to HushTV Canada!",
+                "Payment received!",
                 color = TextPrimary,
-                fontSize = 24.sp,
+                fontSize = sz.title,
                 fontWeight = FontWeight.Black,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Your license is active for 1 year. Loading your library…",
+                "Welcome to HushTV Canada. Loading your library…",
                 color = TextSecondary,
-                fontSize = 16.sp,
+                fontSize = sz.body,
             )
         }
     }
 }
+
+// ─── Responsive sizing primitives ────────────────────────────────────
+
+private data class Sizes(
+    val maxContentWidth: Dp,
+    val pageHorizontal: Dp,
+    val pageVertical: Dp,
+    val gap: Dp,
+    val headerIcon: Dp,
+    val title: TextUnit,
+    val subtitle: TextUnit,
+    val h3: TextUnit,
+    val body: TextUnit,
+    val bodySmall: TextUnit,
+    val labelSmall: TextUnit,
+    val orderId: TextUnit,
+    val email: TextUnit,
+    val buttonHeight: Dp,
+    val qr: Dp,
+)
+
+private fun sizesFor(widthDp: Int): Sizes = when {
+    widthDp < 380 -> Sizes(           // small phones
+        maxContentWidth = 600.dp,
+        pageHorizontal = 16.dp,
+        pageVertical = 20.dp,
+        gap = 14.dp,
+        headerIcon = 56.dp,
+        title = 22.sp,
+        subtitle = 14.sp,
+        h3 = 16.sp,
+        body = 14.sp,
+        bodySmall = 12.sp,
+        labelSmall = 11.sp,
+        orderId = 36.sp,
+        email = 15.sp,
+        buttonHeight = 52.dp,
+        qr = 180.dp,
+    )
+    widthDp < 600 -> Sizes(           // normal phones
+        maxContentWidth = 600.dp,
+        pageHorizontal = 20.dp,
+        pageVertical = 24.dp,
+        gap = 16.dp,
+        headerIcon = 64.dp,
+        title = 26.sp,
+        subtitle = 15.sp,
+        h3 = 18.sp,
+        body = 15.sp,
+        bodySmall = 13.sp,
+        labelSmall = 12.sp,
+        orderId = 44.sp,
+        email = 17.sp,
+        buttonHeight = 56.dp,
+        qr = 220.dp,
+    )
+    widthDp < 900 -> Sizes(           // tablets / foldables
+        maxContentWidth = 720.dp,
+        pageHorizontal = 32.dp,
+        pageVertical = 36.dp,
+        gap = 20.dp,
+        headerIcon = 72.dp,
+        title = 32.sp,
+        subtitle = 16.sp,
+        h3 = 20.sp,
+        body = 17.sp,
+        bodySmall = 14.sp,
+        labelSmall = 13.sp,
+        orderId = 52.sp,
+        email = 20.sp,
+        buttonHeight = 60.dp,
+        qr = 260.dp,
+    )
+    else -> Sizes(                    // TV / large desktop
+        maxContentWidth = 880.dp,
+        pageHorizontal = 48.dp,
+        pageVertical = 48.dp,
+        gap = 24.dp,
+        headerIcon = 80.dp,
+        title = 36.sp,
+        subtitle = 18.sp,
+        h3 = 22.sp,
+        body = 18.sp,
+        bodySmall = 15.sp,
+        labelSmall = 14.sp,
+        orderId = 60.sp,
+        email = 22.sp,
+        buttonHeight = 64.dp,
+        qr = 240.dp,
+    )
+}
+
+private fun formatAmount(v: Double): String =
+    if (v == v.toLong().toDouble()) v.toLong().toString() else String.format("%.2f", v)

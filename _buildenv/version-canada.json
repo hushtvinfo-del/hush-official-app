@@ -1,13 +1,13 @@
 {
-  "versionCode": 467,
-  "versionName": "1.44.67",
+  "versionCode": 469,
+  "versionName": "1.44.69",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "NEW: $40 CAD / year CDN Proxy Fee lock screen for Canadian users. After Xtream login the app generates a unique 8-digit Order ID and asks you to send $40 CAD via Interac e-Transfer to Hushtv.info@gmail.com with the Order ID in the Message field. The app auto-unlocks within 1-2 minutes of the bank confirming the auto-deposit.",
-    "License is tied to your Xtream username, NOT the device — pay once, login on as many devices as you like.",
-    "Annual renewal: when your license expires the same lock screen appears for re-payment."
+    "NEW: QR-code shortcut on the payment screen. Point a second phone's camera at it and it opens an email pre-filled with the recipient address, the $40 CAD amount, and your Order Number — eliminates typos.",
+    "FIXED: $40 CAD payment lock screen now ALWAYS appears after Xtream login (v1.44.67 race fix shipped in v1.44.68 confirmed).",
+    "REDESIGNED: payment screen scales smoothly from phone to TV with senior-friendly large text, three clearly numbered cards, and big copy buttons for the Order Number AND the email address."
   ]
 }
