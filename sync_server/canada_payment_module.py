@@ -910,6 +910,10 @@ async def base44_webhook(
     try:
         body = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        log.warning(
+            "base44 webhook 400 BAD_JSON | err=%s | body_first200=%r",
+            e, raw[:200].decode("utf-8", errors="replace"),
+        )
         raise HTTPException(400, f"bad JSON: {e}")
 
     # 3. Timestamp window — accept either the X-Base44-Timestamp header
@@ -919,18 +923,30 @@ async def base44_webhook(
     ts_str = x_base44_timestamp or body.get("occurred_at") or ""
     ts = _parse_webhook_timestamp(str(ts_str))
     if ts is None:
+        log.warning(
+            "base44 webhook 400 NO_TIMESTAMP | header=%r | occurred_at=%r | event_id=%s",
+            x_base44_timestamp, body.get("occurred_at"), body.get("event_id"),
+        )
         raise HTTPException(400, "missing or unparseable timestamp "
                                   "(need X-Base44-Timestamp header or occurred_at body field)")
     drift = abs(int(time.time()) - ts)
     if drift > WEBHOOK_TS_TOLERANCE_S:
+        log.warning(
+            "base44 webhook 401 STALE_TS | drift=%ds tolerance=%ds | event_id=%s | ts=%s",
+            drift, WEBHOOK_TS_TOLERANCE_S, body.get("event_id"), ts_str,
+        )
         raise HTTPException(401, f"timestamp drift {drift}s exceeds tolerance")
 
     event_id = (body.get("event_id") or "").strip()
     event_type = (body.get("event_type") or "").strip()
     user = (body.get("xtream_username") or "").strip().lower()
     if not event_id:
+        log.warning("base44 webhook 400 MISSING_EVENT_ID | body=%r",
+                    raw[:300].decode("utf-8", errors="replace"))
         raise HTTPException(400, "event_id required")
     if not event_type:
+        log.warning("base44 webhook 400 MISSING_EVENT_TYPE | event_id=%s | body=%r",
+                    event_id, raw[:300].decode("utf-8", errors="replace"))
         raise HTTPException(400, "event_type required")
 
     with _conn() as c:
