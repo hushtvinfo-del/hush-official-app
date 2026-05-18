@@ -96,6 +96,12 @@ object CanadaLicenseClient {
         data class Error(val message: String) : LicenseState()
     }
 
+    /** Wrapped result for create-order calls so the UI can surface real errors. */
+    sealed class CreateOrderResult {
+        data class Success(val data: CreateOrderResp) : CreateOrderResult()
+        data class Failure(val message: String) : CreateOrderResult()
+    }
+
     // ── Cache ───────────────────────────────────────────────────────
     private fun prefs(ctx: Context) =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -180,20 +186,42 @@ object CanadaLicenseClient {
 
     /** POST /order/create — returns the create response or null on failure. */
     fun createOrder(username: String, forceNew: Boolean = false): CreateOrderResp? {
+        val r = createOrderResult(username, forceNew)
+        return (r as? CreateOrderResult.Success)?.data
+    }
+
+    /** POST /order/create that surfaces the underlying error message. */
+    fun createOrderResult(username: String, forceNew: Boolean = false): CreateOrderResult {
         val u = username.lowercase().trim()
-        if (u.isEmpty()) return null
+        if (u.isEmpty()) return CreateOrderResult.Failure("Empty username — please sign in to your Xtream account first.")
         return try {
             val payload = moshi.adapter(CreateOrderReq::class.java)
                 .toJson(CreateOrderReq(u, forceNew))
             val req = Request.Builder().url("$BASE/order/create")
                 .post(payload.toRequestBody(JSON)).build()
             http.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return null
+                if (!resp.isSuccessful) {
+                    val errBody = runCatching { resp.body?.string().orEmpty() }.getOrDefault("")
+                    return CreateOrderResult.Failure("Server returned HTTP ${resp.code}. ${errBody.take(180)}")
+                }
                 val body = resp.body?.string().orEmpty()
-                moshi.adapter(CreateOrderResp::class.java).fromJson(body)
+                val parsed = moshi.adapter(CreateOrderResp::class.java).fromJson(body)
+                if (parsed == null) {
+                    CreateOrderResult.Failure("Server sent an unexpected response. Please try again in a moment.")
+                } else {
+                    CreateOrderResult.Success(parsed)
+                }
             }
-        } catch (_: Exception) {
-            null
+        } catch (e: java.net.UnknownHostException) {
+            CreateOrderResult.Failure("Can't reach hushtv.xyz. Your device DNS may be blocking it — try toggling Wi-Fi off/on or restarting your router.")
+        } catch (e: javax.net.ssl.SSLException) {
+            CreateOrderResult.Failure("Secure connection failed (SSL). The TV's clock may be wrong — check Date & Time in your TV settings. Detail: ${e.message?.take(120) ?: ""}")
+        } catch (e: java.net.SocketTimeoutException) {
+            CreateOrderResult.Failure("Server is slow to respond (timeout). Please try again in a few seconds.")
+        } catch (e: java.io.IOException) {
+            CreateOrderResult.Failure("Network error: ${e.javaClass.simpleName} ${e.message?.take(120) ?: ""}")
+        } catch (e: Exception) {
+            CreateOrderResult.Failure("Unexpected error: ${e.javaClass.simpleName} ${e.message?.take(120) ?: ""}")
         }
     }
 

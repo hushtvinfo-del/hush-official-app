@@ -1,13 +1,13 @@
 {
-  "versionCode": 470,
-  "versionName": "1.44.70",
+  "versionCode": 471,
+  "versionName": "1.44.71",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "NEW: Settings → My HushTV Canada License — see your status (ACTIVE / EXPIRING SOON / EXPIRED), paid date, expiry date, and days remaining.",
-    "NEW: Renew Now button — adds another year on top of your current expiry (you never lose remaining days). Becomes prominent when you have less than 30 days left.",
-    "Same Interac e-Transfer payment flow for renewal — just send $40 to Hushtv.info@gmail.com with the new Order Number."
+    "FIXED: OTA update prompt now appears even when the payment lock screen is showing (v1.44.67 trapped users on the broken paywall because the update check ran INSIDE the gate).",
+    "NEW: \"Check for app update\" button on the error panel — taps open the latest APK in your browser so you can manually re-install if something goes wrong.",
+    "NEW: real network error messages on the lock screen (DNS, SSL/clock, timeout, HTTP code) instead of the generic \"Could not reach payment server\". If anything fails, you and HushTV support can now see exactly what's wrong."
   ]
 }

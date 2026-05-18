@@ -96,24 +96,32 @@ fun CanadaLockScreen(
             orderId = pending.first
             loading = false
         } else {
-            val resp = withContext(Dispatchers.IO) {
-                CanadaLicenseClient.createOrder(xtreamUsername, forceNew = renewMode)
+            val result = withContext(Dispatchers.IO) {
+                CanadaLicenseClient.createOrderResult(xtreamUsername, forceNew = renewMode)
             }
-            when {
-                resp?.already_licensed == true && !renewMode -> {
-                    paidSuccess = true
-                    delay(900); onUnlocked(); return@LaunchedEffect
+            when (result) {
+                is CanadaLicenseClient.CreateOrderResult.Success -> {
+                    val resp = result.data
+                    when {
+                        resp.already_licensed == true && !renewMode -> {
+                            paidSuccess = true
+                            delay(900); onUnlocked(); return@LaunchedEffect
+                        }
+                        resp.order != null -> {
+                            orderId = resp.order.order_id
+                            emailTo = resp.email_to ?: emailTo
+                            amountCad = resp.amount_cad ?: amountCad
+                            CanadaLicenseClient.savePendingOrder(
+                                ctx, xtreamUsername, resp.order.order_id, resp.order.expires_at,
+                            )
+                        }
+                        else -> {
+                            error = "Server response was incomplete. Please try again."
+                        }
+                    }
                 }
-                resp?.order != null -> {
-                    orderId = resp.order.order_id
-                    emailTo = resp.email_to ?: emailTo
-                    amountCad = resp.amount_cad ?: amountCad
-                    CanadaLicenseClient.savePendingOrder(
-                        ctx, xtreamUsername, resp.order.order_id, resp.order.expires_at,
-                    )
-                }
-                else -> {
-                    error = "Couldn't connect to our server. Check your internet, then tap Try Again."
+                is CanadaLicenseClient.CreateOrderResult.Failure -> {
+                    error = result.message
                 }
             }
             loading = false
@@ -197,24 +205,37 @@ fun CanadaLockScreen(
                 Spacer(Modifier.height(12.dp))
                 Text("Getting your Order Number ready…", color = TextSecondary, fontSize = sz.body)
             } else if (orderId == null && error != null) {
-                ErrorPanel(sz, error!!) {
-                    scope.launch {
-                        loading = true; error = null
-                        val resp = withContext(Dispatchers.IO) {
-                            CanadaLicenseClient.createOrder(xtreamUsername)
+                ErrorPanel(sz, error!!,
+                    onRetry = {
+                        scope.launch {
+                            loading = true; error = null
+                            val result = withContext(Dispatchers.IO) {
+                                CanadaLicenseClient.createOrderResult(xtreamUsername, forceNew = renewMode)
+                            }
+                            when (result) {
+                                is CanadaLicenseClient.CreateOrderResult.Success -> {
+                                    val resp = result.data
+                                    if (resp.order != null) {
+                                        orderId = resp.order.order_id
+                                        emailTo = resp.email_to ?: emailTo
+                                        CanadaLicenseClient.savePendingOrder(
+                                            ctx, xtreamUsername, resp.order.order_id, resp.order.expires_at,
+                                        )
+                                    }
+                                }
+                                is CanadaLicenseClient.CreateOrderResult.Failure -> {
+                                    error = result.message
+                                }
+                            }
+                            loading = false
                         }
-                        if (resp?.order != null) {
-                            orderId = resp.order.order_id
-                            emailTo = resp.email_to ?: emailTo
-                            CanadaLicenseClient.savePendingOrder(
-                                ctx, xtreamUsername, resp.order.order_id, resp.order.expires_at,
-                            )
-                        } else {
-                            error = "Still no connection. Make sure your Wi-Fi is on, then try again."
+                    },
+                    onCheckForUpdate = {
+                        scope.launch {
+                            checkForAppUpdate(ctx)
                         }
-                        loading = false
-                    }
-                }
+                    },
+                )
             } else if (orderId != null) {
                 // ─── Order ID card (the hero) ─────────────────────────
                 OrderIdCard(sz, orderId!!, pulse,
@@ -620,21 +641,88 @@ private fun QrShortcutCard(sz: Sizes, orderId: String, emailTo: String, amountCa
 }
 
 @Composable
-private fun ErrorPanel(sz: Sizes, message: String, onRetry: () -> Unit) {
+private fun ErrorPanel(
+    sz: Sizes,
+    message: String,
+    onRetry: () -> Unit,
+    onCheckForUpdate: () -> Unit,
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icons.Default.WifiOff, null, tint = Red, modifier = Modifier.size(64.dp))
         Spacer(Modifier.height(12.dp))
-        Text(message, color = TextPrimary, fontSize = sz.body)
-        Spacer(Modifier.height(20.dp))
-        Button(
-            onClick = onRetry,
-            modifier = Modifier.heightIn(min = sz.buttonHeight),
-            colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = BgBlack),
+        Text(
+            "We couldn't reach the payment server",
+            color = TextPrimary,
+            fontSize = sz.h3,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(8.dp))
+        // Show the real error so the user can tell us what's wrong.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(SurfaceElev, RoundedCornerShape(10.dp))
+                .padding(12.dp),
         ) {
-            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(sz.body.value.dp + 4.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Try again", fontWeight = FontWeight.Black, fontSize = sz.body)
+            Text(message, color = TextSecondary, fontSize = sz.bodySmall)
         }
+        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = onRetry,
+                modifier = Modifier.heightIn(min = sz.buttonHeight),
+                colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = BgBlack),
+            ) {
+                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(sz.body.value.dp + 4.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Try again", fontWeight = FontWeight.Black, fontSize = sz.body)
+            }
+            OutlinedButton(
+                onClick = onCheckForUpdate,
+                modifier = Modifier.heightIn(min = sz.buttonHeight),
+                border = BorderStroke(2.dp, Cyan),
+            ) {
+                Text("Check for app update", color = Cyan,
+                    fontWeight = FontWeight.Bold, fontSize = sz.body)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "If retrying doesn't work, tap \"Check for app update\" to download the latest version.",
+            color = TextSecondary, fontSize = sz.bodySmall,
+        )
+    }
+}
+
+private suspend fun checkForAppUpdate(ctx: android.content.Context) {
+    val latest = com.hushtv.tv.update.UpdateManager.fetchLatest() ?: run {
+        android.widget.Toast.makeText(
+            ctx,
+            "Couldn't reach update server either. Internet appears blocked.",
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
+        return
+    }
+    if (!com.hushtv.tv.update.UpdateManager.isUpdateAvailable(latest)) {
+        android.widget.Toast.makeText(
+            ctx,
+            "You already have the latest version (${latest.versionName}).",
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
+        return
+    }
+    // Launch the system browser to the APK URL — bypasses our in-app
+    // OTA dialog which itself is rendered INSIDE the gate.
+    val intent = android.content.Intent(
+        android.content.Intent.ACTION_VIEW,
+        android.net.Uri.parse(latest.apkUrl),
+    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { ctx.startActivity(intent) }.onFailure {
+        android.widget.Toast.makeText(
+            ctx,
+            "Open https://hushtv.xyz/hushtv-canada.apk in a browser to update.",
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
     }
 }
 

@@ -121,6 +121,14 @@ class MainActivity : ComponentActivity() {
                             com.hushtv.tv.ui.canada.CanadaLicenseGate {
                                 if (isTv) AppContent() else MobileApp()
                             }
+                            // Render the OTA update prompt OUTSIDE the
+                            // license gate so canada users locked behind
+                            // the paywall can still receive critical app
+                            // updates (otherwise a broken gate version
+                            // would brick the device forever).
+                            if (BuildConfig.UPDATE_CHANNEL == "canada") {
+                                UpdateCheckHost()
+                            }
                         }
                     }
                 }
