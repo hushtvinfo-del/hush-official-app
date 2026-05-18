@@ -893,7 +893,7 @@ async def base44_webhook(
                 expected = "<error computing>"
         else:
             expected = "<no secret set>"
-        body_preview = raw[:200].decode("utf-8", errors="replace")
+        body_preview = raw[:1024].decode("utf-8", errors="replace")
         log.warning(
             "base44 webhook BAD SIG | provided=%s | expected=sha256=%s | "
             "body_len=%d | content_type=%s | body_first200=%r",
