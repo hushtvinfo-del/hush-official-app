@@ -1,5 +1,65 @@
 # HushTV — Product Requirements Document
 
+## v1.44.80 — Bug fixes for Sports Guide crash + Discover→Hush+ navigation (LIVE) — 2026-02-08
+
+### Bugs fixed
+Two regressions introduced by the v1.44.78/79 nav restructure:
+
+1. **Sports Guide tap → crash**. `TopNavBar.kt` was navigating to `sports/{playlistId}` but `MainActivity.kt` never registered a `composable("sports/{playlistId}")` route. Result: `IllegalArgumentException: Navigation destination that matches request ... cannot be found` on every tap. Fixed by adding the route which hosts `TVSportsPage` as a standalone screen with a fresh `FocusRequester` and no-op edge handlers (back is via NavController).
+
+2. **D-pad DOWN from Discovery → opens left sidebar instead of Hush+**. `TVMainMenuScreen.kt` line 639 still wired `discoveryPage.onDownFromRow = { currentPage = "sports" }` — but `"sports"` was removed from `pageOrder` when Hush+ replaced it. The `LaunchedEffect(pageOrder)` defensively reset `currentPage` back to a valid page, focus dropped, and the `TVHubRail` (left side nav) caught it. Fixed to `currentPage = "hushplus"`. Also added `"hushplus" -> firstSportsFocus.requestFocus()` in both auto-focus `when` blocks so focus correctly lands on the Hush+ section after the transition.
+
+### Files modified
+- `app/src/main/kotlin/com/hushtv/tv/MainActivity.kt` — added `composable("sports/{playlistId}")` route
+- `app/src/main/kotlin/com/hushtv/tv/ui/screens/TVMainMenuScreen.kt` — discovery `onDownFromRow` → "hushplus"; auto-focus map includes "hushplus"
+- `app/build.gradle.kts` — `versionCode = 480`, `versionName = "1.44.80"`
+- `_buildenv/version{,-official,-canada}.json` — bumped to 480 with bug-fix changelog
+
+### Build env note
+Pod was rescheduled again mid-session, re-wiping JDK + qemu + symlink target dirs (`/var/gradle-home`, `/var/androidtv-gradle`, `/var/androidtv-build`). Recovery sequence used:
+```
+apt-get install -y openjdk-17-jdk-headless qemu-user-static sshpass
+dpkg --add-architecture amd64 && apt-get install -y libc6:amd64 libstdc++6:amd64
+mkdir -p /var/gradle-home /var/androidtv-gradle /var/androidtv-build
+```
+This is the same recovery from v1.44.79 — happening reliably on every pod swap. Worth automating into a single bootstrap script if it keeps recurring.
+
+### Live URLs (all three flavors at v1.44.80 / 480)
+- Dev:      `https://hushtv.xyz/HushTV.apk` (25.13 MB)
+- Official: `https://hushtv.xyz/hushtv-official.apk` (25.13 MB)
+- Canada:   `https://hushtv.xyz/hushtv-canada.apk` (25.13 MB)
+
+---
+
+
+## v1.44.79 — Sports Guide + Hush+ Coming Soon rollout to ALL flavors (LIVE) — 2026-02-08
+
+### What landed
+The "Sports Guide" top-nav promotion and "Hush+ Coming Soon" Home-screen preview (introduced in v1.44.78 Canada) are now **deployed to Dev and Official channels** too. All three flavors are now version-aligned at `v1.44.79` (versionCode 479).
+
+### Paywall isolation confirmed
+The $40 CAD Canada paywall (`CanadaLicenseGate` + `CanadaLockScreen`) is gated by `BuildConfig.UPDATE_CHANNEL == "canada"` and is a no-op pass-through for Dev and Official. Verified at the APK level — Canada APK is `25,125,804` bytes vs Dev/Official's `25,109,408` bytes; the 16 KB delta is exactly the Canada license code. Paywall is **only** in `hushtv-canada.apk`.
+
+### Live URLs
+- Dev:      `https://hushtv.xyz/HushTV.apk` + `version.json` → 1.44.79 / 479
+- Official: `https://hushtv.xyz/hushtv-official.apk` + `version-official.json` → 1.44.79 / 479
+- Canada:   `https://hushtv.xyz/hushtv-canada.apk` + `version-canada.json` → 1.44.79 / 479
+
+### Build environment notes
+The pod was rescheduled mid-session, wiping `openjdk-17`, `qemu-user-static`, and the broken `/var/gradle-home` + `/var/androidtv-build` symlink targets. Recovery sequence (added to debugging checklist for future fork agents):
+1. `apt-get install -y openjdk-17-jdk-headless sshpass qemu-user-static`
+2. `mkdir -p /var/gradle-home /var/androidtv-gradle /var/androidtv-build`
+3. `/app/_buildenv/disk-janitor.sh` BEFORE every gradle invocation
+4. `/app/_buildenv/promote-to-official.sh` was missing `export JAVA_HOME=/app/_buildenv/jdk` (the dev script had it). **Fixed in this session.**
+
+### Files modified
+- `/app/androidtv/app/build.gradle.kts` — `versionCode = 479`, `versionName = "1.44.79"`
+- `/app/_buildenv/version.json` (dev), `/app/_buildenv/version-official.json`, `/app/_buildenv/version-canada.json` — all bumped to 479
+- `/app/_buildenv/promote-to-official.sh` — added `JAVA_HOME` + `ANDROID_HOME` exports
+
+---
+
+
 ## v1.44.67 — HushTV Canada $40 CAD/yr CDN Proxy Fee gateway (LIVE) — 2026-02-08
 
 ### What landed

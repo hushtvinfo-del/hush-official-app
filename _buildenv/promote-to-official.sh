@@ -29,6 +29,8 @@ cd /app/androidtv
 /app/_buildenv/disk-janitor.sh
 
 echo "▶ Building official-flavor APK…"
+export JAVA_HOME=/app/_buildenv/jdk
+export ANDROID_HOME=/app/_buildenv/android-sdk
 ./gradlew assembleOfficialDebug
 
 APK_LOCAL=app/build/outputs/apk/official/debug/app-official-debug.apk

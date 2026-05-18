@@ -1,13 +1,13 @@
 {
-  "versionCode": 465,
-  "versionName": "1.44.65",
+  "versionCode": 480,
+  "versionName": "1.44.80",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": true,
+  "mandatory": false,
   "releasedAt": "2026-02-08",
   "channel": "dev",
   "changelog": [
-    "Reverted the aggressive recovery behaviour from v1.44.62-64. Buffer-stall threshold raised from 4 s → 20 s (live) and frozen-position from 4 s → 15 s. STATE_ENDED-on-live recovery removed. Recovery now uses a bare player.prepare() (the stable behaviour from before v1.44.62) instead of a full source rebuild.",
-    "'Reconnecting…' pill no longer shows on the first retry attempt — only from the 2nd attempt onward. Most freezes resolve invisibly on the first attempt.",
-    "Full-screen player now matches the mini-preview's reliability."
+    "FIX: Tapping \"Sports Guide\" on the top nav no longer crashes the app. v1.44.79 promoted Sports Guide to its own top-nav tab but forgot to register the destination — IllegalArgumentException on every tap. Restored.",
+    "FIX: Pressing D-pad DOWN from the Discover row now lands on the Hush+ Coming Soon section as intended. Previously it pointed at a removed page and bounced focus into the left sidebar — looking like the side menu was \"opening\" by itself.",
+    "Both regressions affected Dev, Official and Canada builds."
   ]
 }

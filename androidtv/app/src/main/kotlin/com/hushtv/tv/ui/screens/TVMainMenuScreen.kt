@@ -636,7 +636,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         onUpFromRow = {
                             if (hasCw) currentPage = "cw" else showNavAndFocus()
                         },
-                        onDownFromRow = { currentPage = "sports" },
+                        onDownFromRow = { currentPage = "hushplus" },
                     )
                 }
             }
@@ -649,7 +649,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     when (currentPage) {
                         "cw" -> if (hasCw) firstCwFocus.requestFocus()
                         "discovery" -> firstDiscoveryFocus.requestFocus()
-                        "sports" -> firstSportsFocus.requestFocus()
+                        "hushplus" -> firstSportsFocus.requestFocus()
                         "collections" -> firstCollectionsFocus.requestFocus()
                         "ss_movies" -> firstSsMoviesFocus.requestFocus()
                         "ss_series" -> firstSsSeriesFocus.requestFocus()
@@ -776,6 +776,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     "cw" -> if (hasCw) firstCwFocus.requestFocus()
                     "discovery" -> firstDiscoveryFocus.requestFocus()
                     "sports" -> firstSportsFocus.requestFocus()
+                    "hushplus" -> firstSportsFocus.requestFocus()
                     "collections" -> firstCollectionsFocus.requestFocus()
                     "ss_movies" -> firstSsMoviesFocus.requestFocus()
                     "ss_series" -> firstSsSeriesFocus.requestFocus()

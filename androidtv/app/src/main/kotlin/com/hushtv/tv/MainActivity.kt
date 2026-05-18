@@ -335,6 +335,31 @@ private fun AppContent() {
                 bs.arguments?.getString("playlistId") ?: "",
             )
         }
+        // v1.44.80 — Sports Guide top-nav tab.
+        // The Sports page used to live INSIDE the Home page-stack
+        // (TVMainMenuScreen's currentPage == "sports"). In v1.44.78
+        // we moved it to its own top-nav tab — but forgot to register
+        // the destination here, so tapping "Sports Guide" crashed the
+        // app with IllegalArgumentException "Navigation destination
+        // that matches sports/{playlistId} cannot be found".
+        //
+        // As a standalone screen, the page has no Home-stack neighbours
+        // to traverse to on D-pad up/down — so we hand TVSportsPage a
+        // fresh FocusRequester and no-op edge handlers. Back is handled
+        // by the NavController (pops the back stack).
+        composable("sports/{playlistId}") { bs ->
+            val playlistId = bs.arguments?.getString("playlistId") ?: ""
+            val firstFocus = androidx.compose.runtime.remember {
+                androidx.compose.ui.focus.FocusRequester()
+            }
+            com.hushtv.tv.ui.screens.sports.TVSportsPage(
+                nav = nav,
+                playlistId = playlistId,
+                firstItemFocus = firstFocus,
+                onUpFromRow = { /* no-op: top-level screen */ },
+                onDownFromRow = null,
+            )
+        }
         // ────────────────────────────────────────────────────────
         //  HushXXX route — DISABLED in v1.43.99 per user request.
         //  The Hush+ Coming Soon teaser already removes the user-
