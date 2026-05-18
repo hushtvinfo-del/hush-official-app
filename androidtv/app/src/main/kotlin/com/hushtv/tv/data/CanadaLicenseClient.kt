@@ -3,6 +3,7 @@ package com.hushtv.tv.data
 import android.content.Context
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,7 +36,12 @@ object CanadaLicenseClient {
             .readTimeout(15, TimeUnit.SECONDS)
             .build()
     }
-    private val moshi: Moshi by lazy { Moshi.Builder().build() }
+    private val moshi: Moshi by lazy {
+        // KotlinJsonAdapterFactory is REQUIRED — without it, Moshi looks
+        // for code-generated adapters (kotlin-codegen processor) which
+        // this module does not enable. See SportsApi.kt for the same pattern.
+        Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    }
     private val JSON = "application/json".toMediaType()
 
     @JsonClass(generateAdapter = true)
