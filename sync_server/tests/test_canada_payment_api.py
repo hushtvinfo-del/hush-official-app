@@ -39,7 +39,7 @@ def test_health():
     assert r.status_code == 200
     j = r.json()
     assert j["ok"] is True
-    assert j["expected_amount_cad"] == 40.00
+    assert j["expected_amount_cad"] == cpm.EXPECTED_AMOUNT_CAD
 
 
 def test_create_order_basic():
@@ -48,7 +48,7 @@ def test_create_order_basic():
     oid = j["order"]["order_id"]
     assert oid.isdigit() and len(oid) == 8
     assert j["order"]["status"] == "pending"
-    assert j["amount_cad"] == 40.00
+    assert j["amount_cad"] == cpm.EXPECTED_AMOUNT_CAD
     assert j["email_to"]
 
 
@@ -103,7 +103,8 @@ def test_license_unpaid_then_paid_via_email_match():
 def test_email_with_low_amount_rejected():
     j = _create_order("eve")
     oid = j["order"]["order_id"]
-    fake_html = f"Amount: $20.00 (CAD) Message: {oid}".encode("utf-8")
+    low = cpm.EXPECTED_AMOUNT_CAD / 2.0  # half the expected → must be rejected
+    fake_html = f"Amount: ${low:.2f} (CAD) Message: {oid}".encode("utf-8")
     raw = b"From: notify@payments.interac.ca\r\nContent-Type: text/html\r\n\r\n" + fake_html
     with cpm._conn() as c:
         outcome = cpm._process_single_email(c, "test-uid-2", raw)

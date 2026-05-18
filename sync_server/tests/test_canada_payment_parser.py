@@ -60,10 +60,13 @@ def test_parse_larger_amount():
     assert r["sender_name"] == "Jane Doe"
 
 
-def test_parse_no_message_field_falls_back_to_any_8_digits():
+def test_parse_no_message_field_does_not_fall_back():
+    # No "Message:" label → order_id MUST be None, even if there are
+    # incidental 8-digit numbers in the body. This guards against
+    # legitimate banking reference numbers / dates wrongly attaching to
+    # someone else's order.
     r = parse_interac_email(SAMPLE_INTERAC_HTML_NO_MESSAGE)
     assert r["amount_cad"] == 40.00
-    # No Message: label, no order id available
     assert r["order_id"] is None
 
 

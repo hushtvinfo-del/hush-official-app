@@ -103,6 +103,19 @@ def _init_schema() -> None:
             );
             """
         )
+        # Add message_id column for stable cross-session idempotency.
+        # The original uid-based key was unreliable because Gmail re-uses
+        # IMAP UIDs after label/folder operations — we'd skip a brand-new
+        # email because its UID happened to match a previously-processed
+        # email. Message-ID is RFC-2822-globally-unique and stable forever.
+        try:
+            c.execute("ALTER TABLE canada_processed_emails ADD COLUMN message_id TEXT")
+        except sqlite3.OperationalError:
+            pass  # already added
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS canada_processed_emails_msgid_idx "
+            "ON canada_processed_emails(message_id)"
+        )
 
 
 @contextmanager
@@ -185,12 +198,12 @@ def parse_interac_email(raw_html_or_text: str) -> dict:
         oid_m = _ORDER_ID_RE.search(msg_tail)
         if oid_m:
             order_id = oid_m.group(1)
-    # Fallback: any 8-digit number in the body (less safe — only used if no
-    # explicit Message: label was matched).
-    if not order_id:
-        oid_m = _ORDER_ID_RE.search(flat)
-        if oid_m:
-            order_id = oid_m.group(1)
+    # NO fallback: if there is no explicit "Message:" label with an 8-digit
+    # value, we treat the email as having NO order id. The previous
+    # any-8-digit-substring fallback caused legitimate Interac transfers
+    # for unrelated business activity (banking reference numbers, dates,
+    # bank-account hashes, etc.) to wrongly attach to a real order — which
+    # could grant licenses to the wrong xtream_username.
 
     sender = None
     sm = _SENT_FROM_RE.search(flat)
@@ -322,19 +335,38 @@ def _imap_connect() -> Optional[imaplib.IMAP4_SSL]:
         return None
 
 
-def _already_processed(c, uid: str) -> bool:
-    return c.execute(
-        "SELECT 1 FROM canada_processed_emails WHERE uid=?", (uid,)
-    ).fetchone() is not None
+def _already_processed(c, uid: str, message_id: Optional[str]) -> bool:
+    """Has this email already been processed?
+
+    Primary idempotency key is the RFC-2822 Message-ID header — globally
+    unique, stable forever, immune to Gmail's IMAP-UID re-assignment quirks.
+    Falls back to the UID for very old rows that pre-date the message_id
+    column.
+    """
+    if message_id:
+        row = c.execute(
+            "SELECT 1 FROM canada_processed_emails WHERE message_id=?",
+            (message_id,),
+        ).fetchone()
+        if row is not None:
+            return True
+    # IMPORTANT: do NOT fall back to uid-only matching. Gmail re-uses UIDs
+    # after label/folder operations, which means a brand-new email can land
+    # at the same UID as one we processed days ago and get incorrectly
+    # skipped. Treating "unknown message_id" as "never processed" is the
+    # safe default — the downstream order-status check (`already_paid`)
+    # prevents double-granting if we do re-process the same payment.
+    return False
 
 
-def _record_processed(c, uid: str, order_id: Optional[str], amount: Optional[float],
-                      sender: Optional[str], outcome: str) -> None:
+def _record_processed(c, uid: str, message_id: Optional[str], order_id: Optional[str],
+                      amount: Optional[float], sender: Optional[str], outcome: str) -> None:
     c.execute(
         """INSERT OR REPLACE INTO canada_processed_emails
-           (uid, processed_at, order_id, amount, sender, outcome)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (uid, _now_ms(), order_id, f"{amount:.2f}" if amount else None, sender, outcome),
+           (uid, message_id, processed_at, order_id, amount, sender, outcome)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (uid, message_id, _now_ms(), order_id,
+         f"{amount:.2f}" if amount else None, sender, outcome),
     )
 
 
@@ -342,6 +374,7 @@ def _process_single_email(c, uid: str, raw_msg_bytes: bytes) -> str:
     """Parse one email, reconcile against orders. Returns an outcome tag."""
     msg = email.message_from_bytes(raw_msg_bytes)
     from_addr = (msg.get("From") or "").lower()
+    message_id = (msg.get("Message-ID") or msg.get("Message-Id") or "").strip().strip("<>")
     if INTERAC_SENDER not in from_addr:
         return "skipped_not_interac"
     body = _extract_email_body(msg)
@@ -352,12 +385,12 @@ def _process_single_email(c, uid: str, raw_msg_bytes: bytes) -> str:
 
     if amount is None or amount < EXPECTED_AMOUNT_CAD - 0.01:
         log.info("Interac email uid=%s amount=%s < expected — skipping", uid, amount)
-        _record_processed(c, uid, order_id, amount, sender_name, "amount_too_low")
+        _record_processed(c, uid, message_id, order_id, amount, sender_name, "amount_too_low")
         return "amount_too_low"
 
     if not order_id:
         log.info("Interac email uid=%s has no parseable order id", uid)
-        _record_processed(c, uid, order_id, amount, sender_name, "no_order_id")
+        _record_processed(c, uid, message_id, order_id, amount, sender_name, "no_order_id")
         return "no_order_id"
 
     row = c.execute(
@@ -365,11 +398,11 @@ def _process_single_email(c, uid: str, raw_msg_bytes: bytes) -> str:
     ).fetchone()
     if row is None:
         log.info("Interac email uid=%s references unknown order_id=%s", uid, order_id)
-        _record_processed(c, uid, order_id, amount, sender_name, "unknown_order")
+        _record_processed(c, uid, message_id, order_id, amount, sender_name, "unknown_order")
         return "unknown_order"
 
     if row["status"] == "paid":
-        _record_processed(c, uid, order_id, amount, sender_name, "already_paid")
+        _record_processed(c, uid, message_id, order_id, amount, sender_name, "already_paid")
         return "already_paid"
 
     # Reconcile.
@@ -380,7 +413,7 @@ def _process_single_email(c, uid: str, raw_msg_bytes: bytes) -> str:
         (now, f"{amount:.2f}", sender_name, uid, order_id),
     )
     _grant_license(c, row["xtream_username"], now, order_id)
-    _record_processed(c, uid, order_id, amount, sender_name, "paid")
+    _record_processed(c, uid, message_id, order_id, amount, sender_name, "paid")
     log.info("Interac payment matched: order_id=%s user=%s amount=%.2f",
              order_id, row["xtream_username"], amount)
     return "paid"
@@ -405,14 +438,22 @@ def _imap_scan_once() -> dict:
             for uid_bytes in uids:
                 uid = uid_bytes.decode("ascii", errors="ignore")
                 summary["checked"] += 1
-                if _already_processed(c, uid):
-                    continue
                 try:
                     typ2, msg_data = m.fetch(uid_bytes, "(RFC822)")
                     if typ2 != "OK" or not msg_data or not msg_data[0]:
                         summary["errors"] += 1
                         continue
                     raw = msg_data[0][1]
+                    # Cheap idempotency probe BEFORE we parse the body:
+                    # extract just the Message-ID header so we can skip
+                    # already-processed emails without re-running the
+                    # regex/HTML pipeline. UID is no longer trusted (Gmail
+                    # re-uses UIDs after folder/label ops).
+                    msg_for_id = email.message_from_bytes(raw)
+                    mid = (msg_for_id.get("Message-ID")
+                           or msg_for_id.get("Message-Id") or "").strip().strip("<>")
+                    if _already_processed(c, uid, mid):
+                        continue
                     outcome = _process_single_email(c, uid, raw)
                     if outcome == "paid":
                         summary["matched"] += 1
