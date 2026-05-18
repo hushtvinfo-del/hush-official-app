@@ -1,5 +1,60 @@
 # HushTV — Product Requirements Document
 
+## v1.44.88 — "Resync ALL to Base44" admin button (LIVE) — 2026-02-08
+
+### What landed
+One-click button in `https://hushtv.xyz/admin → Payments tab` next to Export CSV. Loops every paid license, pushes each to Base44 with a deterministic order_id keyed on `(username, expires_at_ms)` so Base44 dedupes correctly — no spam emails on repeat runs.
+
+### How idempotency works
+- order_id format: `RESYNC_{xtream_username}_{expires_at_ms}`
+- Re-running the bulk sync with no license changes → Base44 returns `duplicate: true` for every row → no email re-fires.
+- If a user's license was extended since last resync → expires_at changes → new order_id → Base44 records as a new payment + fires fresh email. Exactly the right behavior.
+
+### Failure handling
+Per-row outcomes bucketed in the summary:
+- `synced` — Base44 returned success
+- `duplicates` — synced but Base44 dedupe caught it (no email)
+- `permanent_failures` — 4xx like "user not found in Base44" (skip, don't retry)
+- `transient_failures` — 5xx/network (would auto-retry on inline path; here just reported)
+
+Plus a top-level `canada_admin_events` row with the summary line so the bulk action is audit-trackable.
+
+### UI behavior
+- Confirmation dialog explains: "Safe to run anytime — Base44 dedupes by order_id, so users won't get spam emails. Only users whose licenses changed since their last sync will trigger a fresh email."
+- Button disables + shows "Syncing…" during the call.
+- Toast shows `synced/total (duplicates deduped, failures fail)` on success.
+- On any failure, toast goes red and full `errors[]` array is logged to browser console.
+
+### Live test results
+First run with 4 licenses in DB (1 real Base44 customer + 3 legacy test users):
+```json
+{
+  "total": 4, "synced": 1, "duplicates": 0,
+  "permanent_failures": 3, "transient_failures": 0,
+  "errors": [3 × "No user found with xtream_username: ..."]
+}
+```
+✓ Real customer (14756839) synced clean
+✓ Legacy non-Base44 users correctly flagged as permanent failures
+
+After cleaning the legacy test licenses from `canada_licenses` (their `canada_orders` rows preserved as accounting record), re-run:
+```json
+{
+  "total": 1, "synced": 1, "duplicates": 1,
+  "permanent_failures": 0, "transient_failures": 0,
+  "errors": []
+}
+```
+✓ **Idempotent — 1 synced, 1 deduped, 0 errors. Zero spam emails fired.**
+
+### Files modified
+- `/app/sync_server/canada_payment_module.py` — `POST /api/admin/canada/base44/resync-all` endpoint. Deterministic order_id scheme, per-row outcome buckets, top-level audit row.
+- `/app/_buildenv/canada_admin.html` — "Resync ALL to Base44" button in Payments toolbar + `resyncAllBase44()` JS with confirm dialog, busy-state button, summary toast.
+- Both deployed.
+
+---
+
+
 ## v1.44.87 — Manual admin grants & extends now push to Base44 — 2026-02-08
 
 ### Gap discovered

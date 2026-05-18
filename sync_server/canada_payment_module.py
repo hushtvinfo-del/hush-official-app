@@ -1697,6 +1697,92 @@ def admin_base44_resync(
     return result
 
 
+@admin_router.post("/base44/resync-all")
+def admin_base44_resync_all(
+    x_admin_token: Optional[str] = Header(None),
+    actor: Optional[str] = "admin-bulk",
+) -> dict:
+    """Bulk-resync every PAID license to Base44.
+
+    Use after a Base44 migration, outage, or whenever you suspect
+    drift between HushTV and Base44.
+
+    Idempotency: order_id is deterministic per (user, expires_at) —
+    re-running with no license changes hits Base44's dedupe and
+    returns `duplicate: true` for every row (no spam emails). If a
+    user's license was extended since last resync, their order_id
+    changes, so Base44 records a new payment + fires a fresh email.
+    """
+    _check_admin(x_admin_token)
+    actor = actor or "admin-bulk"
+    summary = {
+        "total": 0, "synced": 0, "duplicates": 0,
+        "permanent_failures": 0, "transient_failures": 0,
+        "errors": [],
+    }
+    with _conn() as c:
+        rows = c.execute(
+            """SELECT l.xtream_username, l.paid_at, l.expires_at, l.last_order_id,
+                  (SELECT MAX(o.interac_amount) FROM canada_orders o
+                     WHERE o.xtream_username=l.xtream_username
+                       AND o.status='paid') AS last_amount,
+                  (SELECT o.interac_sender FROM canada_orders o
+                     WHERE o.xtream_username=l.xtream_username
+                       AND o.status='paid'
+                     ORDER BY o.paid_at DESC LIMIT 1) AS last_sender
+               FROM canada_licenses l
+               ORDER BY l.expires_at DESC""",
+        ).fetchall()
+
+    for r in rows:
+        user = r["xtream_username"]
+        expires_at_ms = int(r["expires_at"])
+        # Deterministic per (user, expires_at) — Base44 dedupes on a
+        # repeat run, but a fresh extend changes the expires_at and so
+        # the order_id (→ new payment row + new confirmation email).
+        order_id = f"RESYNC_{user}_{expires_at_ms}"
+        amount = float(r["last_amount"]) if r["last_amount"] else 0.0
+        sender = _clean_sender(r["last_sender"]) if r["last_sender"] else f"resync-all by {actor}"
+        result = base44_module.resync_one(
+            xtream_username=user,
+            order_id=order_id,
+            amount_cad=amount,
+            paid_at_ms=int(r["paid_at"]),
+            expires_at_ms=expires_at_ms,
+            interac_sender=sender,
+            actor=actor,
+        )
+        summary["total"] += 1
+        if result.get("ok"):
+            summary["synced"] += 1
+            if result.get("duplicate"):
+                summary["duplicates"] += 1
+        else:
+            http = result.get("http", 0)
+            if http in (0,) or (isinstance(http, int) and http >= 500) or http == 429:
+                summary["transient_failures"] += 1
+            else:
+                summary["permanent_failures"] += 1
+            summary["errors"].append({
+                "xtream_username": user,
+                "error": result.get("error", "unknown"),
+                "http": http,
+            })
+    # Top-level audit row so you can see the bulk action in /events.
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO canada_admin_events (at, action, xtream_username, actor, detail) "
+            "VALUES (?, 'base44_resync_all', NULL, ?, ?)",
+            (
+                _now_ms(), actor,
+                f"total={summary['total']} synced={summary['synced']} "
+                f"dup={summary['duplicates']} perm_fail={summary['permanent_failures']} "
+                f"transient={summary['transient_failures']}"[:500],
+            ),
+        )
+    return summary
+
+
 # Schema init on import so `import canada_payment_module` is enough.
 try:
     _init_schema()

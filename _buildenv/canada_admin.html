@@ -215,6 +215,10 @@
         class="rounded-lg bg-cyan-500 text-slate-950 px-4 py-2 text-sm font-black hover:bg-cyan-400">
         ⬇ Export CSV
       </button>
+      <button onclick="resyncAllBase44()" data-testid="canada-resync-all"
+        class="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/20" title="Re-sync every paid license to Base44. Safe to re-run — Base44 dedupes by order_id.">
+        ⟲ Resync ALL to Base44
+      </button>
     </div>
 
     <div class="rounded-xl border border-slate-700 bg-slate-900/50 overflow-x-auto" data-testid="canada-payments-table">
@@ -651,6 +655,31 @@ async function doBase44Resync(orderId, username) {
     }
     loadPayments();
   } catch (e) { toast(e.message, "error"); }
+}
+
+async function resyncAllBase44() {
+  if (!confirm(
+    "Resync EVERY paid license to Base44?\n\n" +
+    "Safe to run anytime — Base44 dedupes by order_id, so users won't get spam emails. " +
+    "Only users whose licenses changed since their last sync (e.g. recent extends) will trigger a fresh email.\n\n" +
+    "Continue?"
+  )) return;
+  const btn = document.querySelector('[data-testid="canada-resync-all"]');
+  if (btn) { btn.disabled = true; btn.textContent = "Syncing…"; }
+  try {
+    const r = await api("POST", "/base44/resync-all?actor=hushadmin");
+    const msg = `${r.synced}/${r.total} synced (${r.duplicates} deduped, ${r.permanent_failures} fail)`;
+    if (r.permanent_failures > 0) {
+      toast(msg + " — check audit log for details", "error");
+      console.warn("Resync errors:", r.errors);
+    } else {
+      toast("✓ " + msg, "success");
+    }
+    loadPayments();
+  } catch (e) { toast(e.message, "error"); }
+  finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = "⟲ Resync ALL to Base44"; }
+  }
 }
 $("pay-range").addEventListener("change", loadPayments);
 
