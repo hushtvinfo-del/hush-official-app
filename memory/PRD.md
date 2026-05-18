@@ -1,5 +1,81 @@
 # HushTV — Product Requirements Document
 
+## v1.44.87 — Manual admin grants & extends now push to Base44 — 2026-02-08
+
+### Gap discovered
+User manually granted a 12-month license to xtream_username `14756839` via the Approve/Lookup tab. Expected Base44 to also update + fire the confirmation email. It didn't.
+
+### Why
+Previous v1.44.84 only wired the Base44 push into `_apply_payment()` — the IMAP poller path. The two manual admin paths (`POST /admin/canada/grant` and `POST /admin/canada/license/{u}/extend`) were NOT wired. So Interac payments synced; admin clicks didn't. Confirmed via:
+- `audit events for 14756839` returned `events: []` (no base44_sync row)
+- `base44/queue` returned `count: 0` (no retry attempted)
+
+### Fix
+Added the same `base44_module.record_payment_sync()` call to both manual endpoints with appropriate metadata:
+- **`/admin/canada/grant`** → order_id = `ADMIN_GRANT_{now_ms}`, sender = "admin grant ({months}m)"
+- **`/admin/canada/license/{u}/extend`** → order_id = `ADMIN_EXTEND_{now_ms}`, sender = "admin extend (+{days}d) by {actor}"
+
+Order IDs are unique per click so Base44 dedupe doesn't squash repeat manual grants for renewals. Failures are best-effort and don't block the local license (same pattern as Interac path). Permanent failures (4xx like "user not found in Base44") log to audit but don't retry forever.
+
+### Back-fill for user 14756839
+Pushed manually to Base44 with the back-fill payload. Base44 returned:
+```json
+{ "success": true, "user_id": "6a0b37c54cb95f6ff2187086", "duplicate": false }
+```
+So the user's Base44 record is now updated with `cdn_fee_paid` + the branded confirmation email has been sent.
+
+### Verified going-forward
+- ✓ Fresh admin grant for fake user `___autopush_e2e___` → Base44 push fired immediately
+- ✓ Audit event logged: `base44_sync ... PERMANENT FAIL (http=404). err=No user found with xtream_username: ___autopush_e2e___`
+- ✓ Permanent failure correctly NOT retried (would have looped 24h previously)
+- ✓ Test data cleaned
+
+### Files modified
+- `/app/sync_server/canada_payment_module.py` — added Base44 push to `admin_grant()` and `admin_extend()`. Deployed.
+
+### One observation worth documenting
+The admin endpoints push with `amount_cad=0.0` (manual grants don't have an Interac amount). Base44's confirmation email template may want to handle this differently (e.g. "comp account" wording vs "$40 paid"). User may want to ask Base44 to split the template logic on `amount_cad == 0`.
+
+---
+
+
+## v1.44.86 — Webhook timestamp parser accepts ISO 8601 (Base44-compatible) — 2026-02-08
+
+### Why
+Base44 confirmed they ship timestamps as **ISO 8601 UTC** (not unix seconds). My initial webhook expected unix seconds in `X-Base44-Timestamp`. Fixed the parser to accept BOTH formats AND fall back to body's `occurred_at` when the header is missing.
+
+### New behaviour
+- `X-Base44-Timestamp` header is **optional** — if absent, we use `occurred_at` from the body.
+- Value can be any of: unix seconds (`1779200000`), unix ms (`1779200000000`), ISO 8601 UTC (`2026-02-08T20:00:00Z` or with milliseconds `2026-02-08T20:00:00.123Z`).
+- If neither header nor `occurred_at` is present, returns 400 (replay protection requires *some* timestamp).
+- ±5 min drift tolerance unchanged.
+
+### Implementation
+Added `_parse_webhook_timestamp(value)` helper in `canada_payment_module.py`. Detects digit-only inputs (unix), checks digit count to disambiguate seconds vs milliseconds (≥10^12 → ms), otherwise tries `datetime.fromisoformat()` with `Z` → `+00:00` normalization for Python <3.11 compatibility. Returns `None` if unparseable → 400.
+
+### Verified with realistic Base44-style payloads (4/4)
+- ✓ ISO 8601 in body's `occurred_at`, NO `X-Base44-Timestamp` header — grant succeeded
+- ✓ ISO 8601 in `X-Base44-Timestamp` header — grant succeeded
+- ✓ Revoke with ISO timestamp — license deleted
+- ✓ Stale ISO timestamp (1h old) — 401 "drift 3600s exceeds tolerance"
+- ✓ Admin inbox endpoint surfaces all 3 events with status pills
+- ✓ Test data cleaned (production is back to 3 real licenses, empty inbox)
+
+### Base44 status confirmation (from their msg)
+- ✅ `grantCdnFeeManually` action created → fires `cdn_fee_granted_manually` webhook
+- ✅ `revokeCdnFee` action created → fires `cdn_fee_revoked` webhook
+- ✅ CDN_WEBHOOK_SECRET stored on their side
+- ✅ HMAC-SHA256 signing
+- ✅ 24h exponential-backoff retry (matches our idempotency guarantee)
+- ⏳ `xtream_username_changed` event not built yet — they'll add when needed. Our code already handles it forward-compatibly.
+
+### Files modified
+- `/app/sync_server/canada_payment_module.py` — replaced `int(x_base44_timestamp)` block with `_parse_webhook_timestamp()`, made header optional, added fallback to `occurred_at`.
+- Deployed to `/opt/hushtv-sync/` on 66.163.113.147; service restarted.
+
+---
+
+
 ## v1.44.85 — Base44 → HushTV reverse webhook (LIVE) — 2026-02-08
 
 ### Closed the loop

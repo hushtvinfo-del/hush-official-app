@@ -806,6 +806,33 @@ def _inbox_persist(
     )
 
 
+def _parse_webhook_timestamp(value: str) -> Optional[int]:
+    """Parse the webhook timestamp into UTC unix seconds. Accepts:
+      • Unix seconds (string of digits) — e.g. "1779200000"
+      • Unix milliseconds — e.g. "1779200000000"
+      • ISO 8601 UTC — e.g. "2026-02-08T20:00:00Z" or "2026-02-08T20:00:00.123Z"
+    Base44 sends ISO 8601; older test tooling sends unix. Be permissive.
+    Returns None if unparseable."""
+    if not value:
+        return None
+    v = value.strip()
+    # Numeric?
+    if v.lstrip("-").isdigit():
+        n = int(v)
+        # Heuristic: >= 13 digits → milliseconds; coerce to seconds.
+        return n // 1000 if n > 10**12 else n
+    # ISO 8601 — Python 3.11+ handles trailing "Z" natively, but older
+    # versions need it swapped to "+00:00" for fromisoformat.
+    import datetime as _dt
+    try:
+        iso = v.rstrip()
+        if iso.endswith("Z"):
+            iso = iso[:-1] + "+00:00"
+        return int(_dt.datetime.fromisoformat(iso).timestamp())
+    except (ValueError, TypeError):
+        return None
+
+
 @webhook_router.post("/webhook")
 async def base44_webhook(
     request: Request,
@@ -820,21 +847,25 @@ async def base44_webhook(
         log.warning("base44 webhook: bad signature (sig=%s)", (x_base44_signature or "")[:16])
         raise HTTPException(401, "invalid signature")
 
-    # 2. Timestamp window — protect against replays.
-    if x_base44_timestamp:
-        try:
-            ts = int(x_base44_timestamp)
-            drift = abs(int(time.time()) - ts)
-            if drift > WEBHOOK_TS_TOLERANCE_S:
-                raise HTTPException(401, f"timestamp drift {drift}s exceeds tolerance")
-        except ValueError:
-            raise HTTPException(400, "bad X-Base44-Timestamp")
-
-    # 3. Parse body.
+    # 2. Parse body up-front so we can fall back to occurred_at for the
+    #    replay-protection timestamp if Base44 omits the header.
     try:
         body = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         raise HTTPException(400, f"bad JSON: {e}")
+
+    # 3. Timestamp window — accept either the X-Base44-Timestamp header
+    #    OR the body's `occurred_at`. Both unix-seconds and ISO 8601
+    #    are supported. At least one must be present for replay
+    #    protection to do anything.
+    ts_str = x_base44_timestamp or body.get("occurred_at") or ""
+    ts = _parse_webhook_timestamp(str(ts_str))
+    if ts is None:
+        raise HTTPException(400, "missing or unparseable timestamp "
+                                  "(need X-Base44-Timestamp header or occurred_at body field)")
+    drift = abs(int(time.time()) - ts)
+    if drift > WEBHOOK_TS_TOLERANCE_S:
+        raise HTTPException(401, f"timestamp drift {drift}s exceeds tolerance")
 
     event_id = (body.get("event_id") or "").strip()
     event_type = (body.get("event_type") or "").strip()
@@ -1001,6 +1032,23 @@ def admin_grant(req: AdminGrantReq, x_admin_token: Optional[str] = Header(None))
                   last_order_id=excluded.last_order_id""",
             (user, now, new_expires, "ADMIN_GRANT"),
         )
+        # v1.44.87 — manual admin grants also push to Base44 so the
+        # user record + confirmation email flow is identical to Interac
+        # payments. The Order ID we send is unique per grant (using the
+        # now-timestamp) so Base44's dedupe doesn't squash repeat manual
+        # grants for renewals.
+        try:
+            base44_module.record_payment_sync(
+                c,
+                xtream_username=user,
+                order_id=f"ADMIN_GRANT_{now}",
+                amount_cad=0.0,  # manual grant — no Interac amount
+                paid_at_ms=now,
+                expires_at_ms=new_expires,
+                interac_sender=f"admin grant ({req.months}m)",
+            )
+        except Exception as e:
+            log.exception("base44 push failed for admin_grant user=%s: %s", user, e)
         row2 = _get_license_row(c, user)
         return {"granted": True, "license": _serialize_license(row2)}
 
@@ -1399,6 +1447,19 @@ def admin_extend(
             "VALUES (?, 'extend', ?, ?, ?)",
             (now, user, req.actor or "admin", f"+{req.days}d reason={req.reason or ''}"),
         )
+        # v1.44.87 — manual admin extends also push to Base44.
+        try:
+            base44_module.record_payment_sync(
+                c,
+                xtream_username=user,
+                order_id=f"ADMIN_EXTEND_{now}",
+                amount_cad=0.0,
+                paid_at_ms=now,
+                expires_at_ms=new_expires,
+                interac_sender=f"admin extend (+{req.days}d) by {req.actor or 'admin'}",
+            )
+        except Exception as e:
+            log.exception("base44 push failed for admin_extend user=%s: %s", user, e)
         row2 = _get_license_row(c, user)
         return {"extended": True, "license": _serialize_license(row2)}
 
