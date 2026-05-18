@@ -1,0 +1,54 @@
+{
+  "summary": "Live black-box pytest suite (22 tests) for the HushTV Canada $40 CAD/year Interac payment gateway against https://hushtv.xyz/. 22/22 PASSED. Covers health, order create + idempotency (reuse), case normalization, empty-username 400/422, order status (known + 404), public license lookup, admin auth (missing/wrong token → 401), grant 12-months (~365 days), grant extension (1-month additive), revoke, admin listings (orders + licenses), force IMAP poll (round-trip validates Gmail credentials), plus regression on /api/sports/home and /api/sync/health.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/canada/order/create (real Interac email arrival)",
+        "issue": "Could not exercise the actual pay-by-email branch black-box (would require sending a real Interac e-Transfer). Existing /app/sync_server/tests/test_canada_payment_api.py covers it locally via synthetic email bytes fed to _process_single_email(). Force-poll endpoint returned checked=59,matched=0,errors=0 — proves IMAP login + inbox scan + parser path all work; only the actual amount/Order-ID match could not be triggered."
+      },
+      {
+        "endpoint": "GET /api/canada/order/status/{order_id}",
+        "issue": "Successful (paid) status response was not exercised end-to-end against the live gateway — would require a real Interac deposit. Admin-grant path (which uses the same canada_licenses row) IS verified."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_canada_payment_live.py",
+    "/app/test_reports/pytest/canada_live_results.xml"
+  ],
+  "action_items": [
+    "(Optional, low priority) Consider returning a 200 with a clear error body for empty xtream_username on POST /api/canada/order/create — currently FastAPI/Pydantic returns 422 for missing key and the explicit `if not user: raise 400` returns 400 for empty-string. Both work; just inconsistent. Tests accept both.",
+    "(Code-review, low priority) start_poller() spawns a daemon Thread that sleeps 30 s between scans; if FastAPI shuts down mid-IMAP the connection is leaked. Acceptable for a long-running prod service; revisit if you ever do graceful shutdown.",
+    "(Code-review, low priority) /api/admin/canada/poll is not rate-limited. If exposed beyond ops it could be used to hammer Gmail's IMAP and risk a temporary ban. It currently requires the admin token so risk is low, but worth a per-token cooldown (e.g., 1 call / 10 s).",
+    "(Doc) The /order/create response shape varies — `already_licensed:true` (no `order` key) vs `reused:true` vs `reused:false`. Android client must handle all three. Suggest documenting in the OpenAPI schema."
+  ],
+  "critical_code_review_comments": [
+    "Idempotency works correctly: duplicate POST /api/canada/order/create for the same xtream_username re-uses the same pending Order ID until the 60-minute TTL expires. Verified live (test_create_reuses_existing_pending_order).",
+    "Username case normalization is enforced server-side (.strip().lower()) on all three writer paths: order/create, admin/grant, admin/revoke. Order/status response echoes lowercase. Verified.",
+    "Grant is additive — second grant adds months ON TOP of existing expiry rather than resetting. Verified delta_ms ∈ (25d, 35d) for a 1-month top-up. Means an admin running `/grant months=12` twice gives a 24-month license, which is correct but worth flagging in admin docs.",
+    "Already-licensed users hitting /order/create get a short-circuit `already_licensed:true` response with the license blob and NO new Order ID — prevents needless Order ID inflation. Good design. Verified.",
+    "_check_admin returns 503 if ADMIN_TOKEN env var is unset on the server but 401 if token is wrong. Current deployment has the token set (verified — 401 is what we get for wrong token, not 503). Good.",
+    "IMAP scan looks back 7 days and de-dupes by UID via canada_processed_emails table → safe against duplicate credits even if the poller crashes and reprocesses old mail. Verified that 59 emails were checked with 0 errors and 0 (re)matches on a re-poll.",
+    "Order ID generator uses random.randint with collision retry — re-check needed only at scale (8-digit space = 100M, plenty of headroom for 40 CAD/year customers).",
+    "SQLite WAL + isolation_level=None + RLock — fine for a single-process FastAPI server. If they ever scale horizontally this becomes a hard limit; document that canada_payment_module is single-instance only."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_canada_payment_live.py (new — 22 live black-box tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22 passed in 3.1 s)",
+    "frontend": "N/A (testing_type: backend only)"
+  },
+  "test_credentials": "Admin token X-Admin-Token: b4010e5b9271baa489f3cbaabb2baf58f96c814146054a7f. All public canada endpoints require no auth. No user/password creds in scope for this module.",
+  "seed_data_creation": "Each test run creates ~7 throwaway xtream_usernames of the form qa_<tag>_<unix_ts>_<pid>. Pending orders auto-expire after 60 minutes. Licenses granted to qa_* users during the run are revoked by a session-scoped autouse fixture (_qa_cleanup) so the canada_licenses table stays clean. Verified by running the suite twice — no leftover qa_* licenses.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use /app/backend/tests/test_canada_payment_live.py as the live regression suite for the Canada Interac gateway. It is fully self-contained (no MongoDB, no fixtures beyond a requests.Session) and targets https://hushtv.xyz directly. To re-run: `python -m pytest /app/backend/tests/test_canada_payment_live.py -v`. The session cleanup fixture revokes all qa_* licenses on exit so it is safe to re-run repeatedly. The only branches NOT covered live are (a) successful paid email reconciliation (requires real Interac e-Transfer) and (b) order/status with status=paid via real email — both ARE covered by /app/sync_server/tests/test_canada_payment_api.py via synthetic email bytes. IMAP force-poll confirmed Gmail auth + scanning works in production: checked=59,matched=0,errors=0.",
+  "rca of the issue": "No live bug. All 22 tests green on first run. The only black-box gap is real-Interac email arrival, which is provably mocked-locally by test_canada_payment_api.py::test_license_unpaid_then_paid_via_email_match and confirmed-alive in prod by the force-poll returning errors=0 against 59 recent inbox messages — i.e. Gmail IMAP auth + parser pipeline are healthy; the only thing that hasn't fired in this run is an actual amount/Order-ID match."
+}

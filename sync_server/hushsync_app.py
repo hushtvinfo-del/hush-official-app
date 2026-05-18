@@ -151,6 +151,17 @@ def _startup() -> None:
     except Exception as e:
         log.exception("sports module failed to mount: %s", e)
 
+    # Canada $40 CDN Proxy Fee module — Interac e-Transfer auto-verify.
+    # Routes mounted under /api/canada/* and /api/admin/canada/*.
+    try:
+        import canada_payment_module  # type: ignore
+        app.include_router(canada_payment_module.router)
+        app.include_router(canada_payment_module.admin_router)
+        canada_payment_module.start_poller()
+        log.info("HushTV canada payment module mounted, poller running")
+    except Exception as e:
+        log.exception("canada payment module failed to mount: %s", e)
+
 
 @app.get("/api/sync/health")
 def health() -> Dict[str, Any]:

@@ -118,7 +118,9 @@ class MainActivity : ComponentActivity() {
                         androidx.compose.runtime.CompositionLocalProvider(
                             com.hushtv.tv.ui.LocalIsTouchDevice provides isTouchDevice,
                         ) {
-                            if (isTv) AppContent() else MobileApp()
+                            com.hushtv.tv.ui.canada.CanadaLicenseGate {
+                                if (isTv) AppContent() else MobileApp()
+                            }
                         }
                     }
                 }
