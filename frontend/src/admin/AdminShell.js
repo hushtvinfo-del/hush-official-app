@@ -19,7 +19,7 @@ import { useEffect, useState } from "react";
 import {
   LayoutDashboard, Tv, Megaphone, Palette, SlidersHorizontal,
   Users, ScrollText, LogOut, Menu, ChevronsLeft, ChevronsRight,
-  Stethoscope, HardDrive,
+  Stethoscope, HardDrive, ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/admin/AuthContext";
 import ResellerSwitcher from "@/admin/components/ResellerSwitcher";
@@ -34,6 +34,7 @@ const NAV = [
   { to: "/config", label: "App Config", icon: SlidersHorizontal },
   { to: "/resellers", label: "Resellers", icon: Users, superOnly: true },
   { to: "/dvr-cluster", label: "DVR Cluster", icon: HardDrive, superOnly: true },
+  { to: "/canada-licenses", label: "Canada Licenses", icon: ShieldCheck, superOnly: true },
   { to: "/audit", label: "Audit Log", icon: ScrollText },
 ];
 
