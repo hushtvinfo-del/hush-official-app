@@ -134,6 +134,32 @@ android {
                 "\"official\"",
             )
         }
+        create("canada") {
+            dimension = "channel"
+            // v1.44.66 — Canada-branded clone of the Official build.
+            // Functionally identical to Official; only difference is:
+            //   • applicationId  → com.hushtv.tv.canada
+            //   • App label      → "HushTV Canada"  (via res override)
+            //   • OTA manifest   → /version-canada.json
+            //   • APK URL        → /hushtv-canada.apk
+            // Installs side-by-side with Dev and Official on the same
+            // device. Same signing certificate so it'll auto-update
+            // cleanly from /hushtv-canada.apk.
+            applicationIdSuffix = ".canada"
+            // App label override lives at
+            // src/canada/res/values/strings.xml — Gradle resource
+            // merging picks the flavor-specific value over main's.
+            buildConfigField(
+                "String",
+                "UPDATE_MANIFEST_URL",
+                "\"https://hushtv.xyz/version-canada.json\"",
+            )
+            buildConfigField(
+                "String",
+                "UPDATE_CHANNEL",
+                "\"canada\"",
+            )
+        }
     }
     buildFeatures {
         compose = true

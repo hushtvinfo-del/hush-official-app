@@ -1,6 +1,27 @@
 # HushTV — Product Requirements Document
 
-## v1.44.65 — Reverted aggressive recovery; matches mini-player stability (Dev + Official LIVE) — 2026-02-08
+## v1.44.66 — HushTV Canada flavor added (LIVE) — 2026-02-08
+
+### What landed
+Third distribution channel alongside Dev and Official. Same v1.44.65 code, branded "HushTV Canada", own applicationId so it installs side-by-side with the other two on the same device.
+
+### URLs
+- **APK**: https://hushtv.xyz/hushtv-canada.apk  (24 MB, versionCode 465 / 1.44.65-debug)
+- **OTA manifest**: https://hushtv.xyz/version-canada.json
+- **applicationId**: `com.hushtv.tv.canada.debug` (`.canada` flavor suffix + `.debug` build-type suffix)
+- **Launcher label**: `HushTV Canada`
+- **Signing**: same `hushtv` keystore as Dev / Official — future Canada-channel OTAs install cleanly.
+
+### Files added
+- NEW `_buildenv/version-canada.json` — OTA manifest served at `/version-canada.json`.
+- NEW `_buildenv/build-canada.sh` — build & deploy script for this flavor.
+- NEW `app/src/canada/res/values/strings.xml` — overrides `app_name` → "HushTV Canada".
+- MODIFIED `app/build.gradle.kts` — added `canada` product flavor.
+
+### How updates work
+The Canada APK auto-updates only from `/version-canada.json`. Bumping versionCode there and uploading a new `/hushtv-canada.apk` is what triggers the OTA prompt on installed devices — independent of the Dev and Official update channels.
+
+## v1.44.65 — Reverted aggressive recovery — 2026-02-08
 
 ### Final shape of the recovery loop (back to stable behaviour)
 - **Buffer stall (live)**: 20 s threshold (was 4 s in v1.44.62-64, was 5 s historically).

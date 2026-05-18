@@ -1,0 +1,12 @@
+{
+  "versionCode": 465,
+  "versionName": "1.44.65",
+  "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
+  "mandatory": true,
+  "releasedAt": "2026-02-08",
+  "channel": "canada",
+  "changelog": [
+    "HushTV Canada — Canada-branded clone of the Official build. Functionally identical: same features, same Xtream login flow, same Moods & Themes catalog, same Sports rail. Installs side-by-side with HushTV / HushTV Official on the same device (separate applicationId: com.hushtv.tv.canada).",
+    "OTA updates pulled from https://hushtv.xyz/version-canada.json — this app updates itself independently of the Dev and Official channels."
+  ]
+}

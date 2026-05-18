@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v1.44.66 — Canada-branded launcher label.
+
+  Same override pattern as src/dev and src/official: this flavor-
+  specific strings.xml supersedes the main `app_name` at build
+  time. App icon, theme, and feature set are identical to the
+  Official channel; this string + the .canada applicationId
+  suffix + the version-canada.json manifest URL are the only
+  things that differ.
+-->
+<resources>
+    <string name="app_name">HushTV Canada</string>
+</resources>
