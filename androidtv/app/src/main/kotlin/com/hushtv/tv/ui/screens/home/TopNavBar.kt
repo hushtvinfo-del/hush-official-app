@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SportsScore
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.outlined.Slideshow
@@ -106,7 +107,7 @@ fun topNavTabs(
     TopNavTab("live",     "Live TV",  Icons.Default.Tv,         "browse/$playlistId/live"),
     TopNavTab("movies",   "Movies",   Icons.Default.Movie,      "browse/$playlistId/movie"),
     TopNavTab("series",   "Series",   Icons.Outlined.Slideshow, "browse/$playlistId/series"),
-    TopNavTab("hushplus", "Hush+",    Icons.Default.Star,       "hushplus/$playlistId"),
+    TopNavTab("sports",   "Sports Guide", Icons.Default.SportsScore, "sports/$playlistId"),
     TopNavTab("requests", "Requests", Icons.Default.Inbox,      "requests/$playlistId", showBadge = requestsBadge),
     TopNavTab("search",   "Search",   Icons.Default.Search,     "search/$playlistId"),
 )

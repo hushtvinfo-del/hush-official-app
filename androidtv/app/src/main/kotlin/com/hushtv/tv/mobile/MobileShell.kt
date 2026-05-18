@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SportsScore
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
@@ -60,7 +61,13 @@ fun MobileShell(nav: NavController, playlistId: String) {
                 "movies" -> MobileBrowseScreen(nav, playlistId, "movie", inline = true)
                 "series" -> MobileBrowseScreen(nav, playlistId, "series", inline = true)
                 "live" -> MobileLiveHubScreen(nav, playlistId)
-                "hushplus" -> com.hushtv.tv.ui.hushplus.MobileHushPlusScreen(nav)
+                "sports" -> com.hushtv.tv.ui.screens.sports.TVSportsPage(
+                    nav = nav,
+                    playlistId = playlistId,
+                    firstItemFocus = androidx.compose.ui.focus.FocusRequester(),
+                    onUpFromRow = {},
+                    onDownFromRow = {},
+                )
                 "settings" -> MobileSettingsScreen(nav, playlistId)
                 else -> MobileHomeScreen(nav, playlistId)
             }
@@ -79,7 +86,7 @@ private fun MobileBottomNav(
         BottomItem("live", "Live", Icons.Default.LiveTv),
         BottomItem("movies", "Movies", Icons.Default.Movie),
         BottomItem("series", "Series", Icons.Default.Tv),
-        BottomItem("hushplus", "Hush+", Icons.Default.Star),
+        BottomItem("sports", "Sports", Icons.Default.SportsScore),
     )
     Row(
         Modifier

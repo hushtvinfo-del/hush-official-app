@@ -1,11 +1,13 @@
 {
-  "versionCode": 477,
-  "versionName": "1.44.77",
+  "versionCode": 478,
+  "versionName": "1.44.78",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
-  "mandatory": true,
+  "mandatory": false,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "FIXED: Step 2 content no longer drifts out of alignment with Steps 1 and 3 — every card now uses fixed-weight sections (badge / instruction / value) so the badges, instructions, labels, and values all sit at the EXACT same y-position regardless of how short or long the value text is."
+    "NEW: \"Sports Guide\" is now its own top-level menu tab (with a sports-score icon). Faster to reach the full live games + PPV grid — one click from anywhere in the app.",
+    "NEW: Hush+ Coming Soon preview lives on the Home screen right below Discover — a beautiful one-page showcase of HushVOD+, HushBooks+, HushArcade+, and HushTube+. No buttons, just a clean preview of what's launching alongside your HushTV subscription.",
+    "Mobile bottom-nav: Hush+ replaced with the live Sports surface."
   ]
 }

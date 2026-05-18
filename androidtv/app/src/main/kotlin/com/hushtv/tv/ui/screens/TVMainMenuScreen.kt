@@ -301,14 +301,12 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         buildList {
             if (hasCw) add("cw")
             add("discovery")
-            // v1.44.9 — sports needs to be in pageOrder so the
-            // page-up/page-down indicator chevrons + the slide-
-            // direction logic in AnimatedContent both know about it.
-            // Previously the page existed and rendered fine, but it
-            // wasn't part of pageOrder so ss_movies's onUpFromRow
-            // bypassed it entirely (skipped from streaming back to
-            // discovery).
-            add("sports")
+            // v1.44.78 — Hush+ is now a Coming-Soon home-page section
+            // (the live Sports surface moved to the top-nav tab where
+            // Hush+ used to live). Keeping it here directly under
+            // discovery puts the marketing/preview right where users
+            // already scroll down looking for "what's next".
+            add("hushplus")
             add("ss_movies")
             add("ss_series")
             add("collections")
@@ -537,9 +535,7 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         onClearAll = { clearAllPromptOpen = true },
                         onDownFromRow = { currentPage = "discovery" },
                     )
-                    "sports" -> com.hushtv.tv.ui.screens.sports.TVSportsPage(
-                        nav = nav,
-                        playlistId = playlistId,
+                    "hushplus" -> com.hushtv.tv.ui.hushplus.TVHushPlusComingSoonSection(
                         firstItemFocus = firstSportsFocus,
                         onUpFromRow = { currentPage = "discovery" },
                         onDownFromRow = { currentPage = "ss_movies" },
@@ -553,11 +549,10 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                         kindLabel = "STREAMING SERVICES · MOVIES",
                         kind = "movie",
                         firstItemFocus = firstSsMoviesFocus,
-                        // v1.44.9 — UP from streaming-movies returns
-                        // to Sports (the page above it in pageOrder),
-                        // not Discovery. Previously this skipped over
-                        // Sports entirely.
-                        onUpFromRow = { currentPage = "sports" },
+                        // v1.44.78 — UP from streaming-movies returns
+                        // to the Hush+ Coming Soon section (the page
+                        // above it in pageOrder), not Discovery.
+                        onUpFromRow = { currentPage = "hushplus" },
                         onDownFromRow = { currentPage = "ss_series" },
                     )
                     "ss_series" -> SsPage(
