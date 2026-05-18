@@ -1,5 +1,56 @@
 # HushTV — Product Requirements Document
 
+## v1.44.67 — HushTV Canada $40 CAD/yr CDN Proxy Fee gateway (LIVE) — 2026-02-08
+
+### What landed
+Brand-new payment system **exclusive to the `canada` flavor**. After the user logs into their Xtream playlist, a fullscreen lock screen appears requiring a $40 CAD/year payment via Interac e-Transfer. The lock screen generates a unique **8-digit numeric Order ID** tied to the user's Xtream username, instructs the user to send $40 CAD to `Hushtv.info@gmail.com` with the Order ID typed into the Interac "Message" field, and polls every 5 seconds for confirmation. The backend runs an IMAP poller against `Hushtv.info@gmail.com` every 30 seconds, parses each incoming auto-deposit email from `notify@payments.interac.ca`, matches the Message → Order ID, and grants a 1-year license. Pay once → unlocks **all devices** logged into the same Xtream account.
+
+### Backend
+Lives in `/app/sync_server/canada_payment_module.py` (production: `/opt/hushtv-sync/canada_payment_module.py` on 66.163.113.147). Mounted onto the existing FastAPI sync app on port 5056 and proxied through nginx at:
+- Public:  `https://hushtv.xyz/api/canada/{health,order/create,order/status/{id},license/{user}}`
+- Admin:   `https://hushtv.xyz/api/admin/canada/{grant,revoke,orders,licenses,poll}` — gated by `X-Admin-Token` (re-uses the existing `SPORTS_ADMIN_TOKEN`)
+
+SQLite (re-uses `sync.sqlite3`) adds three tables:
+- `canada_orders` — order_id PK, xtream_username, created_at, expires_at (60-min TTL for unpaid pending), status (pending|paid|expired), paid_at, interac_amount, interac_sender, interac_email_uid
+- `canada_licenses` — xtream_username PK, paid_at, expires_at (paid_at + 1 yr), last_order_id. Renewals ADD a year on top of the current expiry.
+- `canada_processed_emails` — uid PK (idempotency for the IMAP poller; reprocess-safe)
+
+The IMAP poller runs in a daemon thread, reconnects per scan, scans `SINCE <7 days> FROM "notify@payments.interac.ca"`, parses the HTML body with BeautifulSoup, extracts the `$XX.XX (CAD)` amount + 8-digit Order ID from the `Message:` field, and:
+- Rejects amounts < $40 CAD as `amount_too_low`
+- Ignores emails referencing unknown order IDs as `unknown_order`
+- On match → marks the order `paid`, grants the 1-year license, records the email uid so re-processing is a no-op
+
+### Frontend (Android, `canada` flavor only)
+- `data/CanadaLicenseClient.kt` — OkHttp + Moshi client. Methods: `fetchLicense(user)`, `createOrder(user)`, `pollOrder(orderId)`, `readPendingOrder`/`savePendingOrder`/`clearPendingOrder` for offline persistence, `readCache` for 7-day offline-grace fallback.
+- `ui/canada/CanadaLockScreen.kt` — fullscreen Compose lock screen. Cyan-accented Order ID card (56sp Monospace, gentle pulse animation), step-by-step Interac instructions, copy-to-clipboard button, "Check now" manual poll button, 5-second auto-poll loop. On payment confirmation shows the green "Payment received — welcome to HushTV Canada!" panel before fading into the rest of the app.
+- `ui/canada/CanadaLicenseGate.kt` — wrapper composable around `AppContent()` / `MobileApp()` in `MainActivity.kt`. **No-op for Dev/Official** (compile-time `BuildConfig.UPDATE_CHANNEL == "canada"` check). For Canada: checks license on every cold start + every 30 minutes in foreground, falls through to lock screen if unpaid, falls through to the normal app if paid OR if no playlist is configured (so the playlist-add flow still works before the lock kicks in).
+
+### Tests
+- Parser: 7 unit tests in `tests/test_canada_payment_parser.py` covering HTML+plaintext payloads, missing-Message fallback, currency-format tolerance.
+- API: 12 integration tests in `tests/test_canada_payment_api.py` using FastAPI TestClient — order create / reuse / status / 404, license unpaid→paid via simulated email, low-amount rejection, non-Interac sender rejection, unknown-order rejection, admin token gating, admin grant/revoke, idempotent double-processing, order expiry.
+- Black-box production: testing agent ran **22/22 PASSED** against `https://hushtv.xyz/`, including regression on `/api/sports/home` and `/api/sync/health`.
+
+### Build + deploy
+- APK + manifest live: `https://hushtv.xyz/hushtv-canada.apk` (versionCode 467 / 1.44.67-debug, 24 MB) + `https://hushtv.xyz/version-canada.json`.
+- Dev / Official channels intentionally **NOT bumped** — the lock screen is exclusive to the Canada flavor; pushing this build to Official would lock out existing users.
+- Backend deployed to `/opt/hushtv-sync/` on 66.163.113.147; `beautifulsoup4` installed into the venv; `INTERAC_GMAIL_USER` + `INTERAC_GMAIL_APP_PASSWORD` added to the systemd unit; `nginx` config patched to proxy `/api/canada/` and `/api/admin/canada/` to port 5056; service restarted.
+
+### Files added
+- NEW `/app/sync_server/canada_payment_module.py` (~470 lines)
+- NEW `/app/sync_server/tests/test_canada_payment_parser.py`
+- NEW `/app/sync_server/tests/test_canada_payment_api.py`
+- NEW `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/CanadaLicenseClient.kt`
+- NEW `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/canada/CanadaLockScreen.kt`
+- NEW `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/canada/CanadaLicenseGate.kt`
+- MODIFIED `/app/sync_server/hushsync_app.py` — mounts canada router + starts IMAP poller on startup
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/MainActivity.kt` — wraps app in `CanadaLicenseGate { ... }`
+- MODIFIED `/app/androidtv/app/build.gradle.kts` — bumped to 1.44.67 / 467
+- MODIFIED `/app/_buildenv/version-canada.json` — manifest bumped + new changelog
+- MODIFIED `/etc/systemd/system/hushtv-sync.service` (server) — adds `INTERAC_GMAIL_USER` + `INTERAC_GMAIL_APP_PASSWORD` env vars
+- MODIFIED `/etc/nginx/sites-enabled/hushtv` (server) — proxies `/api/canada/*` and `/api/admin/canada/*` to localhost:5056
+
+
+
 ## v1.44.66 — HushTV Canada flavor added (LIVE) — 2026-02-08
 
 ### What landed
