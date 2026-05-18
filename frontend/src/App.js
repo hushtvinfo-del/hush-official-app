@@ -34,7 +34,6 @@ import ResellersPage from "@/admin/pages/ResellersPage";
 import AuditPage from "@/admin/pages/AuditPage";
 import DiagnosticsPage from "@/admin/pages/DiagnosticsPage";
 import DvrClusterPage from "@/admin/pages/DvrClusterPage";
-import CanadaLicensesPage from "@/admin/pages/CanadaLicensesPage";
 import "@/App.css";
 
 function Protected({ children }) {
@@ -100,14 +99,6 @@ export default function App() {
               }
             />
             <Route path="audit" element={<AuditPage />} />
-            <Route
-              path="canada-licenses"
-              element={
-                <SuperOnly>
-                  <CanadaLicensesPage />
-                </SuperOnly>
-              }
-            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
