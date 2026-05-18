@@ -408,8 +408,34 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 
 // ── stats / revenue dashboard ──
 async function loadStats() {
+  // v1.44.92 — parallel-fetch the 3 Revenue-tab endpoints. Previously
+  // they ran sequentially inside loadStats() → loadInbox() → loadArchive(),
+  // making the visible "loading" state ~3× longer than necessary.
+  // Promise.all triples up the network calls and renders as each
+  // resolves, so the visible Loading state ends at MAX(stats, inbox,
+  // archive) instead of SUM(stats + inbox + archive).
+  const [statsP, inboxP, archiveP] = [
+    api("GET", "/stats"),
+    api("GET", "/base44/inbox?limit=20"),
+    api("GET", "/licenses/archive?limit=50"),
+  ];
+  // Render each as it lands — don't wait for the slowest to render
+  // the fast ones.
+  inboxP.then(d => renderInbox(d.rows || []))
+        .catch(e => $("inbox-tbody").innerHTML =
+          `<tr><td colspan="6" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`);
+  archiveP.then(d => renderArchive(d.rows || []))
+          .catch(e => $("archive-tbody").innerHTML =
+            `<tr><td colspan="7" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`);
   try {
-    const s = await api("GET", "/stats");
+    const s = await statsP;
+    renderStats(s);
+  } catch (e) {
+    toast("Stats: " + e.message, "error");
+  }
+}
+
+function renderStats(s) {
     const fmt = (v) => "$" + (v||0).toFixed(2);
     $("rev-today").textContent = fmt(s.revenue.today.total_cad);
     $("rev-today-count").textContent = s.revenue.today.count + " payment(s)";
@@ -456,18 +482,18 @@ async function loadStats() {
           </td>
         </tr>`).join("");
     }
-    loadInbox();
-    loadArchive();
-  } catch (e) {
-    toast("Stats: " + e.message, "error");
-  }
 }
 
 // ── License archive (v1.44.90 — accidental-delete recovery) ──
 async function loadArchive() {
   try {
     const d = await api("GET", "/licenses/archive?limit=50");
-    const rows = d.rows || [];
+    renderArchive(d.rows || []);
+  } catch (e) {
+    $("archive-tbody").innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+function renderArchive(rows) {
     if (rows.length === 0) {
       $("archive-tbody").innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center text-slate-500">No deleted licenses on file. 🎉</td></tr>`;
       return;
@@ -485,9 +511,6 @@ async function loadArchive() {
             class="rounded-lg bg-cyan-500 text-slate-950 px-3 py-1 text-xs font-bold hover:bg-cyan-400">↺ Restore</button>
         </td>
       </tr>`).join("");
-  } catch (e) {
-    $("archive-tbody").innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`;
-  }
 }
 async function restoreLicense(username) {
   if (!confirm(`Restore the license for "${username}"?\n\nThis brings the row back into the active licenses table with the original paid_at and expires_at — customer keeps the full original year they paid for.`)) return;
@@ -507,7 +530,12 @@ async function restoreLicense(username) {
 async function loadInbox() {
   try {
     const d = await api("GET", "/base44/inbox?limit=20");
-    const rows = d.rows || [];
+    renderInbox(d.rows || []);
+  } catch (e) {
+    $("inbox-tbody").innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+function renderInbox(rows) {
     if (rows.length === 0) {
       $("inbox-tbody").innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">No webhook events yet. Base44 will fire one when an admin marks CDN fee paid/revoked there.</td></tr>`;
       return;
@@ -529,9 +557,6 @@ async function loadInbox() {
         <td class="px-3 py-2 text-slate-600 font-mono text-[10px]">${r.event_id.substring(0,32)}</td>
       </tr>`;
     }).join("");
-  } catch (e) {
-    $("inbox-tbody").innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`;
-  }
 }
 
 // ── licenses table ──
