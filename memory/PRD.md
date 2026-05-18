@@ -1,5 +1,39 @@
 # HushTV — Product Requirements Document
 
+## v1.44.81 — Sports Guide trimmed to 5 leagues (NHL, MLB, NBA, NFL, UFC) — 2026-02-08
+
+### What changed
+Per user request, the Sports Guide now surfaces ONLY these 5 leagues, in this display order:
+
+1. **NHL** (sportsdb_id 4380)
+2. **MLB** (4424)
+3. **NBA** (4387)
+4. **NFL** (4391)
+5. **UFC** (4443)
+
+Removed from active list: MLS, Premier League, UEFA Champions League, NCAA Football, NCAA Basketball, CFL (which was also pointing at the wrong sportsdb_id `4335` = Spanish La Liga — bug never reached production users because the league rail filters by has-games), Formula 1.
+
+### How
+- `DEFAULT_LEAGUES` in `/app/sync_server/sports_module.py` rewritten to the 5-league lineup with display_order 1–5 matching user request.
+- Added `DEACTIVATED_LEAGUES = ["mls","epl","ucl","ncaaf","ncaab","cfl","f1"]` and extended `_ingest_leagues()` to (a) re-assert display_order on every boot (so re-ordering takes effect on existing installs without DB nuking) and (b) `UPDATE sports_leagues SET active=0` for any deactivated slug.
+- `LEAGUE_CHANNEL_SEED` and `TEAM_CHANNEL_SEED` trimmed to remove broadcaster entries for the deactivated leagues.
+- Deployed `/opt/hushtv-sync/sports_module.py` to `66.163.113.147` and restarted `hushtv-sync`.
+
+### Verification
+- `sqlite3 /var/hushtv-sync/sports.sqlite3` post-restart shows exactly 5 rows with `active=1` and `display_order` 1–5 matching the request; the 7 deactivated rows now show `active=0`.
+- `GET https://hushtv.xyz/api/sports/leagues` returns the 5 in correct order.
+- `GET https://hushtv.xyz/api/sports/home` returns NHL, MLB, NBA, UFC populated with games (NFL skipped because the season ended Feb 8 2026 — its tab will reappear when pre-season games are scheduled in TheSportsDB).
+
+### Note on NFL visibility
+The TV/Mobile league rail is built from `/api/sports/home.leagues[]`, which only includes leagues with at least one upcoming game in the past-2/future-14-day window. NFL is registered & active but won't surface as a tab until pre-season. If the user wants the NFL tab visible always (showing an empty state during off-season), that's a one-line UI change in TV/Mobile sports surface — call out later if desired.
+
+### Files modified
+- `/app/sync_server/sports_module.py` — `DEFAULT_LEAGUES` rewritten, `DEACTIVATED_LEAGUES` added, `_ingest_leagues()` extended with re-assert + deactivate migration, broadcaster seeds trimmed
+- Deployed → `/opt/hushtv-sync/sports_module.py` on 66.163.113.147
+
+---
+
+
 ## v1.44.80 — Bug fixes for Sports Guide crash + Discover→Hush+ navigation (LIVE) — 2026-02-08
 
 ### Bugs fixed

@@ -136,25 +136,33 @@ GAMES_FUTURE_DAYS = 14
 # TheSportsDB league IDs we ingest by default. User can disable any
 # league via POST /api/admin/sports/league/{slug}/active.
 # Source: https://www.thesportsdb.com/api/v1/json/3/all_leagues.php
+#
+# v1.44.81 — Trimmed to the five leagues HushTV currently wants surfaced
+# on the Sports Guide (in this exact display order). Soccer/NCAA/CFL/F1
+# were removed per user request and any historically-seeded rows are
+# deactivated by the migration in `_ingest_leagues`.
 DEFAULT_LEAGUES: List[Dict[str, Any]] = [
-    # slug       name                  sportsdb_id   accent     order
-    ("nhl",      "NHL",                 "4380",      "#000000",   2),
-    ("mlb",      "MLB",                 "4424",      "#132448",   3),
-    ("nba",      "NBA",                 "4387",      "#C8102E",   4),
-    ("nfl",      "NFL",                 "4391",      "#013369",   5),
-    ("ufc",      "UFC",                 "4443",      "#D20A0A",   1),  # PPV-ish
-    ("mls",      "MLS",                 "4346",      "#00205B",   6),
-    ("epl",      "Premier League",      "4328",      "#3D195B",   7),
-    ("ucl",      "Champions League",    "4480",      "#00387B",   8),
-    ("ncaaf",    "NCAA Football",       "4479",      "#BB0000",   9),
-    ("ncaab",    "NCAA Basketball",     "4607",      "#BB0000",  10),
-    ("cfl",      "CFL",                 "4335",      "#B8860B",  11),
-    ("f1",       "Formula 1",           "4370",      "#E10600",  12),
+    # slug   name    sportsdb_id   accent      order
+    ("nhl",  "NHL",  "4380",       "#000000",  1),
+    ("mlb",  "MLB",  "4424",       "#132448",  2),
+    ("nba",  "NBA",  "4387",       "#C8102E",  3),
+    ("nfl",  "NFL",  "4391",       "#013369",  4),
+    ("ufc",  "UFC",  "4443",       "#D20A0A",  5),
+]
+
+# Slugs that used to be seeded but should now be hidden. Migration in
+# `_ingest_leagues` deactivates these on startup so users on existing
+# DBs see the same trimmed lineup as fresh installs.
+DEACTIVATED_LEAGUES: List[str] = [
+    "mls", "epl", "ucl", "ncaaf", "ncaab", "cfl", "f1",
 ]
 
 # Smart defaults seed — Canadian broadcaster mappings.
 # scope=league|team, key=slug or team short_name, channel_name=Xtream-side name
 # User can override via the admin panel later, these just bootstrap day-1.
+#
+# v1.44.81 — trimmed to the active 5 leagues. Removed soccer / NCAA /
+# CFL / F1 entries since those leagues are no longer surfaced.
 LEAGUE_CHANNEL_SEED: List[Tuple[str, str]] = [
     # league_slug, default Canadian broadcaster
     ("nhl",   "SPORTSNET"),
@@ -162,13 +170,6 @@ LEAGUE_CHANNEL_SEED: List[Tuple[str, str]] = [
     ("nba",   "TSN"),
     ("nfl",   "TSN"),
     ("ufc",   "SPORTSNET PPV"),
-    ("mls",   "TSN"),
-    ("epl",   "FUBO SPORTS"),
-    ("ucl",   "DAZN"),
-    ("ncaaf", "TSN"),
-    ("ncaab", "TSN"),
-    ("cfl",   "TSN"),
-    ("f1",    "TSN"),
 ]
 
 # Team → regional broadcaster. Names match TheSportsDB `strTeam` field
@@ -184,9 +185,6 @@ TEAM_CHANNEL_SEED: List[Tuple[str, str, str]] = [
     ("nhl",  "Edmonton Oilers",        "SPORTSNET WEST"),
     ("nhl",  "Vancouver Canucks",      "SPORTSNET PACIFIC"),
     ("nba",  "Toronto Raptors",        "TSN 1"),
-    ("mls",  "Toronto FC",             "TSN 4"),
-    ("mls",  "CF Montreal",            "TSN 5"),
-    ("mls",  "Vancouver Whitecaps FC", "TSN 1"),
 ]
 
 # ── DB ─────────────────────────────────────────────────────────────
@@ -461,13 +459,34 @@ def _utc_ts(iso: Optional[str], time_str: Optional[str] = None) -> Optional[int]
 
 # ── Ingestion ───────────────────────────────────────────────────────
 def _ingest_leagues(c: sqlite3.Connection) -> None:
-    """Ensure DEFAULT_LEAGUES are present. Idempotent."""
+    """Ensure DEFAULT_LEAGUES are present and DEACTIVATED_LEAGUES are
+    hidden. Idempotent.
+
+    v1.44.81 — also UPSERTs display_order on every boot so a change to
+    the DEFAULT_LEAGUES table (e.g. re-ordering tabs) takes effect for
+    existing installs after a service restart, without having to nuke
+    the DB. And we explicitly flip `active=0` for any historically
+    seeded league that's been removed from the active list.
+    """
     for slug, name, sid, accent, order in DEFAULT_LEAGUES:
         c.execute(
             "INSERT OR IGNORE INTO sports_leagues "
             "(slug, name, sportsdb_id, accent, display_order, active) "
             "VALUES (?, ?, ?, ?, ?, 1)",
             (slug, name, sid, accent, order),
+        )
+        # Re-assert order + activation for rows that already existed.
+        c.execute(
+            "UPDATE sports_leagues "
+            "SET display_order=?, active=1, name=?, sportsdb_id=?, accent=? "
+            "WHERE slug=?",
+            (order, name, sid, accent, slug),
+        )
+    # Migration — hide leagues that are no longer in the active set.
+    for slug in DEACTIVATED_LEAGUES:
+        c.execute(
+            "UPDATE sports_leagues SET active=0 WHERE slug=?",
+            (slug,),
         )
 
 
