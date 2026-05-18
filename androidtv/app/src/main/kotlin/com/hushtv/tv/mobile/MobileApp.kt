@@ -110,6 +110,28 @@ fun MobileApp() {
             }
             composable("mdiag") { MobileDiagnosticsScreen(nav) }
             composable("mspeed") { MobileSpeedTestScreen(nav) }
+            composable("canada/license") {
+                com.hushtv.tv.ui.canada.CanadaLicenseDetailsScreen(
+                    onRenew = { nav.navigate("canada/renew") },
+                    onBack = { nav.popBackStack() },
+                )
+            }
+            composable("canada/renew") {
+                val ctx2 = androidx.compose.ui.platform.LocalContext.current
+                val username = androidx.compose.runtime.remember {
+                    com.hushtv.tv.data.PlaylistStore.getAll(ctx2)
+                        .firstOrNull()?.username?.lowercase().orEmpty()
+                }
+                if (username.isEmpty()) {
+                    androidx.compose.runtime.LaunchedEffect(Unit) { nav.popBackStack() }
+                } else {
+                    com.hushtv.tv.ui.canada.CanadaLockScreen(
+                        xtreamUsername = username,
+                        onUnlocked = { nav.popBackStack() },
+                        renewMode = true,
+                    )
+                }
+            }
             composable("mrequests/{playlistId}") { bs ->
                 com.hushtv.tv.ui.requests.MobileMyRequestsScreen(
                     nav,

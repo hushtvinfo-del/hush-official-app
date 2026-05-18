@@ -1,13 +1,13 @@
 {
-  "versionCode": 469,
-  "versionName": "1.44.69",
+  "versionCode": 470,
+  "versionName": "1.44.70",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "NEW: QR-code shortcut on the payment screen. Point a second phone's camera at it and it opens an email pre-filled with the recipient address, the $40 CAD amount, and your Order Number — eliminates typos.",
-    "FIXED: $40 CAD payment lock screen now ALWAYS appears after Xtream login (v1.44.67 race fix shipped in v1.44.68 confirmed).",
-    "REDESIGNED: payment screen scales smoothly from phone to TV with senior-friendly large text, three clearly numbered cards, and big copy buttons for the Order Number AND the email address."
+    "NEW: Settings → My HushTV Canada License — see your status (ACTIVE / EXPIRING SOON / EXPIRED), paid date, expiry date, and days remaining.",
+    "NEW: Renew Now button — adds another year on top of your current expiry (you never lose remaining days). Becomes prominent when you have less than 30 days left.",
+    "Same Interac e-Transfer payment flow for renewal — just send $40 to Hushtv.info@gmail.com with the new Order Number."
   ]
 }

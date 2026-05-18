@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
@@ -127,6 +128,22 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                     icon = { Icon(Icons.Default.PersonAdd, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                     onClick = { nav.navigate("add") },
                 )
+            }
+            if (com.hushtv.tv.BuildConfig.UPDATE_CHANNEL == "canada") {
+                item {
+                    SettingsCard(
+                        title = "My HushTV Canada License",
+                        subtitle = "View your $40 CAD / year status, expiry date, and renew",
+                        icon = {
+                            Icon(
+                                Icons.Default.WorkspacePremium, null,
+                                tint = Cyan,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        },
+                        onClick = { nav.navigate("canada/license") },
+                    )
+                }
             }
 
             // ── LAYOUT (dev channel only — v1.44.41) ───────────────

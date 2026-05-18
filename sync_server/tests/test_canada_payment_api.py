@@ -160,6 +160,20 @@ def test_already_licensed_short_circuits_order():
     assert j.get("already_licensed") is True
 
 
+def test_force_new_creates_renewal_order_for_licensed_user():
+    # grant first
+    client.post("/api/admin/canada/grant",
+                json={"xtream_username": "renewaltester", "months": 12},
+                headers={"X-Admin-Token": "test-admin-token"})
+    r = client.post("/api/canada/order/create",
+                    json={"xtream_username": "renewaltester", "force_new": True})
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("already_licensed") is not True
+    assert "order" in j
+    assert j["order"]["status"] == "pending"
+
+
 def test_double_email_processing_is_idempotent():
     j = _create_order("greta")
     oid = j["order"]["order_id"]

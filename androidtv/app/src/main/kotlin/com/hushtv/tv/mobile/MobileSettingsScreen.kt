@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Update
@@ -101,6 +102,14 @@ fun MobileSettingsScreen(nav: NavController, playlistId: String) {
             title = "Switch / Add Profile",
             onClick = { nav.navigate("home") },
         )
+        if (com.hushtv.tv.BuildConfig.UPDATE_CHANNEL == "canada") {
+            SettingsItem(
+                icon = Icons.Default.WorkspacePremium,
+                title = "My HushTV Canada License",
+                subtitle = "View your $40 CAD / year status and renew",
+                onClick = { nav.navigate("canada/license") },
+            )
+        }
         SettingsItem(
             icon = Icons.Default.Update,
             title = "Check for updates",

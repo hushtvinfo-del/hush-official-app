@@ -242,6 +242,7 @@ def _extract_email_body(msg: Message) -> str:
 # ── Order / License DB ops ──────────────────────────────────────────
 class CreateOrderReq(BaseModel):
     xtream_username: str = Field(..., min_length=1, max_length=128)
+    force_new: bool = False  # when true, allow a renewal even if currently licensed
 
 
 def _serialize_order(row: sqlite3.Row) -> dict:
@@ -489,13 +490,15 @@ def create_order(req: CreateOrderReq) -> dict:
     now = _now_ms()
     with _conn() as c:
         _expire_stale_orders(c)
-        # Existing license?
-        lic = _get_license_row(c, user)
-        if lic and int(lic["expires_at"]) > now:
-            return {
-                "already_licensed": True,
-                "license": _serialize_license(lic),
-            }
+        # Existing license? Short-circuit unless caller is explicitly
+        # asking to create a renewal order on top of an active license.
+        if not req.force_new:
+            lic = _get_license_row(c, user)
+            if lic and int(lic["expires_at"]) > now:
+                return {
+                    "already_licensed": True,
+                    "license": _serialize_license(lic),
+                }
         existing = c.execute(
             """SELECT * FROM canada_orders WHERE xtream_username=? AND status='pending'
                AND expires_at>? ORDER BY created_at DESC LIMIT 1""",

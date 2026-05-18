@@ -269,6 +269,28 @@ private fun AppContent() {
         composable("settings/{playlistId}") { bs ->
             TVSettingsScreen(nav, bs.arguments?.getString("playlistId") ?: "")
         }
+        composable("canada/license") {
+            com.hushtv.tv.ui.canada.CanadaLicenseDetailsScreen(
+                onRenew = { nav.navigate("canada/renew") },
+                onBack = { nav.popBackStack() },
+            )
+        }
+        composable("canada/renew") {
+            val ctx2 = LocalContext.current
+            val username = remember {
+                com.hushtv.tv.data.PlaylistStore.getAll(ctx2)
+                    .firstOrNull()?.username?.lowercase().orEmpty()
+            }
+            if (username.isEmpty()) {
+                LaunchedEffect(Unit) { nav.popBackStack() }
+            } else {
+                com.hushtv.tv.ui.canada.CanadaLockScreen(
+                    xtreamUsername = username,
+                    onUnlocked = { nav.popBackStack() },
+                    renewMode = true,
+                )
+            }
+        }
         composable("diag") { TVDiagnosticsScreen(nav) }
         composable("speedtest") { TVSpeedTestScreen(nav) }
         composable("myrequests/{playlistId}") { bs ->

@@ -59,7 +59,7 @@ object CanadaLicenseClient {
     )
 
     @JsonClass(generateAdapter = true)
-    data class CreateOrderReq(val xtream_username: String)
+    data class CreateOrderReq(val xtream_username: String, val force_new: Boolean = false)
 
     @JsonClass(generateAdapter = true)
     data class CreateOrderResp(
@@ -179,11 +179,12 @@ object CanadaLicenseClient {
     }
 
     /** POST /order/create — returns the create response or null on failure. */
-    fun createOrder(username: String): CreateOrderResp? {
+    fun createOrder(username: String, forceNew: Boolean = false): CreateOrderResp? {
         val u = username.lowercase().trim()
         if (u.isEmpty()) return null
         return try {
-            val payload = moshi.adapter(CreateOrderReq::class.java).toJson(CreateOrderReq(u))
+            val payload = moshi.adapter(CreateOrderReq::class.java)
+                .toJson(CreateOrderReq(u, forceNew))
             val req = Request.Builder().url("$BASE/order/create")
                 .post(payload.toRequestBody(JSON)).build()
             http.newCall(req).execute().use { resp ->

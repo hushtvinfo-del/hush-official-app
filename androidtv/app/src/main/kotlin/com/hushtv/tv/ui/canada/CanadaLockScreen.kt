@@ -67,6 +67,7 @@ import kotlinx.coroutines.withContext
 fun CanadaLockScreen(
     xtreamUsername: String,
     onUnlocked: () -> Unit,
+    renewMode: Boolean = false,
 ) {
     val ctx = LocalContext.current
     val clip: ClipboardManager = LocalClipboardManager.current
@@ -90,16 +91,16 @@ fun CanadaLockScreen(
     LaunchedEffect(xtreamUsername) {
         loading = true
         error = null
-        val pending = CanadaLicenseClient.readPendingOrder(ctx, xtreamUsername)
+        val pending = if (renewMode) null else CanadaLicenseClient.readPendingOrder(ctx, xtreamUsername)
         if (pending != null) {
             orderId = pending.first
             loading = false
         } else {
             val resp = withContext(Dispatchers.IO) {
-                CanadaLicenseClient.createOrder(xtreamUsername)
+                CanadaLicenseClient.createOrder(xtreamUsername, forceNew = renewMode)
             }
             when {
-                resp?.already_licensed == true -> {
+                resp?.already_licensed == true && !renewMode -> {
                     paidSuccess = true
                     delay(900); onUnlocked(); return@LaunchedEffect
                 }
@@ -175,7 +176,7 @@ fun CanadaLockScreen(
     ) {
         if (paidSuccess) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                PaidSuccessPanel(sz)
+                PaidSuccessPanel(sz, renewMode = renewMode)
             }
             return@Box
         }
@@ -187,7 +188,7 @@ fun CanadaLockScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            HeaderBlock(sz, amountCad)
+            HeaderBlock(sz, amountCad, renewMode = renewMode)
 
             Spacer(Modifier.height(sz.gap))
 
@@ -274,7 +275,7 @@ fun CanadaLockScreen(
 // ─── Building blocks ──────────────────────────────────────────────────
 
 @Composable
-private fun HeaderBlock(sz: Sizes, amountCad: Double) {
+private fun HeaderBlock(sz: Sizes, amountCad: Double, renewMode: Boolean = false) {
     Box(
         modifier = Modifier
             .size(sz.headerIcon)
@@ -286,21 +287,24 @@ private fun HeaderBlock(sz: Sizes, amountCad: Double) {
     }
     Spacer(Modifier.height(16.dp))
     Text(
-        "HushTV Canada",
+        if (renewMode) "Renew HushTV Canada" else "HushTV Canada",
         color = TextPrimary,
         fontSize = sz.title,
         fontWeight = FontWeight.Black,
     )
     Spacer(Modifier.height(4.dp))
     Text(
-        "One-time setup",
+        if (renewMode) "Annual renewal" else "One-time setup",
         color = Cyan,
         fontSize = sz.subtitle,
         fontWeight = FontWeight.Bold,
     )
     Spacer(Modifier.height(12.dp))
     Text(
-        "Send $${formatAmount(amountCad)} CAD by Interac e-Transfer to start using the app.",
+        if (renewMode)
+            "Send another $${formatAmount(amountCad)} CAD by Interac e-Transfer to add 1 more year on top of your current expiry."
+        else
+            "Send $${formatAmount(amountCad)} CAD by Interac e-Transfer to start using the app.",
         color = TextPrimary,
         fontSize = sz.body,
     )
@@ -635,7 +639,7 @@ private fun ErrorPanel(sz: Sizes, message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun PaidSuccessPanel(sz: Sizes) {
+private fun PaidSuccessPanel(sz: Sizes, renewMode: Boolean = false) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     AnimatedVisibility(visible = visible) {
@@ -646,14 +650,17 @@ private fun PaidSuccessPanel(sz: Sizes) {
             Icon(Icons.Default.CheckCircle, null, tint = Green, modifier = Modifier.size(96.dp))
             Spacer(Modifier.height(20.dp))
             Text(
-                "Payment received!",
+                if (renewMode) "License renewed!" else "Payment received!",
                 color = TextPrimary,
                 fontSize = sz.title,
                 fontWeight = FontWeight.Black,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Welcome to HushTV Canada. Loading your library…",
+                if (renewMode)
+                    "Another year added to your license."
+                else
+                    "Welcome to HushTV Canada. Loading your library…",
                 color = TextSecondary,
                 fontSize = sz.body,
             )
