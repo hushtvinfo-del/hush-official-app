@@ -76,40 +76,48 @@ fun CanadaLockScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var paidSuccess by remember { mutableStateOf(false) }
 
-    // Create or re-use order
+    // Create or re-use order. We ALWAYS hit the server even when a
+    // pending order is cached locally, otherwise stale amount/email
+    // values stay on screen forever (e.g. when the server-side price
+    // changes for a testing window). The server is idempotent — it
+    // returns the same pending order with reused=true when one exists.
     LaunchedEffect(xtreamUsername) {
         loading = true; error = null
-        val pending = if (renewMode) null else CanadaLicenseClient.readPendingOrder(ctx, xtreamUsername)
-        if (pending != null) {
-            orderId = pending.first
-            loading = false
-        } else {
-            val result = withContext(Dispatchers.IO) {
-                CanadaLicenseClient.createOrderResult(xtreamUsername, forceNew = renewMode)
-            }
-            when (result) {
-                is CanadaLicenseClient.CreateOrderResult.Success -> {
-                    val resp = result.data
-                    when {
-                        resp.already_licensed == true && !renewMode -> {
-                            paidSuccess = true
-                            delay(700); onUnlocked(); return@LaunchedEffect
-                        }
-                        resp.order != null -> {
-                            orderId = resp.order.order_id
-                            emailTo = resp.email_to ?: emailTo
-                            amountCad = resp.amount_cad ?: amountCad
-                            CanadaLicenseClient.savePendingOrder(
-                                ctx, xtreamUsername, resp.order.order_id, resp.order.expires_at,
-                            )
-                        }
-                        else -> error = "Server response was incomplete. Please try again."
-                    }
-                }
-                is CanadaLicenseClient.CreateOrderResult.Failure -> error = result.message
-            }
-            loading = false
+        val result = withContext(Dispatchers.IO) {
+            CanadaLicenseClient.createOrderResult(xtreamUsername, forceNew = renewMode)
         }
+        when (result) {
+            is CanadaLicenseClient.CreateOrderResult.Success -> {
+                val resp = result.data
+                when {
+                    resp.already_licensed == true && !renewMode -> {
+                        paidSuccess = true
+                        delay(700); onUnlocked(); return@LaunchedEffect
+                    }
+                    resp.order != null -> {
+                        orderId = resp.order.order_id
+                        emailTo = resp.email_to ?: emailTo
+                        amountCad = resp.amount_cad ?: amountCad
+                        CanadaLicenseClient.savePendingOrder(
+                            ctx, xtreamUsername, resp.order.order_id, resp.order.expires_at,
+                        )
+                    }
+                    else -> error = "Server response was incomplete. Please try again."
+                }
+            }
+            is CanadaLicenseClient.CreateOrderResult.Failure -> {
+                // If the server is unreachable, fall back to the locally cached
+                // order id so the user can still see something to pay against.
+                val pending = if (renewMode) null
+                              else CanadaLicenseClient.readPendingOrder(ctx, xtreamUsername)
+                if (pending != null) {
+                    orderId = pending.first
+                } else {
+                    error = result.message
+                }
+            }
+        }
+        loading = false
     }
 
     // Poll
@@ -248,21 +256,30 @@ fun CanadaLockScreen(
 // ──────── Header ────────
 @Composable
 private fun Header(sz: Sizes, amountCad: Double, renewMode: Boolean) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(Icons.Default.Lock, null, tint = Cyan, modifier = Modifier.size(sz.headerIcon))
-        Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(Icons.Default.Lock, null, tint = Cyan, modifier = Modifier.size(sz.headerIcon))
             Text(
                 if (renewMode) "Renew HushTV Canada" else "HushTV Canada",
-                color = TextPrimary, fontSize = sz.title, fontWeight = FontWeight.Black,
-            )
-            Text(
-                "${if (renewMode) "Renewal" else "One-time setup"} • $${formatAmount(amountCad)} CAD / year • Unlimited devices",
-                color = Cyan, fontSize = sz.subtitle, fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                fontSize = sz.title,
+                fontWeight = FontWeight.Black,
             )
         }
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "${if (renewMode) "Renewal" else "One-time setup"} • $${formatAmount(amountCad)} CAD / year • Unlimited devices",
+            color = Cyan,
+            fontSize = sz.subtitle,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
     }
 }
 
@@ -288,8 +305,7 @@ private fun StepsRow(sz: Sizes, amountCad: Double, emailTo: String, orderId: Str
             instruction = "Send the e-Transfer to this email address",
             valueLabel = "Recipient email",
             value = emailTo,
-            valueIsMonospace = false,
-            valueWrap = true,
+            valueIsEmail = true,
             modifier = Modifier.weight(1f).fillMaxHeight(),
         )
         StepCard(
@@ -324,8 +340,7 @@ private fun StepsColumn(sz: Sizes, amountCad: Double, emailTo: String, orderId: 
             instruction = "Send the e-Transfer to this email address",
             valueLabel = "Recipient email",
             value = emailTo,
-            valueIsMonospace = false,
-            valueWrap = true,
+            valueIsEmail = true,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
         StepCard(
@@ -348,7 +363,7 @@ private fun StepCard(
     valueLabel: String,
     value: String,
     valueIsMonospace: Boolean = false,
-    valueWrap: Boolean = false,
+    valueIsEmail: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -381,7 +396,10 @@ private fun StepCard(
         )
 
         // Value block (label + big value)
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Text(
                 valueLabel,
                 color = Cyan,
@@ -390,18 +408,74 @@ private fun StepCard(
                 letterSpacing = 2.sp,
             )
             Spacer(Modifier.height(6.dp))
-            Text(
-                value,
-                color = TextPrimary,
-                fontSize = if (valueWrap) sz.valueWrap else sz.value,
-                fontWeight = FontWeight.Black,
-                fontFamily = if (valueIsMonospace) FontFamily.Monospace else FontFamily.Default,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-                lineHeight = if (valueWrap) (sz.valueWrap.value * 1.1f).sp else (sz.value.value * 1.1f).sp,
-            )
+            if (valueIsEmail) {
+                // The recipient email card uses an auto-shrinking text so a
+                // long address like Hushtv.info@gmail.com never wraps onto
+                // two lines on narrower TVs / tablets. Compose has no
+                // built-in autoSize yet, so we measure-and-step-down the
+                // font size until the string fits the card width.
+                AutoFitSingleLineText(
+                    text = value,
+                    maxFontSize = sz.value,
+                    minFontSize = sz.tiny,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Text(
+                    value,
+                    color = TextPrimary,
+                    fontSize = sz.value,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = if (valueIsMonospace) FontFamily.Monospace else FontFamily.Default,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
+}
+
+/**
+ * Single-line text that shrinks its font size until the value fits on one
+ * line. Used for the recipient-email step card so a long gmail address
+ * never wraps onto two lines and breaks the layout. Compose 1.8 ships
+ * with `autoSize` but our BOM is pinned earlier; this hand-rolled version
+ * does the same job in ~20 lines with no new dependencies.
+ */
+@Composable
+private fun AutoFitSingleLineText(
+    text: String,
+    maxFontSize: TextUnit,
+    minFontSize: TextUnit,
+    color: androidx.compose.ui.graphics.Color,
+    fontWeight: FontWeight,
+    modifier: Modifier = Modifier,
+) {
+    var fontSize by remember(text) { mutableStateOf(maxFontSize) }
+    var ready by remember(text) { mutableStateOf(false) }
+    Text(
+        text = text,
+        color = color,
+        fontSize = fontSize,
+        fontWeight = fontWeight,
+        maxLines = 1,
+        softWrap = false,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = modifier,
+        onTextLayout = { layout ->
+            if (!ready && layout.didOverflowWidth && fontSize > minFontSize) {
+                // Shrink in 2-sp steps until it fits or we hit the floor.
+                val next = (fontSize.value - 2f).coerceAtLeast(minFontSize.value)
+                fontSize = next.sp
+            } else {
+                ready = true
+            }
+        },
+    )
 }
 
 // ──────── Footer ────────

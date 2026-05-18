@@ -1,14 +1,13 @@
 {
-  "versionCode": 475,
-  "versionName": "1.44.75",
+  "versionCode": 476,
+  "versionName": "1.44.76",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "FULLY REDESIGNED payment screen — three simple step cards (1) Amount, (2) Email, (3) Order Number — laid out side-by-side on TV/tablet, stacked on phones, all visible at once with NO scrolling on any device.",
-    "Removed clutter: no more QR code, no copy buttons, no multi-line walls of text. You read the values off the screen, do the e-Transfer from your bank app — that's it.",
-    "Big high-contrast text sized so a senior can read every value from across the room. Adapts automatically to TVs (32-52 sp values), tablets (36 sp), and phones (26-30 sp).",
-    "\"Check Now\" + \"Exit App\" buttons always pinned at the bottom — fully responsive and always reachable."
+    "FIXED: stale $40 amount shown on cached orders — the app now always re-fetches the current server amount (so the testing $5 price actually appears).",
+    "FIXED: long recipient email no longer wraps onto two lines — auto-shrinks until it fits the card on one line, on any device.",
+    "FIXED: header (HushTV Canada + subtitle) is now properly centered on screen — lock icon + title on top row, subtitle centered below."
   ]
 }
