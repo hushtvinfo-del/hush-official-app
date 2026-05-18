@@ -1,5 +1,8 @@
 package com.hushtv.tv.ui.canada
 
+import android.content.Context
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +20,23 @@ import com.hushtv.tv.ui.theme.Cyan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+
+/** v1.44.82 — Heartbeat helpers. The admin "Last active" + "Devices"
+ * columns are powered by these. ANDROID_ID is a stable per-device,
+ * per-app installation identifier and is the right primitive here. */
+private const val HEARTBEAT_INTERVAL_MS = 5L * 60_000
+
+@Suppress("HardwareIds")
+private fun stableDeviceId(ctx: Context): String =
+    Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID).orEmpty()
+
+private fun platformLabel(ctx: Context): String {
+    val isTv = ctx.packageManager.hasSystemFeature("android.software.leanback")
+    return if (isTv) "android-tv" else "android-mobile"
+}
+
+private fun deviceModel(): String =
+    "${Build.MANUFACTURER ?: ""} ${Build.MODEL ?: ""}".trim().take(120)
 
 /**
  * Wraps the rest of the app for the `canada` flavor only.
@@ -57,6 +77,7 @@ fun CanadaLicenseGate(content: @Composable () -> Unit) {
     LaunchedEffect(Unit) {
         var lastUser = ""
         var lastFullCheckMs = 0L
+        var lastHeartbeatMs = 0L
         while (true) {
             val playlists = withContext(Dispatchers.IO) { PlaylistStore.getAll(ctx) }
             val lastId = withContext(Dispatchers.IO) {
@@ -90,6 +111,28 @@ fun CanadaLicenseGate(content: @Composable () -> Unit) {
                     is CanadaLicenseClient.LicenseState.Error -> false
                 }
                 lastFullCheckMs = System.currentTimeMillis()
+            }
+
+            // Heartbeat — fire once we're sure the user is licensed and
+            // then every HEARTBEAT_INTERVAL_MS while the app stays open.
+            // Best-effort: failures are swallowed in the client.
+            val now = System.currentTimeMillis()
+            if (u.isNotEmpty() && licensed == true &&
+                now - lastHeartbeatMs >= HEARTBEAT_INTERVAL_MS
+            ) {
+                lastHeartbeatMs = now
+                val deviceId = stableDeviceId(ctx)
+                if (deviceId.isNotEmpty()) {
+                    withContext(Dispatchers.IO) {
+                        CanadaLicenseClient.sendHeartbeat(
+                            username = u,
+                            deviceId = deviceId,
+                            appVersion = BuildConfig.VERSION_NAME,
+                            platform = platformLabel(ctx),
+                            model = deviceModel(),
+                        )
+                    }
+                }
             }
 
             delay(2000)

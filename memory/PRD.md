@@ -1,5 +1,119 @@
 # HushTV — Product Requirements Document
 
+## v1.44.83 — Canada admin moved INTO https://hushtv.xyz/admin (user request) — 2026-02-08
+
+### What changed
+Previous session shipped the Canada admin into the React/Emergent admin. User pushed back hard — they want EVERYTHING under their own server at `https://hushtv.xyz/admin`, not Emergent. Refactor done:
+
+**Moved INTO `/_buildenv/canada_admin.html`** (deployed at `/var/www/hushtv/admin.html` on 66.163.113.147):
+- 📊 **Revenue tab** (new default) — 5 revenue cards (today/week/month/YTD/all-time), 5 status cards (active licenses · expiring · expired · 5-min online · 24h active), 12-month bar chart, expiring-soon alert table. Auto-refreshes every 30 s.
+- 👥 **Licenses tab** (enriched) — search + status filter, devices/last-seen/total-paid/payment-count columns, status pills (Active/Expiring/Expired). Each row opens a side drawer.
+- 💰 **Payments tab** (new) — date-range filter (today/7d/30d/90d/YTD/all), total badge, one-click CSV export.
+- ✓ **Approve/Lookup tab** (existing, retained) — manual grant flow.
+- 📋 **Recent Orders tab** (existing, retained) — chronological orders list.
+- License drawer — full payment history, per-device list (model · platform · version · last seen), Send Reminder email input + button, Extend +1 year, Revoke.
+
+**Removed from React admin** (per user request):
+- Deleted `/app/frontend/src/admin/pages/CanadaPage.js` (the React version)
+- Removed `/canada` route from `/app/frontend/src/App.js`
+- Removed "Canada" nav entry from `/app/frontend/src/admin/AdminShell.js`
+- Removed `/api/admin/canada/{path:path}` proxy from `/app/backend/server.py`
+- Removed `SPORTS_ADMIN_TOKEN`, `SYNC_SERVER_URL`, `NGINX_ADMIN_USER/PASS` from `/app/backend/.env`
+
+### Backend (unchanged, all the new endpoints stay)
+Same Canada admin endpoints that I added to `/app/sync_server/canada_payment_module.py` in the previous step continue to power everything (`/licenses`, `/payments`, `/payments.csv`, `/stats`, `/license/{u}/devices`, `/license/{u}/extend`, `/license/{u}/remind`, `/events`). The new HTML admin calls them directly via the existing nginx Basic-Auth-gated `/api/admin/canada/*` location block.
+
+### Auth flow (back to single Basic Auth)
+- User opens `https://hushtv.xyz/admin` in their browser → Chrome shows Basic Auth dialog → enters `hushadmin` / `HushTV2026!`
+- Chrome caches credentials in the realm "HushTV Canada Admin" and automatically attaches them to every subsequent AJAX request to `/api/admin/canada/*` (same realm)
+- No Emergent involvement at all
+
+### Verification
+✓ Revenue tab: $20 CAD all-time, 3 active, 12-month chart with May spike
+✓ Licenses tab: 3 rows (renew_smoke_test, smoked2022, bfam23) with all enrichment columns
+✓ Payments tab: 2 paid rows (William Crocker, Benjamin Langille), $20 total, 30-day range
+✓ CSV export endpoint reachable
+✓ Approve/Lookup + Recent Orders existing tabs still functional
+
+### Files modified
+- `/app/_buildenv/canada_admin.html` — full rewrite (~620 lines)
+- Deployed → `/var/www/hushtv/admin.html` on 66.163.113.147
+- `/app/frontend/src/admin/AdminShell.js` — reverted (removed Canada nav)
+- `/app/frontend/src/App.js` — reverted (removed Canada route)
+- `/app/backend/server.py` — reverted (removed proxy)
+- `/app/backend/.env` — reverted (removed 3 env vars)
+- Removed `/app/frontend/src/admin/pages/CanadaPage.js`
+
+---
+
+
+## v1.44.82 — Unified Canada admin in React panel (LIVE) — 2026-02-08
+
+### Feature shipped
+Per user request ("one admin where I access everything, no two-site logins") — the standalone `/admin` HTML and the React Admin Panel are now unified. The React admin gained a "Canada" nav entry with three tabs powered by the existing Interac IMAP poller dataset:
+
+1. **Licenses tab** — every paid Xtream user enriched with device count, last-active timestamp, total paid CAD, payment count, status pill (active/expiring/expired). Searchable by username, filterable by status. Each row opens a side drawer with full payment history, per-device list (model + platform + version), a "Send reminder email" action, "Extend +1 year" and "Revoke" buttons.
+2. **Payments tab** — line-item ledger of every successful Interac e-Transfer with date-range filter (today/7d/30d/90d/YTD/all), total CAD + count badge, and one-click **CSV export** for accounting. Columns match the user's accountant spec: Date · Order ID · Username · Amount · Interac Sender · Status · Reference (Email UID).
+3. **Revenue tab** — dashboard with five revenue cards (today/week/month/YTD/all-time), three license-status cards, two live-device counters (last 5 min / last 24 h), a 12-month bar chart, and an "Expiring < 30 days" alert table so renewals can be chased proactively. Auto-refreshes every 30 s.
+
+### How the unified login works
+The user logs in once to the React admin (same email/password as before). Behind the scenes a new authenticated proxy at `/api/admin/canada/{path:path}` in the main backend (`backend/server.py`) forwards the request to the sync server's existing Canada admin endpoints with both:
+- the `X-Admin-Token` header (gates the sync-server-side endpoints), and
+- HTTP Basic Auth (gates nginx defence-in-depth in front of `/api/admin/canada/*`).
+
+Both secrets live in `backend/.env` (`SPORTS_ADMIN_TOKEN`, `NGINX_ADMIN_USER`, `NGINX_ADMIN_PASS`). The browser never sees them — only the server-to-server hop carries them.
+
+### New backend endpoints (sync_server/canada_payment_module.py)
+- `POST /api/canada/heartbeat` (public) — Android client calls this every 5 min while in foreground. Upserts `canada_devices` row per `device_id`.
+- `GET  /api/admin/canada/licenses?status=&q=` — enriched license list with device count, last_seen, payment count, total_paid_cad, computed status + days_remaining.
+- `GET  /api/admin/canada/license/{username}/devices` — per-license device list (drawer).
+- `GET  /api/admin/canada/payments?from_ms=&to_ms=` — date-range payment ledger.
+- `GET  /api/admin/canada/payments.csv?from_ms=&to_ms=` — accounting CSV download.
+- `GET  /api/admin/canada/stats` — revenue cards + 12-month chart + expiring-soon list, all in one round trip.
+- `POST /api/admin/canada/license/{username}/extend` — manual +N days extend, audit-logged with actor + reason.
+- `POST /api/admin/canada/license/{username}/remind` — SMTP renewal email via Gmail account (reuses IMAP credentials), audit-logged regardless of success.
+- `GET  /api/admin/canada/events?username=` — audit log of admin actions.
+
+### New DB tables (migrated automatically on service restart)
+```
+canada_devices       (device_id PK, xtream_username, first_seen_at, last_seen_at,
+                      app_version, platform, model)
+canada_admin_events  (id, at, action, xtream_username, actor, detail)
+```
+
+### Android (Canada flavor only, v1.44.82)
+Added a 5-min foreground heartbeat in `CanadaLicenseGate.kt` that fires once the license is confirmed paid. Sends `device_id` (ANDROID_ID, stable per-install), `app_version`, `platform` (android-tv / android-mobile), `model` (manufacturer + model name). Fire-and-forget; never crashes the UI on failure. Dev/Official are unchanged (no heartbeat — those flavors have no paid users to track).
+
+### Misc
+- Cleaned the `interac_sender` cosmetic — the IMAP HTML parser was capturing email-body cruft, now trimmed to just "First Last".
+- Audit log captures actor name + reason on every extend / revoke / reminder.
+- CSV export uses `/api/admin/canada/payments.csv` query params for the date range and triggers a browser download.
+
+### Files modified
+- `/app/sync_server/canada_payment_module.py` — 2 new tables, 8 new endpoints, _clean_sender helper, SMTP helper.
+- `/app/backend/server.py` — `/api/admin/canada/{path:path}` proxy gated by `current_admin`, env-loaded `SYNC_SERVER_URL` + `SPORTS_ADMIN_TOKEN` + `NGINX_ADMIN_USER`/`PASS`.
+- `/app/backend/.env` — added 3 new env vars (token + basic-auth creds).
+- `/app/frontend/src/admin/pages/CanadaPage.js` — new 850-line page with all three tabs + drawer.
+- `/app/frontend/src/admin/AdminShell.js` — Canada nav entry (Flag icon).
+- `/app/frontend/src/App.js` — `/canada` route.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/CanadaLicenseClient.kt` — `sendHeartbeat()` method + HeartbeatReq DTO.
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/canada/CanadaLicenseGate.kt` — heartbeat coroutine wired into existing 2 s poll loop.
+- `/app/androidtv/app/build.gradle.kts` — versionCode 482 / versionName 1.44.82.
+- `/app/_buildenv/version-canada.json` — bumped + changelog.
+
+### Verification
+- End-to-end heartbeat: `curl POST /heartbeat` → admin licenses table row updates `device_count=1, last_seen="1 min ago"` immediately. ✓
+- Extend: drawer button → `+30 d` applied → audit-log event written with actor & reason → revenue dashboard count incremented. ✓
+- CSV: download via browser triggers correct filename, columns match accountant spec, sender names cleaned. ✓
+- Reminder: SMTP path validated in code (production untested for actual delivery — needs a real recipient). Audit-log entry created either way.
+- Build: Canada APK 1.44.82 successfully built and live at `https://hushtv.xyz/hushtv-canada.apk` (24 MB).
+
+### Standalone /admin HTML
+Kept alive for backwards compatibility / emergency access (still at `https://hushtv.xyz/admin`, hushadmin / HushTV2026!). The user should use the React admin going forward. Plan to retire the standalone HTML once a couple of weeks pass without issues.
+
+---
+
+
 ## v1.44.81 — Sports Guide trimmed to 5 leagues (NHL, MLB, NBA, NFL, UFC) — 2026-02-08
 
 ### What changed

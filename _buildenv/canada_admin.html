@@ -4,21 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>HushTV Canada — License Admin</title>
+  <title>HushTV Canada — Admin</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { color-scheme: dark; }
     body { background: #060814; color: #e5e7eb; }
-    .badge-pending { background:#3b2a06; color:#f59e0b; }
-    .badge-paid    { background:#063828; color:#34d399; }
-    .badge-expired { background:#1a1d28; color:#6b7280; }
-    input:focus { outline:none; border-color:#22d3ee; box-shadow:0 0 0 2px rgba(34,211,238,.15); }
+    .badge-active   { background:#063828; color:#34d399; }
+    .badge-expiring { background:#3b2a06; color:#f59e0b; }
+    .badge-expired  { background:#1a1d28; color:#9ca3af; }
+    input:focus, select:focus { outline:none; border-color:#22d3ee; box-shadow:0 0 0 2px rgba(34,211,238,.15); }
+    .drawer-backdrop { background: rgba(0,0,0,.6); }
+    .bar { background: #0e6cd4; transition: height .3s; }
+    .bar:hover { background: #22d3ee; }
   </style>
 </head>
 <body class="min-h-screen">
 
 <header class="border-b border-slate-800 bg-slate-900/50">
-  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
     <div>
       <h1 class="text-xl font-black tracking-tight">
         hush<span class="text-cyan-400">tv</span>.
@@ -31,26 +34,192 @@
   </div>
 </header>
 
-<main class="max-w-6xl mx-auto px-6 py-6 space-y-6">
+<main class="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
   <!-- TABS -->
-  <div class="flex gap-1 border-b border-slate-700">
-    <button data-tab="approve" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-cyan-400 text-cyan-300">Approve / Lookup</button>
-    <button data-tab="licenses" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200">Active Licenses</button>
-    <button data-tab="orders" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200">Recent Orders</button>
+  <div class="flex gap-1 border-b border-slate-700 overflow-x-auto" data-testid="canada-tabs">
+    <button data-tab="revenue" data-testid="canada-tab-revenue" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-cyan-400 text-cyan-300 whitespace-nowrap">📊 Revenue</button>
+    <button data-tab="licenses" data-testid="canada-tab-licenses" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">👥 Licenses</button>
+    <button data-tab="payments" data-testid="canada-tab-payments" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">💰 Payments</button>
+    <button data-tab="approve" data-testid="canada-tab-approve" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">✓ Approve / Lookup</button>
+    <button data-tab="orders" data-testid="canada-tab-orders" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">📋 Recent Orders</button>
   </div>
 
-  <!-- APPROVE TAB -->
-  <section id="tab-approve" class="space-y-4">
+  <!-- ─────────────────── REVENUE TAB ─────────────────── -->
+  <section id="tab-revenue" class="space-y-6">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" id="rev-cards">
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400">Today</div>
+        <div class="text-2xl font-bold mt-1" id="rev-today">…</div>
+        <div class="text-xs text-slate-500" id="rev-today-count"></div>
+      </div>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400">This Week</div>
+        <div class="text-2xl font-bold mt-1" id="rev-week">…</div>
+        <div class="text-xs text-slate-500" id="rev-week-count"></div>
+      </div>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400">This Month</div>
+        <div class="text-2xl font-bold mt-1" id="rev-month">…</div>
+        <div class="text-xs text-slate-500" id="rev-month-count"></div>
+      </div>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400">YTD</div>
+        <div class="text-2xl font-bold mt-1" id="rev-ytd">…</div>
+        <div class="text-xs text-slate-500" id="rev-ytd-count"></div>
+      </div>
+      <div class="rounded-xl border-2 border-cyan-500/40 bg-cyan-500/5 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-cyan-300">All-time</div>
+        <div class="text-2xl font-bold mt-1 text-cyan-300" id="rev-all">…</div>
+        <div class="text-xs text-cyan-400/70" id="rev-all-count"></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400">Active Licenses</div>
+        <div class="text-2xl font-bold mt-1 text-emerald-400" id="lic-active">…</div>
+      </div>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400">Expiring &lt; 30d</div>
+        <div class="text-2xl font-bold mt-1 text-amber-400" id="lic-expiring">…</div>
+      </div>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400">Expired</div>
+        <div class="text-2xl font-bold mt-1 text-slate-400" id="lic-expired">…</div>
+      </div>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400">Online (5 min)</div>
+        <div class="text-2xl font-bold mt-1 text-emerald-400" id="dev-5min">…</div>
+      </div>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400">Active (24 h)</div>
+        <div class="text-2xl font-bold mt-1" id="dev-24h">…</div>
+      </div>
+    </div>
+
+    <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+      <h3 class="text-sm font-bold mb-3 text-slate-300">12-month revenue</h3>
+      <div id="rev-chart" class="flex items-end gap-1.5 h-40">
+        <div class="text-slate-500 text-sm m-auto">Loading…</div>
+      </div>
+    </div>
+
+    <div id="expiring-soon-section" class="hidden rounded-xl border border-amber-700/50 bg-amber-900/10 p-4">
+      <h3 class="text-sm font-bold mb-3 text-amber-400">⚠ Expiring in the next 30 days (<span id="exp-count">0</span>)</h3>
+      <div class="overflow-hidden rounded-lg border border-slate-800">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+            <tr>
+              <th class="text-left px-4 py-2">Username</th>
+              <th class="text-left px-4 py-2">Expires</th>
+              <th class="text-right px-4 py-2">Days left</th>
+              <th class="text-right px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody id="expiring-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────── LICENSES TAB ─────────────────── -->
+  <section id="tab-licenses" class="hidden space-y-4">
+    <div class="flex flex-wrap gap-2 items-center">
+      <input id="lic-search" type="text" placeholder="Search by username…"
+        class="flex-1 min-w-[220px] rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm font-mono"
+        data-testid="canada-search">
+      <select id="lic-status" data-testid="canada-status-filter"
+        class="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm">
+        <option value="all">All licenses</option>
+        <option value="active">Active</option>
+        <option value="expiring_30d">Expiring &lt; 30 days</option>
+        <option value="expired">Expired</option>
+      </select>
+      <button onclick="loadLicenses()" data-testid="canada-refresh"
+        class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm">↻</button>
+      <button onclick="loadStats()" class="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-300">↻ Stats</button>
+    </div>
+
+    <div class="rounded-xl border border-slate-700 bg-slate-900/50 overflow-x-auto" data-testid="canada-licenses-table">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+          <tr>
+            <th class="text-left px-3 py-3">Username</th>
+            <th class="text-left px-3 py-3">Paid</th>
+            <th class="text-left px-3 py-3">Expires</th>
+            <th class="text-right px-3 py-3">Days</th>
+            <th class="text-left px-3 py-3">Last active</th>
+            <th class="text-right px-3 py-3">Devices</th>
+            <th class="text-right px-3 py-3">Total paid</th>
+            <th class="text-left px-3 py-3">Status</th>
+            <th class="text-right px-3 py-3"></th>
+          </tr>
+        </thead>
+        <tbody id="licenses-tbody">
+          <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────── PAYMENTS TAB ─────────────────── -->
+  <section id="tab-payments" class="hidden space-y-4">
+    <div class="flex flex-wrap gap-2 items-center">
+      <label class="text-xs text-slate-400">Range</label>
+      <select id="pay-range" data-testid="canada-payments-range"
+        class="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm">
+        <option value="today">Today</option>
+        <option value="7d">Last 7 days</option>
+        <option value="30d" selected>Last 30 days</option>
+        <option value="90d">Last 90 days</option>
+        <option value="ytd">Year to date</option>
+        <option value="all">All time</option>
+      </select>
+      <div class="flex-1"></div>
+      <div class="rounded-lg bg-slate-800 border border-slate-700 px-4 py-2 text-sm">
+        <span class="text-slate-400">Total:</span>
+        <strong data-testid="canada-payments-total" id="pay-total">…</strong>
+        <span class="text-slate-400"> · </span>
+        <strong data-testid="canada-payments-count" id="pay-count">…</strong>
+        <span class="text-slate-400">payments</span>
+      </div>
+      <button onclick="downloadCsv()" data-testid="canada-csv-export"
+        class="rounded-lg bg-cyan-500 text-slate-950 px-4 py-2 text-sm font-black hover:bg-cyan-400">
+        ⬇ Export CSV
+      </button>
+    </div>
+
+    <div class="rounded-xl border border-slate-700 bg-slate-900/50 overflow-x-auto" data-testid="canada-payments-table">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+          <tr>
+            <th class="text-left px-3 py-3">Date</th>
+            <th class="text-left px-3 py-3">Order ID</th>
+            <th class="text-left px-3 py-3">Username</th>
+            <th class="text-right px-3 py-3">Amount (CAD)</th>
+            <th class="text-left px-3 py-3">Interac Sender</th>
+            <th class="text-left px-3 py-3">Status</th>
+            <th class="text-left px-3 py-3">Ref</th>
+          </tr>
+        </thead>
+        <tbody id="payments-tbody">
+          <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────── APPROVE TAB (existing) ─────────────────── -->
+  <section id="tab-approve" class="hidden space-y-4">
     <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-6 space-y-4">
       <div>
         <h2 class="text-lg font-bold">Manually approve a user</h2>
         <p class="text-sm text-slate-400 mt-1">
-          Just type the Xtream username and how many months to grant. No order number, no email, no amount.
-          A 12-month license activates instantly.
+          Type the Xtream username and how many months to grant. A 12-month license activates instantly.
+          For renewal Interac edge-cases, use this instead of waiting on the IMAP poller.
         </p>
       </div>
-
       <div class="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-3 items-end">
         <div>
           <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Xtream username</label>
@@ -64,47 +233,19 @@
             class="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-base">
         </div>
       </div>
-
       <div class="flex flex-wrap gap-2">
         <button onclick="doLookup()"
-          class="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-semibold hover:bg-slate-700">
-          🔍 Look up
-        </button>
+          class="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-semibold hover:bg-slate-700">🔍 Look up</button>
         <button onclick="doGrant()"
-          class="rounded-lg bg-cyan-500 text-slate-950 px-4 py-2 text-sm font-black hover:bg-cyan-400">
-          ✓ Approve &amp; Grant
-        </button>
+          class="rounded-lg bg-cyan-500 text-slate-950 px-4 py-2 text-sm font-black hover:bg-cyan-400">✓ Approve &amp; Grant</button>
         <button onclick="doPoll()"
-          class="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/20 ml-auto">
-          ✉ Re-scan Interac inbox
-        </button>
+          class="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/20 ml-auto">✉ Re-scan Interac inbox</button>
       </div>
-
       <div id="result"></div>
     </div>
   </section>
 
-  <!-- LICENSES TAB -->
-  <section id="tab-licenses" class="hidden">
-    <div class="rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
-          <tr>
-            <th class="text-left px-4 py-3">Username</th>
-            <th class="text-left px-4 py-3">Paid On</th>
-            <th class="text-left px-4 py-3">Expires</th>
-            <th class="text-left px-4 py-3">Last Order</th>
-            <th class="text-right px-4 py-3">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="licenses-tbody">
-          <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- ORDERS TAB -->
+  <!-- ─────────────────── ORDERS TAB (existing) ─────────────────── -->
   <section id="tab-orders" class="hidden">
     <div class="rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden">
       <table class="w-full text-sm">
@@ -126,13 +267,32 @@
 
 </main>
 
+<!-- ─────────────────── LICENSE DRAWER ─────────────────── -->
+<div id="drawer" class="hidden fixed inset-0 z-40 drawer-backdrop" onclick="if (event.target.id==='drawer') closeDrawer()">
+  <div class="absolute top-0 right-0 w-full max-w-md h-full bg-slate-900 border-l border-slate-700 overflow-y-auto p-6" data-testid="canada-license-drawer">
+    <div id="drawer-content"></div>
+  </div>
+</div>
+
 <div id="toast" class="fixed bottom-6 right-6 z-50 pointer-events-none transition-all"></div>
 
 <script>
 const BASE = "/api/admin/canada";
 const $ = (id) => document.getElementById(id);
 
-function toast(msg, type = "info") {
+function fmtDate(ms) {
+  if (!ms) return "—";
+  return new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+function fmtRelative(ms) {
+  if (!ms) return "—";
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return Math.floor(diff/60_000) + " min ago";
+  if (diff < 86_400_000) return Math.floor(diff/3_600_000) + " h ago";
+  return Math.floor(diff/86_400_000) + " d ago";
+}
+function toast(msg, type="info") {
   const el = $("toast");
   const bg = type === "error" ? "bg-rose-500" : type === "success" ? "bg-emerald-500" : "bg-slate-700";
   el.innerHTML = `<div class="${bg} text-slate-950 font-semibold rounded-lg px-4 py-3 shadow-2xl">${msg}</div>`;
@@ -140,17 +300,12 @@ function toast(msg, type = "info") {
   window._toastT = setTimeout(() => el.innerHTML = "", 4000);
 }
 
-function fmtDate(ms) {
-  if (!ms) return "—";
-  return new Date(ms).toLocaleString();
-}
-
 async function api(method, path, body) {
   const r = await fetch(BASE + path, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-    credentials: "include",  // sends Basic-Auth header from browser
+    credentials: "include",
   });
   if (!r.ok) {
     let detail = r.statusText;
@@ -159,7 +314,6 @@ async function api(method, path, body) {
   }
   return r.json();
 }
-
 async function publicApi(path) {
   const r = await fetch("/api/canada" + path);
   if (!r.ok) throw new Error("HTTP " + r.status);
@@ -167,35 +321,262 @@ async function publicApi(path) {
 }
 
 // ── tab switching ──
+const TAB_IDS = ["revenue","licenses","payments","approve","orders"];
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach(b => {
-      b.classList.remove("border-cyan-400", "text-cyan-300");
-      b.classList.add("border-transparent", "text-slate-400");
+      b.classList.remove("border-cyan-400","text-cyan-300");
+      b.classList.add("border-transparent","text-slate-400");
     });
-    btn.classList.remove("border-transparent", "text-slate-400");
-    btn.classList.add("border-cyan-400", "text-cyan-300");
+    btn.classList.remove("border-transparent","text-slate-400");
+    btn.classList.add("border-cyan-400","text-cyan-300");
     const k = btn.dataset.tab;
-    document.getElementById("tab-approve").classList.toggle("hidden", k !== "approve");
-    document.getElementById("tab-licenses").classList.toggle("hidden", k !== "licenses");
-    document.getElementById("tab-orders").classList.toggle("hidden", k !== "orders");
+    TAB_IDS.forEach(id => $("tab-"+id).classList.toggle("hidden", id !== k));
+    if (k === "revenue")  loadStats();
     if (k === "licenses") loadLicenses();
-    if (k === "orders") loadOrders();
+    if (k === "payments") loadPayments();
+    if (k === "orders")   loadOrders();
   });
 });
 
-// ── lookup / grant / revoke ──
+// ── stats / revenue dashboard ──
+async function loadStats() {
+  try {
+    const s = await api("GET", "/stats");
+    const fmt = (v) => "$" + (v||0).toFixed(2);
+    $("rev-today").textContent = fmt(s.revenue.today.total_cad);
+    $("rev-today-count").textContent = s.revenue.today.count + " payment(s)";
+    $("rev-week").textContent = fmt(s.revenue.week.total_cad);
+    $("rev-week-count").textContent = s.revenue.week.count + " payment(s)";
+    $("rev-month").textContent = fmt(s.revenue.month.total_cad);
+    $("rev-month-count").textContent = s.revenue.month.count + " payment(s)";
+    $("rev-ytd").textContent = fmt(s.revenue.ytd.total_cad);
+    $("rev-ytd-count").textContent = s.revenue.ytd.count + " payment(s)";
+    $("rev-all").textContent = fmt(s.revenue.all_time.total_cad);
+    $("rev-all-count").textContent = s.revenue.all_time.count + " payment(s)";
+
+    $("lic-active").textContent   = s.licenses.active;
+    $("lic-expiring").textContent = s.licenses.expiring_30d;
+    $("lic-expired").textContent  = s.licenses.expired;
+    $("dev-5min").textContent     = s.active_devices.last_5min;
+    $("dev-24h").textContent      = s.active_devices.last_24h;
+
+    // 12-month bar chart
+    const max = Math.max(1, ...s.monthly_chart.map(m => m.total_cad));
+    $("rev-chart").innerHTML = s.monthly_chart.map(m => {
+      const h = Math.max(4, (m.total_cad / max) * 130);
+      return `<div class="flex-1 flex flex-col items-center min-w-0">
+        <div class="bar w-full rounded-t" style="height:${h}px" title="${m.month}: $${m.total_cad.toFixed(2)} (${m.count} payments)"></div>
+        <div class="text-[10px] text-slate-500 mt-1 truncate w-full text-center">${m.month.slice(5)}</div>
+        <div class="text-[11px] font-semibold">$${m.total_cad.toFixed(0)}</div>
+      </div>`;
+    }).join("");
+
+    // expiring soon
+    const exp = s.expiring_soon || [];
+    if (exp.length === 0) {
+      $("expiring-soon-section").classList.add("hidden");
+    } else {
+      $("expiring-soon-section").classList.remove("hidden");
+      $("exp-count").textContent = exp.length;
+      $("expiring-tbody").innerHTML = exp.map(u => `
+        <tr class="border-t border-slate-800 hover:bg-slate-800/30">
+          <td class="px-4 py-2 font-mono font-semibold">${u.xtream_username}</td>
+          <td class="px-4 py-2 text-slate-300">${fmtDate(u.expires_at)}</td>
+          <td class="px-4 py-2 text-right ${u.days_remaining < 7 ? 'text-rose-400' : ''}">${u.days_remaining}</td>
+          <td class="px-4 py-2 text-right">
+            <button onclick="openDrawer('${u.xtream_username}')" class="text-cyan-400 hover:text-cyan-300 text-xs font-semibold">View →</button>
+          </td>
+        </tr>`).join("");
+    }
+  } catch (e) {
+    toast("Stats: " + e.message, "error");
+  }
+}
+
+// ── licenses table ──
+let LICENSES_CACHE = [];
+async function loadLicenses() {
+  try {
+    const q = ($("lic-search").value || "").trim();
+    const status = $("lic-status").value;
+    const params = new URLSearchParams({ limit: 500 });
+    if (status !== "all") params.set("status", status);
+    if (q) params.set("q", q);
+    const data = await api("GET", "/licenses?" + params.toString());
+    LICENSES_CACHE = data.licenses || [];
+    if (LICENSES_CACHE.length === 0) {
+      $("licenses-tbody").innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No licenses match.</td></tr>`;
+      return;
+    }
+    $("licenses-tbody").innerHTML = LICENSES_CACHE.map(l => {
+      const badge = l.status === "active" ? "badge-active" : l.status === "expiring_30d" ? "badge-expiring" : "badge-expired";
+      const label = l.status === "active" ? "Active" : l.status === "expiring_30d" ? "Expiring" : "Expired";
+      return `<tr class="border-t border-slate-800 hover:bg-slate-800/30" data-testid="canada-lic-row-${l.xtream_username}">
+        <td class="px-3 py-3 font-mono font-semibold">${l.xtream_username}</td>
+        <td class="px-3 py-3 text-slate-300">${fmtDate(l.paid_at)}</td>
+        <td class="px-3 py-3 text-slate-300">${fmtDate(l.expires_at)}</td>
+        <td class="px-3 py-3 text-right">${l.days_remaining}</td>
+        <td class="px-3 py-3 text-slate-300">${l.last_seen_at ? fmtRelative(l.last_seen_at) : '<span class="text-slate-600">never</span>'}</td>
+        <td class="px-3 py-3 text-right">${l.device_count}</td>
+        <td class="px-3 py-3 text-right">$${(l.total_paid_cad||0).toFixed(2)}</td>
+        <td class="px-3 py-3"><span class="text-[10px] font-bold tracking-wider rounded px-2 py-0.5 ${badge}">${label}</span></td>
+        <td class="px-3 py-3 text-right">
+          <button onclick="openDrawer('${l.xtream_username}')" data-testid="canada-view-${l.xtream_username}" class="text-cyan-400 hover:text-cyan-300 text-xs font-semibold">View →</button>
+        </td>
+      </tr>`;
+    }).join("");
+  } catch (e) {
+    $("licenses-tbody").innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+$("lic-search").addEventListener("input", () => { clearTimeout(window._licT); window._licT = setTimeout(loadLicenses, 250); });
+$("lic-status").addEventListener("change", loadLicenses);
+
+// ── license drawer ──
+async function openDrawer(username) {
+  $("drawer").classList.remove("hidden");
+  $("drawer-content").innerHTML = `<div class="text-slate-500">Loading…</div>`;
+  try {
+    const l = LICENSES_CACHE.find(x => x.xtream_username === username) || (await api("GET", "/licenses?q=" + encodeURIComponent(username))).licenses[0];
+    if (!l) throw new Error("not found");
+    const dev = await api("GET", `/license/${encodeURIComponent(username)}/devices`);
+    renderDrawer(l, dev.devices || []);
+  } catch (e) {
+    $("drawer-content").innerHTML = `<div class="text-rose-400">${e.message}</div>`;
+  }
+}
+function closeDrawer() { $("drawer").classList.add("hidden"); }
+
+function renderDrawer(l, devices) {
+  const badge = l.status === "active" ? "badge-active" : l.status === "expiring_30d" ? "badge-expiring" : "badge-expired";
+  const label = l.status === "active" ? "Active" : l.status === "expiring_30d" ? "Expiring" : "Expired";
+  const devicesHtml = devices.length === 0
+    ? `<p class="text-slate-500 text-sm">📱 No heartbeats yet. Devices show up here after a paid user opens the app (heartbeat fires every 5 min).</p>`
+    : devices.map(d => `
+        <div class="rounded-lg bg-slate-800 border border-slate-700 p-3 mb-2">
+          <div class="flex justify-between items-baseline">
+            <strong class="text-sm">${d.platform || "unknown"}</strong>
+            <span class="text-xs text-slate-500">${fmtRelative(d.last_seen_at)}</span>
+          </div>
+          <div class="text-xs text-slate-400">${d.model || "—"} · v${d.app_version || "?"}</div>
+          <div class="text-[10px] text-slate-600 font-mono mt-1">${(d.device_id||"").substring(0,28)}…</div>
+        </div>`).join("");
+
+  $("drawer-content").innerHTML = `
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold font-mono">${l.xtream_username}</h2>
+      <span class="text-[10px] font-bold tracking-wider rounded px-2 py-1 ${badge}">${label}</span>
+    </div>
+    <div class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm mb-6">
+      <div class="text-slate-400">Paid</div><div class="text-right">${fmtDate(l.paid_at)}</div>
+      <div class="text-slate-400">Expires</div><div class="text-right">${fmtDate(l.expires_at)}</div>
+      <div class="text-slate-400">Days remaining</div><div class="text-right font-bold">${l.days_remaining}</div>
+      <div class="text-slate-400">Total paid</div><div class="text-right">$${(l.total_paid_cad||0).toFixed(2)} CAD</div>
+      <div class="text-slate-400">Payments</div><div class="text-right">${l.payment_count}</div>
+      <div class="text-slate-400">Last order ID</div><div class="text-right font-mono">${l.last_order_id || "—"}</div>
+    </div>
+
+    <h3 class="text-sm font-bold text-slate-300 mb-2">Devices (${devices.length})</h3>
+    ${devicesHtml}
+
+    <h3 class="text-sm font-bold text-slate-300 mt-6 mb-2">Send renewal reminder</h3>
+    <div class="flex gap-2 mb-1">
+      <input id="d-email" type="email" placeholder="user@example.com" class="flex-1 rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm" data-testid="canada-remind-email">
+      <button onclick="doRemind('${l.xtream_username}')" data-testid="canada-remind-send"
+        class="rounded-lg bg-cyan-500 text-slate-950 px-3 py-2 text-sm font-bold hover:bg-cyan-400">✉ Send</button>
+    </div>
+    <p class="text-[10px] text-slate-500 mb-4">Sent from Hushtv.info@gmail.com. Audit-logged regardless of success.</p>
+
+    <div class="grid grid-cols-2 gap-2 mt-2">
+      <button onclick="doExtendOneYear('${l.xtream_username}')" data-testid="canada-drawer-extend"
+        class="rounded-lg bg-cyan-500 text-slate-950 px-3 py-2 text-sm font-bold hover:bg-cyan-400">+ Extend +1 year</button>
+      <button onclick="doRevoke('${l.xtream_username}')" data-testid="canada-drawer-revoke"
+        class="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm font-bold text-rose-300 hover:bg-rose-500/20">🗑 Revoke</button>
+    </div>
+    <button onclick="closeDrawer()" class="w-full mt-3 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm">Close</button>
+  `;
+}
+
+async function doExtendOneYear(username) {
+  try {
+    await api("POST", `/license/${encodeURIComponent(username)}/extend`, {
+      xtream_username: username, days: 365, actor: "hushadmin",
+    });
+    toast(`Extended +1 year for ${username}`, "success");
+    closeDrawer();
+    loadLicenses();
+    loadStats();
+  } catch (e) { toast(e.message, "error"); }
+}
+
+async function doRemind(username) {
+  const email = ($("d-email").value || "").trim();
+  if (!email) return toast("Enter an email address", "error");
+  try {
+    const r = await api("POST", `/license/${encodeURIComponent(username)}/remind`, {
+      xtream_username: username, to_email: email, actor: "hushadmin",
+    });
+    if (r.reminded) toast(`Reminder sent to ${email}`, "success");
+    else toast(`Send failed: ${r.error || "unknown"}`, "error");
+  } catch (e) { toast(e.message, "error"); }
+}
+
+// ── payments ledger ──
+function rangeToMs(r) {
+  const now = Date.now(); const D = 24*60*60*1000;
+  switch (r) {
+    case "today": { const d=new Date(); d.setUTCHours(0,0,0,0); return { from_ms: d.getTime() }; }
+    case "7d":  return { from_ms: now - 7*D };
+    case "30d": return { from_ms: now - 30*D };
+    case "90d": return { from_ms: now - 90*D };
+    case "ytd": { const d=new Date(); return { from_ms: Date.UTC(d.getUTCFullYear(),0,1) }; }
+    default: return {};
+  }
+}
+async function loadPayments() {
+  try {
+    const params = rangeToMs($("pay-range").value);
+    const qs = new URLSearchParams(params).toString();
+    const data = await api("GET", "/payments" + (qs ? "?" + qs : ""));
+    $("pay-total").textContent = "$" + (data.total_cad||0).toFixed(2) + " CAD";
+    $("pay-count").textContent = data.count;
+    if ((data.payments||[]).length === 0) {
+      $("payments-tbody").innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No payments in this range.</td></tr>`;
+      return;
+    }
+    $("payments-tbody").innerHTML = data.payments.map(p => `
+      <tr class="border-t border-slate-800 hover:bg-slate-800/30" data-testid="canada-pay-row-${p.order_id}">
+        <td class="px-3 py-3">${fmtDate(p.paid_at || p.created_at)}</td>
+        <td class="px-3 py-3 font-mono">${p.order_id}</td>
+        <td class="px-3 py-3 font-mono">${p.xtream_username}</td>
+        <td class="px-3 py-3 text-right">${p.amount_cad != null ? '$' + p.amount_cad.toFixed(2) : '—'}</td>
+        <td class="px-3 py-3 text-slate-300">${p.interac_sender || '—'}</td>
+        <td class="px-3 py-3"><span class="${p.status === 'paid' ? 'text-emerald-400' : 'text-slate-400'}">${p.status}</span></td>
+        <td class="px-3 py-3 font-mono text-xs text-slate-500">${p.interac_email_uid || '—'}</td>
+      </tr>`).join("");
+  } catch (e) {
+    $("payments-tbody").innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+$("pay-range").addEventListener("change", loadPayments);
+
+function downloadCsv() {
+  const params = rangeToMs($("pay-range").value);
+  const qs = new URLSearchParams(params).toString();
+  // Same-origin; Basic-Auth cookie travels along automatically.
+  window.location.href = "/api/admin/canada/payments.csv" + (qs ? "?" + qs : "");
+}
+
+// ── approve / lookup (existing) ──
 async function doLookup() {
   const u = ($("i-username").value || "").trim().toLowerCase();
   if (!u) { toast("Enter a username", "error"); return; }
   try {
     const data = await publicApi(`/license/${encodeURIComponent(u)}`);
     renderResult(u, data.license || { paid: false });
-  } catch (e) {
-    toast(e.message, "error");
-  }
+  } catch (e) { toast(e.message, "error"); }
 }
-
 async function doGrant() {
   const u = ($("i-username").value || "").trim().toLowerCase();
   const months = parseInt($("i-months").value || "12", 10);
@@ -205,11 +586,8 @@ async function doGrant() {
     const days = data.license?.days_remaining ?? "?";
     toast(`Granted ${months} months to ${u} — ${days} days total`, "success");
     await doLookup();
-  } catch (e) {
-    toast(e.message, "error");
-  }
+  } catch (e) { toast(e.message, "error"); }
 }
-
 async function doRevoke(username) {
   const u = username || ($("i-username").value || "").trim().toLowerCase();
   if (!u) return;
@@ -217,34 +595,26 @@ async function doRevoke(username) {
   try {
     await api("POST", "/revoke", { xtream_username: u });
     toast(`Revoked ${u}`, "success");
+    closeDrawer();
     if (u === ($("i-username").value || "").trim().toLowerCase()) await doLookup();
-    if (!document.getElementById("tab-licenses").classList.contains("hidden")) loadLicenses();
-  } catch (e) {
-    toast(e.message, "error");
-  }
+    loadLicenses();
+    loadStats();
+  } catch (e) { toast(e.message, "error"); }
 }
-
 async function doPoll() {
   try {
     const data = await api("POST", "/poll");
     const s = data.scan || {};
     toast(`Scanned ${s.checked || 0} emails, matched ${s.matched || 0}`, "success");
-  } catch (e) {
-    toast(e.message, "error");
-  }
+  } catch (e) { toast(e.message, "error"); }
 }
-
 function renderResult(username, lic) {
   const paid = !!lic.paid;
   const expired = !!lic.expired;
   const color = paid ? "emerald" : "rose";
   const label = paid ? "ACTIVE LICENSE" : (expired ? "EXPIRED" : "NO LICENSE");
   const icon = paid ? "✓" : "⚠";
-
-  let detailRows = `
-    <div class="text-slate-400">Username</div>
-    <div class="font-mono">${username}</div>
-  `;
+  let detailRows = `<div class="text-slate-400">Username</div><div class="font-mono">${username}</div>`;
   if (paid) {
     detailRows += `
       <div class="text-slate-400">Paid on</div><div>${fmtDate(lic.paid_at)}</div>
@@ -254,13 +624,9 @@ function renderResult(username, lic) {
   } else if (expired) {
     detailRows += `<div class="text-slate-400">Expired on</div><div>${fmtDate(lic.expired_at)}</div>`;
   }
-
   const revokeBtn = paid ? `
     <button onclick="doRevoke('${username}')"
-      class="mt-4 inline-flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20">
-      Revoke this license
-    </button>` : "";
-
+      class="mt-4 inline-flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20">Revoke this license</button>` : "";
   $("result").innerHTML = `
     <div class="rounded-xl border-2 border-${color}-500/50 bg-${color}-500/5 p-4 mt-4">
       <div class="flex items-center gap-2 mb-3">
@@ -270,29 +636,6 @@ function renderResult(username, lic) {
       <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">${detailRows}</div>
       ${revokeBtn}
     </div>`;
-}
-
-async function loadLicenses() {
-  try {
-    const data = await api("GET", "/licenses?limit=500");
-    const rows = data.licenses || [];
-    if (rows.length === 0) {
-      $("licenses-tbody").innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No active licenses yet.</td></tr>`;
-      return;
-    }
-    $("licenses-tbody").innerHTML = rows.map(l => `
-      <tr class="border-t border-slate-800 hover:bg-slate-800/30">
-        <td class="px-4 py-3 font-mono">${l.xtream_username}</td>
-        <td class="px-4 py-3 text-slate-300">${fmtDate(l.paid_at)}</td>
-        <td class="px-4 py-3 text-slate-300">${fmtDate(l.expires_at)}</td>
-        <td class="px-4 py-3 font-mono text-slate-400">${l.last_order_id || "—"}</td>
-        <td class="px-4 py-3 text-right">
-          <button onclick="doRevoke('${l.xtream_username}')" class="text-rose-400 hover:text-rose-300 text-xs font-semibold">Revoke</button>
-        </td>
-      </tr>`).join("");
-  } catch (e) {
-    $("licenses-tbody").innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-rose-400">${e.message}</td></tr>`;
-  }
 }
 
 async function loadOrders() {
@@ -305,8 +648,7 @@ async function loadOrders() {
     }
     $("orders-tbody").innerHTML = rows.map(o => {
       const cls = o.status === "paid" ? "text-emerald-400 font-bold"
-                : o.status === "expired" ? "text-slate-500"
-                : "text-amber-400";
+                : o.status === "expired" ? "text-slate-500" : "text-amber-400";
       return `<tr class="border-t border-slate-800 hover:bg-slate-800/30">
         <td class="px-4 py-3 font-mono">${o.order_id}</td>
         <td class="px-4 py-3 font-mono">${o.xtream_username}</td>
@@ -320,13 +662,16 @@ async function loadOrders() {
   }
 }
 
-// ── allow Enter key in username to trigger lookup ──
+// ── boot ──
 $("i-username").addEventListener("keydown", e => { if (e.key === "Enter") doLookup(); });
-
-// ── show server-side configured amount in header ──
 fetch("/api/canada/health").then(r => r.json()).then(d => {
   $("server-amount").textContent = "$" + (d.expected_amount_cad ?? "?");
 }).catch(() => $("server-amount").textContent = "$?");
+loadStats();
+// Refresh dashboard every 30 s
+setInterval(() => {
+  if (!$("tab-revenue").classList.contains("hidden")) loadStats();
+}, 30000);
 </script>
 </body>
 </html>

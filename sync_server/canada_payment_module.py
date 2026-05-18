@@ -11,30 +11,36 @@ pending orders. On a match the order flips to `paid` and a 1-year
 license is granted to the associated xtream_username.
 
 Storage: re-uses the existing sync SQLite DB at /var/hushtv-sync/sync.sqlite3
-in three new tables:
+in five tables:
   - canada_orders         (order_id PK, xtream_username, status, …)
   - canada_licenses       (xtream_username PK, paid_at, expires_at)
   - canada_processed_emails (uid PK)   — idempotency for IMAP poller
+  - canada_devices        — heartbeat tracking per device per user (v1.44.82)
+  - canada_admin_events   — audit log for manual extends, revokes, reminders (v1.44.82)
 
 Routes mounted under /api/canada/* by hushsync_app.py.
 """
 from __future__ import annotations
 
+import csv
 import email
 import imaplib
+import io
 import logging
 import os
 import random
 import re
+import smtplib
 import sqlite3
 import threading
 import time
 from contextlib import contextmanager
-from email.message import Message
+from email.message import EmailMessage, Message
 from typing import Optional
 
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 log = logging.getLogger("canada_payment")
@@ -101,6 +107,38 @@ def _init_schema() -> None:
                 sender       TEXT,
                 outcome      TEXT
             );
+
+            -- v1.44.82 — per-device heartbeats so admin can see who is
+            -- actively using the app and from how many devices.
+            CREATE TABLE IF NOT EXISTS canada_devices (
+                device_id        TEXT PRIMARY KEY,
+                xtream_username  TEXT NOT NULL,
+                first_seen_at    INTEGER NOT NULL,
+                last_seen_at     INTEGER NOT NULL,
+                app_version      TEXT,
+                platform         TEXT,
+                model            TEXT
+            );
+            CREATE INDEX IF NOT EXISTS canada_devices_user_idx
+                ON canada_devices(xtream_username);
+            CREATE INDEX IF NOT EXISTS canada_devices_last_seen_idx
+                ON canada_devices(last_seen_at DESC);
+
+            -- v1.44.82 — audit log for admin-initiated actions
+            -- (extend, revoke, send reminder). Lets accounting see who
+            -- did what without trawling through orders.
+            CREATE TABLE IF NOT EXISTS canada_admin_events (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                at               INTEGER NOT NULL,
+                action           TEXT NOT NULL,
+                xtream_username  TEXT,
+                actor            TEXT,
+                detail           TEXT
+            );
+            CREATE INDEX IF NOT EXISTS canada_admin_events_user_idx
+                ON canada_admin_events(xtream_username);
+            CREATE INDEX IF NOT EXISTS canada_admin_events_at_idx
+                ON canada_admin_events(at DESC);
             """
         )
         # Add message_id column for stable cross-session idempotency.
@@ -591,6 +629,42 @@ def license_status(xtream_username: str) -> dict:
         return {"xtream_username": user, "license": _serialize_license(row)}
 
 
+# ── Public heartbeat ────────────────────────────────────────────────
+class HeartbeatReq(BaseModel):
+    xtream_username: str = Field(..., min_length=1, max_length=128)
+    device_id: str = Field(..., min_length=1, max_length=128)
+    app_version: Optional[str] = Field(None, max_length=64)
+    platform: Optional[str] = Field(None, max_length=32)  # "android-tv" | "android-mobile"
+    model: Optional[str] = Field(None, max_length=128)
+
+
+@router.post("/heartbeat")
+def heartbeat(req: HeartbeatReq) -> dict:
+    """Called by the Android client every ~5 min while in foreground.
+    Records `last_seen_at` per device so the admin can see active
+    devices/users. Cheap upsert — no IO beyond the SQLite write.
+    """
+    user = req.xtream_username.strip().lower()
+    if not user or not req.device_id:
+        raise HTTPException(400, "xtream_username and device_id required")
+    now = _now_ms()
+    with _conn() as c:
+        c.execute(
+            """INSERT INTO canada_devices
+               (device_id, xtream_username, first_seen_at, last_seen_at,
+                app_version, platform, model)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(device_id) DO UPDATE SET
+                 xtream_username = excluded.xtream_username,
+                 last_seen_at    = excluded.last_seen_at,
+                 app_version     = COALESCE(excluded.app_version, canada_devices.app_version),
+                 platform        = COALESCE(excluded.platform, canada_devices.platform),
+                 model           = COALESCE(excluded.model, canada_devices.model)""",
+            (req.device_id, user, now, now, req.app_version, req.platform, req.model),
+        )
+    return {"ok": True, "at": now}
+
+
 # ── Admin endpoints (gated by X-Admin-Token) ────────────────────────
 admin_router = APIRouter(prefix="/api/admin/canada", tags=["canada-admin"])
 
@@ -655,20 +729,483 @@ def admin_orders(x_admin_token: Optional[str] = Header(None), limit: int = 50) -
 
 
 @admin_router.get("/licenses")
-def admin_licenses(x_admin_token: Optional[str] = Header(None), limit: int = 500) -> dict:
+def admin_licenses(
+    x_admin_token: Optional[str] = Header(None),
+    limit: int = 1000,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
+) -> dict:
+    """Returns enriched license rows joined with device + payment data.
+
+    Filters:
+      status = "active" | "expiring_30d" | "expired" | None (all)
+      q      = username substring filter
+    """
     _check_admin(x_admin_token)
     limit = max(1, min(2000, limit))
+    now = _now_ms()
+    thirty_d = 30 * 24 * 60 * 60 * 1000
     with _conn() as c:
         rows = c.execute(
-            "SELECT * FROM canada_licenses ORDER BY expires_at DESC LIMIT ?", (limit,)
+            """SELECT l.*,
+                  (SELECT COUNT(*) FROM canada_devices d
+                     WHERE d.xtream_username = l.xtream_username) AS device_count,
+                  (SELECT MAX(last_seen_at) FROM canada_devices d
+                     WHERE d.xtream_username = l.xtream_username) AS last_seen_at,
+                  (SELECT COUNT(*) FROM canada_orders o
+                     WHERE o.xtream_username = l.xtream_username
+                       AND o.status='paid') AS payment_count,
+                  (SELECT COALESCE(SUM(CAST(o.interac_amount AS REAL)), 0)
+                     FROM canada_orders o
+                     WHERE o.xtream_username = l.xtream_username
+                       AND o.status='paid') AS total_paid_cad
+               FROM canada_licenses l
+               ORDER BY l.expires_at DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        out = []
+        for r in rows:
+            exp = int(r["expires_at"])
+            if exp <= now:
+                row_status = "expired"
+            elif exp - now <= thirty_d:
+                row_status = "expiring_30d"
+            else:
+                row_status = "active"
+            if status and status != row_status:
+                continue
+            if q and q.lower() not in r["xtream_username"].lower():
+                continue
+            out.append({
+                "xtream_username": r["xtream_username"],
+                "paid_at": int(r["paid_at"]),
+                "expires_at": exp,
+                "last_order_id": r["last_order_id"],
+                "device_count": int(r["device_count"] or 0),
+                "last_seen_at": int(r["last_seen_at"]) if r["last_seen_at"] else None,
+                "payment_count": int(r["payment_count"] or 0),
+                "total_paid_cad": round(float(r["total_paid_cad"] or 0), 2),
+                "status": row_status,
+                "days_remaining": max(0, (exp - now) // (24 * 60 * 60 * 1000)),
+            })
+        return {"licenses": out, "total": len(out)}
+
+
+@admin_router.get("/license/{username}/devices")
+def admin_license_devices(
+    username: str, x_admin_token: Optional[str] = Header(None)
+) -> dict:
+    """Per-user device list for the license detail drawer."""
+    _check_admin(x_admin_token)
+    user = username.strip().lower()
+    with _conn() as c:
+        rows = c.execute(
+            """SELECT device_id, first_seen_at, last_seen_at, app_version,
+                      platform, model
+               FROM canada_devices
+               WHERE xtream_username=?
+               ORDER BY last_seen_at DESC""",
+            (user,),
         ).fetchall()
         return {
-            "licenses": [
+            "xtream_username": user,
+            "devices": [
                 {
+                    "device_id": r["device_id"],
+                    "first_seen_at": int(r["first_seen_at"]),
+                    "last_seen_at": int(r["last_seen_at"]),
+                    "app_version": r["app_version"],
+                    "platform": r["platform"],
+                    "model": r["model"],
+                }
+                for r in rows
+            ],
+        }
+
+
+# ── Payments ledger + CSV export ───────────────────────────────────
+def _clean_sender(s) -> str:
+    """Strip email-body cruft from the captured sender field. The Interac
+    HTML parser sometimes grabs whitespace runs from the Gmail body
+    instead of the bare name — this normalises to just the person's
+    name. Defensive; safe to call on already-clean values."""
+    if not s:
+        return ""
+    t = str(s)
+    m = re.match(r"^(.+?)\s+have\s+been", t, re.I)
+    if m:
+        return m.group(1).strip().rstrip(",.")
+    # Fall back: cut at the first double-space (Gmail boilerplate often
+    # starts with several non-breaking spaces).
+    return t.split("  ", 1)[0].strip().rstrip(",.")[:80]
+
+
+def _paid_orders_in_range(c, from_ms: Optional[int], to_ms: Optional[int]):
+    where = ["status='paid'"]
+    params: list = []
+    if from_ms is not None:
+        where.append("paid_at >= ?")
+        params.append(from_ms)
+    if to_ms is not None:
+        where.append("paid_at < ?")
+        params.append(to_ms)
+    sql = (
+        "SELECT * FROM canada_orders WHERE " + " AND ".join(where) +
+        " ORDER BY paid_at DESC"
+    )
+    return c.execute(sql, params).fetchall()
+
+
+@admin_router.get("/payments")
+def admin_payments(
+    x_admin_token: Optional[str] = Header(None),
+    from_ms: Optional[int] = None,
+    to_ms: Optional[int] = None,
+) -> dict:
+    """JSON list of paid orders in [from_ms, to_ms). Both sides optional."""
+    _check_admin(x_admin_token)
+    with _conn() as c:
+        rows = _paid_orders_in_range(c, from_ms, to_ms)
+        total_cad = sum(
+            float(r["interac_amount"] or 0) for r in rows if r["interac_amount"]
+        )
+        return {
+            "from_ms": from_ms,
+            "to_ms": to_ms,
+            "count": len(rows),
+            "total_cad": round(total_cad, 2),
+            "payments": [
+                {
+                    "order_id": r["order_id"],
                     "xtream_username": r["xtream_username"],
-                    "paid_at": int(r["paid_at"]),
-                    "expires_at": int(r["expires_at"]),
-                    "last_order_id": r["last_order_id"],
+                    "paid_at": int(r["paid_at"]) if r["paid_at"] else None,
+                    "amount_cad": float(r["interac_amount"]) if r["interac_amount"] else None,
+                    "interac_sender": _clean_sender(r["interac_sender"]),
+                    "interac_email_uid": r["interac_email_uid"],
+                    "created_at": int(r["created_at"]),
+                    "status": r["status"],
+                }
+                for r in rows
+            ],
+        }
+
+
+@admin_router.get("/payments.csv")
+def admin_payments_csv(
+    x_admin_token: Optional[str] = Header(None),
+    from_ms: Optional[int] = None,
+    to_ms: Optional[int] = None,
+):
+    """CSV export for the accountant. Columns:
+       Date, Order ID, Username, Amount (CAD), Interac Sender,
+       Payment Status, Reference (email UID)
+    """
+    _check_admin(x_admin_token)
+    with _conn() as c:
+        rows = _paid_orders_in_range(c, from_ms, to_ms)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([
+        "Date (UTC ISO)", "Order ID", "Username", "Amount (CAD)",
+        "Interac Sender", "Payment Status", "Reference (Email UID)",
+    ])
+    import datetime as _dt
+    for r in rows:
+        ts = r["paid_at"] or r["created_at"]
+        iso = _dt.datetime.utcfromtimestamp(int(ts) / 1000).isoformat() if ts else ""
+        w.writerow([
+            iso,
+            r["order_id"],
+            r["xtream_username"],
+            r["interac_amount"] or "",
+            _clean_sender(r["interac_sender"]),
+            r["status"],
+            r["interac_email_uid"] or "",
+        ])
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="canada_payments.csv"'},
+    )
+
+
+# ── Dashboard stats ─────────────────────────────────────────────────
+@admin_router.get("/stats")
+def admin_stats(x_admin_token: Optional[str] = Header(None)) -> dict:
+    """Pre-aggregated dashboard numbers — single call powers the revenue UI."""
+    _check_admin(x_admin_token)
+    import datetime as _dt
+    now = _now_ms()
+    today = _dt.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    start_today = int(today.timestamp() * 1000)
+    start_week = int((today - _dt.timedelta(days=today.weekday())).timestamp() * 1000)
+    start_month = int(today.replace(day=1).timestamp() * 1000)
+    start_year = int(today.replace(month=1, day=1).timestamp() * 1000)
+    # 12-month bar chart buckets
+    months_back: list[tuple[int, int, str]] = []
+    cursor = today.replace(day=1)
+    for _ in range(12):
+        prev = cursor
+        # back one month
+        year = prev.year if prev.month > 1 else prev.year - 1
+        month = prev.month - 1 if prev.month > 1 else 12
+        cursor = prev.replace(year=year, month=month, day=1)
+    cursor = today.replace(day=1)
+    # rebuild forward 12 entries (oldest first)
+    starts = []
+    pt = today.replace(day=1)
+    for _ in range(12):
+        starts.append(pt)
+        year = pt.year if pt.month > 1 else pt.year - 1
+        month = pt.month - 1 if pt.month > 1 else 12
+        pt = pt.replace(year=year, month=month, day=1)
+    starts.reverse()
+    months_back = []
+    for i, s in enumerate(starts):
+        if i + 1 < len(starts):
+            end = starts[i + 1]
+        else:
+            # last month ends at "now + 1 second" so we include current month
+            end = today.replace(year=today.year + (1 if today.month == 12 else 0),
+                                month=1 if today.month == 12 else today.month + 1, day=1)
+        months_back.append((int(s.timestamp() * 1000),
+                            int(end.timestamp() * 1000),
+                            s.strftime("%Y-%m")))
+
+    with _conn() as c:
+        def sum_for(start_ms: int, end_ms: Optional[int] = None) -> tuple[int, float]:
+            sql = "SELECT COUNT(*) c, COALESCE(SUM(CAST(interac_amount AS REAL)),0) s FROM canada_orders WHERE status='paid' AND paid_at >= ?"
+            params: list = [start_ms]
+            if end_ms is not None:
+                sql += " AND paid_at < ?"
+                params.append(end_ms)
+            r = c.execute(sql, params).fetchone()
+            return int(r["c"] or 0), round(float(r["s"] or 0), 2)
+
+        all_count, all_total = sum_for(0)
+        ytd_count, ytd_total = sum_for(start_year)
+        mtd_count, mtd_total = sum_for(start_month)
+        wtd_count, wtd_total = sum_for(start_week)
+        td_count, td_total = sum_for(start_today)
+
+        active = c.execute(
+            "SELECT COUNT(*) c FROM canada_licenses WHERE expires_at > ?",
+            (now,),
+        ).fetchone()["c"]
+        expiring_30d = c.execute(
+            "SELECT COUNT(*) c FROM canada_licenses WHERE expires_at > ? AND expires_at <= ?",
+            (now, now + 30 * 24 * 60 * 60 * 1000),
+        ).fetchone()["c"]
+        expired = c.execute(
+            "SELECT COUNT(*) c FROM canada_licenses WHERE expires_at <= ?",
+            (now,),
+        ).fetchone()["c"]
+
+        # devices seen in last 5 min / 24 h
+        five_min = c.execute(
+            "SELECT COUNT(*) c FROM canada_devices WHERE last_seen_at > ?",
+            (now - 5 * 60 * 1000,),
+        ).fetchone()["c"]
+        day = c.execute(
+            "SELECT COUNT(*) c FROM canada_devices WHERE last_seen_at > ?",
+            (now - 24 * 60 * 60 * 1000,),
+        ).fetchone()["c"]
+
+        chart = []
+        for (s, e, label) in months_back:
+            cnt, tot = sum_for(s, e)
+            chart.append({"month": label, "count": cnt, "total_cad": tot})
+
+        # Expiring-soon list (top 30, soonest first)
+        soon_rows = c.execute(
+            """SELECT xtream_username, expires_at, last_order_id
+               FROM canada_licenses
+               WHERE expires_at > ? AND expires_at <= ?
+               ORDER BY expires_at ASC LIMIT 30""",
+            (now, now + 30 * 24 * 60 * 60 * 1000),
+        ).fetchall()
+        expiring_soon = [
+            {
+                "xtream_username": r["xtream_username"],
+                "expires_at": int(r["expires_at"]),
+                "days_remaining": max(0, (int(r["expires_at"]) - now) // (24 * 60 * 60 * 1000)),
+                "last_order_id": r["last_order_id"],
+            }
+            for r in soon_rows
+        ]
+
+    return {
+        "now_ms": now,
+        "revenue": {
+            "today":    {"count": td_count,  "total_cad": td_total},
+            "week":     {"count": wtd_count, "total_cad": wtd_total},
+            "month":    {"count": mtd_count, "total_cad": mtd_total},
+            "ytd":      {"count": ytd_count, "total_cad": ytd_total},
+            "all_time": {"count": all_count, "total_cad": all_total},
+        },
+        "licenses": {
+            "active": int(active),
+            "expiring_30d": int(expiring_30d),
+            "expired": int(expired),
+        },
+        "active_devices": {
+            "last_5min": int(five_min),
+            "last_24h":  int(day),
+        },
+        "monthly_chart": chart,
+        "expiring_soon": expiring_soon,
+    }
+
+
+# ── Manual extend + reminder ───────────────────────────────────────
+class AdminExtendReq(BaseModel):
+    xtream_username: str
+    days: int = Field(365, ge=1, le=3650)
+    reason: Optional[str] = None
+    actor: Optional[str] = None  # who clicked the button
+
+
+@admin_router.post("/license/{username}/extend")
+def admin_extend(
+    username: str,
+    req: AdminExtendReq,
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Extend a license by N days (default 365). Adds time on top of
+    the current expiry if active, or starts a fresh window from now if
+    expired/missing. Logged into canada_admin_events for accounting.
+    """
+    _check_admin(x_admin_token)
+    user = (req.xtream_username or username).strip().lower()
+    now = _now_ms()
+    ms_to_add = int(req.days) * 24 * 60 * 60 * 1000
+    with _conn() as c:
+        row = _get_license_row(c, user)
+        base = max(int(row["expires_at"]) if row else 0, now)
+        new_expires = base + ms_to_add
+        c.execute(
+            """INSERT INTO canada_licenses (xtream_username, paid_at, expires_at, last_order_id)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(xtream_username) DO UPDATE SET
+                  expires_at=excluded.expires_at,
+                  last_order_id=excluded.last_order_id""",
+            (user, now, new_expires, "ADMIN_EXTEND"),
+        )
+        c.execute(
+            "INSERT INTO canada_admin_events (at, action, xtream_username, actor, detail) "
+            "VALUES (?, 'extend', ?, ?, ?)",
+            (now, user, req.actor or "admin", f"+{req.days}d reason={req.reason or ''}"),
+        )
+        row2 = _get_license_row(c, user)
+        return {"extended": True, "license": _serialize_license(row2)}
+
+
+class AdminReminderReq(BaseModel):
+    xtream_username: str
+    to_email: str = Field(..., min_length=3, max_length=256)
+    actor: Optional[str] = None
+
+
+def _smtp_send(to_email: str, subject: str, body: str) -> dict:
+    """Send a plain-text email via Gmail SMTP using the same credentials
+    the IMAP poller uses. Returns {"sent": bool, "error": str|None}.
+    """
+    if not GMAIL_USER or not GMAIL_PASS:
+        return {"sent": False, "error": "gmail credentials not configured"}
+    msg = EmailMessage()
+    msg["From"] = GMAIL_USER
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.set_content(body)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as s:
+            s.login(GMAIL_USER, GMAIL_PASS)
+            s.send_message(msg)
+        return {"sent": True, "error": None}
+    except Exception as e:
+        log.exception("SMTP send failed for %s: %s", to_email, e)
+        return {"sent": False, "error": str(e)}
+
+
+@admin_router.post("/license/{username}/remind")
+def admin_remind(
+    username: str,
+    req: AdminReminderReq,
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Send a renewal reminder email. Logs the attempt into
+    canada_admin_events regardless of SMTP success/failure so accounting
+    has a record of outreach."""
+    _check_admin(x_admin_token)
+    user = (req.xtream_username or username).strip().lower()
+    now = _now_ms()
+    with _conn() as c:
+        row = _get_license_row(c, user)
+        if row is None:
+            raise HTTPException(404, "license not found for that user")
+        expires_at = int(row["expires_at"])
+        days_left = max(0, (expires_at - now) // (24 * 60 * 60 * 1000))
+        import datetime as _dt
+        exp_iso = _dt.datetime.utcfromtimestamp(expires_at / 1000).strftime("%B %d, %Y")
+        subject = (
+            f"HushTV Canada — your subscription expires in {days_left} days"
+            if days_left > 0
+            else "HushTV Canada — your subscription has expired"
+        )
+        body = (
+            f"Hi,\n\n"
+            f"Your HushTV Canada subscription tied to username '{user}' is "
+            f"{'set to expire' if days_left > 0 else 'expired'} on {exp_iso}.\n\n"
+            f"To renew, open the HushTV Canada app — you'll see your Order ID "
+            f"on the renewal screen. Send ${EXPECTED_AMOUNT_CAD:.2f} CAD via "
+            f"Interac e-Transfer to {GMAIL_USER} with that Order ID typed into "
+            f"the 'Message' field.\n\n"
+            f"Once we receive your payment your subscription is automatically "
+            f"extended by one year. Pay once, unlocks all your devices.\n\n"
+            f"— HushTV Canada"
+        )
+        result = _smtp_send(req.to_email, subject, body)
+        c.execute(
+            "INSERT INTO canada_admin_events (at, action, xtream_username, actor, detail) "
+            "VALUES (?, 'remind', ?, ?, ?)",
+            (
+                now, user, req.actor or "admin",
+                f"to={req.to_email} sent={result['sent']} err={result.get('error') or ''}",
+            ),
+        )
+        return {"reminded": result["sent"], "error": result.get("error"),
+                "to": req.to_email, "days_remaining": days_left}
+
+
+@admin_router.get("/events")
+def admin_events(
+    x_admin_token: Optional[str] = Header(None),
+    limit: int = 200,
+    username: Optional[str] = None,
+) -> dict:
+    """Audit log for admin actions (extend, revoke, remind)."""
+    _check_admin(x_admin_token)
+    limit = max(1, min(1000, limit))
+    sql = "SELECT * FROM canada_admin_events"
+    params: list = []
+    if username:
+        sql += " WHERE xtream_username=?"
+        params.append(username.strip().lower())
+    sql += " ORDER BY at DESC LIMIT ?"
+    params.append(limit)
+    with _conn() as c:
+        rows = c.execute(sql, params).fetchall()
+        return {
+            "events": [
+                {
+                    "id": int(r["id"]),
+                    "at": int(r["at"]),
+                    "action": r["action"],
+                    "xtream_username": r["xtream_username"],
+                    "actor": r["actor"],
+                    "detail": r["detail"],
                 }
                 for r in rows
             ]

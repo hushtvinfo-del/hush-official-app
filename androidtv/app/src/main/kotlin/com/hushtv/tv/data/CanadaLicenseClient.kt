@@ -244,4 +244,36 @@ object CanadaLicenseClient {
             null
         }
     }
+
+    /** v1.44.82 — Activity heartbeat. Fire-and-forget. The admin uses
+     * `last_seen_at` per device to show who's actively using the app
+     * (5-min live count) and how many devices each license is on. */
+    @JsonClass(generateAdapter = true)
+    data class HeartbeatReq(
+        val xtream_username: String,
+        val device_id: String,
+        val app_version: String? = null,
+        val platform: String? = null,
+        val model: String? = null,
+    )
+
+    fun sendHeartbeat(
+        username: String,
+        deviceId: String,
+        appVersion: String?,
+        platform: String?,
+        model: String?,
+    ) {
+        val u = username.lowercase().trim()
+        if (u.isEmpty() || deviceId.isEmpty()) return
+        try {
+            val payload = moshi.adapter(HeartbeatReq::class.java)
+                .toJson(HeartbeatReq(u, deviceId, appVersion, platform, model))
+            val req = Request.Builder().url("$BASE/heartbeat")
+                .post(payload.toRequestBody(JSON)).build()
+            http.newCall(req).execute().use { /* discard body */ }
+        } catch (_: Exception) {
+            // Heartbeat is best-effort; never crash the UI for this.
+        }
+    }
 }

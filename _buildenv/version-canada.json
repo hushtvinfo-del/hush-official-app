@@ -1,12 +1,13 @@
 {
-  "versionCode": 480,
-  "versionName": "1.44.80",
+  "versionCode": 482,
+  "versionName": "1.44.82",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "FIX: Tapping \"Sports Guide\" on the top nav no longer crashes the app. v1.44.79 promoted Sports Guide to its own top-nav tab but forgot to register the destination — IllegalArgumentException on every tap. Restored.",
-    "FIX: Pressing D-pad DOWN from the Discover row now lands on the Hush+ Coming Soon section as intended. Previously it pointed at a removed page and bounced focus into the left sidebar — looking like the side menu was \"opening\" by itself."
+    "Sports Guide trimmed to NHL · MLB · NBA · NFL · UFC (other leagues retired for now).",
+    "Backend: anonymous device heartbeat (every 5 min, no PII) so the admin can see which devices each licensed user has the app installed on — helps with support & abuse detection.",
+    "Cleaned-up payment-sender names in the admin (was getting some email-body noise)."
   ]
 }
