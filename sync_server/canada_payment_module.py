@@ -162,7 +162,43 @@ def _init_schema() -> None:
             );
             CREATE INDEX IF NOT EXISTS canada_base44_inbox_recv_idx
                 ON canada_base44_events_inbox(received_at DESC);
+
+            -- v1.44.90 — Belt-and-suspenders licence protection.
+            -- Every DELETE on canada_licenses gets snapshotted here
+            -- BEFORE the row goes away, so any accidental wipe (an
+            -- admin running ad-hoc SQL, a buggy test script, even me
+            -- in a future agent session) is fully reversible.
+            CREATE TABLE IF NOT EXISTS canada_licenses_archive (
+                xtream_username  TEXT NOT NULL,
+                paid_at          INTEGER NOT NULL,
+                expires_at       INTEGER NOT NULL,
+                last_order_id    TEXT,
+                archived_at      INTEGER NOT NULL,
+                archived_reason  TEXT
+            );
+            CREATE INDEX IF NOT EXISTS canada_licenses_archive_user_idx
+                ON canada_licenses_archive(xtream_username);
+            CREATE INDEX IF NOT EXISTS canada_licenses_archive_at_idx
+                ON canada_licenses_archive(archived_at DESC);
+
+            -- The trigger lives outside the executescript() so we can
+            -- DROP/CREATE it idempotently below.
             """
+        )
+        c.execute("DROP TRIGGER IF EXISTS canada_licenses_archive_on_delete")
+        c.execute(
+            """CREATE TRIGGER canada_licenses_archive_on_delete
+               BEFORE DELETE ON canada_licenses
+               FOR EACH ROW
+               BEGIN
+                   INSERT INTO canada_licenses_archive
+                       (xtream_username, paid_at, expires_at, last_order_id,
+                        archived_at, archived_reason)
+                   VALUES
+                       (OLD.xtream_username, OLD.paid_at, OLD.expires_at,
+                        OLD.last_order_id, CAST(strftime('%s','now')*1000 AS INTEGER),
+                        'trigger');
+               END;"""
         )
         # Add message_id column for stable cross-session idempotency.
         # The original uid-based key was unreliable because Gmail re-uses
@@ -1617,6 +1653,98 @@ def admin_force_poll(x_admin_token: Optional[str] = Header(None)) -> dict:
     _check_admin(x_admin_token)
     s = _imap_scan_once()
     return {"scan": s}
+
+
+# ── License archive + restore (safeguard v1.44.90) ──────────────────
+@admin_router.get("/licenses/archive")
+def admin_licenses_archive(
+    x_admin_token: Optional[str] = Header(None),
+    limit: int = 200,
+) -> dict:
+    """List every license that was ever deleted from canada_licenses.
+    The BEFORE-DELETE trigger snapshots the full row here so any
+    accidental wipe (admin ad-hoc SQL, test script, agent error) is
+    fully reversible — the row is reconstructable byte-for-byte."""
+    _check_admin(x_admin_token)
+    limit = max(1, min(1000, limit))
+    with _conn() as c:
+        rows = c.execute(
+            """SELECT xtream_username, paid_at, expires_at, last_order_id,
+                      archived_at, archived_reason
+               FROM canada_licenses_archive
+               ORDER BY archived_at DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return {
+            "count": len(rows),
+            "rows": [
+                {
+                    "xtream_username": r["xtream_username"],
+                    "paid_at": int(r["paid_at"]),
+                    "expires_at": int(r["expires_at"]),
+                    "last_order_id": r["last_order_id"],
+                    "archived_at": int(r["archived_at"]),
+                    "archived_reason": r["archived_reason"],
+                }
+                for r in rows
+            ],
+        }
+
+
+class RestoreReq(BaseModel):
+    xtream_username: str
+    actor: Optional[str] = None
+
+
+@admin_router.post("/licenses/restore")
+def admin_license_restore(
+    req: RestoreReq,
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Restore the most recently archived license for a user. Inserts
+    the row back into canada_licenses with original paid_at, expires_at,
+    and last_order_id. The archive row stays so the action is auditable.
+    """
+    _check_admin(x_admin_token)
+    user = req.xtream_username.strip().lower()
+    with _conn() as c:
+        snap = c.execute(
+            """SELECT paid_at, expires_at, last_order_id, archived_at, archived_reason
+               FROM canada_licenses_archive
+               WHERE xtream_username=?
+               ORDER BY archived_at DESC LIMIT 1""",
+            (user,),
+        ).fetchone()
+        if snap is None:
+            raise HTTPException(404, f"no archived license found for {user}")
+        c.execute(
+            """INSERT INTO canada_licenses
+                  (xtream_username, paid_at, expires_at, last_order_id)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(xtream_username) DO UPDATE SET
+                  paid_at=excluded.paid_at,
+                  expires_at=excluded.expires_at,
+                  last_order_id=excluded.last_order_id""",
+            (user, int(snap["paid_at"]), int(snap["expires_at"]),
+             snap["last_order_id"]),
+        )
+        c.execute(
+            "INSERT INTO canada_admin_events (at, action, xtream_username, actor, detail) "
+            "VALUES (?, 'restore', ?, ?, ?)",
+            (
+                _now_ms(), user, req.actor or "admin",
+                f"Restored from archive (archived_at={int(snap['archived_at'])}, "
+                f"reason={snap['archived_reason']}, original_order={snap['last_order_id']})",
+            ),
+        )
+        return {
+            "ok": True,
+            "xtream_username": user,
+            "paid_at": int(snap["paid_at"]),
+            "expires_at": int(snap["expires_at"]),
+            "last_order_id": snap["last_order_id"],
+        }
 
 
 # ── Base44 resync + queue inspection ────────────────────────────────
