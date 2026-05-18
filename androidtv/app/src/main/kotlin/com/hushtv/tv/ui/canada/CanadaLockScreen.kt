@@ -72,7 +72,7 @@ fun CanadaLockScreen(
     var loading by remember { mutableStateOf(true) }
     var orderId by remember { mutableStateOf<String?>(null) }
     var emailTo by remember { mutableStateOf("Hushtv.info@gmail.com") }
-    var amountCad by remember { mutableStateOf(40.0) }
+    var amountCad by remember { mutableStateOf(10.0) }
     var error by remember { mutableStateOf<String?>(null) }
     var paidSuccess by remember { mutableStateOf(false) }
 
@@ -261,15 +261,18 @@ private fun Header(sz: Sizes, amountCad: Double, renewMode: Boolean) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.Center,
         ) {
             Icon(Icons.Default.Lock, null, tint = Cyan, modifier = Modifier.size(sz.headerIcon))
+            Spacer(Modifier.width(10.dp))
             Text(
                 if (renewMode) "Renew HushTV Canada" else "HushTV Canada",
                 color = TextPrimary,
                 fontSize = sz.title,
                 fontWeight = FontWeight.Black,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }
         Spacer(Modifier.height(2.dp))
@@ -279,6 +282,7 @@ private fun Header(sz: Sizes, amountCad: Double, renewMode: Boolean) {
             fontSize = sz.subtitle,
             fontWeight = FontWeight.SemiBold,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
@@ -428,12 +432,22 @@ private fun StepCard(
                 )
                 Spacer(Modifier.height(6.dp))
                 if (valueIsEmail) {
-                    AutoFitSingleLineText(
-                        text = value,
-                        maxFontSize = sz.value,
-                        minFontSize = sz.tiny,
+                    // The recipient gmail address can be long — use
+                    // the dedicated `valueWrap` font size (about half
+                    // of `value`) so it lays out on a single line at
+                    // every viewport size. Ellipsis is the safety net
+                    // if a future longer email is ever used; the
+                    // current "Hushtv.info@gmail.com" fits with room
+                    // to spare.
+                    Text(
+                        value,
                         color = TextPrimary,
+                        fontSize = sz.valueWrap,
                         fontWeight = FontWeight.Black,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
@@ -455,44 +469,11 @@ private fun StepCard(
 }
 
 /**
- * Single-line text that shrinks its font size until the value fits on one
- * line. Used for the recipient-email step card so a long gmail address
- * never wraps onto two lines and breaks the layout. Compose 1.8 ships
- * with `autoSize` but our BOM is pinned earlier; this hand-rolled version
- * does the same job in ~20 lines with no new dependencies.
+ * Footer status row helper kept inline. The old `AutoFitSingleLineText`
+ * helper that lived here was removed — emails now use the dedicated
+ * `valueWrap` Sizes field directly, so the runtime auto-fit dance is
+ * no longer needed.
  */
-@Composable
-private fun AutoFitSingleLineText(
-    text: String,
-    maxFontSize: TextUnit,
-    minFontSize: TextUnit,
-    color: androidx.compose.ui.graphics.Color,
-    fontWeight: FontWeight,
-    modifier: Modifier = Modifier,
-) {
-    var fontSize by remember(text) { mutableStateOf(maxFontSize) }
-    var ready by remember(text) { mutableStateOf(false) }
-    Text(
-        text = text,
-        color = color,
-        fontSize = fontSize,
-        fontWeight = fontWeight,
-        maxLines = 1,
-        softWrap = false,
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        modifier = modifier,
-        onTextLayout = { layout ->
-            if (!ready && layout.didOverflowWidth && fontSize > minFontSize) {
-                // Shrink in 2-sp steps until it fits or we hit the floor.
-                val next = (fontSize.value - 2f).coerceAtLeast(minFontSize.value)
-                fontSize = next.sp
-            } else {
-                ready = true
-            }
-        },
-    )
-}
-
 // ──────── Footer ────────
 @Composable
 private fun Footer(

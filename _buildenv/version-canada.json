@@ -1,13 +1,13 @@
 {
-  "versionCode": 482,
-  "versionName": "1.44.82",
+  "versionCode": 489,
+  "versionName": "1.44.89",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-08",
   "channel": "canada",
   "changelog": [
-    "Sports Guide trimmed to NHL · MLB · NBA · NFL · UFC (other leagues retired for now).",
-    "Backend: anonymous device heartbeat (every 5 min, no PII) so the admin can see which devices each licensed user has the app installed on — helps with support & abuse detection.",
-    "Cleaned-up payment-sender names in the admin (was getting some email-body noise)."
+    "Lock screen polish: recipient email now always renders on a single line at every screen size.",
+    "Centered all header text under the HushTV Canada lockup so nothing drifts off-axis.",
+    "Updated the on-screen testing price default so it matches the server."
   ]
 }
