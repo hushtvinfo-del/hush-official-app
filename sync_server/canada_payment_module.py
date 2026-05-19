@@ -58,6 +58,7 @@ ADMIN_TOKEN = os.environ.get("SPORTS_ADMIN_TOKEN", "")
 
 # Business constants
 EXPECTED_AMOUNT_CAD = 10.00          # TESTING price — bump back to 40.00 when going live
+DEFAULT_BASE44_AMOUNT_CAD = 50.00    # Fallback for Base44 webhooks that omit amount_cad
 ORDER_TTL_MS = 60 * 60 * 1000        # 60 minutes for user to pay
 LICENSE_YEAR_MS = 365 * 24 * 60 * 60 * 1000
 INTERAC_SENDER = "notify@payments.interac.ca"
@@ -985,6 +986,43 @@ async def base44_webhook(
                 row = _get_license_row(c, user)
                 base = max(int(row["expires_at"]) if row else 0, now)
                 new_expires = base + months * 30 * 24 * 60 * 60 * 1000
+                # v1.44.93 — Resolve amount + record a synthetic paid
+                # canada_orders row so the Base44 grant appears in
+                # Revenue, Payments tab, total_paid_cad on the license.
+                # Fall back to DEFAULT_BASE44_AMOUNT_CAD ($50) if Base44
+                # doesn't send a value, since the revenue dashboard would
+                # otherwise show $0 for every customer.
+                raw_amount = body.get("amount_cad")
+                try:
+                    amount_cad = float(raw_amount) if raw_amount is not None else 0.0
+                except (TypeError, ValueError):
+                    amount_cad = 0.0
+                if amount_cad <= 0:
+                    amount_cad = DEFAULT_BASE44_AMOUNT_CAD
+                actor = (body.get("actor") or "base44").strip()[:80]
+                reason = (body.get("reason") or "").strip()[:160]
+                method = (body.get("payment_method") or "manual").strip()[:32]
+
+                order_id = f"BASE44_{event_id[:24]}"
+                c.execute(
+                    """INSERT INTO canada_orders
+                          (order_id, xtream_username, status, created_at,
+                           expires_at, paid_at, interac_amount,
+                           interac_sender, interac_email_uid)
+                       VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, NULL)
+                       ON CONFLICT(order_id) DO UPDATE SET
+                          status='paid',
+                          paid_at=excluded.paid_at,
+                          interac_amount=excluded.interac_amount,
+                          interac_sender=excluded.interac_sender""",
+                    (
+                        order_id, user, now,
+                        now + ORDER_TTL_MS,  # placeholder TTL for paid order
+                        now, f"{amount_cad:.2f}",
+                        f"Base44 {method} by {actor}",
+                    ),
+                )
+
                 c.execute(
                     """INSERT INTO canada_licenses
                         (xtream_username, paid_at, expires_at, last_order_id)
@@ -993,15 +1031,11 @@ async def base44_webhook(
                          paid_at=excluded.paid_at,
                          expires_at=excluded.expires_at,
                          last_order_id=excluded.last_order_id""",
-                    (user, now, new_expires, f"BASE44_MANUAL_{event_id[:32]}"),
+                    (user, now, new_expires, order_id),
                 )
-                actor = (body.get("actor") or "base44").strip()[:80]
-                reason = (body.get("reason") or "").strip()[:160]
-                method = (body.get("payment_method") or "").strip()[:32]
-                amount = body.get("amount_cad")
                 detail = (
                     f"+{months}m via base44 actor={actor} "
-                    f"method={method} amount={amount} reason={reason}"
+                    f"method={method} amount=${amount_cad:.2f} reason={reason}"
                 )
                 c.execute(
                     "INSERT INTO canada_admin_events "
@@ -1016,6 +1050,7 @@ async def base44_webhook(
                     "applied": applied,
                     "xtream_username": user,
                     "new_expires_at_ms": new_expires,
+                    "amount_recorded_cad": amount_cad,
                 }
                 _inbox_persist(c, event_id, event_type, raw, user, "applied", applied)
                 return resp
