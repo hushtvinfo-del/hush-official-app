@@ -1,5 +1,202 @@
 # HushTV — Product Requirements Document
 
+## v1.44.94 — Canada 72-hour free trial — 2026-02-19
+
+### What landed
+New Canada-flavor users (anyone with an Xtream username we've never
+seen at the `/api/canada/license/{username}` endpoint) now get 72
+hours of full app access before the existing CanadaLockScreen
+paywall appears.
+
+### Behaviour
+- Trial is anchored **server-side by Xtream username** — clearing
+  app data, reinstalling, or switching devices does not reset the
+  72 h clock. One trial per Xtream account, across all devices the
+  account is ever logged into.
+- Server auto-grants the trial on the first license check for a
+  never-seen username. The trial row in the new `canada_trials`
+  table is **immutable** once written.
+- During the trial the API returns `paid:true, trial:true,
+  trial_expires_at:<ms>` so the existing client gate bypasses the
+  lock screen and a new client-side overlay renders a "FREE TRIAL ·
+  2d 4h" pill in the top-right corner.
+- Badge turns red and pulses gently when < 6 h remain.
+- After the 72 h window, server returns `paid:false, trial:true,
+  trial_expired:true` → existing CanadaLockScreen takes over.
+- Existing paid users (`bfam23`, `smoked2022`, anyone in
+  `canada_licenses` with `expires_at > now`) see no change. The
+  trial flow is skipped entirely for paid users — no row inserted,
+  no badge rendered.
+- Trial users do NOT get the 7-day offline cache (the client
+  intentionally drops the paid cache when it detects a trial) so
+  the lock screen appears immediately the moment the trial expires
+  rather than waiting up to a week of offline grace.
+
+### Backend
+- `canada_payment_module.py`:
+  - `TRIAL_HOURS = 72`, `TRIAL_DURATION_MS` constants.
+  - New `canada_trials(xtream_username PK, started_at, expires_at)`
+    table + index in `_init_schema()`.
+  - `_get_or_grant_trial(c, username)` helper — auto-inserts a row
+    on first call, returns the existing row on subsequent calls.
+    Never mutates an existing row.
+  - `GET /api/canada/license/{username}` now branches:
+    - paid license active → return paid (existing)
+    - else → look up / create trial → return paid:true+trial:true
+      if active, paid:false+trial:true+trial_expired:true if expired
+- Pytest coverage: 5 new tests in `tests/test_canada_trial.py`
+  covering grant, immutability, expiry-paywall, paid-user-skip,
+  and expired-paid-user-eligible. 2 existing `test_canada_payment_api.py`
+  tests updated to assert the new trial contract. Full suite (32
+  tests) passes.
+
+### Android client
+- `CanadaLicenseClient`:
+  - `LicenseDto` gained `trial`, `trial_started_at`,
+    `trial_expires_at`, `trial_expired` optional fields.
+  - `LicenseState` sealed class gained a new `Trial(expiresAtMs)`
+    branch.
+  - `fetchLicense` no longer writes a paid cache for trial users
+    so the lock screen appears immediately at expiry.
+- `CanadaLicenseGate`:
+  - New `trialExpiresAt` local state mirrored into
+    `CanadaTrialState` (a small singleton StateFlow).
+  - Re-polls the server 2 min before the trial deadline so the
+    flip to the lock screen is near-instant (vs. the periodic
+    30 min refresh that drives normal license re-checks).
+- New files:
+  - `CanadaTrialState.kt` — `StateFlow<Long?>` singleton that
+    publishes the trial expiry timestamp.
+  - `CanadaTrialBadge.kt` — Compose pill + a fullscreen overlay
+    variant anchored top-right. Self-ticking (60 s tick rate
+    normally, 30 s when < 1 h remains). Turns red and pulses
+    when remaining < 6 h.
+- `MainActivity` renders `CanadaTrialBadgeOverlay()` above the
+  app tree (alongside the existing dev-flavor `DemoRecorderOverlay`).
+- `CanadaLicenseDetailsScreen` (the dedicated settings page) got
+  a new `TrialCard` matching the existing PaidCard style.
+
+### Deployment
+- Backend: `/opt/hushtv-sync/canada_payment_module.py` redeployed,
+  systemd `hushtv-sync` restarted. Schema migrated automatically
+  on startup (idempotent `CREATE TABLE IF NOT EXISTS`).
+- Canada APK: built `1.44.94` (versionCode 494) → uploaded to
+  `https://hushtv.xyz/hushtv-canada.apk`, manifest at
+  `/version-canada.json`.
+- Dev APK: rebuilt at the same version code so the OTA channels
+  stay in lockstep. Same `1.44.94`/`494`.
+
+### Live URLs
+- Public license endpoint:  `GET https://hushtv.xyz/api/canada/license/<username>`
+- Canada APK:               `https://hushtv.xyz/hushtv-canada.apk`
+- Canada OTA manifest:      `https://hushtv.xyz/version-canada.json`
+- Dev APK:                  `https://hushtv.xyz/HushTV.apk`
+- Trial admin (SQLite):     `sqlite3 /var/hushtv-sync/sync.sqlite3 "SELECT * FROM canada_trials"`
+
+### Verified E2E
+1. `curl /api/canada/license/<new_user>` → returns `paid:true, trial:true, trial_started_at, trial_expires_at` (deadline ≈ now + 72 h).
+2. Same call repeated → trial row not mutated, same expiry returned.
+3. `canada_trials` SQLite count grew from 0 → 6 during test sweeps; all rows have the expected `now + 72h` shape (verified directly via sqlite3 on the production server).
+4. Paid users (`bfam23`) return the legacy paid payload with no trial fields and **no canada_trials row inserted**.
+5. All 32 pytests pass: trial-grant, immutability, expiry, paid-skip, expired-paid-eligible, + the pre-existing payment/parser/demo-recorder suites.
+
+### Files touched
+- **NEW** `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/canada/CanadaTrialState.kt`
+- **NEW** `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/canada/CanadaTrialBadge.kt`
+- **NEW** `/app/sync_server/tests/test_canada_trial.py`
+- MODIFIED `/app/sync_server/canada_payment_module.py`
+- MODIFIED `/app/sync_server/tests/test_canada_payment_api.py`
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/CanadaLicenseClient.kt`
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/canada/CanadaLicenseGate.kt`
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/canada/CanadaLicenseDetailsScreen.kt`
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/MainActivity.kt`
+- MODIFIED `/app/androidtv/app/build.gradle.kts` (versionCode 494)
+- MODIFIED `/app/_buildenv/version-canada.json`
+- MODIFIED `/app/_buildenv/version.json`
+
+### Known operational footnote
+The sync server's `/api/canada/license/` endpoint can take 20–60 s
+on first hit when the global `_db_lock` is held by another module
+(IMAP poller, sports sync). The Android client handles this with
+caching + a loading spinner — first-launch UX is unaffected for
+returning users. This is a pre-existing issue (not introduced by
+the trial code) but worth optimising in a future pass.
+
+---
+
+
+## v1.44.93 — Screen recorder crash fix (Shield NPE) — 2026-02-19
+
+### Issue
+v1.44.92 hard-crashed on NVIDIA SHIELD (Android 11 / SDK 30) the
+moment the user pressed "Start screen recording" in Settings. Crash
+log on the central crash server showed:
+
+    java.lang.NullPointerException: ...DisplayInfo.getMode() on null
+       at android.media.MediaCodec$1.onDisplayChanged(MediaCodec.java:2143)
+
+This is a known Android 11 OS bug — MediaCodec's internal
+DisplayListener fires `onDisplayChanged` while a freshly-created
+VirtualDisplay is still initialising, and the implementation calls
+`DisplayInfo.getMode()` unconditionally even though it can return
+null for VirtualDisplays in that window.
+
+### Fix
+Replaced the entire video pipeline:
+- WAS: `MediaCodec` (H.264 encoder) → `MediaMuxer` (MP4 writer) →
+  `AudioRecord` w/ `AudioPlaybackCaptureConfiguration` (system audio).
+- NOW: `MediaRecorder` (Android's high-level video API that owns
+  the encoder + muxer internally and does not touch the buggy
+  MediaCodec display-listener code path).
+
+Trade-off: MediaRecorder doesn't expose
+`AudioPlaybackCaptureConfiguration`, so v1.44.93 records **video
+only**. Audio will return in a follow-up build using a separate
+`AudioRecord` that doesn't go anywhere near MediaCodec.
+
+### Other changes shipped in the same APK
+- Dialed video back to 1080p / 30 fps / 8 Mbps (was 60/12). 30 fps
+  is what most Android TV encoders confidently accept; 60 was
+  causing silent encoder rejections on older Shield models.
+- All MediaCodec / MediaMuxer / AudioRecord state removed from
+  `ScreenRecordingService`.
+- `DemoController` simplified to plain start/stop (we already
+  dropped the auto-pilot scripted tour earlier this session).
+
+### Files modified
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/demo/ScreenRecordingService.kt` (rewritten)
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVSettingsScreen.kt` (subtitle copy update)
+- `/app/androidtv/app/build.gradle.kts` (versionCode 493)
+- `/app/_buildenv/version.json` (1.44.93 changelog)
+
+---
+
+
+## v1.44.92 — Visible manual recorder + Shield crash (BROKEN, fixed in 1.44.93) — 2026-02-19
+
+### Background
+1.44.91 added a visible Settings card for the screen recorder
+(replacing the hidden long-press) but auto-popped to home + ran a
+scripted tour, which the user explicitly rejected.
+
+### What 1.44.92 changed
+- Stripped the scripted-tour logic entirely.
+- Settings → SCREEN RECORDER card is now a plain manual toggle:
+  press once to start, press again to stop. User drives the app
+  themselves in between.
+- Added a "Stop" action button to the foreground service
+  notification so the user can stop from anywhere without
+  navigating back to Settings.
+- Removed `DemoModeDialog`, `beginScriptedTour`, `scriptedPage`,
+  and the related caption state from `DemoController`.
+
+### Bug
+Started recording crashed on Shield due to the Android 11
+MediaCodec NPE (see v1.44.93 above).
+
+---
+
+
 ## v1.44.90 — Auto-pilot Demo Recorder (Phase 1, LIVE) — 2026-02-19
 
 ### What landed

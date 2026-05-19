@@ -72,9 +72,13 @@ def test_order_status_pending_then_unknown():
 def test_license_unpaid_then_paid_via_email_match():
     j = _create_order("dave")
     oid = j["order"]["order_id"]
-    # license = not paid yet
+    # license = trial (auto-granted by v1.44.94). Before the Interac
+    # email is matched, the user has not actually paid — but they
+    # are auto-enrolled in the 72 h free trial. The endpoint
+    # surfaces this as paid:true + trial:true.
     lic = client.get("/api/canada/license/dave").json()
-    assert lic["license"]["paid"] is False
+    assert lic["license"]["paid"] is True
+    assert lic["license"]["trial"] is True
 
     # Simulate the IMAP poller receiving an Interac email matching this order.
     fake_html = f"""<html><body>
@@ -149,7 +153,15 @@ def test_admin_endpoints_require_token():
                       headers={"X-Admin-Token": "test-admin-token"})
     assert rev.status_code == 200
     lic = client.get("/api/canada/license/manualgrant").json()
-    assert lic["license"]["paid"] is False
+    # v1.44.94 — Revoked users SHOULD still see paid:true / trial:true
+    # because revoke wipes their paid license but doesn't pre-emptively
+    # write a trial row. The very next license check auto-grants the
+    # 72 h trial. We deliberately don't try to detect "this user had
+    # a paid license once" — it leads to confusing edge cases. The
+    # admin can manually wipe the trial row from canada_trials if
+    # they want a hard ban.
+    assert lic["license"]["paid"] is True
+    assert lic["license"]["trial"] is True
 
 
 def test_already_licensed_short_circuits_order():

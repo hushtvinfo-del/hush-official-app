@@ -62,6 +62,11 @@ object CanadaLicenseClient {
         val days_remaining: Long? = null,
         val last_order_id: String? = null,
         val expired: Boolean? = null,
+        // v1.44.94 — Canada free trial.
+        val trial: Boolean? = null,
+        val trial_started_at: Long? = null,
+        val trial_expires_at: Long? = null,
+        val trial_expired: Boolean? = null,
     )
 
     @JsonClass(generateAdapter = true)
@@ -97,7 +102,10 @@ object CanadaLicenseClient {
     // ── Public state ────────────────────────────────────────────────
     sealed class LicenseState {
         object NoNetwork : LicenseState()
+        /** Holds a real (paid_at) license. */
         data class Paid(val expiresAtMs: Long, val daysRemaining: Long) : LicenseState()
+        /** v1.44.94 — currently inside the 72 h free trial. */
+        data class Trial(val expiresAtMs: Long) : LicenseState()
         object Unpaid : LicenseState()
         data class Error(val message: String) : LicenseState()
     }
@@ -162,9 +170,28 @@ object CanadaLicenseClient {
                 val parsed = moshi.adapter(LicenseResp::class.java).fromJson(body)
                     ?: return offlineFallback(ctx, u, "bad payload")
                 val lic = parsed.license
-                if (lic.paid && lic.expires_at != null && lic.expires_at > System.currentTimeMillis()) {
-                    writeCache(ctx, u, lic.expires_at)
-                    LicenseState.Paid(lic.expires_at, lic.days_remaining ?: 0L)
+                // v1.44.94 — Branch order matters. The server promotes
+                // an active trial to `paid:true` with `trial:true` set
+                // so old client builds still bypass the paywall. New
+                // builds explicitly surface the Trial state so the UI
+                // can show the countdown.
+                val now = System.currentTimeMillis()
+                val trialActive = lic.trial == true &&
+                    (lic.trial_expires_at ?: 0L) > now
+                if (lic.paid && lic.expires_at != null && lic.expires_at > now) {
+                    if (trialActive) {
+                        // Don't write a paid cache for a trial — when the
+                        // trial expires we want the lock screen to appear
+                        // immediately, not after the 7-day offline grace.
+                        prefs(ctx).edit()
+                            .remove(KEY_PAID_UNTIL + u)
+                            .remove(KEY_CHECKED + u)
+                            .apply()
+                        LicenseState.Trial(lic.trial_expires_at!!)
+                    } else {
+                        writeCache(ctx, u, lic.expires_at)
+                        LicenseState.Paid(lic.expires_at, lic.days_remaining ?: 0L)
+                    }
                 } else {
                     // Clear stale cache when server says unpaid.
                     prefs(ctx).edit()

@@ -168,6 +168,11 @@ class MainActivity : ComponentActivity() {
                             // visible across navigation, the license gate,
                             // and the OTA update dialog.
                             DemoRecorderOverlay()
+                            // v1.44.94 — Canada 72 h free-trial countdown pill.
+                            // No-op on Dev / Official. Same overlay layer
+                            // as the REC pill but they never coexist
+                            // (REC is dev-flavor, badge is canada-flavor).
+                            com.hushtv.tv.ui.canada.CanadaTrialBadgeOverlay()
                             // Render the OTA update prompt OUTSIDE the
                             // license gate so canada users locked behind
                             // the paywall can still receive critical app

@@ -61,6 +61,12 @@ EXPECTED_AMOUNT_CAD = 10.00          # TESTING price — bump back to 40.00 when
 DEFAULT_BASE44_AMOUNT_CAD = 50.00    # Fallback for Base44 webhooks that omit amount_cad
 ORDER_TTL_MS = 60 * 60 * 1000        # 60 minutes for user to pay
 LICENSE_YEAR_MS = 365 * 24 * 60 * 60 * 1000
+# v1.44.94 — Canada free trial: 72 h auto-granted on first license check
+# for an xtream_username we've never seen before. After 72 h the existing
+# CanadaLockScreen paywall kicks in. One trial per Xtream account
+# (anchored server-side, survives app reinstall + device swap).
+TRIAL_HOURS = 72
+TRIAL_DURATION_MS = TRIAL_HOURS * 60 * 60 * 1000
 INTERAC_SENDER = "notify@payments.interac.ca"
 IMAP_HOST = "imap.gmail.com"
 IMAP_PORT = 993
@@ -105,6 +111,17 @@ def _init_schema() -> None:
                 expires_at      INTEGER NOT NULL,
                 last_order_id   TEXT NOT NULL
             );
+
+            -- v1.44.94 — One free 72 h trial per Xtream username, auto-granted
+            -- on the first license check. Once a row exists here it is NEVER
+            -- mutated again, so users can't game the trial by reinstalling.
+            CREATE TABLE IF NOT EXISTS canada_trials (
+                xtream_username TEXT PRIMARY KEY,
+                started_at      INTEGER NOT NULL,
+                expires_at      INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS canada_trials_expires_idx
+                ON canada_trials(expires_at);
 
             CREATE TABLE IF NOT EXISTS canada_processed_emails (
                 uid          TEXT PRIMARY KEY,
@@ -379,6 +396,41 @@ def _serialize_order(row: sqlite3.Row) -> dict:
         "status": row["status"],
         "paid_at": row["paid_at"],
     }
+
+
+def _get_or_grant_trial(c, xtream_username: str) -> Optional[dict]:
+    """v1.44.94 — Trial bookkeeping for the Canada flavor.
+
+    Returns the current trial row as a dict, AUTO-CREATING one on the
+    user's very first license check. Returns None if a paid license
+    exists for this user (paid licenses always take precedence over
+    trials — once you've paid you don't burn trial time).
+
+    The trial row is immutable once written: even if it has expired,
+    we don't overwrite it. This is the anti-gaming guarantee — clearing
+    app data or reinstalling the APK never resets the 72 h clock.
+
+    Caller MUST already hold a write-capable connection (`with _conn()`).
+    """
+    row = c.execute(
+        "SELECT started_at, expires_at FROM canada_trials WHERE xtream_username=?",
+        (xtream_username,),
+    ).fetchone()
+    now = _now_ms()
+    if row is None:
+        started = now
+        expires = now + TRIAL_DURATION_MS
+        c.execute(
+            "INSERT INTO canada_trials (xtream_username, started_at, expires_at) "
+            "VALUES (?, ?, ?)",
+            (xtream_username, started, expires),
+        )
+        log.info(
+            "canada_trials: GRANTED 72h trial to %s (expires=%s)",
+            xtream_username, expires,
+        )
+        return {"started_at": started, "expires_at": expires}
+    return {"started_at": int(row["started_at"]), "expires_at": int(row["expires_at"])}
 
 
 def _serialize_license(row: Optional[sqlite3.Row]) -> dict:
@@ -722,7 +774,40 @@ def license_status(xtream_username: str) -> dict:
     user = xtream_username.strip().lower()
     with _conn() as c:
         row = _get_license_row(c, user)
-        return {"xtream_username": user, "license": _serialize_license(row)}
+        lic = _serialize_license(row)
+        # v1.44.94 — If they don't currently hold a PAID license,
+        # auto-grant + apply a 72 h trial (immutable; one per account).
+        # Trial is invisible to paid users so we don't waste a trial
+        # row on bfam23 / smoked2022 / anyone the IMAP poller has
+        # already activated.
+        if not lic.get("paid"):
+            trial = _get_or_grant_trial(c, user)
+            now = _now_ms()
+            if trial and trial["expires_at"] > now:
+                # Trial active — promote to "paid" so the Android
+                # CanadaLicenseGate bypasses the lock screen, and tag
+                # `trial:true` so the client can render the countdown.
+                lic = {
+                    "paid": True,
+                    "trial": True,
+                    "trial_started_at": trial["started_at"],
+                    "trial_expires_at": trial["expires_at"],
+                    "expires_at": trial["expires_at"],
+                    "days_remaining": max(
+                        0,
+                        (trial["expires_at"] - now) // (24 * 60 * 60 * 1000),
+                    ),
+                }
+            elif trial:
+                # Trial expired — show paywall, tell the client why.
+                lic = {
+                    "paid": False,
+                    "trial": True,
+                    "trial_expired": True,
+                    "trial_started_at": trial["started_at"],
+                    "trial_expires_at": trial["expires_at"],
+                }
+        return {"xtream_username": user, "license": lic}
 
 
 # ── Public heartbeat ────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Button
@@ -77,6 +78,8 @@ fun CanadaLicenseDetailsScreen(
         state = when (res) {
             is CanadaLicenseClient.LicenseState.Paid ->
                 LicenseUiState.Paid(playlist.username, res.expiresAtMs, res.daysRemaining)
+            is CanadaLicenseClient.LicenseState.Trial ->
+                LicenseUiState.Trial(playlist.username, res.expiresAtMs)
             is CanadaLicenseClient.LicenseState.Unpaid ->
                 LicenseUiState.Unpaid(playlist.username)
             is CanadaLicenseClient.LicenseState.NoNetwork ->
@@ -132,6 +135,11 @@ fun CanadaLicenseDetailsScreen(
                     onRefresh = { scope.launch { refresh() } },
                     onRenew = onRenew,
                 )
+                is LicenseUiState.Trial -> TrialCard(
+                    username = s.username,
+                    expiresAtMs = s.expiresAtMs,
+                    onRefresh = { scope.launch { refresh() } },
+                )
                 is LicenseUiState.Unpaid -> UnpaidCard(s.username, onPayNow = onRenew)
             }
         }
@@ -143,6 +151,7 @@ private sealed class LicenseUiState {
     object NoAccount : LicenseUiState()
     data class NoNetwork(val username: String) : LicenseUiState()
     data class Paid(val username: String, val expiresAtMs: Long, val daysRemaining: Long) : LicenseUiState()
+    data class Trial(val username: String, val expiresAtMs: Long) : LicenseUiState()
     data class Unpaid(val username: String) : LicenseUiState()
 }
 
@@ -190,6 +199,67 @@ private fun NoNetworkBlock(username: String, onRetry: () -> Unit) {
             Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("Try again")
+        }
+    }
+}
+
+@Composable
+private fun TrialCard(
+    username: String,
+    expiresAtMs: Long,
+    onRefresh: () -> Unit,
+) {
+    val now = System.currentTimeMillis()
+    val remainingMs = (expiresAtMs - now).coerceAtLeast(0L)
+    val hoursLeft = remainingMs / (60L * 60_000)
+    val daysLeft  = hoursLeft / 24
+    val accent = Cyan
+    val expiryDate = remember(expiresAtMs) {
+        SimpleDateFormat("EEEE, MMMM d 'at' h:mm a", Locale.getDefault()).format(Date(expiresAtMs))
+    }
+    val heroLabel = when {
+        daysLeft  >= 1 -> "$daysLeft day${if (daysLeft == 1L) "" else "s"} remaining"
+        hoursLeft >= 1 -> "$hoursLeft hour${if (hoursLeft == 1L) "" else "s"} remaining"
+        else           -> "Less than an hour remaining"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceNavy, RoundedCornerShape(20.dp))
+            .border(2.dp, accent, RoundedCornerShape(20.dp))
+            .padding(24.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Default.Schedule,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(32.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "FREE TRIAL",
+                color = accent, fontSize = 14.sp,
+                fontWeight = FontWeight.Black, letterSpacing = 2.sp,
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(heroLabel, color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Black)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Your trial ends $expiryDate. After that you'll be asked to pay the $40 CAD / year CDN proxy fee to keep using HushTV Canada.",
+            color = TextSecondary, fontSize = 14.sp,
+        )
+        Spacer(Modifier.height(20.dp))
+        DetailRow("Account", username)
+        DetailRow("Plan", "Free 72-hour trial — one per Xtream account")
+        DetailRow("Trial ends", expiryDate)
+        Spacer(Modifier.height(20.dp))
+        OutlinedButton(onClick = onRefresh) {
+            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Refresh status")
         }
     }
 }

@@ -73,6 +73,10 @@ fun CanadaLicenseGate(content: @Composable () -> Unit) {
     var currentUser by remember { mutableStateOf<String?>(null) }
     // null = unknown (checking).  true = paid.  false = unpaid.
     var licensed by remember { mutableStateOf<Boolean?>(null) }
+    // v1.44.94 — Non-null while the user is inside the 72 h free trial;
+    // expressed as ms-since-epoch of the trial expiry. Drives the
+    // top-bar countdown badge inside the home screen.
+    var trialExpiresAt by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(Unit) {
         var lastUser = ""
@@ -89,27 +93,38 @@ fun CanadaLicenseGate(content: @Composable () -> Unit) {
             val usernameChanged = u != lastUser
             val periodicRefresh =
                 u.isNotEmpty() && System.currentTimeMillis() - lastFullCheckMs > 30L * 60_000
+            // v1.44.94 — Re-poll AT the trial expiry boundary so we flip
+            // to the lock screen the moment the 72 h runs out, instead
+            // of waiting up to 30 min for the periodic refresh.
+            val trialExpiringSoon = u.isNotEmpty() && trialExpiresAt != null &&
+                (trialExpiresAt!! - System.currentTimeMillis()) in 0..120_000
 
             if (usernameChanged) {
                 lastUser = u
                 currentUser = if (u.isEmpty()) "" else u
                 if (u.isEmpty()) {
                     licensed = null  // pre-login pass-through
+                    trialExpiresAt = null
                 } else {
                     licensed = null  // force re-check
                 }
             }
 
-            if (u.isNotEmpty() && (usernameChanged || licensed == null || periodicRefresh)) {
+            if (u.isNotEmpty() && (usernameChanged || licensed == null ||
+                    periodicRefresh || trialExpiringSoon)
+            ) {
                 val res = withContext(Dispatchers.IO) {
                     CanadaLicenseClient.fetchLicense(ctx, u)
                 }
                 licensed = when (res) {
-                    is CanadaLicenseClient.LicenseState.Paid -> true
-                    is CanadaLicenseClient.LicenseState.Unpaid -> false
+                    is CanadaLicenseClient.LicenseState.Paid    -> true
+                    is CanadaLicenseClient.LicenseState.Trial   -> true
+                    is CanadaLicenseClient.LicenseState.Unpaid  -> false
                     is CanadaLicenseClient.LicenseState.NoNetwork -> false
-                    is CanadaLicenseClient.LicenseState.Error -> false
+                    is CanadaLicenseClient.LicenseState.Error   -> false
                 }
+                trialExpiresAt = (res as? CanadaLicenseClient.LicenseState.Trial)?.expiresAtMs
+                CanadaTrialState.set(trialExpiresAt)
                 lastFullCheckMs = System.currentTimeMillis()
             }
 
