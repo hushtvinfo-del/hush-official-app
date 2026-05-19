@@ -1,13 +1,13 @@
 {
-  "versionCode": 494,
-  "versionName": "1.44.94",
+  "versionCode": 495,
+  "versionName": "1.44.95",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "NEW: 72-hour free trial. Anyone who signs in with a new Xtream account gets full app access for 72 hours before the paywall appears. The trial is anchored to your Xtream username (server-side), so reinstalling or switching devices won't reset the clock — one trial per account.",
-    "A small 'FREE TRIAL · 2d 4h' pill in the top-right corner shows your remaining time. The pill turns red and pulses gently when less than 6 hours remain.",
-    "Existing paid users see no change — the trial only applies to never-seen-before Xtream accounts."
+    "CHANGE: CDN proxy fee is now $50 CAD / year (was $40). All lock-screen, license-detail and renewal copy updated to the new price.",
+    "FIX: When you open Live TV, Movies or Series with sidebar layout, the cyan focus ring now lands on the CURRENTLY-SELECTED category — not always on the first row (Favorites). The visual selection state and the D-pad cursor now match.",
+    "FIX: Same selection-aware focus restore on layout flip (top-bar ↔ sidebar)."
   ]
 }

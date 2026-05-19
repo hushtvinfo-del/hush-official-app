@@ -577,6 +577,21 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     // Layout chooser invoked via the TopNavBar hint chip.
     var showLayoutChooser by remember { mutableStateOf(false) }
 
+    // v1.44.95 — On initial composition (or layout flip back into
+    // sidebar mode), focus the CURRENTLY-SELECTED sidebar row so the
+    // cyan ring lands on whatever category is actually active —
+    // not always on the first row. Falls back to the first row if
+    // the selected requester isn't attached yet (rare race during
+    // category load).
+    LaunchedEffect(useSidebar) {
+        if (!useSidebar) return@LaunchedEffect
+        kotlinx.coroutines.delay(260)
+        runCatching { sidebarSelectedItemFocus.requestFocus() }
+            .onFailure {
+                runCatching { sidebarFirstItemFocus.requestFocus() }
+            }
+    }
+
     Box(Modifier.fillMaxSize()) {
     if (useSidebar) {
         // ── SIDEBAR MODE ──

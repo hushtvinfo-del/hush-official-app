@@ -1,4 +1,4 @@
-"""HushTV Canada — $40 CAD/year CDN Proxy Fee payment gateway.
+"""HushTV Canada — $50 CAD/year CDN Proxy Fee payment gateway.
 
 Generates 8-digit Order IDs tied to an Xtream username. The user pays
 $40 (CAD) via Interac e-Transfer to Hushtv.info@gmail.com with the
@@ -57,7 +57,7 @@ GMAIL_PASS = os.environ.get("INTERAC_GMAIL_APP_PASSWORD", "")
 ADMIN_TOKEN = os.environ.get("SPORTS_ADMIN_TOKEN", "")
 
 # Business constants
-EXPECTED_AMOUNT_CAD = 10.00          # TESTING price — bump back to 40.00 when going live
+EXPECTED_AMOUNT_CAD = 50.00          # CDN proxy fee
 DEFAULT_BASE44_AMOUNT_CAD = 50.00    # Fallback for Base44 webhooks that omit amount_cad
 ORDER_TTL_MS = 60 * 60 * 1000        # 60 minutes for user to pay
 LICENSE_YEAR_MS = 365 * 24 * 60 * 60 * 1000
@@ -620,32 +620,34 @@ def _imap_scan_once() -> dict:
         if typ != "OK" or not data or not data[0]:
             return summary
         uids = data[0].split()
-        with _conn() as c:
-            for uid_bytes in uids:
-                uid = uid_bytes.decode("ascii", errors="ignore")
-                summary["checked"] += 1
-                try:
-                    typ2, msg_data = m.fetch(uid_bytes, "(RFC822)")
-                    if typ2 != "OK" or not msg_data or not msg_data[0]:
-                        summary["errors"] += 1
-                        continue
-                    raw = msg_data[0][1]
-                    # Cheap idempotency probe BEFORE we parse the body:
-                    # extract just the Message-ID header so we can skip
-                    # already-processed emails without re-running the
-                    # regex/HTML pipeline. UID is no longer trusted (Gmail
-                    # re-uses UIDs after folder/label ops).
-                    msg_for_id = email.message_from_bytes(raw)
-                    mid = (msg_for_id.get("Message-ID")
-                           or msg_for_id.get("Message-Id") or "").strip().strip("<>")
+        # v1.44.95 — Acquire _db_lock per-message ONLY around the DB
+        # write, not around the blocking IMAP fetch. Previous version
+        # held the lock for the entire UID loop which blocked every
+        # other DB consumer (admin endpoints, license checks, etc.)
+        # for up to a minute while we waited on Gmail's IMAP server.
+        for uid_bytes in uids:
+            uid = uid_bytes.decode("ascii", errors="ignore")
+            summary["checked"] += 1
+            try:
+                typ2, msg_data = m.fetch(uid_bytes, "(RFC822)")
+                if typ2 != "OK" or not msg_data or not msg_data[0]:
+                    summary["errors"] += 1
+                    continue
+                raw = msg_data[0][1]
+                # Extract Message-ID before grabbing the DB lock so the
+                # idempotency probe doesn't have to be on the hot path.
+                msg_for_id = email.message_from_bytes(raw)
+                mid = (msg_for_id.get("Message-ID")
+                       or msg_for_id.get("Message-Id") or "").strip().strip("<>")
+                with _conn() as c:
                     if _already_processed(c, uid, mid):
                         continue
                     outcome = _process_single_email(c, uid, raw)
                     if outcome == "paid":
                         summary["matched"] += 1
-                except Exception as e:
-                    log.exception("error processing uid %s: %s", uid, e)
-                    summary["errors"] += 1
+            except Exception as e:
+                log.exception("error processing uid %s: %s", uid, e)
+                summary["errors"] += 1
     finally:
         try:
             m.close()
@@ -1657,6 +1659,22 @@ def _compute_stats() -> dict:
             (now - 24 * 60 * 60 * 1000,),
         ).fetchone()["c"]
 
+        # v1.44.95 — Trial counts: total ever granted, currently active,
+        # and expired. Drives the new Admin "Trials" panel + lets the
+        # Revenue dashboard show conversion data (active trials are
+        # potential future revenue).
+        trials_total = c.execute(
+            "SELECT COUNT(*) c FROM canada_trials"
+        ).fetchone()["c"]
+        trials_active = c.execute(
+            "SELECT COUNT(*) c FROM canada_trials WHERE expires_at > ?",
+            (now,),
+        ).fetchone()["c"]
+        trials_expired = c.execute(
+            "SELECT COUNT(*) c FROM canada_trials WHERE expires_at <= ?",
+            (now,),
+        ).fetchone()["c"]
+
         chart = []
         for (s, e, label) in months_back:
             cnt, tot = sum_for(s, e)
@@ -1693,6 +1711,11 @@ def _compute_stats() -> dict:
             "active": int(active),
             "expiring_30d": int(expiring_30d),
             "expired": int(expired),
+        },
+        "trials": {
+            "total":   int(trials_total),
+            "active":  int(trials_active),
+            "expired": int(trials_expired),
         },
         "active_devices": {
             "last_5min": int(five_min),
@@ -1954,6 +1977,157 @@ def admin_licenses_archive(
 class RestoreReq(BaseModel):
     xtream_username: str
     actor: Optional[str] = None
+
+
+# ── Free-trial admin (v1.44.95) ─────────────────────────────────────
+@admin_router.get("/trials")
+def admin_trials(
+    x_admin_token: Optional[str] = Header(None),
+    limit: int = 500,
+    status: str = "all",  # "all" | "active" | "expired"
+) -> dict:
+    """List every 72 h free trial. The standalone admin's Trials panel
+    consumes this — same pre-aggregated shape as /licenses so the UI
+    can render counts + a table with one round-trip.
+
+    Sorted active-first, then by expiry descending so the most recent
+    activity bubbles to the top."""
+    _check_admin(x_admin_token)
+    limit = max(1, min(2000, limit))
+    now = _now_ms()
+    where = ""
+    params: list = []
+    if status == "active":
+        where = "WHERE expires_at > ?"
+        params.append(now)
+    elif status == "expired":
+        where = "WHERE expires_at <= ?"
+        params.append(now)
+    with _conn() as c:
+        rows = c.execute(
+            f"""SELECT t.xtream_username, t.started_at, t.expires_at,
+                       (l.xtream_username IS NOT NULL) AS converted_to_paid,
+                       l.paid_at AS converted_paid_at
+                FROM canada_trials t
+                LEFT JOIN canada_licenses l
+                  ON l.xtream_username = t.xtream_username
+                {where}
+                ORDER BY
+                  CASE WHEN t.expires_at > {now} THEN 0 ELSE 1 END ASC,
+                  t.expires_at DESC
+                LIMIT ?""",
+            (*params, limit),
+        ).fetchall()
+        total_all     = c.execute("SELECT COUNT(*) c FROM canada_trials").fetchone()["c"]
+        total_active  = c.execute("SELECT COUNT(*) c FROM canada_trials WHERE expires_at > ?", (now,)).fetchone()["c"]
+        total_expired = c.execute("SELECT COUNT(*) c FROM canada_trials WHERE expires_at <= ?", (now,)).fetchone()["c"]
+        total_converted = c.execute(
+            """SELECT COUNT(*) c FROM canada_trials t
+               INNER JOIN canada_licenses l
+                 ON l.xtream_username = t.xtream_username"""
+        ).fetchone()["c"]
+
+    out_rows = []
+    for r in rows:
+        started  = int(r["started_at"])
+        expires  = int(r["expires_at"])
+        is_active = expires > now
+        remaining_ms = max(0, expires - now)
+        out_rows.append({
+            "xtream_username": r["xtream_username"],
+            "started_at": started,
+            "expires_at": expires,
+            "remaining_ms": remaining_ms,
+            "status": "active" if is_active else "expired",
+            "converted_to_paid": bool(r["converted_to_paid"]),
+            "converted_paid_at": int(r["converted_paid_at"]) if r["converted_paid_at"] else None,
+        })
+    conversion_rate = (
+        round(100.0 * total_converted / max(1, total_all), 1)
+        if total_all else 0.0
+    )
+    return {
+        "now_ms": now,
+        "trial_duration_hours": TRIAL_HOURS,
+        "totals": {
+            "all":       int(total_all),
+            "active":    int(total_active),
+            "expired":   int(total_expired),
+            "converted": int(total_converted),
+            "conversion_rate_pct": conversion_rate,
+        },
+        "rows": out_rows,
+    }
+
+
+class TrialRevokeReq(BaseModel):
+    xtream_username: str
+    actor: Optional[str] = None
+    reason: Optional[str] = None
+
+
+@admin_router.post("/trials/revoke")
+def admin_trial_revoke(
+    req: TrialRevokeReq,
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Force-expire a trial by mutating its expires_at to now-1ms.
+    Used when an account is abusing the trial (e.g. signed up just
+    to scrape content). The row stays in canada_trials so the user
+    can NEVER re-trigger a new 72 h trial — that's the anti-abuse
+    guarantee. To fully wipe and re-grant a fresh trial for a user
+    (e.g. legitimate tester), use /trials/delete instead."""
+    _check_admin(x_admin_token)
+    user = req.xtream_username.strip().lower()
+    now = _now_ms()
+    with _conn() as c:
+        row = c.execute(
+            "SELECT expires_at FROM canada_trials WHERE xtream_username=?",
+            (user,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, f"No trial on file for {user}")
+        c.execute(
+            "UPDATE canada_trials SET expires_at=? WHERE xtream_username=?",
+            (now - 1, user),
+        )
+        c.execute(
+            "INSERT INTO canada_admin_events "
+            "(at, action, xtream_username, actor, detail) "
+            "VALUES (?, 'trial_revoke', ?, ?, ?)",
+            (now, user, req.actor or "admin", (req.reason or "")[:500]),
+        )
+    log.info("canada_trials: REVOKED trial for %s by %s", user, req.actor or "admin")
+    return {"revoked": user, "expires_at": now - 1}
+
+
+@admin_router.post("/trials/delete")
+def admin_trial_delete(
+    req: TrialRevokeReq,
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Hard-delete a trial row. The user becomes eligible for a NEW
+    72 h trial on their very next license check. Use sparingly — the
+    whole point of the trial system is one-per-account. This endpoint
+    exists for legitimate operational cases like 'I accidentally used
+    a real customer's username during testing, wipe it.'"""
+    _check_admin(x_admin_token)
+    user = req.xtream_username.strip().lower()
+    with _conn() as c:
+        cur = c.execute(
+            "DELETE FROM canada_trials WHERE xtream_username=?",
+            (user,),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(404, f"No trial on file for {user}")
+        c.execute(
+            "INSERT INTO canada_admin_events "
+            "(at, action, xtream_username, actor, detail) "
+            "VALUES (?, 'trial_delete', ?, ?, ?)",
+            (_now_ms(), user, req.actor or "admin", (req.reason or "")[:500]),
+        )
+    log.info("canada_trials: DELETED trial for %s by %s", user, req.actor or "admin")
+    return {"deleted": user}
 
 
 @admin_router.post("/licenses/restore")

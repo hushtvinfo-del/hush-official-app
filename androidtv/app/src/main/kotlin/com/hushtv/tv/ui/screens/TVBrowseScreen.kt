@@ -452,12 +452,16 @@ fun TVBrowseScreen(
 
     // Initial focus: put cursor on the dropdown so user can immediately
     // open the category picker or arrow down into the grid. In sidebar
-    // mode, focus the first sidebar item instead.
-    LaunchedEffect(Unit) {
+    // mode, focus the CURRENTLY-SELECTED row so the cyan ring lines up
+    // with the active category (v1.44.95). Falls back to the first row
+    // if the selection requester isn't attached yet (e.g. empty list).
+    LaunchedEffect(useSidebar) {
         delay(260)
         runCatching {
-            if (useSidebar) sidebarFirstItemFocus.requestFocus()
-            else dropdownFocus.requestFocus()
+            if (useSidebar) {
+                runCatching { sidebarSelectedItemFocus.requestFocus() }
+                    .onFailure { sidebarFirstItemFocus.requestFocus() }
+            } else dropdownFocus.requestFocus()
         }
     }
 

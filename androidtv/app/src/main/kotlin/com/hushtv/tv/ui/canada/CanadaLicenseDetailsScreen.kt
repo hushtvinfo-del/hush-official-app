@@ -248,7 +248,7 @@ private fun TrialCard(
         Text(heroLabel, color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(4.dp))
         Text(
-            "Your trial ends $expiryDate. After that you'll be asked to pay the $40 CAD / year CDN proxy fee to keep using HushTV Canada.",
+            "Your trial ends $expiryDate. After that you'll be asked to pay the $50 CAD / year CDN proxy fee to keep using HushTV Canada.",
             color = TextSecondary, fontSize = 14.sp,
         )
         Spacer(Modifier.height(20.dp))
@@ -322,7 +322,7 @@ private fun PaidCard(
 
         DetailRow("Account", username)
         DetailRow("Expires", expiryDate)
-        DetailRow("Plan", "$40 CAD / year — unlimited devices")
+        DetailRow("Plan", "$50 CAD / year — unlimited devices")
 
         Spacer(Modifier.height(20.dp))
 
@@ -337,7 +337,7 @@ private fun PaidCard(
                     Icon(Icons.Default.WorkspacePremium, null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (daysRemaining <= 0) "Renew Now — $40 CAD" else "Renew Now",
+                        if (daysRemaining <= 0) "Renew Now — $50 CAD" else "Renew Now",
                         fontWeight = FontWeight.Black,
                     )
                 }
@@ -360,7 +360,7 @@ private fun PaidCard(
             .padding(16.dp),
     ) {
         Text(
-            "How renewal works: tap Renew Now → send another $40 CAD by Interac e-Transfer using the same instructions. Your new year is added on TOP of your current expiry — you never lose remaining days.",
+            "How renewal works: tap Renew Now → send another $50 CAD by Interac e-Transfer using the same instructions. Your new year is added on TOP of your current expiry — you never lose remaining days.",
             color = TextSecondary, fontSize = 13.sp,
         )
     }
@@ -384,7 +384,7 @@ private fun UnpaidCard(username: String, onPayNow: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Text("No payment on file for $username.", color = TextPrimary, fontSize = 16.sp)
         Spacer(Modifier.height(4.dp))
-        Text("Pay $40 CAD to use HushTV Canada for 1 year on unlimited devices.",
+        Text("Pay $50 CAD to use HushTV Canada for 1 year on unlimited devices.",
             color = TextSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(16.dp))
         Button(
@@ -393,7 +393,7 @@ private fun UnpaidCard(username: String, onPayNow: () -> Unit) {
         ) {
             Icon(Icons.Default.WorkspacePremium, null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Pay Now — $40 CAD", fontWeight = FontWeight.Black)
+            Text("Pay Now — $50 CAD", fontWeight = FontWeight.Black)
         }
     }
 }

@@ -1,5 +1,122 @@
 # HushTV — Product Requirements Document
 
+## v1.44.95 — $50 paywall, admin trials dashboard, sidebar focus fix — 2026-02-19
+
+### 1. Paywall: $40 → $50 CAD
+- `canada_payment_module.py`: `EXPECTED_AMOUNT_CAD` bumped to `50.00`.
+  Removed the "TESTING price" comment — this is now the live price.
+- Module docstring + Android lock screen default + license-details
+  card copy all updated to `$50 CAD`.
+- IMAP poller's "amount below expected" rejection now triggers
+  at < $49.99 (was < $39.99). Test fixtures updated.
+
+### 2. Admin "Trials" dashboard
+New section in the standalone admin (`https://hushtv.xyz/admin`)
+right under the device-count stats:
+
+- **4 summary cards**: Total ever granted, Active right now,
+  Expired (no convert), Converted → paid (with conversion-rate
+  percentage).
+- **Table** of every trial: username, started date, expires date,
+  live status pill (`ACTIVE · 2d 3h left` in cyan / `EXPIRED` in
+  grey), converted-to-paid badge, plus per-row "End trial" +
+  "Wipe" actions.
+- **Filter pills** at the top: All / Active / Expired.
+- Numbers are live — current count: **8 active trials** (this
+  count is real — every E2E test we ran during dev triggered a
+  trial grant).
+
+New backend routes:
+- `GET  /api/admin/canada/trials?status=all|active|expired&limit=N`
+- `POST /api/admin/canada/trials/revoke` — force-expire (user
+  becomes paywalled, no new trial possible)
+- `POST /api/admin/canada/trials/delete` — hard-wipe row (user
+  becomes eligible for a brand-new 72 h trial)
+
+`/api/admin/canada/stats` now also returns a `trials: {total,
+active, expired}` object so the dashboard can render the high-level
+roll-up without a second round-trip.
+
+5 new pytests, all green:
+- list endpoint auth + totals shape
+- list rows include the right usernames + statuses
+- revoke flips trial_expired:true on the next license check
+- delete makes the user eligible for a fresh 72 h trial
+- revoke 404s for an unknown user
+
+### 3. Sidebar focus follows selection
+**Issue** (from screenshots): when opening Live TV / Movies /
+Series with the sidebar layout, the bright cyan "focus" ring
+always landed on the first row (`Favorites`) — even though the
+actually-selected category was `All` (or `AMC`, etc.). The visual
+selection bar and the D-pad cursor were on different rows,
+which was visually wrong and unintuitive.
+
+**Fix**: in both `TVBrowseScreen.kt` (Movies/Series) and
+`TVLiveBrowseScreen.kt` (Live TV), the initial sidebar focus
+LaunchedEffect now calls `sidebarSelectedItemFocus.requestFocus()`
+(falling back to `sidebarFirstItemFocus` if no selection yet).
+The selected-row FocusRequester was ALREADY plumbed through the
+CategorySidebar composable — it just was never wired in by the
+callers. Two-line fix per screen.
+
+Also keyed the LaunchedEffect on `useSidebar` so the focus
+restores correctly when the user flips between top-bar ←→
+sidebar layouts mid-session.
+
+### 4. IMAP poller no longer blocks the admin panel
+**Side fix discovered while verifying #2**: the Canada Interac
+IMAP poller was acquiring `_db_lock` BEFORE its loop over Gmail
+message UIDs, then making blocking `m.fetch(uid, "(RFC822)")`
+network calls to Gmail's IMAP server while holding the lock.
+This blocked every other database consumer (admin endpoints,
+license checks, sync state writes) for up to a minute every
+60-second poll cycle.
+
+**Fix**: refactored the loop to acquire `_db_lock` per-message
+ONLY around the DB write (the `_already_processed` probe +
+`_process_single_email` call). Gmail fetches now happen
+lock-free.
+
+**Measured impact**: admin trials endpoint went from **~56s
+first-hit response** → **142ms**. ~400× speedup. License check
+endpoint sees the same improvement.
+
+### Deployed
+- Backend: `/opt/hushtv-sync/canada_payment_module.py` redeployed
+  to production, `hushtv-sync` restarted.
+- Admin HTML: deployed to `/var/www/hushtv/admin.html`.
+- nginx: `proxy_read_timeout` bumped 30s → 120s for `/api/admin/`
+  (defensive — most calls now complete in < 300ms anyway).
+- Canada APK: built `1.44.95` (versionCode 495) → uploaded to
+  `https://hushtv.xyz/hushtv-canada.apk`, manifest at
+  `/version-canada.json`.
+- Dev APK: rebuilt at the same version code so OTA channels stay
+  in lockstep.
+
+### Live URLs
+- Order create:               `POST https://hushtv.xyz/api/canada/order/create` → `amount_cad: 50.0`
+- Trials admin (Basic Auth):  `GET  https://hushtv.xyz/api/admin/canada/trials`
+- Trials admin UI:            `https://hushtv.xyz/admin` → Revenue tab → 🎟 Free trials section
+- Canada APK:                 `https://hushtv.xyz/hushtv-canada.apk` (v1.44.95)
+- Dev APK:                    `https://hushtv.xyz/HushTV.apk` (v1.44.95)
+
+### Files touched
+- MODIFIED `/app/sync_server/canada_payment_module.py` (paywall price, trial admin endpoints, stats roll-up, IMAP lock fix)
+- MODIFIED `/app/sync_server/tests/test_canada_payment_api.py` (test fixtures bumped to $50)
+- MODIFIED `/app/sync_server/tests/test_canada_trial.py` (5 new admin pytests, autouse fixture for state isolation)
+- MODIFIED `/app/_buildenv/canada_admin.html` (Trials section + JS)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVBrowseScreen.kt` (focus-follows-selection)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVLiveBrowseScreen.kt` (focus-follows-selection)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/canada/CanadaLicenseDetailsScreen.kt` ($40 → $50)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/canada/CanadaLockScreen.kt` (default $10 → $50)
+- MODIFIED `/app/androidtv/app/build.gradle.kts` (versionCode 495)
+- MODIFIED `/app/_buildenv/version-canada.json`
+- MODIFIED `/app/_buildenv/version.json`
+
+---
+
+
 ## v1.44.94 — Canada 72-hour free trial — 2026-02-19
 
 ### What landed

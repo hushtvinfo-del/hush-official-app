@@ -13,10 +13,11 @@ Verifies:
 """
 from __future__ import annotations
 
-import importlib
 import os
 import sqlite3
 import tempfile
+
+import pytest
 
 # --- Bootstrap env ---------------------------------------------------
 TMP = tempfile.mkdtemp(prefix="trial_test_")
@@ -27,14 +28,36 @@ os.environ["SPORTS_ADMIN_TOKEN"] = "TEST_ADMIN"
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-# Force a fresh module import so it picks up the env var.
 import canada_payment_module
-importlib.reload(canada_payment_module)
-canada_payment_module._init_schema()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_module_state():
+    """Apply this file's DB + admin-token overrides BEFORE each test
+    in this module, restore them after. Without this, mutating
+    module-level attributes at import time poisons other test files
+    that run in the same pytest session.
+
+    Also runs `_init_schema()` against THIS file's DB on the first
+    invocation — the module-level _init_schema() runs against whatever
+    DB_PATH happened to be set at import time, which may have been
+    overridden by another test file."""
+    prev_db    = canada_payment_module.DB_PATH
+    prev_admin = canada_payment_module.ADMIN_TOKEN
+    canada_payment_module.DB_PATH     = DB
+    canada_payment_module.ADMIN_TOKEN = "TEST_ADMIN_TOKEN_xyz"
+    canada_payment_module._init_schema()
+    yield
+    canada_payment_module.DB_PATH     = prev_db
+    canada_payment_module.ADMIN_TOKEN = prev_admin
 
 app = FastAPI()
 app.include_router(canada_payment_module.router)
+app.include_router(canada_payment_module.admin_router)
 client = TestClient(app)
+
+
+_ADMIN_HEADERS = {"X-Admin-Token": "TEST_ADMIN_TOKEN_xyz"}
 
 
 def _fetch_trial_row(user: str):
@@ -138,3 +161,64 @@ def test_paid_user_after_expired_paid_still_skips_trial():
     # Their paid license expired so they enter the trial flow.
     assert lic["paid"] is True
     assert lic["trial"] is True
+
+
+# ── Admin /trials endpoint coverage (v1.44.95) ──────────────────────
+def test_admin_trials_list_requires_token():
+    r = client.get("/api/admin/canada/trials")
+    assert r.status_code == 401
+
+
+def test_admin_trials_list_returns_totals_and_rows():
+    # Seed some trials.
+    for u in ("alpha_admin", "beta_admin", "gamma_admin"):
+        client.get(f"/api/canada/license/{u}")
+    r = client.get("/api/admin/canada/trials", headers=_ADMIN_HEADERS)
+    assert r.status_code == 200
+    j = r.json()
+    assert j["trial_duration_hours"] == 72
+    assert j["totals"]["all"] >= 3
+    assert j["totals"]["active"] >= 3
+    usernames = {row["xtream_username"] for row in j["rows"]}
+    assert "alpha_admin" in usernames
+    # Conversion rate present + sane.
+    assert 0.0 <= j["totals"]["conversion_rate_pct"] <= 100.0
+
+
+def test_admin_trial_revoke_forces_expiry():
+    client.get("/api/canada/license/revoke_target")
+    r = client.post(
+        "/api/admin/canada/trials/revoke",
+        json={"xtream_username": "revoke_target", "actor": "tester"},
+        headers=_ADMIN_HEADERS,
+    )
+    assert r.status_code == 200
+    # Re-check the license endpoint — must now show trial_expired.
+    lic = client.get("/api/canada/license/revoke_target").json()["license"]
+    assert lic["paid"] is False
+    assert lic.get("trial_expired") is True
+
+
+def test_admin_trial_delete_lets_user_regrant_fresh_trial():
+    client.get("/api/canada/license/delete_target")
+    first = client.get("/api/canada/license/delete_target").json()["license"]
+    first_started = first["trial_started_at"]
+    r = client.post(
+        "/api/admin/canada/trials/delete",
+        json={"xtream_username": "delete_target", "actor": "tester"},
+        headers=_ADMIN_HEADERS,
+    )
+    assert r.status_code == 200
+    # Next check grants a brand-new trial — started_at strictly newer.
+    second = client.get("/api/canada/license/delete_target").json()["license"]
+    assert second["trial_started_at"] > first_started
+    assert second["trial"] is True
+
+
+def test_admin_trial_revoke_404_when_unknown():
+    r = client.post(
+        "/api/admin/canada/trials/revoke",
+        json={"xtream_username": "nobody_ever_signed_up"},
+        headers=_ADMIN_HEADERS,
+    )
+    assert r.status_code == 404

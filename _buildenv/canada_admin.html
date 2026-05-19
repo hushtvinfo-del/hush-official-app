@@ -98,6 +98,58 @@
       </div>
     </div>
 
+    <!-- Free-trial roll-up (v1.44.95) — at-a-glance health for the 72h flow. -->
+    <div class="rounded-xl border border-cyan-700/40 bg-cyan-900/5 p-4 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-cyan-300">🎟 Free trials (72 hr)</h3>
+          <p class="text-xs text-slate-500 mt-1">One per Xtream account, immutable, auto-granted on first sign-in. Active trials are potential revenue.</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="setTrialFilter('all')"    id="trial-filter-all"    class="trial-filter-btn rounded-md bg-cyan-500/20 text-cyan-300 px-3 py-1 text-xs font-bold">All</button>
+          <button onclick="setTrialFilter('active')" id="trial-filter-active" class="trial-filter-btn rounded-md bg-slate-700 text-slate-400 px-3 py-1 text-xs">Active</button>
+          <button onclick="setTrialFilter('expired')" id="trial-filter-expired" class="trial-filter-btn rounded-md bg-slate-700 text-slate-400 px-3 py-1 text-xs">Expired</button>
+          <button onclick="loadTrials()" class="rounded-md bg-slate-700 text-slate-300 px-3 py-1 text-xs hover:bg-slate-600">↻</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">Total ever granted</div>
+          <div class="text-2xl font-bold mt-1" id="trial-total" data-testid="trial-total">…</div>
+        </div>
+        <div class="rounded-lg border border-cyan-700/40 bg-cyan-900/15 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-cyan-300">Active right now</div>
+          <div class="text-2xl font-bold mt-1 text-cyan-300" id="trial-active" data-testid="trial-active">…</div>
+        </div>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">Expired (no convert)</div>
+          <div class="text-2xl font-bold mt-1 text-slate-400" id="trial-expired" data-testid="trial-expired">…</div>
+        </div>
+        <div class="rounded-lg border border-emerald-700/40 bg-emerald-900/15 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-emerald-300">Converted → paid</div>
+          <div class="text-2xl font-bold mt-1 text-emerald-300" id="trial-converted" data-testid="trial-converted">…</div>
+          <div class="text-xs text-emerald-400/70 mt-0.5" id="trial-conv-rate">…</div>
+        </div>
+      </div>
+      <div class="overflow-x-auto rounded-lg border border-slate-800">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+            <tr>
+              <th class="text-left px-3 py-2">Username</th>
+              <th class="text-left px-3 py-2">Started</th>
+              <th class="text-left px-3 py-2">Expires</th>
+              <th class="text-left px-3 py-2">Status</th>
+              <th class="text-left px-3 py-2">Converted?</th>
+              <th class="text-right px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody id="trials-tbody" data-testid="trials-tbody">
+            <tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
       <h3 class="text-sm font-bold mb-3 text-slate-300">12-month revenue</h3>
       <div id="rev-chart" class="flex items-end gap-1.5 h-40">
@@ -470,6 +522,97 @@ async function deleteDemo(id) {
   } catch (e) { toast(e.message, "error"); }
 }
 
+// ── Free-trial admin (v1.44.95) ────────────────────────────────────
+window._trialFilter = "all";
+function setTrialFilter(f) {
+  window._trialFilter = f;
+  ["all", "active", "expired"].forEach(k => {
+    const btn = $("trial-filter-" + k);
+    if (!btn) return;
+    if (k === f) {
+      btn.className = "trial-filter-btn rounded-md bg-cyan-500/20 text-cyan-300 px-3 py-1 text-xs font-bold";
+    } else {
+      btn.className = "trial-filter-btn rounded-md bg-slate-700 text-slate-400 px-3 py-1 text-xs";
+    }
+  });
+  loadTrials();
+}
+async function loadTrials() {
+  try {
+    const d = await api("GET",
+      "/trials?limit=500&status=" + (window._trialFilter || "all"));
+    renderTrials(d);
+  } catch (e) {
+    $("trials-tbody").innerHTML =
+      `<tr><td colspan="6" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+function renderTrials(d) {
+  const t = d.totals || {};
+  $("trial-total").textContent     = (t.all     ?? 0).toLocaleString();
+  $("trial-active").textContent    = (t.active  ?? 0).toLocaleString();
+  $("trial-expired").textContent   = (t.expired ?? 0).toLocaleString();
+  $("trial-converted").textContent = (t.converted ?? 0).toLocaleString();
+  const rate = (t.conversion_rate_pct ?? 0).toFixed(1);
+  $("trial-conv-rate").textContent = `${rate}% conversion`;
+
+  const rows = d.rows || [];
+  if (rows.length === 0) {
+    $("trials-tbody").innerHTML =
+      `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">No trials in this view.</td></tr>`;
+    return;
+  }
+  $("trials-tbody").innerHTML = rows.map(r => {
+    const statusPill = r.status === "active"
+      ? `<span class="inline-flex items-center rounded-full bg-cyan-500/20 text-cyan-300 px-2 py-0.5 text-xs font-bold">ACTIVE · ${fmtTrialRemaining(r.remaining_ms)}</span>`
+      : `<span class="inline-flex items-center rounded-full bg-slate-700 text-slate-400 px-2 py-0.5 text-xs">EXPIRED</span>`;
+    const convertedCell = r.converted_to_paid
+      ? `<span class="inline-flex items-center rounded-full bg-emerald-500/20 text-emerald-300 px-2 py-0.5 text-xs font-bold">✓ PAID</span>`
+      : `<span class="text-slate-500 text-xs">—</span>`;
+    const revokeBtn = r.status === "active"
+      ? `<button onclick="revokeTrial('${r.xtream_username}')" class="rounded-md bg-slate-700 hover:bg-rose-600 text-slate-200 px-2 py-1 text-xs">End trial</button>`
+      : "";
+    const deleteBtn = `<button onclick="deleteTrial('${r.xtream_username}')" class="rounded-md bg-slate-700 hover:bg-rose-700 text-slate-200 px-2 py-1 text-xs ml-1">Wipe</button>`;
+    return `
+      <tr class="border-t border-slate-800 hover:bg-slate-800/30">
+        <td class="px-3 py-2 text-slate-200 font-mono text-xs">${r.xtream_username}</td>
+        <td class="px-3 py-2 text-slate-300 text-xs">${fmtRelative(r.started_at)}</td>
+        <td class="px-3 py-2 text-slate-300 text-xs">${fmtRelative(r.expires_at)}</td>
+        <td class="px-3 py-2">${statusPill}</td>
+        <td class="px-3 py-2">${convertedCell}</td>
+        <td class="px-3 py-2 text-right whitespace-nowrap">${revokeBtn}${deleteBtn}</td>
+      </tr>`;
+  }).join("");
+}
+function fmtTrialRemaining(ms) {
+  if (!ms || ms <= 0) return "expired";
+  const sec = Math.floor(ms / 1000);
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h left`;
+  if (h > 0) return `${h}h ${m}m left`;
+  return `${m}m left`;
+}
+async function revokeTrial(user) {
+  if (!confirm(`End ${user}'s free trial right now? Their app will show the paywall on the next check. They will NOT be eligible for another trial.`)) return;
+  try {
+    await api("POST", "/trials/revoke",
+      { xtream_username: user, actor: "admin-ui" });
+    toast(`✓ Trial ended for ${user}`, "success");
+    loadTrials();
+  } catch (e) { toast(e.message, "error"); }
+}
+async function deleteTrial(user) {
+  if (!confirm(`Wipe ${user}'s trial row? They will be eligible for a brand-new 72h trial on their next sign-in. Use only for test accounts / mis-typed usernames.`)) return;
+  try {
+    await api("POST", "/trials/delete",
+      { xtream_username: user, actor: "admin-ui" });
+    toast(`✓ Trial wiped for ${user}`, "success");
+    loadTrials();
+  } catch (e) { toast(e.message, "error"); }
+}
+
 // ── tab switching ──
 const TAB_IDS = ["revenue","licenses","payments","approve","orders"];
 document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -497,11 +640,12 @@ async function loadStats() {
   // Promise.all triples up the network calls and renders as each
   // resolves, so the visible Loading state ends at MAX(stats, inbox,
   // archive) instead of SUM(stats + inbox + archive).
-  const [statsP, inboxP, archiveP, demosP] = [
+  const [statsP, inboxP, archiveP, demosP, trialsP] = [
     api("GET", "/stats"),
     api("GET", "/base44/inbox?limit=20"),
     api("GET", "/licenses/archive?limit=50"),
     apiDemo("GET", "/recordings?limit=50"),
+    api("GET", "/trials?limit=500&status=" + (window._trialFilter || "all")),
   ];
   // Render each as it lands — don't wait for the slowest to render
   // the fast ones.
@@ -514,6 +658,9 @@ async function loadStats() {
   demosP.then(d => renderDemos(d.rows || []))
         .catch(e => $("demos-tbody").innerHTML =
           `<tr><td colspan="5" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`);
+  trialsP.then(d => renderTrials(d))
+         .catch(e => $("trials-tbody").innerHTML =
+           `<tr><td colspan="6" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`);
   try {
     const s = await statsP;
     renderStats(s);

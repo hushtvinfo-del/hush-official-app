@@ -82,7 +82,7 @@ def test_license_unpaid_then_paid_via_email_match():
 
     # Simulate the IMAP poller receiving an Interac email matching this order.
     fake_html = f"""<html><body>
-        Amount: $40.00 (CAD)<br>
+        Amount: $50.00 (CAD)<br>
         Sent From: Dave Tester<br>
         Message: {oid}
     </body></html>"""
@@ -121,7 +121,7 @@ def test_email_not_from_interac_skipped():
     j = _create_order("frank")
     oid = j["order"]["order_id"]
     raw = (b"From: scammer@example.com\r\nContent-Type: text/html\r\n\r\n"
-           + f"Amount: $40.00 (CAD) Message: {oid}".encode())
+           + f"Amount: $50.00 (CAD) Message: {oid}".encode())
     with cpm._conn() as c:
         outcome = cpm._process_single_email(c, "test-uid-3", raw)
     assert outcome == "skipped_not_interac"
@@ -129,7 +129,7 @@ def test_email_not_from_interac_skipped():
 
 def test_email_unknown_order_id():
     raw = (b"From: notify@payments.interac.ca\r\nContent-Type: text/html\r\n\r\n"
-           b"Amount: $40.00 (CAD) Message: 00000001")
+           b"Amount: $50.00 (CAD) Message: 00000001")
     with cpm._conn() as c:
         outcome = cpm._process_single_email(c, "test-uid-4", raw)
     assert outcome == "unknown_order"
@@ -191,7 +191,7 @@ def test_double_email_processing_is_idempotent():
     j = _create_order("greta")
     oid = j["order"]["order_id"]
     raw = (b"From: notify@payments.interac.ca\r\nContent-Type: text/html\r\n\r\n"
-           + f"Amount: $40.00 (CAD) Message: {oid}".encode())
+           + f"Amount: $50.00 (CAD) Message: {oid}".encode())
     with cpm._conn() as c:
         out1 = cpm._process_single_email(c, "dup-uid", raw)
         out2 = cpm._process_single_email(c, "dup-uid-2", raw)

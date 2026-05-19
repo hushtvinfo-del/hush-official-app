@@ -1,12 +1,12 @@
 {
-  "versionCode": 494,
-  "versionName": "1.44.94",
+  "versionCode": 495,
+  "versionName": "1.44.95",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "Internal: bumped to 1.44.94 to stay in lockstep with Canada channel. No new features on the dev channel itself — Canada gets the 72h free trial UI; dev users still see the manual screen recorder shipped in 1.44.93.",
-    "Includes the wider license-client refactor that makes the trial state surface-able for future flavors."
+    "FIX: Sidebar focus now lands on the currently-selected category in Live TV, Movies and Series (was always defaulting to the top row). Cursor + selection visually match.",
+    "Bumped to 1.44.95 to stay in lockstep with the Canada channel."
   ]
 }

@@ -72,7 +72,7 @@ fun CanadaLockScreen(
     var loading by remember { mutableStateOf(true) }
     var orderId by remember { mutableStateOf<String?>(null) }
     var emailTo by remember { mutableStateOf("Hushtv.info@gmail.com") }
-    var amountCad by remember { mutableStateOf(10.0) }
+    var amountCad by remember { mutableStateOf(50.0) }
     var error by remember { mutableStateOf<String?>(null) }
     var paidSuccess by remember { mutableStateOf(false) }
 
