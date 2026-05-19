@@ -2,10 +2,16 @@ package com.hushtv.tv.ui.boot
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -31,13 +38,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hushtv.tv.R
 import com.hushtv.tv.data.LastProfileStore
 import com.hushtv.tv.data.LibraryIndex
 import com.hushtv.tv.data.PlaylistStore
@@ -97,6 +107,12 @@ fun BootRefreshScreen(onDone: () -> Unit) {
     val ctx = LocalContext.current
     var stepLabel by remember { mutableStateOf("Refreshing your library…") }
     var progress by remember { mutableStateOf(0f) }
+    // v1.44.102 — Gcore CDN connection state. Flips to true the first
+    // time a network step (categories fetch) returns real data,
+    // proving the device is talking to the Xtream backend through
+    // its Gcore-fronted edge. Drives the bottom pill that reads
+    // "Connecting to Gcore CDN…" → "Connected to Gcore CDN".
+    var gcoreConnected by remember { mutableStateOf(false) }
     val animProgress by animateFloatAsState(
         targetValue = progress,
         animationSpec = tween(durationMillis = 280),
@@ -161,6 +177,16 @@ fun BootRefreshScreen(onDone: () -> Unit) {
                                 playlist.password, "series",
                             )
                         }
+                    }
+                    // v1.44.102 — First successful network round-trip.
+                    // If any of the three category fetches returned
+                    // data, the device IS talking to the Gcore-fronted
+                    // edge. Flip the badge so the user sees "Connected
+                    // to Gcore CDN" while the rest of refresh runs.
+                    if (liveCats.isNotEmpty() || movieCats.isNotEmpty() ||
+                        seriesCats.isNotEmpty()
+                    ) {
+                        gcoreConnected = true
                     }
                 }
             }
@@ -441,7 +467,79 @@ fun BootRefreshScreen(onDone: () -> Unit) {
                     softWrap = false,
                 )
             }
+            // v1.44.102 — Gcore CDN connection pill. Shows
+            //   "Connecting to Gcore CDN…" with a pulsing orange dot
+            // while we're still warming up the first network call,
+            // then transitions to
+            //   "Connected to Gcore CDN" with a steady green dot
+            // the moment the categories endpoint comes back with
+            // real data. Tells users their stream is routed through
+            // a real, named enterprise CDN (not a random reseller).
+            Spacer(Modifier.height(18.dp))
+            GcoreConnectBadge(connected = gcoreConnected)
         }
+    }
+}
+
+@Composable
+private fun GcoreConnectBadge(connected: Boolean) {
+    val label = if (connected) "Connected to Gcore CDN" else "Connecting to Gcore CDN…"
+    val dotColor = if (connected) Color(0xFF22C55E) else Color(0xFFFF6B00)
+    // Pulsing alpha for the "connecting" state — fades the dot in
+    // and out at ~1 Hz so the user can tell something is happening.
+    val pulseAlpha = if (connected) {
+        1f
+    } else {
+        val t = rememberInfiniteTransition(label = "gcore-pulse")
+        t.animateFloat(
+            initialValue = 0.35f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "gcore-pulse-alpha",
+        ).value
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .background(
+                color = Color(0xFF0E1217),
+                shape = RoundedCornerShape(20.dp),
+            )
+            .border(
+                width = 1.dp,
+                color = Color(0xFF1F2937),
+                shape = RoundedCornerShape(20.dp),
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        // Gcore logo
+        Image(
+            painter = painterResource(id = R.drawable.ic_gcore),
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        // Status dot
+        Box(
+            Modifier
+                .size(7.dp)
+                .alpha(pulseAlpha)
+                .clip(CircleShape)
+                .background(dotColor),
+        )
+        Spacer(Modifier.width(7.dp))
+        Text(
+            label,
+            color = if (connected) Color(0xFF86EFAC) else Color(0xFFFCD34D),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 

@@ -61,9 +61,6 @@ fun HushSplashScreen(onDone: () -> Unit) {
     val logoScale   = remember { Animatable(0.85f) }
     val barProgress = remember { Animatable(0f) }
     val tagAlpha    = remember { Animatable(0f) }
-    // v1.44.101 — Gcore CDN protection badge alpha. Fades in alongside
-    // the tagline (Phase 4) so it doesn't compete with the wordmark.
-    val gcoreAlpha  = remember { Animatable(0f) }
     val rootAlpha   = remember { Animatable(1f) }
 
     var done by remember { mutableStateOf(false) }
@@ -89,18 +86,9 @@ fun HushSplashScreen(onDone: () -> Unit) {
         // Phase 3: progress bar sweep (1200 ms)
         barProgress.animateTo(1f, tween(1200, easing = LinearEasing))
 
-        // Phase 4: tagline fade — Gcore badge fades in alongside the
-        // tagline so the user reads "Your Stream. Your Way." and the
-        // CDN trust signal at the same time. Tiny stagger (120 ms)
-        // keeps it from feeling synchronized-cheesy.
-        coroutineScope {
-            launch { tagAlpha.animateTo(1f, tween(400)) }
-            launch {
-                delay(120)
-                gcoreAlpha.animateTo(1f, tween(450))
-            }
-        }
-        delay(450)
+        // Phase 4: tagline fade
+        tagAlpha.animateTo(1f, tween(400))
+        delay(300)
 
         // Phase 5: fade everything to black
         rootAlpha.animateTo(0f, tween(400))
@@ -180,41 +168,5 @@ fun HushSplashScreen(onDone: () -> Unit) {
                 .height(2.dp)
                 .background(Cyan),
         )
-
-        // v1.44.101 — Gcore CDN protection badge. Anchored bottom-center
-        // a comfortable distance above the progress bar. Renders as a
-        // pill with the orange G icon + "Protected by Gcore CDN" copy.
-        // Designed to signal trust the moment the user sees the splash:
-        // their stream is delivered through a real, named CDN — not
-        // some random reseller. Whole row fades in only during Phase 4
-        // so it never competes with the wordmark animation.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 40.dp)
-                .alpha(gcoreAlpha.value)
-                .background(
-                    color = Color(0xFF0E1217),
-                    shape = RoundedCornerShape(20.dp),
-                )
-                .padding(horizontal = 14.dp, vertical = 7.dp),
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_gcore),
-                contentDescription = "Gcore CDN",
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "Protected by Gcore CDN",
-                color = Color(0xFFD1D5DB),
-                fontSize = 11.sp,
-                fontFamily = Inter,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.8.sp,
-            )
-        }
     }
 }

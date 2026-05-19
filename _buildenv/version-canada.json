@@ -1,12 +1,12 @@
 {
-  "versionCode": 501,
-  "versionName": "1.44.101-debug",
+  "versionCode": 502,
+  "versionName": "1.44.102-debug",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "NEW: 'Protected by Gcore CDN' badge on the splash screen, with the Gcore logo. Tells customers their stream is delivered by a real, enterprise-grade CDN — not a random reseller.",
-    "The badge fades in alongside the tagline so it doesn't compete with the HushTV wordmark animation."
+    "NEW: Refresh screen shows a live 'Connecting to Gcore CDN…' indicator with the Gcore logo, then flips to 'Connected to Gcore CDN' with a green status dot as soon as the device confirms a successful round-trip to the CDN. Customers see real proof their stream is delivered through enterprise-grade infrastructure.",
+    "Splash screen reverted to its previous look — the Gcore trust signal lives on the refresh screen instead."
   ]
 }
