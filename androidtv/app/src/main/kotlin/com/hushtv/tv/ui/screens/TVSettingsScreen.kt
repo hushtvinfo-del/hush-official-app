@@ -285,7 +285,7 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                         demoLastClip != null ->
                             "Last clip saved: ${demoLastClip!!.substringAfterLast('/')}"
                         else ->
-                            "1080p · 60 fps · 12 Mbps · captures system audio · auto-uploads to admin"
+                            "1080p · 30 fps · 8 Mbps · video only · auto-uploads to admin"
                     }
                     SettingsCard(
                         title = if (isRecording) "Stop recording" else "Start screen recording",

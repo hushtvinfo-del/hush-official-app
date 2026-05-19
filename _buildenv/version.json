@@ -1,12 +1,12 @@
 {
-  "versionCode": 492,
-  "versionName": "1.44.92",
+  "versionCode": 493,
+  "versionName": "1.44.93",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "CHANGE: Demo recorder is now a plain manual start/stop. No scripted tour, no UI hijacking. Settings → SCREEN RECORDER card → press once to start, navigate the app yourself, press again (or tap Stop in the notification) to stop + save + auto-upload.",
-    "Notification now has a Stop action so you can finish the recording from anywhere without having to navigate back to Settings."
+    "FIX: Screen recorder no longer crashes on NVIDIA Shield. The previous build used a low-level MediaCodec+MediaMuxer pipeline that tripped a known Android 11 NullPointerException inside MediaCodec's internal display listener. Switched to MediaRecorder which sidesteps the bug entirely. 1080p / 30 fps / 8 Mbps, video only for now — audio will return in a follow-up build.",
+    "Settings → SCREEN RECORDER card behaviour is unchanged: press once to start, navigate freely, press again (or tap Stop in the notification) to finish + upload."
   ]
 }
