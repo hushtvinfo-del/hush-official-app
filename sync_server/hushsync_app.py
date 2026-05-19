@@ -163,6 +163,16 @@ def _startup() -> None:
     except Exception as e:
         log.exception("canada payment module failed to mount: %s", e)
 
+    # Demo recording uploads (Dev flavor screen recordings).
+    # Routes: /api/demo/upload + /api/admin/demo/recordings.
+    try:
+        import demo_recording_module  # type: ignore
+        app.include_router(demo_recording_module.router)
+        app.include_router(demo_recording_module.admin_router)
+        log.info("HushTV demo recording module mounted")
+    except Exception as e:
+        log.exception("demo recording module failed to mount: %s", e)
+
 
 @app.get("/api/sync/health")
 def health() -> Dict[str, Any]:
