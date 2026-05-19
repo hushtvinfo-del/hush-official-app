@@ -1,3 +1,31 @@
+## v1.44.105-debug (Canada channel) — Shipped 2026-02-19
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (25.2 MB)
+- **Manifest**: https://hushtv.xyz/version-canada.json
+- **versionCode**: 505 / **versionName**: 1.44.105-debug
+- **applicationId**: `com.hushtv.tv.canada.debug` (kept `.debug` suffix — DO NOT switch to release/R8 or OTA breaks for existing customers)
+- **Build variant**: `assembleCanadaDebug` (no R8, no minification)
+
+### What landed
+- FIX: Parental Controls now actually hide locked categories across Live TV / Movies / Series / Search. Filter reads PinStore.lockedIds reactively in TVLiveBrowseScreen + TVBrowseScreen.
+- FIX: Parental Controls PIN now uses an on-screen D-pad keypad (TV remotes have no number keys).
+- NEW: 72-hour free trial for first-time Canada users.
+- NEW: Gcore CDN trust badge on BootRefreshScreen.
+- Paywall updated to $50 CAD.
+- Admin Trial panel + Demo Recorder upload pipeline.
+
+### Admin URL
+- https://hushtv.xyz/admin (Basic Auth: `hushadmin` / `HushTV2026!`)
+
+### Critical guard-rails (DO NOT change)
+- Keep `canadaDebug` flavor. `.debug` applicationId must stay or OTA silently fails for existing installs.
+- React frontend (`/app/frontend/`) is deprecated — all admin UI lives in `/app/_buildenv/canada_admin.html`.
+- Before each Gradle build: `bash /app/_buildenv/bootstrap-build-env.sh && /app/_buildenv/disk-janitor.sh`.
+
+---
+
+
 # HushTV — Product Requirements Document
 
 ## v1.44.97 — Baseline Profile (hand-tuned + library) — 2026-02-19
