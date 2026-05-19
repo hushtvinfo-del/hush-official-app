@@ -81,12 +81,11 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
         else -> "Top Bar"
     }
 
-    // v1.44.90 — Hidden Auto-pilot Demo Recorder. Long-press the
-    // "Parental Controls" header (≥ 700 ms via D-pad center) to open
-    // the recording dialog. Visible only on the dev flavor so we
-    // don't accidentally ship the trigger to end users.
+    // v1.44.91 — Auto-pilot Demo Recorder visible toggle. Dev-flavor
+    // only so end users never see it.
     var showDemoDialog by remember { mutableStateOf(false) }
     val demoTriggerEnabled = BuildConfig.UPDATE_CHANNEL == "dev"
+    val demoPhaseLive by com.hushtv.tv.demo.DemoController.phase.collectAsState()
 
     LaunchedEffect(playlistId) {
         val p = playlist ?: return@LaunchedEffect
@@ -107,21 +106,9 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
         ) {
             BackBtn { nav.popBackStack() }
             Spacer(Modifier.width(16.dp))
-            // Long-press the title (dev flavor only) to open the
-            // Auto-pilot Demo Recorder dialog. Short presses are a
-            // no-op so the title still feels like a static label.
-            val titleModifier = if (demoTriggerEnabled) {
-                Modifier
-                    .focusable()
-                    .clickableWithEnterAndLongPress(
-                        onClick = { /* swallow short-press */ },
-                        onLongPress = { showDemoDialog = true },
-                    )
-            } else Modifier
             Text(
                 "Parental Controls",
                 color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black,
-                modifier = titleModifier,
             )
         }
 
@@ -271,6 +258,45 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                     icon = { Icon(Icons.Default.Report, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                     onClick = { nav.navigate("diag") },
                 )
+            }
+
+            // ── DEMO RECORDER (dev flavor only, v1.44.91) ───────────
+            // Records a marketing tour of the home screen and uploads
+            // the MP4 to the admin panel. Hidden from official/canada
+            // so end users never see it.
+            if (demoTriggerEnabled) {
+                item { Spacer(Modifier.height(12.dp)) }
+                item {
+                    Text(
+                        "DEMO RECORDER",
+                        color = TextSecondary, fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+                    )
+                }
+                item {
+                    val isRecording = demoPhaseLive != com.hushtv.tv.demo.DemoController.Phase.Idle
+                    SettingsCard(
+                        title = if (isRecording) "Stop demo recording" else "Record marketing demo",
+                        subtitle = if (isRecording)
+                            "Recording in progress (${demoPhaseLive.name.lowercase()}) — tap to finish + upload"
+                        else
+                            "1080p · 60 fps · 12 Mbps · auto-tour of Home (~90s), auto-uploads to admin",
+                        icon = {
+                            Icon(
+                                Icons.Default.FiberManualRecord, null,
+                                tint = if (isRecording) Color(0xFFEF4444) else Cyan,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        },
+                        onClick = {
+                            if (isRecording) {
+                                com.hushtv.tv.demo.DemoController.stopRecording(ctx.applicationContext)
+                            } else {
+                                showDemoDialog = true
+                            }
+                        },
+                    )
+                }
             }
 
             // ── APP MODE (v1.44.19, refactored v1.44.24) ────────────

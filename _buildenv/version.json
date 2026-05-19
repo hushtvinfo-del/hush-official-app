@@ -1,13 +1,12 @@
 {
-  "versionCode": 490,
-  "versionName": "1.44.90",
+  "versionCode": 491,
+  "versionName": "1.44.91",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "NEW: Auto-pilot Demo Recorder (Phase 1). Long-press the 'Parental Controls' header in Settings to open the hidden marketing tool. Captures 1080p / 60 fps / 12 Mbps screen recording with system audio, then drives a ~90-second scripted tour of every Home section (Discovery, Streaming Services, Movie Collections incl. Star Wars, Genres, Themes & Moods, Decades). MP4 is saved to app-private storage and auto-uploaded to the sync server.",
-    "Dev-flavor only — Official and Canada builds ship without the hidden trigger so end users never see it.",
-    "Recordings are listed under the admin panel at /api/admin/demo/recordings and can be downloaded as MP4 for stitching with voiceover (Phase 2)."
+    "FIX: Demo Recorder now lives as a regular Settings card. Open Settings and scroll to 'DEMO RECORDER' — single Enter press starts the recording. Same card shows 'Stop demo recording' once it's running so you can finish + upload on demand.",
+    "Removed the hidden long-press trigger that was unreliable across remotes."
   ]
 }
