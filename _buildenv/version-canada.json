@@ -1,12 +1,12 @@
 {
-  "versionCode": 502,
-  "versionName": "1.44.102-debug",
+  "versionCode": 503,
+  "versionName": "1.44.103-debug",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "NEW: Refresh screen shows a live 'Connecting to Gcore CDN…' indicator with the Gcore logo, then flips to 'Connected to Gcore CDN' with a green status dot as soon as the device confirms a successful round-trip to the CDN. Customers see real proof their stream is delivered through enterprise-grade infrastructure.",
-    "Splash screen reverted to its previous look — the Gcore trust signal lives on the refresh screen instead."
+    "FIX: Parental Controls PIN entry now works with the Shield / Fire Stick remote. Previously it only listened for hardware number keys (which no TV remote has). New version shows a proper 3×4 number pad you navigate with the arrow buttons + OK.",
+    "Initial focus lands on '5' in the centre so any key is at most two D-pad presses away."
   ]
 }

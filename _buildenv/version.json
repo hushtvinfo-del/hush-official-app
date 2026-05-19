@@ -1,11 +1,11 @@
 {
-  "versionCode": 502,
-  "versionName": "1.44.102-debug",
+  "versionCode": 503,
+  "versionName": "1.44.103-debug",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "NEW: Gcore CDN trust badge moved from the splash to the refresh screen, with a live 'Connecting…' → 'Connected' status indicator."
+    "FIX: Parental Controls PIN dialog now has an on-screen D-pad number pad — TV remotes don't have hardware number keys, so the previous version was un-usable."
   ]
 }
