@@ -35,11 +35,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.hushtv.tv.BuildConfig
+import com.hushtv.tv.MainActivity
 import com.hushtv.tv.data.LayoutPrefsStore
 import com.hushtv.tv.data.PinStore
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamCategory
+import com.hushtv.tv.demo.DemoModeDialog
 import com.hushtv.tv.ui.player.PinDialog
 import com.hushtv.tv.ui.player.PinMode
 import com.hushtv.tv.ui.screens.home.LayoutChooserDialog
@@ -78,6 +81,13 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
         else -> "Top Bar"
     }
 
+    // v1.44.90 — Hidden Auto-pilot Demo Recorder. Long-press the
+    // "Parental Controls" header (≥ 700 ms via D-pad center) to open
+    // the recording dialog. Visible only on the dev flavor so we
+    // don't accidentally ship the trigger to end users.
+    var showDemoDialog by remember { mutableStateOf(false) }
+    val demoTriggerEnabled = BuildConfig.UPDATE_CHANNEL == "dev"
+
     LaunchedEffect(playlistId) {
         val p = playlist ?: return@LaunchedEffect
         scope.launch {
@@ -97,7 +107,22 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
         ) {
             BackBtn { nav.popBackStack() }
             Spacer(Modifier.width(16.dp))
-            Text("Parental Controls", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+            // Long-press the title (dev flavor only) to open the
+            // Auto-pilot Demo Recorder dialog. Short presses are a
+            // no-op so the title still feels like a static label.
+            val titleModifier = if (demoTriggerEnabled) {
+                Modifier
+                    .focusable()
+                    .clickableWithEnterAndLongPress(
+                        onClick = { /* swallow short-press */ },
+                        onLongPress = { showDemoDialog = true },
+                    )
+            } else Modifier
+            Text(
+                "Parental Controls",
+                color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black,
+                modifier = titleModifier,
+            )
         }
 
         LazyColumn(
@@ -410,6 +435,28 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
             },
             onDismiss = { showLayoutChooser = false },
         )
+    }
+
+    if (showDemoDialog) {
+        DemoModeDialog(
+            onStart = {
+                (ctx as? MainActivity)?.requestDemoRecordingPermission()
+            },
+            onDismiss = { showDemoDialog = false },
+        )
+    }
+
+    // v1.44.90 — Once the recorder has actually started, hop back to the
+    // home menu so the scripted tour has a Home page to drive. Triggered
+    // by the phase StateFlow flipping to Recording.
+    val demoPhase by com.hushtv.tv.demo.DemoController.phase.collectAsState()
+    LaunchedEffect(demoPhase) {
+        if (demoPhase == com.hushtv.tv.demo.DemoController.Phase.Recording) {
+            showDemoDialog = false
+            // Pop back to the home menu — Settings is one entry above
+            // Home, so a single pop suffices.
+            nav.popBackStack()
+        }
     }
 }
 

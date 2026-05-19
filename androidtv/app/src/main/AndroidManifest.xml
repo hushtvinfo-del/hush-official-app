@@ -6,6 +6,11 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Auto-pilot Demo Recorder (v1.44.90+) — MediaProjection screen
+         capture runs inside ScreenRecordingService, and audio capture
+         pulls our own process's playback via AudioPlaybackCaptureConfig. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Streaming wake locks: lets ExoPlayer.setWakeMode(WAKE_MODE_NETWORK)
          hold a partial WakeLock + WifiLock during playback, preventing
          Android Wi-Fi power save from throttling our IPTV streams after
@@ -68,5 +73,14 @@
         <receiver
             android:name=".notifications.ReminderReceiver"
             android:exported="false" />
+
+        <!-- Auto-pilot Demo Recorder (v1.44.90+). Foreground service that
+             owns the MediaProjection token for the duration of a marketing
+             demo capture. Type "mediaProjection" is required on Android 14+
+             for any service that calls getMediaProjection(). -->
+        <service
+            android:name=".demo.ScreenRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
     </application>
 </manifest>

@@ -182,6 +182,35 @@
       </div>
     </div>
 
+    <!-- Auto-pilot Demo Recordings (v1.44.90) ──────────────────── -->
+    <div class="rounded-xl border border-cyan-700/40 bg-cyan-900/5 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-bold text-cyan-300">🎬 Auto-pilot Demo Recordings</h3>
+        <button onclick="loadDemos()" class="text-cyan-400 hover:text-cyan-300 text-xs">↻ Refresh</button>
+      </div>
+      <p class="text-xs text-slate-400 mb-3">
+        Marketing-tour MP4s uploaded by the in-app recorder
+        (Settings → long-press the "Parental Controls" header, dev flavor only).
+        Download to publish on socials / stitch with a voiceover.
+      </p>
+      <div class="overflow-x-auto rounded-lg border border-slate-800">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+            <tr>
+              <th class="text-left px-3 py-2">Uploaded</th>
+              <th class="text-left px-3 py-2">Device</th>
+              <th class="text-left px-3 py-2">App version</th>
+              <th class="text-right px-3 py-2">Size</th>
+              <th class="text-right px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody id="demos-tbody" data-testid="demos-tbody">
+            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </section>
 
   <!-- ─────────────────── LICENSES TAB ─────────────────── -->
@@ -387,6 +416,60 @@ async function publicApi(path) {
   return r.json();
 }
 
+// ── Demo recordings (v1.44.90) — separate base path ──
+const DEMO_BASE = "/api/admin/demo";
+async function apiDemo(method, path, body) {
+  const r = await fetch(DEMO_BASE + path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: "include",
+  });
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail || detail; } catch {}
+    throw new Error(`HTTP ${r.status}: ${detail}`);
+  }
+  return r.json();
+}
+async function loadDemos() {
+  try {
+    const d = await apiDemo("GET", "/recordings?limit=50");
+    renderDemos(d.rows || []);
+  } catch (e) {
+    $("demos-tbody").innerHTML =
+      `<tr><td colspan="5" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+function renderDemos(rows) {
+  if (rows.length === 0) {
+    $("demos-tbody").innerHTML =
+      `<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">No demo recordings yet. Trigger one from the Android app (Settings → long-press "Parental Controls").</td></tr>`;
+    return;
+  }
+  $("demos-tbody").innerHTML = rows.map(r => `
+    <tr class="border-t border-slate-800 hover:bg-slate-800/30">
+      <td class="px-3 py-2 text-slate-300 text-xs">${fmtRelative(r.uploaded_at)}</td>
+      <td class="px-3 py-2 text-slate-200 text-xs">${(r.device_label || "—")} <span class="text-slate-500 font-mono">${(r.device_id || "").slice(0,8)}</span></td>
+      <td class="px-3 py-2 text-slate-400 text-xs font-mono">${r.app_version || "—"}</td>
+      <td class="px-3 py-2 text-right text-slate-300">${r.size_human}</td>
+      <td class="px-3 py-2 text-right space-x-2 whitespace-nowrap">
+        <a href="${r.download_url}" target="_blank"
+          class="rounded-lg bg-cyan-500 text-slate-950 px-3 py-1 text-xs font-bold hover:bg-cyan-400">⬇ MP4</a>
+        <button onclick="deleteDemo('${r.id}')"
+          class="rounded-lg bg-slate-700 hover:bg-rose-600 text-slate-100 px-3 py-1 text-xs">✕</button>
+      </td>
+    </tr>`).join("");
+}
+async function deleteDemo(id) {
+  if (!confirm(`Delete demo recording ${id}? This removes both the MP4 file and the DB row.`)) return;
+  try {
+    await apiDemo("DELETE", "/recordings/" + id);
+    toast(`✓ Deleted ${id}`, "success");
+    loadDemos();
+  } catch (e) { toast(e.message, "error"); }
+}
+
 // ── tab switching ──
 const TAB_IDS = ["revenue","licenses","payments","approve","orders"];
 document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -414,10 +497,11 @@ async function loadStats() {
   // Promise.all triples up the network calls and renders as each
   // resolves, so the visible Loading state ends at MAX(stats, inbox,
   // archive) instead of SUM(stats + inbox + archive).
-  const [statsP, inboxP, archiveP] = [
+  const [statsP, inboxP, archiveP, demosP] = [
     api("GET", "/stats"),
     api("GET", "/base44/inbox?limit=20"),
     api("GET", "/licenses/archive?limit=50"),
+    apiDemo("GET", "/recordings?limit=50"),
   ];
   // Render each as it lands — don't wait for the slowest to render
   // the fast ones.
@@ -427,6 +511,9 @@ async function loadStats() {
   archiveP.then(d => renderArchive(d.rows || []))
           .catch(e => $("archive-tbody").innerHTML =
             `<tr><td colspan="7" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`);
+  demosP.then(d => renderDemos(d.rows || []))
+        .catch(e => $("demos-tbody").innerHTML =
+          `<tr><td colspan="5" class="px-4 py-6 text-center text-rose-400">${e.message}</td></tr>`);
   try {
     const s = await statsP;
     renderStats(s);

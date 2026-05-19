@@ -1,5 +1,153 @@
 # HushTV — Product Requirements Document
 
+## v1.44.90 — Auto-pilot Demo Recorder (Phase 1, LIVE) — 2026-02-19
+
+### What landed
+The dev-flavor Android app can now record itself executing a scripted
+~90-second tour of every Home section and auto-upload the resulting
+MP4 to the sync server for marketing use. End-to-end: idle → hidden
+trigger → MediaProjection permission → 1080p/60fps/12 Mbps recording
+with system audio → scripted page-by-page tour → MP4 finalisation →
+auto-upload → status toast.
+
+### User journey
+1. Open Settings inside the **dev** flavor APK (gated by
+   `BuildConfig.UPDATE_CHANNEL == "dev"`; official + canada don't
+   see the trigger).
+2. **Long-press** (≥ 700 ms via D-pad center) on the "Parental
+   Controls" header. The hidden Auto-pilot Demo Recorder dialog
+   opens.
+3. Tap "Start recording" → system shows the MediaProjection
+   permission dialog → user accepts.
+4. App immediately pops Settings off the back-stack and lands on
+   the Home menu. The `DemoController` script coroutine kicks off:
+   - 2.5 s intro pad ("HushTV — auto-pilot demo")
+   - 10 s on Discovery
+   - 10 s on Streaming Services (Movies)
+   - 9 s on Streaming Services (Series)
+   - 14 s on Movie Collections (incl. Star Wars)
+   - 9 s on Genres (Movies)
+   - 8 s on Genres (Series)
+   - 10 s on Themes & Moods
+   - 10 s on Browse by Decade
+   - 1.5 s outro pad
+5. Service stops → MediaMuxer finalises the MP4 → upload to
+   `POST https://hushtv.xyz/api/demo/upload` with the bearer
+   `X-Demo-Upload-Token` header → admin row inserted.
+6. Throughout, a top-right "REC · <step caption>" pill is rendered
+   above the entire app tree via `DemoRecorderOverlay`.
+
+### Architecture
+- **`com.hushtv.tv.demo.DemoController`** — reactive singleton with
+  `phase: StateFlow<Phase>`, `scriptedPage: StateFlow<String?>`,
+  `caption: StateFlow<String>`. Holds the script and the
+  `beginScriptedTour()` coroutine.
+- **`com.hushtv.tv.demo.ScreenRecordingService`** — Foreground
+  service of type `mediaProjection`. Owns `MediaProjection`,
+  `MediaCodec` (H.264 video encoder fed by a VirtualDisplay
+  Surface) + `AudioPlaybackCaptureConfiguration` →
+  `AudioRecord` → `MediaCodec` (AAC encoder), and `MediaMuxer`.
+  Two daemon threads drain each encoder; the muxer starts the
+  moment both tracks are added.
+- **`com.hushtv.tv.demo.DemoUploadClient`** — OkHttp PUT of the
+  raw MP4 body (streamed, not multipart). 2 GB limit on the
+  server side, 2 min read/write timeouts.
+- **`com.hushtv.tv.demo.DemoModeDialog`** — Compose dialog rendered
+  by `TVSettingsScreen` showing instructions, the current phase
+  (Idle/Preparing/Recording/Stopping), the last clip path and
+  upload status. The "Start recording" button delegates to
+  `MainActivity.requestDemoRecordingPermission()` which fires
+  the `ActivityResultLauncher`.
+- **`com.hushtv.tv.demo.DemoRecorderOverlay`** — Top-right pill
+  with a pulsing red dot, phase label, and live caption. Rendered
+  ABOVE the rest of the Compose tree in `MainActivity.setContent`
+  so it stays visible across navigation, the license gate, and
+  any OTA update dialog.
+- **`TVMainMenuScreen.kt`** — `LaunchedEffect(demoPhase)` calls
+  `DemoController.beginScriptedTour()` when phase becomes
+  Recording. A second `LaunchedEffect(demoPage)` mirrors the
+  scripted page into `currentPage`, so the existing `AnimatedContent`
+  slide animation runs for every step transition automatically.
+
+### Server side
+- `/api/demo/upload` — public endpoint, gated by
+  `X-Demo-Upload-Token`. Streaming write to
+  `/var/hushtv-sync/recordings/demo-<id>.mp4`. Inserts a row
+  into the new `demo_recordings` SQLite table.
+- `/api/admin/demo/recordings` (Basic-Auth + X-Admin-Token via
+  nginx) — list / download / delete recordings.
+- `demo_recording_module.py` was already authored last session;
+  this session deployed it (`hushsync_app.py` had the import,
+  production server didn't have either file). Added nginx
+  location blocks for `/api/demo/` and `/api/admin/demo/`, plus
+  a systemd drop-in `/etc/systemd/system/hushtv-sync.service.d/demo-recording.conf`
+  that sets `DEMO_UPLOAD_TOKEN` + `DEMO_RECORDINGS_DIR`.
+
+### Admin UI
+New "🎬 Auto-pilot Demo Recordings" section at the bottom of the
+Revenue tab in `https://hushtv.xyz/admin`. Lists every uploaded
+clip with timestamp, device, app version, size, plus per-row
+"Download MP4" and "Delete" buttons.
+
+### Permissions added
+- `android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION`
+- `android.permission.RECORD_AUDIO` (paired with
+  `AudioPlaybackCaptureConfiguration` for system playback capture)
+
+### Build config
+- `app/build.gradle.kts` exposes `DEMO_UPLOAD_URL` +
+  `DEMO_UPLOAD_TOKEN` as `buildConfigField`s per flavor.
+- Dev: URL = `https://hushtv.xyz/api/demo/upload`, token injected
+  via `-PdemoUploadToken=<hex>` so it never lands in source.
+- Official + canada: both fields are empty strings (recorder
+  bails with `Result(skipped=true)` and the local MP4 stays only).
+
+### Test coverage
+- `/app/sync_server/tests/test_demo_recording_api.py` — 7 pytests
+  covering auth (401), bad content-type (415), empty body (400),
+  happy path (upload → list → download → delete), admin gate.
+  All 7 pass locally.
+- E2E curl smoke test against production confirmed upload → list →
+  download → delete round-trip works through the real nginx +
+  uvicorn pipeline.
+
+### Files modified
+- **NEW** `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/demo/DemoController.kt`
+- **NEW** `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/demo/ScreenRecordingService.kt`
+- **NEW** `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/demo/DemoUploadClient.kt`
+- **NEW** `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/demo/DemoModeDialog.kt`
+- **NEW** `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/demo/DemoOverlay.kt`
+- **NEW** `/app/sync_server/tests/test_demo_recording_api.py`
+- MODIFIED `/app/androidtv/app/src/main/AndroidManifest.xml` (+2 permissions, +1 service decl)
+- MODIFIED `/app/androidtv/app/build.gradle.kts` (per-flavor buildConfigFields, version bump to 1.44.90 / 490)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/MainActivity.kt` (ActivityResultLauncher + overlay render)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVSettingsScreen.kt` (hidden long-press on title)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVMainMenuScreen.kt` (scripted page consumer)
+- MODIFIED `/app/_buildenv/canada_admin.html` (Demo Recordings section)
+- MODIFIED `/app/_buildenv/version.json` (1.44.90 / 490 + changelog)
+- DEPLOYED: APK → `/var/www/hushtv/HushTV.apk` (24 MB),
+  manifest → `/var/www/hushtv/version.json`,
+  `demo_recording_module.py` + `hushsync_app.py` →
+  `/opt/hushtv-sync/`, admin.html → `/var/www/hushtv/admin.html`,
+  systemd drop-in created, nginx config patched +
+  `systemctl reload nginx`.
+
+### Live URLs
+- Dev APK: https://hushtv.xyz/HushTV.apk (1.44.90 / 490)
+- Dev manifest: https://hushtv.xyz/version.json
+- Upload endpoint (smoke-tested): POST https://hushtv.xyz/api/demo/upload
+- Admin list: https://hushtv.xyz/admin → Revenue tab → 🎬 Auto-pilot Demo Recordings
+
+### Not in this phase (Phase 2 / 3 backlog)
+- Sports + Live TV auto-tour flows.
+- Server-side OpenAI Whisper transcribe + TTS narration + FFmpeg
+  stitching pipeline ("voiceover director").
+- Hybrid manual-record flow for Search / DVR (where scripting the
+  UI is impractical because content is user-typed).
+
+---
+
+
 ## v1.44.90 — URGENT incident: deleted licenses recovered + 5 permanent safeguards — 2026-02-08
 
 ### Root cause (mine, not the system)

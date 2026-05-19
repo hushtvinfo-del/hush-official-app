@@ -1,11 +1,17 @@
 package com.hushtv.tv
 
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -24,6 +30,8 @@ import androidx.navigation.compose.rememberNavController
 import com.hushtv.tv.data.LastChannelStore
 import com.hushtv.tv.data.LastProfileStore
 import com.hushtv.tv.data.PlaylistStore
+import com.hushtv.tv.demo.DemoController
+import com.hushtv.tv.demo.DemoRecorderOverlay
 import com.hushtv.tv.mobile.MobileApp
 import com.hushtv.tv.ui.HushSplashScreen
 import com.hushtv.tv.ui.requests.RequestNotificationHost
@@ -51,6 +59,17 @@ import com.hushtv.tv.update.VersionInfo
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
+
+    // Launcher for the MediaProjection permission dialog. Triggered by
+    // the hidden Settings long-press → DemoModeDialog → "Start recording".
+    private lateinit var mediaProjectionLauncher: ActivityResultLauncher<Intent>
+
+    /** Public entry-point invoked from the demo dialog. */
+    fun requestDemoRecordingPermission() {
+        val mpm = getSystemService(MediaProjectionManager::class.java) ?: return
+        mediaProjectionLauncher.launch(mpm.createScreenCaptureIntent())
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Must be called before super.onCreate(). Instantly shows the pure-black
         // splash background — the animated wordmark is rendered by Compose.
@@ -75,6 +94,19 @@ class MainActivity : ComponentActivity() {
         // v1.43.86 — refresh server-side bundle overrides every 6 h.
         // **DISABLED in v1.43.87** — see HushTVApp.newImageLoader().
         // com.hushtv.tv.data.BundleOverrides.startRefresh(this, lifecycleScope)
+        // v1.44.90 — Auto-pilot Demo Recorder. Register the
+        // MediaProjection permission launcher before setContent so the
+        // hidden settings trigger can dispatch into it.
+        mediaProjectionLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { res ->
+            if (res.resultCode == Activity.RESULT_OK && res.data != null &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+            ) {
+                DemoController.startRecording(applicationContext, res.resultCode, res.data!!)
+            }
+        }
+
         setContent {
             HushTVTheme {
                 Surface(
@@ -131,6 +163,11 @@ class MainActivity : ComponentActivity() {
                             com.hushtv.tv.ui.canada.CanadaLicenseGate {
                                 if (isTv) AppContent() else MobileApp()
                             }
+                            // v1.44.90 — Auto-pilot Demo Recorder REC pill.
+                            // Rendered ABOVE the app tree so it stays
+                            // visible across navigation, the license gate,
+                            // and the OTA update dialog.
+                            DemoRecorderOverlay()
                             // Render the OTA update prompt OUTSIDE the
                             // license gate so canada users locked behind
                             // the paywall can still receive critical app

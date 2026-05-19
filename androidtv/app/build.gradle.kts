@@ -11,8 +11,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 489
-        versionName = "1.44.89"
+        versionCode = 490
+        versionName = "1.44.90"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -76,19 +76,19 @@ android {
     // BuildConfig — see UpdateManager.kt.
     flavorDimensions += "channel"
     productFlavors {
+        // ── Auto-pilot Demo Recorder (v1.44.90+) ─────────────────────
+        // Shared upload endpoint. Dev gets a token (the server gates
+        // uploads with X-Demo-Upload-Token) so we can actually upload;
+        // official + canada ship with an empty token + URL so the
+        // recorder still saves a local MP4 but never tries to upload
+        // (keeps the marketing tool out of end-users' hands by accident).
+        // The token can be injected at build time via gradle property
+        // -PdemoUploadToken=<token> (set in CI / build-dev.sh).
+        val demoUploadToken: String =
+            (project.findProperty("demoUploadToken") as String?) ?: ""
+
         create("dev") {
             dimension = "channel"
-            // v1.44.39: dev gets a distinct applicationId so it can be
-            // installed SIDE-BY-SIDE with the official channel on the
-            // same device. Result on disk:
-            //   • dev release  → com.hushtv.tv.dev
-            //   • dev debug    → com.hushtv.tv.dev.debug
-            // Existing dev users upgrading from v1.44.38 will see a
-            // NEW "HushTV Dev" install appear alongside their legacy
-            // "HushTV" — Android can't auto-replace across application-
-            // ids. The legacy install can be uninstalled manually; it
-            // won't auto-update further since this manifest URL now
-            // points at the new applicationId.
             applicationIdSuffix = ".dev"
             buildConfigField(
                 "String",
@@ -100,28 +100,19 @@ android {
                 "UPDATE_CHANNEL",
                 "\"dev\"",
             )
+            buildConfigField(
+                "String",
+                "DEMO_UPLOAD_URL",
+                "\"https://hushtv.xyz/api/demo/upload\"",
+            )
+            buildConfigField(
+                "String",
+                "DEMO_UPLOAD_TOKEN",
+                "\"$demoUploadToken\"",
+            )
         }
         create("official") {
             dimension = "channel"
-            // v1.44.40: official ALSO gets a distinct applicationId
-            // suffix. We tried keeping it on the legacy id in v1.44.39
-            // to preserve in-place upgrades, but in practice users
-            // had legacy installs (signed with older keystores or
-            // released before applicationIdSuffix unification) that
-            // refused to accept v1.44.39-official as an "update" —
-            // Android threw "App not installed" because the signing
-            // cert didn't line up. Branching official off to its own
-            // applicationId means: regardless of what legacy app the
-            // device has at com.hushtv.tv*, the new official APK
-            // installs as a brand-new app and the user gets a guaranteed
-            // working side-by-side configuration.
-            //
-            //   • official release  → com.hushtv.tv.official
-            //   • official debug    → com.hushtv.tv.official.debug
-            //
-            // Cost: one-time fresh install (lose playlist / favorites
-            // / watch progress on first launch). Worth it for the
-            // unblocked testing flow.
             applicationIdSuffix = ".official"
             buildConfigField(
                 "String",
@@ -133,22 +124,12 @@ android {
                 "UPDATE_CHANNEL",
                 "\"official\"",
             )
+            buildConfigField("String", "DEMO_UPLOAD_URL", "\"\"")
+            buildConfigField("String", "DEMO_UPLOAD_TOKEN", "\"\"")
         }
         create("canada") {
             dimension = "channel"
-            // v1.44.66 — Canada-branded clone of the Official build.
-            // Functionally identical to Official; only difference is:
-            //   • applicationId  → com.hushtv.tv.canada
-            //   • App label      → "HushTV Canada"  (via res override)
-            //   • OTA manifest   → /version-canada.json
-            //   • APK URL        → /hushtv-canada.apk
-            // Installs side-by-side with Dev and Official on the same
-            // device. Same signing certificate so it'll auto-update
-            // cleanly from /hushtv-canada.apk.
             applicationIdSuffix = ".canada"
-            // App label override lives at
-            // src/canada/res/values/strings.xml — Gradle resource
-            // merging picks the flavor-specific value over main's.
             buildConfigField(
                 "String",
                 "UPDATE_MANIFEST_URL",
@@ -159,6 +140,8 @@ android {
                 "UPDATE_CHANNEL",
                 "\"canada\"",
             )
+            buildConfigField("String", "DEMO_UPLOAD_URL", "\"\"")
+            buildConfigField("String", "DEMO_UPLOAD_TOKEN", "\"\"")
         }
     }
     buildFeatures {
