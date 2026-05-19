@@ -1,12 +1,13 @@
 {
-  "versionCode": 499,
-  "versionName": "1.44.99",
+  "versionCode": 500,
+  "versionName": "1.44.100-debug",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
-  "mandatory": false,
+  "mandatory": true,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "FIX: Exit button now actually exits to the Fire TV launcher instead of relaunching the app. v1.44.96–v1.44.98 used Activity.finish() which Fire TV would immediately undo (a known quirk that's specific to release builds + singleTask launch mode). Now uses finishAndRemoveTask() plus a clean process kill so Fire TV has nothing to resurrect.",
-    "Same fix applies to the Exit App button on the trial-ended lock screen."
+    "FIX: OTA updates work again. v1.44.96 through v1.44.99 silently failed to install because they changed the applicationId — your device kept showing the update prompt over and over without it actually installing. This build keeps the same applicationId as your current install, so it'll update cleanly.",
+    "FIX: Exit button correctly returns to the device home screen.",
+    "Reverted the R8 minification stack — it was causing more problems than it was worth at this stage. App is back to a 24 MB APK but the perf wins are pursued differently in a follow-up after launch."
   ]
 }
