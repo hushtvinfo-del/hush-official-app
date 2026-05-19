@@ -61,7 +61,7 @@ import kotlinx.coroutines.delay
 class MainActivity : ComponentActivity() {
 
     // Launcher for the MediaProjection permission dialog. Triggered by
-    // the hidden Settings long-press → DemoModeDialog → "Start recording".
+    // the "Start screen recording" card in Settings (dev flavor only).
     private lateinit var mediaProjectionLauncher: ActivityResultLauncher<Intent>
 
     /** Public entry-point invoked from the demo dialog. */

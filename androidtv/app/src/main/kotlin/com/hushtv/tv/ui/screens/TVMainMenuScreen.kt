@@ -329,25 +329,6 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         }
     }
 
-    // v1.44.90 — Auto-pilot Demo Recorder hook. While a recording is in
-    // flight, DemoController.scriptedPage drives `currentPage` through
-    // the home tour (Discovery → Streaming Services → Collections →
-    // Genres → Themes → Decades). We also kick off the script
-    // coroutine the moment we're composed in the Recording phase.
-    val demoPhase by com.hushtv.tv.demo.DemoController.phase.collectAsState()
-    val demoPage by com.hushtv.tv.demo.DemoController.scriptedPage.collectAsState()
-    LaunchedEffect(demoPhase) {
-        if (demoPhase == com.hushtv.tv.demo.DemoController.Phase.Recording) {
-            com.hushtv.tv.demo.DemoController.beginScriptedTour()
-        }
-    }
-    LaunchedEffect(demoPage) {
-        val target = demoPage ?: return@LaunchedEffect
-        if (target in pageOrder && target != currentPage) {
-            currentPage = target
-        }
-    }
-
     Box(
         Modifier
             .fillMaxSize()

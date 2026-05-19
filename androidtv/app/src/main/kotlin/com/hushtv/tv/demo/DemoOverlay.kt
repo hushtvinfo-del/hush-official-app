@@ -10,7 +10,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,15 +33,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Tiny status overlay shown while a demo recording is in flight.
- * Anchored top-right so it doesn't collide with the "Reconnecting…" pill
- * (top-left). Composed by [MainActivity] above the rest of the app so
- * it's visible regardless of the current screen.
+ * Top-right "REC" pill rendered above the entire app while a manual
+ * screen recording is in flight. Confirms to the user that the
+ * recorder is live — they then navigate the app at their own pace
+ * and hit Stop in Settings (or the notification) when done.
  */
 @Composable
 fun DemoRecorderOverlay() {
     val phase by DemoController.phase.collectAsState()
-    val caption by DemoController.caption.collectAsState()
     val visible = phase != DemoController.Phase.Idle
 
     Box(Modifier.fillMaxSize()) {
@@ -65,24 +63,15 @@ fun DemoRecorderOverlay() {
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = when (phase) {
-                        DemoController.Phase.Preparing -> "PREP"
+                        DemoController.Phase.Preparing -> "STARTING"
                         DemoController.Phase.Recording -> "REC"
-                        DemoController.Phase.Stopping  -> "SAVE"
+                        DemoController.Phase.Stopping  -> "SAVING"
                         DemoController.Phase.Idle      -> ""
                     },
                     color = Color(0xFFEF4444),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Black,
                 )
-                if (caption.isNotBlank()) {
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = caption,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
             }
         }
     }

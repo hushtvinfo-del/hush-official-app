@@ -42,7 +42,6 @@ import com.hushtv.tv.data.PinStore
 import com.hushtv.tv.data.PlaylistStore
 import com.hushtv.tv.data.XtreamApi
 import com.hushtv.tv.data.XtreamCategory
-import com.hushtv.tv.demo.DemoModeDialog
 import com.hushtv.tv.ui.player.PinDialog
 import com.hushtv.tv.ui.player.PinMode
 import com.hushtv.tv.ui.screens.home.LayoutChooserDialog
@@ -81,11 +80,12 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
         else -> "Top Bar"
     }
 
-    // v1.44.91 — Auto-pilot Demo Recorder visible toggle. Dev-flavor
-    // only so end users never see it.
-    var showDemoDialog by remember { mutableStateOf(false) }
+    // v1.44.92 — Manual screen recorder toggle. Dev-flavor only so
+    // end users never see it.
     val demoTriggerEnabled = BuildConfig.UPDATE_CHANNEL == "dev"
     val demoPhaseLive by com.hushtv.tv.demo.DemoController.phase.collectAsState()
+    val demoLastClip by com.hushtv.tv.demo.DemoController.outputPath.collectAsState()
+    val demoUploadStatus by com.hushtv.tv.demo.DemoController.uploadStatus.collectAsState()
 
     LaunchedEffect(playlistId) {
         val p = playlist ?: return@LaunchedEffect
@@ -260,27 +260,36 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 )
             }
 
-            // ── DEMO RECORDER (dev flavor only, v1.44.91) ───────────
-            // Records a marketing tour of the home screen and uploads
-            // the MP4 to the admin panel. Hidden from official/canada
-            // so end users never see it.
+            // ── SCREEN RECORDER (dev flavor only, v1.44.92) ─────────
+            // Plain manual start/stop screen recorder. Records the
+            // entire screen (1080p / 60 fps / 12 Mbps + system audio)
+            // and uploads the MP4 to the admin panel. Visible only on
+            // the dev flavor.
             if (demoTriggerEnabled) {
                 item { Spacer(Modifier.height(12.dp)) }
                 item {
                     Text(
-                        "DEMO RECORDER",
+                        "SCREEN RECORDER",
                         color = TextSecondary, fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
                     )
                 }
                 item {
                     val isRecording = demoPhaseLive != com.hushtv.tv.demo.DemoController.Phase.Idle
+                    // Subtitle reflects current state with last-clip /
+                    // upload-status if we have any.
+                    val subtitle = when {
+                        isRecording ->
+                            "Recording in progress (${demoPhaseLive.name.lowercase()}) — tap to stop + save"
+                        demoUploadStatus != null -> demoUploadStatus!!
+                        demoLastClip != null ->
+                            "Last clip saved: ${demoLastClip!!.substringAfterLast('/')}"
+                        else ->
+                            "1080p · 60 fps · 12 Mbps · captures system audio · auto-uploads to admin"
+                    }
                     SettingsCard(
-                        title = if (isRecording) "Stop demo recording" else "Record marketing demo",
-                        subtitle = if (isRecording)
-                            "Recording in progress (${demoPhaseLive.name.lowercase()}) — tap to finish + upload"
-                        else
-                            "1080p · 60 fps · 12 Mbps · auto-tour of Home (~90s), auto-uploads to admin",
+                        title = if (isRecording) "Stop recording" else "Start screen recording",
+                        subtitle = subtitle,
                         icon = {
                             Icon(
                                 Icons.Default.FiberManualRecord, null,
@@ -292,7 +301,7 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                             if (isRecording) {
                                 com.hushtv.tv.demo.DemoController.stopRecording(ctx.applicationContext)
                             } else {
-                                showDemoDialog = true
+                                (ctx as? MainActivity)?.requestDemoRecordingPermission()
                             }
                         },
                     )
@@ -461,28 +470,6 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
             },
             onDismiss = { showLayoutChooser = false },
         )
-    }
-
-    if (showDemoDialog) {
-        DemoModeDialog(
-            onStart = {
-                (ctx as? MainActivity)?.requestDemoRecordingPermission()
-            },
-            onDismiss = { showDemoDialog = false },
-        )
-    }
-
-    // v1.44.90 — Once the recorder has actually started, hop back to the
-    // home menu so the scripted tour has a Home page to drive. Triggered
-    // by the phase StateFlow flipping to Recording.
-    val demoPhase by com.hushtv.tv.demo.DemoController.phase.collectAsState()
-    LaunchedEffect(demoPhase) {
-        if (demoPhase == com.hushtv.tv.demo.DemoController.Phase.Recording) {
-            showDemoDialog = false
-            // Pop back to the home menu — Settings is one entry above
-            // Home, so a single pop suffices.
-            nav.popBackStack()
-        }
     }
 }
 

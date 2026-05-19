@@ -153,22 +153,37 @@ class ScreenRecordingService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE,
         )
+        // "Stop" action that fires ACTION_STOP back at this service.
+        val stopIntent = Intent(this, ScreenRecordingService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPending = PendingIntent.getService(
+            this, 1, stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         val n: Notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CH_ID)
-                .setContentTitle("HushTV demo recording")
-                .setContentText("Auto-pilot tour in progress")
+                .setContentTitle("HushTV screen recorder")
+                .setContentText("Recording — tap Stop to save")
                 .setSmallIcon(R.drawable.tv_banner)
                 .setContentIntent(tap)
                 .setOngoing(true)
+                .addAction(
+                    Notification.Action.Builder(
+                        null as android.graphics.drawable.Icon?,
+                        "Stop", stopPending,
+                    ).build()
+                )
                 .build()
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
-                .setContentTitle("HushTV demo recording")
-                .setContentText("Auto-pilot tour in progress")
+                .setContentTitle("HushTV screen recorder")
+                .setContentText("Recording — tap Stop to save")
                 .setSmallIcon(R.drawable.tv_banner)
                 .setContentIntent(tap)
                 .setOngoing(true)
+                .addAction(0, "Stop", stopPending)
                 .build()
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

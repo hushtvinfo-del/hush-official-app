@@ -1,12 +1,12 @@
 {
-  "versionCode": 491,
-  "versionName": "1.44.91",
+  "versionCode": 492,
+  "versionName": "1.44.92",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "FIX: Demo Recorder now lives as a regular Settings card. Open Settings and scroll to 'DEMO RECORDER' — single Enter press starts the recording. Same card shows 'Stop demo recording' once it's running so you can finish + upload on demand.",
-    "Removed the hidden long-press trigger that was unreliable across remotes."
+    "CHANGE: Demo recorder is now a plain manual start/stop. No scripted tour, no UI hijacking. Settings → SCREEN RECORDER card → press once to start, navigate the app yourself, press again (or tap Stop in the notification) to stop + save + auto-upload.",
+    "Notification now has a Stop action so you can finish the recording from anywhere without having to navigate back to Settings."
   ]
 }
