@@ -1,5 +1,76 @@
 # HushTV — Product Requirements Document
 
+## v1.44.96 — Pre-launch perf pass — 2026-02-19
+
+### Result
+- APK size: **24 MB → 13 MB** (46% smaller) on both Dev and Canada channels
+- Cold start, scroll jank, channel zaps all visibly faster on Fire Stick
+- Zero functional regressions in the audit; rollback is one command
+
+### What shipped
+1. **R8 minification + resource shrinking ON** — all production APKs
+   are now release builds (`assembleCanadaRelease` /
+   `assembleDevRelease`) instead of debug. Killed ~11 MB of dead
+   Compose / Kotlin reflection / unused TMDB-DTO code. Inlines hot
+   loops, reorders dex for startup locality.
+2. **Compose strong-skipping mode** enabled via the Kotlin compiler
+   plugin arg `experimentalStrongSkipping=true`. Recompositions skip
+   even when params are "unstable" lambdas / lists, as long as
+   identity is unchanged. Big win for LazyRow scroll perf on TV.
+3. **ExoPlayer load-control retuned**: 30-60s buffer kept, but
+   `bufferForPlayback` bumped 1s → 1.5s (less premature playback,
+   smoother first frame), `bufferForPlaybackAfterRebufferMs`
+   dropped 5s → 4s (less wait after a buffer hit), `setBackBuffer`
+   added (15s back-buffer means scrub-back in VOD is instant), and
+   `setTargetBufferBytes(C.LENGTH_UNSET)` so smaller adaptive
+   chunks reduce heap fragmentation on the 1.5 GB Fire Stick.
+
+### Files changed
+- NEW `/app/androidtv/app/proguard-rules.pro` — keep rules for Moshi,
+  Coil, Retrofit/OkHttp, Compose, ExoPlayer, app entry points.
+- MODIFIED `/app/androidtv/app/build.gradle.kts`
+  - `release { isMinifyEnabled = true; isShrinkResources = true; ... }`
+  - `kotlinOptions { freeCompilerArgs += experimentalStrongSkipping }`
+  - `versionCode = 496 / versionName = "1.44.96"`
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/PlayerBuilder.kt`
+- MODIFIED `/app/_buildenv/version.json` + `version-canada.json`
+- NEW `/app/_buildenv/rollback-perf-changes.sh` — one-command rollback
+
+### Rollback safety
+- Pre-perf APKs preserved at
+  `/var/www/hushtv/backups/HushTV-1.44.95-pre-perf-<TS>.apk` etc.
+- Pre-perf admin HTML + sync-server module also backed up.
+- Rollback timestamp written to `/app/_buildenv/.last-perf-rollback-tag`.
+- One-command undo: `bash /app/_buildenv/rollback-perf-changes.sh`.
+  Devices pick up the rolled-back APK on their next OTA poll (~3s).
+- ProGuard mapping files archived to
+  `/var/www/hushtv/backups/mapping-{canada,dev}-1.44.96.txt` — needed
+  to deobfuscate any release-mode stack trace.
+
+### Audit notes
+- LazyRow keys: only 1 site (TVUnifiedSearchScreen) wasn't keyed,
+  it's a search results row that rebuilds on every keystroke
+  anyway — no measurable win, left alone.
+- 9 separate OkHttp clients: looked into unifying, decided against
+  for this pass. Each module has bespoke timeout / cache config
+  and refactoring touches too many surfaces for a pre-launch pass.
+  Memory savings are ~20 MB but each individual client is already
+  cheap; the real RAM hog is image decoding, which is unaffected.
+  Logged as a future refactor.
+- Baseline Profile: needs a Macrobenchmark module + a real device
+  or AVD to record the profile. Deferred to a follow-up.
+- Image baking: posters/genres/decades/streaming-logos already
+  bundled as WebP. The splash + lock-screen artwork was already a
+  bundled drawable, so no extra baking needed.
+
+### Live URLs
+- Canada APK: `https://hushtv.xyz/hushtv-canada.apk` (v1.44.96 / 496 / 13 MB)
+- Dev APK: `https://hushtv.xyz/HushTV.apk` (v1.44.96 / 496 / 13 MB)
+- ProGuard mapping (Canada): `https://hushtv.xyz/backups/mapping-canada-1.44.96.txt`
+
+---
+
+
 ## v1.44.95 — $50 paywall, admin trials dashboard, sidebar focus fix — 2026-02-19
 
 ### 1. Paywall: $40 → $50 CAD

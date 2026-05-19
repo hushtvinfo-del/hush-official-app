@@ -1,12 +1,12 @@
 {
-  "versionCode": 495,
-  "versionName": "1.44.95",
+  "versionCode": 496,
+  "versionName": "1.44.96",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "FIX: Sidebar focus now lands on the currently-selected category in Live TV, Movies and Series (was always defaulting to the top row). Cursor + selection visually match.",
-    "Bumped to 1.44.95 to stay in lockstep with the Canada channel."
+    "PERF: Dev channel matches Canada — release-mode build, R8 enabled, Compose strong-skipping, ExoPlayer retuned.",
+    "APK is roughly half the size of v1.44.95 (24 MB → 13 MB)."
   ]
 }
