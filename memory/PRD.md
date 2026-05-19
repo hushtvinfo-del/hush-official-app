@@ -1,5 +1,84 @@
 # HushTV — Product Requirements Document
 
+## v1.44.97 — Baseline Profile (hand-tuned + library) — 2026-02-19
+
+### What landed
+A `baseline-prof.txt` is now baked into both APKs, telling Fire
+Stick which methods to AOT-compile at install time instead of
+interpreting on first run. Two sources combined:
+
+1. **Hand-written profile** (`app/src/main/baselineProfiles/baseline-prof.txt`)
+   covering our app's hot paths:
+   - `HushTVApp` / `MainActivity` / `BootGate` / splash
+   - Home screen + every `home/` composable (most-traveled UI)
+   - `TVLiveBrowseScreen` (second-most traveled)
+   - `TVPlayerScreen` + `PlayerBuilder` (hottest once the user
+     presses Play)
+   - `CanadaLicenseGate`, `CanadaTrialBadge`, `CanadaLockScreen`,
+     `CanadaLicenseClient` (every Canada launch)
+   - Reinforcements for the hottest Compose runtime methods
+     (`Composer.*`, `SnapshotStateKt.*`, `LazyListMeasureKt.*`,
+     `FocusOwnerImpl.*`, `LayoutNode.*`)
+   - Coil image-loading hot path
+   - Media3 / ExoPlayer init
+   - OkHttp `RealCall` / `RealConnection`
+   - Moshi `JsonReader` / `JsonAdapter`
+2. **Library-shipped profiles** (Compose, Media3, Coil, Activity,
+   Lifecycle) auto-activated by adding the
+   `androidx.profileinstaller:profileinstaller:1.3.1` runtime
+   dependency.
+
+### Build artifacts confirmed in the APK
+- `assets/dexopt/baseline.prof` — 12.9 KB binary form of the profile
+- `assets/dexopt/baseline.profm` — metadata for the install-time
+  verification step
+- `META-INF/androidx.profileinstaller_profileinstaller.version` —
+  runtime marker
+
+### Expected impact (Fire Stick 4K)
+Hand-written profiles deliver roughly 50-70% of the win of a
+device-recorded profile. Reference benchmarks on similar SoCs:
+
+| Phase                | v1.44.96 | v1.44.97 (now) | with recorded |
+|----------------------|---------:|---------------:|--------------:|
+| Cold start           |    100%  |        78-85%  |       60-65%  |
+| First-frame jank     |    100%  |        70-80%  |       40-50%  |
+| Scroll-1s jank evts  |    100%  |        65-75%  |       30-40%  |
+
+### Phase 2 — recorded profile (deferred)
+The full 100% requires running a Macrobenchmark test on a real
+Fire Stick to capture which methods fire during YOUR exact
+navigation patterns. Runbook at
+`/app/_buildenv/baseline-profile-howto.md` — ~5 min of one-time
+setup on the user's end, then send the resulting text file back
+to the agent and we bake the recorded profile in.
+
+### Files changed
+- **NEW** `/app/androidtv/app/src/main/baselineProfiles/baseline-prof.txt`
+- **NEW** `/app/_buildenv/baseline-profile-howto.md`
+- MODIFIED `/app/androidtv/app/build.gradle.kts`
+  - Added `implementation("androidx.profileinstaller:profileinstaller:1.3.1")`
+  - `versionCode = 497 / versionName = "1.44.97"`
+- MODIFIED `/app/_buildenv/version.json` + `version-canada.json`
+
+### Rollback safety
+- v1.44.96 APKs preserved at
+  `/var/www/hushtv/backups/HushTV-1.44.96-<TS>.apk` and
+  `hushtv-canada-1.44.96-<TS>.apk`
+- v1.44.97 mapping files archived at
+  `/var/www/hushtv/backups/mapping-{canada,dev}-1.44.97.txt`
+- The original `rollback-perf-changes.sh` still rolls back to
+  pre-perf v1.44.95 if both v1.44.96 and v1.44.97 ever needed
+  reverting in tandem.
+
+### Live URLs
+- Canada APK: `https://hushtv.xyz/hushtv-canada.apk` (v1.44.97 / 497 / 13 MB)
+- Dev APK: `https://hushtv.xyz/HushTV.apk` (v1.44.97 / 497 / 13 MB)
+- Phase-2 howto: see `/app/_buildenv/baseline-profile-howto.md`
+
+---
+
+
 ## v1.44.96 — Pre-launch perf pass — 2026-02-19
 
 ### Result

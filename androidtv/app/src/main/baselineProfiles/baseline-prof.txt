@@ -1,0 +1,124 @@
+# HushTV — Baseline Profile (Human-Readable Format)
+#
+# Tells ART (Fire Stick / Android TV / Android Auto runtime) which
+# methods to AOT-compile at install time. Without this, those methods
+# get JIT-compiled on the fly during cold start, which is the #1
+# reason "first launch after update" feels sluggish on weak ARM SoCs
+# like the Fire Stick 4K.
+#
+# Format crash-course:
+#   H  = Hot method (called many times during normal use)
+#   S  = Startup method (called during app cold-start)
+#   P  = Post-startup method (called shortly after the splash)
+#   L  = Standard JVM type descriptor prefix (always present)
+#   ** = Wildcard — match any method on the class
+#
+# AGP 8.5 + R8 automatically translate the original class names below
+# to their R8-minified equivalents when building the release APK,
+# using the same mapping file emitted at /var/www/hushtv/backups/
+# mapping-canada-1.44.96.txt.
+#
+# When generating an UPDATED profile from a Fire Stick run
+# (Macrobenchmark module — see /app/_buildenv/baseline-profile-howto.md
+# once we add it), append the generated rules here. Order doesn't
+# matter; duplicates are de-duplicated automatically.
+#
+# Library-shipped profiles (Compose, Media3, Coil, Activity, etc.)
+# are merged in automatically by AGP — no need to repeat them here.
+
+# ── Our application entry point ─────────────────────────────────────
+HSPLcom/hushtv/tv/HushTVApp;-><init>()V
+HSPLcom/hushtv/tv/HushTVApp;->onCreate()V
+HSPLcom/hushtv/tv/MainActivity;-><init>()V
+HSPLcom/hushtv/tv/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLcom/hushtv/tv/MainActivity;->onStart()V
+HSPLcom/hushtv/tv/MainActivity;->onResume()V
+
+# ── Splash + bootstrap ──────────────────────────────────────────────
+HSPLcom/hushtv/tv/BootGate**->**(**)**
+HSPLcom/hushtv/tv/ui/HushSplashScreen**->**(**)**
+
+# ── Theme / colors (referenced from every composable) ───────────────
+HSPLcom/hushtv/tv/ui/theme/**->**(**)**
+
+# ── Home — the most-traveled screen ─────────────────────────────────
+HSPLcom/hushtv/tv/ui/screens/TVMainMenuScreen**->**(**)**
+HSPLcom/hushtv/tv/ui/screens/home/**->**(**)**
+
+# ── Live TV — second-most traveled ──────────────────────────────────
+HSPLcom/hushtv/tv/ui/screens/TVLiveBrowseScreen**->**(**)**
+
+# ── Movies / Series browse ──────────────────────────────────────────
+HSPLcom/hushtv/tv/ui/screens/TVBrowseScreen**->**(**)**
+
+# ── Player — hottest of all once the user hits Play ─────────────────
+HSPLcom/hushtv/tv/ui/screens/TVPlayerScreen**->**(**)**
+HSPLcom/hushtv/tv/data/PlayerBuilder**->**(**)**
+
+# ── License gate (Canada flavor) ────────────────────────────────────
+HSPLcom/hushtv/tv/ui/canada/CanadaLicenseGate**->**(**)**
+HSPLcom/hushtv/tv/ui/canada/CanadaTrialBadge**->**(**)**
+HSPLcom/hushtv/tv/ui/canada/CanadaLockScreen**->**(**)**
+HSPLcom/hushtv/tv/data/CanadaLicenseClient**->**(**)**
+
+# ── Data layer (called inside every screen's LaunchedEffect) ────────
+HSPLcom/hushtv/tv/data/PlaylistStore**->**(**)**
+HSPLcom/hushtv/tv/data/LastChannelStore**->**(**)**
+HSPLcom/hushtv/tv/data/LastProfileStore**->**(**)**
+HSPLcom/hushtv/tv/data/LayoutPrefsStore**->**(**)**
+HSPLcom/hushtv/tv/data/XtreamApi**->**(**)**
+HSPLcom/hushtv/tv/data/XtreamCache**->**(**)**
+HSPLcom/hushtv/tv/data/TmdbService**->**(**)**
+
+# ── Update / OTA dialog (every launch) ──────────────────────────────
+HSPLcom/hushtv/tv/update/UpdateManager**->**(**)**
+HSPLcom/hushtv/tv/update/UpdateDialog**->**(**)**
+
+# ── Bundle mapper — fast-path for built-in posters ──────────────────
+HSPLcom/hushtv/tv/HushBundleMapper**->**(**)**
+
+# ── Top-level Compose runtime hot paths ─────────────────────────────
+# (Compose ships its own profile; these are reinforcements for the
+# methods that show up in EVERY Compose recomposition.)
+HSPLandroidx/compose/runtime/Composer**->**(**)**
+HSPLandroidx/compose/runtime/SnapshotStateKt**->**(**)**
+HSPLandroidx/compose/runtime/snapshots/Snapshot**->**(**)**
+HSPLandroidx/compose/runtime/snapshots/SnapshotStateObserver**->**(**)**
+HSPLandroidx/compose/foundation/lazy/LazyListMeasureKt**->**(**)**
+HSPLandroidx/compose/foundation/lazy/LazyListState**->**(**)**
+HSPLandroidx/compose/foundation/lazy/LazyListItemProvider**->**(**)**
+HSPLandroidx/compose/foundation/gestures/Scrollable**->**(**)**
+HSPLandroidx/compose/ui/focus/FocusOwnerImpl**->**(**)**
+HSPLandroidx/compose/ui/focus/FocusTraversalKt**->**(**)**
+HSPLandroidx/compose/ui/node/LayoutNode**->**(**)**
+HSPLandroidx/compose/ui/node/NodeCoordinator**->**(**)**
+HSPLandroidx/compose/ui/platform/AndroidComposeView**->**(**)**
+
+# ── Kotlin coroutines (referenced from every LaunchedEffect) ────────
+HSPLkotlinx/coroutines/CoroutineScopeKt**->**(**)**
+HSPLkotlinx/coroutines/flow/StateFlowImpl**->**(**)**
+HSPLkotlinx/coroutines/flow/MutableStateFlow**->**(**)**
+
+# ── Coil — runs on every poster decode ──────────────────────────────
+HSPLcoil/compose/AsyncImagePainter**->**(**)**
+HSPLcoil/compose/AsyncImageKt**->**(**)**
+HSPLcoil/ImageLoader**->**(**)**
+HSPLcoil/RealImageLoader**->**(**)**
+HSPLcoil/memory/RealMemoryCache**->**(**)**
+
+# ── Media3 / ExoPlayer init (hot during channel zaps + VOD play) ────
+HSPLandroidx/media3/exoplayer/ExoPlayer**->**(**)**
+HSPLandroidx/media3/exoplayer/DefaultLoadControl**->**(**)**
+HSPLandroidx/media3/exoplayer/source/MediaSource**->**(**)**
+HSPLandroidx/media3/exoplayer/hls/HlsMediaSource**->**(**)**
+HSPLandroidx/media3/exoplayer/dash/DashMediaSource**->**(**)**
+
+# ── OkHttp — every network call goes through here ──────────────────
+HSPLokhttp3/internal/connection/RealConnection**->**(**)**
+HSPLokhttp3/internal/connection/RealCall**->**(**)**
+HSPLokhttp3/internal/http/RealInterceptorChain**->**(**)**
+
+# ── Moshi — every JSON decode (TMDB, Xtream, sports, etc.) ─────────
+HSPLcom/squareup/moshi/Moshi**->**(**)**
+HSPLcom/squareup/moshi/JsonReader**->**(**)**
+HSPLcom/squareup/moshi/JsonAdapter**->**(**)**

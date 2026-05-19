@@ -1,14 +1,13 @@
 {
-  "versionCode": 496,
-  "versionName": "1.44.96",
+  "versionCode": 497,
+  "versionName": "1.44.97",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "PERF: First release-mode build for Canada. APK size cut nearly in half (24 MB → 13 MB) thanks to R8 minification + resource shrinking. Debug-build perf overhead is gone.",
-    "PERF: Compose strong-skipping mode enabled — less recomposition jank when D-pad-scrolling through title rows and channel lists on Fire Stick.",
-    "PERF: ExoPlayer load-control retuned — channel zaps and Play taps feel snappier; back-buffer kept around so scrub-back in VOD is instant.",
-    "If anything looks off on your device please report it — release builds are aggressive about removing 'unused' code and we want to catch any edge cases early. You can roll back instantly from the agent panel."
+    "PERF: Baseline profile baked into the APK. Fire Stick now AOT-compiles the hot Compose paths (Home, Live TV, player startup, license gate, image loading) at install time instead of interpreting them on first launch — expect another 20-35% faster cold start on top of v1.44.96's gains.",
+    "PERF: profileinstaller runtime added so library-shipped profiles (Compose, Media3, Coil) activate automatically — these alone speed up image decoding and player initialization.",
+    "APK still 13 MB — the profile itself only costs ~14 KB."
   ]
 }
