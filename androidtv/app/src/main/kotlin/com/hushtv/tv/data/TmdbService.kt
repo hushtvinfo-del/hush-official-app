@@ -487,10 +487,23 @@ object TmdbService {
 
     /**
      * Fetch the hottest landscape backdrops (w1280) RIGHT NOW from
-     * TMDB via `/trending/{movie|tv}/week`. Used by the Home > Discovery
-     * hero so users see CURRENT blockbusters (bright, cinematic, fresh
-     * artwork) instead of whatever happened to match their Xtream
-     * library via fuzzy title search.
+     * TMDB for the Home > Discovery hero so users see CURRENT
+     * blockbusters (bright, cinematic, fresh artwork) instead of
+     * whatever happened to match their Xtream library.
+     *
+     * v1.44.106 — `trending/{kind}/week` started returning corrupted
+     * gzip from TMDB's CloudFront cache around Feb 2026 (response
+     * body is gzipped but Content-Encoding header is stripped, so
+     * OkHttp's transparent decompression doesn't kick in and Moshi
+     * fails to parse). We now try a CHAIN of endpoints and return
+     * the first one that yields ≥3 valid backdrops:
+     *
+     *   movies:  trending/movie/week
+     *         →  movie/popular
+     *         →  discover/movie?sort_by=popularity.desc&vote_count.gte=200
+     *   series:  trending/tv/week
+     *         →  tv/on_the_air
+     *         →  discover/tv?sort_by=popularity.desc&vote_count.gte=200
      *
      * Returns up to [limit] backdrop URLs, already sorted by popularity.
      */
@@ -498,21 +511,38 @@ object TmdbService {
         kind: String,        // "movie" or "series"
         limit: Int = 10,
     ): List<String> = withContext(Dispatchers.IO) {
-        val endpoint = if (kind == "series") "trending/tv/week" else "trending/movie/week"
-        runCatching {
-            val url = "$BASE/$endpoint?language=en-US&api_key=${ApiKeys.TMDB}"
-            val body = client.newCall(Request.Builder().url(url).build())
-                .execute().body?.string() ?: return@runCatching emptyList()
-            moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)?.results
-                ?.asSequence()
-                ?.filter { !it.backdrop_path.isNullOrBlank() }
-                ?.sortedByDescending { it.popularity }
-                ?.mapNotNull { img(it.backdrop_path, "w1280") }
-                ?.distinct()
-                ?.take(limit)
-                ?.toList()
-                .orEmpty()
-        }.getOrDefault(emptyList())
+        val endpoints = if (kind == "series") {
+            listOf(
+                "trending/tv/week?language=en-US",
+                "tv/on_the_air?language=en-US",
+                "discover/tv?language=en-US&sort_by=popularity.desc&vote_count.gte=200&include_adult=false",
+            )
+        } else {
+            listOf(
+                "trending/movie/week?language=en-US",
+                "movie/popular?language=en-US",
+                "discover/movie?language=en-US&sort_by=popularity.desc&vote_count.gte=200&include_adult=false",
+            )
+        }
+        for (path in endpoints) {
+            val urls = runCatching {
+                val sep = if (path.contains('?')) "&" else "?"
+                val url = "$BASE/$path${sep}api_key=${ApiKeys.TMDB}"
+                val body = client.newCall(Request.Builder().url(url).build())
+                    .execute().body?.string() ?: return@runCatching emptyList()
+                moshi.adapter(TmdbSearchResponse::class.java).fromJson(body)?.results
+                    ?.asSequence()
+                    ?.filter { !it.backdrop_path.isNullOrBlank() }
+                    ?.sortedByDescending { it.popularity }
+                    ?.mapNotNull { img(it.backdrop_path, "w1280") }
+                    ?.distinct()
+                    ?.take(limit)
+                    ?.toList()
+                    .orEmpty()
+            }.getOrDefault(emptyList())
+            if (urls.size >= 3) return@withContext urls
+        }
+        emptyList()
     }
 
     /**

@@ -11,8 +11,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 505
-        versionName = "1.44.105"
+        versionCode = 506
+        versionName = "1.44.106"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
