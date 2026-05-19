@@ -4,13 +4,20 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,9 +31,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hushtv.tv.R
 import com.hushtv.tv.ui.theme.BgBlack
 import com.hushtv.tv.ui.theme.Cyan
 import com.hushtv.tv.ui.theme.CyanGlow08
@@ -52,6 +61,9 @@ fun HushSplashScreen(onDone: () -> Unit) {
     val logoScale   = remember { Animatable(0.85f) }
     val barProgress = remember { Animatable(0f) }
     val tagAlpha    = remember { Animatable(0f) }
+    // v1.44.101 — Gcore CDN protection badge alpha. Fades in alongside
+    // the tagline (Phase 4) so it doesn't compete with the wordmark.
+    val gcoreAlpha  = remember { Animatable(0f) }
     val rootAlpha   = remember { Animatable(1f) }
 
     var done by remember { mutableStateOf(false) }
@@ -77,9 +89,18 @@ fun HushSplashScreen(onDone: () -> Unit) {
         // Phase 3: progress bar sweep (1200 ms)
         barProgress.animateTo(1f, tween(1200, easing = LinearEasing))
 
-        // Phase 4: tagline fade
-        tagAlpha.animateTo(1f, tween(400))
-        delay(300)
+        // Phase 4: tagline fade — Gcore badge fades in alongside the
+        // tagline so the user reads "Your Stream. Your Way." and the
+        // CDN trust signal at the same time. Tiny stagger (120 ms)
+        // keeps it from feeling synchronized-cheesy.
+        coroutineScope {
+            launch { tagAlpha.animateTo(1f, tween(400)) }
+            launch {
+                delay(120)
+                gcoreAlpha.animateTo(1f, tween(450))
+            }
+        }
+        delay(450)
 
         // Phase 5: fade everything to black
         rootAlpha.animateTo(0f, tween(400))
@@ -110,11 +131,11 @@ fun HushSplashScreen(onDone: () -> Unit) {
         )
 
         // Wordmark column — centered
-        androidx.compose.foundation.layout.Column(
+        Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            verticalArrangement = Arrangement.Center,
         ) {
-            androidx.compose.foundation.layout.Row(
+            Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.scale(logoScale.value),
             ) {
@@ -159,5 +180,41 @@ fun HushSplashScreen(onDone: () -> Unit) {
                 .height(2.dp)
                 .background(Cyan),
         )
+
+        // v1.44.101 — Gcore CDN protection badge. Anchored bottom-center
+        // a comfortable distance above the progress bar. Renders as a
+        // pill with the orange G icon + "Protected by Gcore CDN" copy.
+        // Designed to signal trust the moment the user sees the splash:
+        // their stream is delivered through a real, named CDN — not
+        // some random reseller. Whole row fades in only during Phase 4
+        // so it never competes with the wordmark animation.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 40.dp)
+                .alpha(gcoreAlpha.value)
+                .background(
+                    color = Color(0xFF0E1217),
+                    shape = RoundedCornerShape(20.dp),
+                )
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_gcore),
+                contentDescription = "Gcore CDN",
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Protected by Gcore CDN",
+                color = Color(0xFFD1D5DB),
+                fontSize = 11.sp,
+                fontFamily = Inter,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.8.sp,
+            )
+        }
     }
 }

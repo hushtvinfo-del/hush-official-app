@@ -1,12 +1,11 @@
 {
-  "versionCode": 500,
-  "versionName": "1.44.100-debug",
+  "versionCode": 501,
+  "versionName": "1.44.101-debug",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
-  "mandatory": true,
+  "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "FIX: OTA updates resume. Same root cause + fix as the Canada channel.",
-    "FIX: Exit button returns to the device home screen."
+    "NEW: Splash screen now shows a 'Protected by Gcore CDN' badge below the wordmark."
   ]
 }

@@ -1,13 +1,12 @@
 {
-  "versionCode": 500,
-  "versionName": "1.44.100-debug",
+  "versionCode": 501,
+  "versionName": "1.44.101-debug",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
-  "mandatory": true,
+  "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "FIX: OTA updates work again. v1.44.96 through v1.44.99 silently failed to install because they changed the applicationId — your device kept showing the update prompt over and over without it actually installing. This build keeps the same applicationId as your current install, so it'll update cleanly.",
-    "FIX: Exit button correctly returns to the device home screen.",
-    "Reverted the R8 minification stack — it was causing more problems than it was worth at this stage. App is back to a 24 MB APK but the perf wins are pursued differently in a follow-up after launch."
+    "NEW: 'Protected by Gcore CDN' badge on the splash screen, with the Gcore logo. Tells customers their stream is delivered by a real, enterprise-grade CDN — not a random reseller.",
+    "The badge fades in alongside the tagline so it doesn't compete with the HushTV wordmark animation."
   ]
 }
