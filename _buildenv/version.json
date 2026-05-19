@@ -1,11 +1,11 @@
 {
-  "versionCode": 498,
-  "versionName": "1.44.98",
+  "versionCode": 499,
+  "versionName": "1.44.99",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "FIX: Login persistence across app updates restored. Same root cause + fix as the Canada channel."
+    "FIX: Exit button truly exits now — Fire TV would previously catch our finish() call and immediately relaunch the app. Now uses finishAndRemoveTask() + process kill."
   ]
 }

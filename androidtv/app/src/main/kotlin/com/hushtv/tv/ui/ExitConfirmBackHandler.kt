@@ -115,7 +115,12 @@ fun ExitConfirmBackHandler() {
                         focusRequester = exitFocus,
                         onClick = {
                             open = false
-                            (ctx as? Activity)?.finish()
+                            // v1.44.99 — finishAndRemoveTask + PID kill
+                            // (see ExitToLauncher.kt for why a plain
+                            // Activity.finish() got the app stuck in a
+                            // Fire-TV-relaunch loop after we switched
+                            // to release builds in v1.44.96).
+                            exitToLauncher(ctx)
                         },
                     )
                 }

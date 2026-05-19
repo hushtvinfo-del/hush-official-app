@@ -1,12 +1,12 @@
 {
-  "versionCode": 498,
-  "versionName": "1.44.98",
+  "versionCode": 499,
+  "versionName": "1.44.99",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "FIX: Auto-login now survives app updates again. v1.44.96 / v1.44.97 unintentionally rotated the internal class names used to deserialize the stored Xtream credentials, which forced everyone to log back in. Tightened the proguard rules so the JSON-deserialization path is stable across releases.",
-    "Side benefit: the fix doesn't undo the speedups — APK is still 13 MB, cold start is still as fast as v1.44.97."
+    "FIX: Exit button now actually exits to the Fire TV launcher instead of relaunching the app. v1.44.96–v1.44.98 used Activity.finish() which Fire TV would immediately undo (a known quirk that's specific to release builds + singleTask launch mode). Now uses finishAndRemoveTask() plus a clean process kill so Fire TV has nothing to resurrect.",
+    "Same fix applies to the Exit App button on the trial-ended lock screen."
   ]
 }

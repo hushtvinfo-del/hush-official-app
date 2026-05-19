@@ -245,7 +245,7 @@ fun CanadaLockScreen(
                     },
                     onExit = {
                         if (renewMode) onUnlocked()
-                        else (ctx as? android.app.Activity)?.finish()
+                        else com.hushtv.tv.ui.exitToLauncher(ctx)
                     },
                 )
             }
