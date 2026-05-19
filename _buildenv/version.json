@@ -1,11 +1,11 @@
 {
-  "versionCode": 503,
-  "versionName": "1.44.103-debug",
+  "versionCode": 504,
+  "versionName": "1.44.104-debug",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "FIX: Parental Controls PIN dialog now has an on-screen D-pad number pad — TV remotes don't have hardware number keys, so the previous version was un-usable."
+    "FIX: Parental Controls actually enforce category locks now — hides from sidebars and 'All'/'Favorites' buckets and search."
   ]
 }

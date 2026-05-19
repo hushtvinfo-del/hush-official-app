@@ -633,7 +633,8 @@ private fun XtreamLiveStream.toCard() = MediaCard(
     streamId = stream_id,
     seriesId = 0,
     containerExtension = "m3u8",
-    kind = "live"
+    kind = "live",
+    categoryId = category_id,
 )
 
 /** Raw extended info we need for `added` timestamp & genre on the VOD card. */
@@ -647,6 +648,7 @@ private fun XtreamVod.toCard() = MediaCard(
     containerExtension = container_extension ?: "mp4",
     kind = "movie",
     addedTs = added?.toLongOrNull() ?: 0L,
+    categoryId = category_id,
 )
 
 private fun XtreamSeries.toCard() = MediaCard(
@@ -659,4 +661,5 @@ private fun XtreamSeries.toCard() = MediaCard(
     containerExtension = null,
     kind = "series",
     addedTs = last_modified?.toLongOrNull() ?: 0L,
+    categoryId = category_id,
 )

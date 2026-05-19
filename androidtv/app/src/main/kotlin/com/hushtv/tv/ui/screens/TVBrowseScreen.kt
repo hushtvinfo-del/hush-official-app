@@ -271,15 +271,36 @@ fun TVBrowseScreen(
         }
     }
 
+    // v1.44.104 — Parental Controls: locked category_ids. Refreshed on
+    // every resume so lock/unlock in Settings applies the moment the
+    // user returns here. Locked categories disappear from the sidebar
+    // entirely, AND their items are filtered out of the All / Favorites
+    // virtual buckets so a kid can't bypass the lock by browsing All.
+    val lifecycleOwnerB = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var lockedIds by remember {
+        mutableStateOf(com.hushtv.tv.data.PinStore.lockedCategoryIds(ctx))
+    }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwnerB) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                lockedIds = com.hushtv.tv.data.PinStore.lockedCategoryIds(ctx)
+            }
+        }
+        lifecycleOwnerB.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwnerB.lifecycle.removeObserver(obs) }
+    }
+
     // Virtual sidebar: [Search] + [Favorites, All] + real categories
-    val sidebarEntries: List<SidebarEntry> = remember(allCategories, type) {
+    val sidebarEntries: List<SidebarEntry> = remember(allCategories, type, lockedIds) {
         buildList {
             add(SidebarEntry(CAT_SEARCH, "Search", Icons.Default.Search))
             add(SidebarEntry("__divider__", "", Icons.Default.Info, isDivider = true))
             add(SidebarEntry(CAT_FAV, "Favorites", Icons.Default.Star))
             add(SidebarEntry(CAT_ALL, "All", Icons.Outlined.Slideshow))
             allCategories.forEach { c ->
-                add(SidebarEntry(c.category_id, c.category_name, Icons.Default.Movie))
+                if (c.category_id !in lockedIds) {
+                    add(SidebarEntry(c.category_id, c.category_name, Icons.Default.Movie))
+                }
             }
         }
     }
@@ -289,18 +310,23 @@ fun TVBrowseScreen(
     var myListVersion by remember { mutableStateOf(0) }
     var watchVersion by remember { mutableStateOf(0) }
 
-    LaunchedEffect(selectedCatId, allItems, myListVersion, watchVersion) {
+    LaunchedEffect(selectedCatId, allItems, myListVersion, watchVersion, lockedIds) {
         val p = playlist ?: return@LaunchedEffect
+        // Filter out items belonging to a locked category.
+        fun filterLocked(list: List<MediaCard>): List<MediaCard> =
+            if (lockedIds.isEmpty()) list
+            else list.filter { (it.categoryId == null) || it.categoryId !in lockedIds }
+
         when (selectedCatId) {
-            CAT_ALL -> gridItems = allItems
+            CAT_ALL -> gridItems = filterLocked(allItems)
             CAT_FAV -> {
                 // Filter allItems by "in My List" for the current kind.
                 // Movies key on streamId, series on seriesId.
                 val favIds = MyListStore.getAll(ctx, playlistId, effectiveKind)
-                gridItems = allItems.filter {
+                gridItems = filterLocked(allItems.filter {
                     val id = if (it.kind == "series") it.seriesId else it.streamId
                     favIds.contains(id)
-                }
+                })
             }
             CAT_SEARCH -> {
                 // Legacy — kept for the dedicated Search tab route. New
@@ -308,7 +334,9 @@ fun TVBrowseScreen(
                 // the active category (see baseItems filter below).
                 val q = searchQuery.trim().lowercase()
                 gridItems = if (q.length < 2) emptyList()
-                else allItems.filter { it.title.lowercase().contains(q) }.take(200)
+                else filterLocked(
+                    allItems.filter { it.title.lowercase().contains(q) }.take(200)
+                )
             }
             "__divider__", "__divider2__" -> gridItems = emptyList()
             else -> {

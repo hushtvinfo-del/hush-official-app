@@ -189,4 +189,9 @@ data class MediaCard(
     val containerExtension: String?,
     val kind: String, // "live" | "movie" | "series"
     val addedTs: Long = 0L, // unix seconds — used for "New" filter
+    // v1.44.104 — needed by Parental Controls to filter out channels
+    // whose category is locked even inside the "All channels" /
+    // "★ Favorites" virtual buckets. Optional because legacy callers
+    // (search results that don't know the category) leave it null.
+    val categoryId: String? = null,
 )

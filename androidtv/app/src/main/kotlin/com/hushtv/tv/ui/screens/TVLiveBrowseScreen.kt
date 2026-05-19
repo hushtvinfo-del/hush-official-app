@@ -70,6 +70,7 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import coil.compose.SubcomposeAsyncImage
 import com.hushtv.tv.data.EpgProgram
+import com.hushtv.tv.data.PinStore
 import com.hushtv.tv.data.EpgService
 import com.hushtv.tv.data.FavoritesStore
 import com.hushtv.tv.data.MediaCard
@@ -125,11 +126,32 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     // Categories list — prepend two virtual rows: ★ Favorites and "All channels".
     val FAVORITES_ID = "__fav__"
     val ALL_ID = "__all__"
-    val uiCategories = remember(categories) {
+
+    // v1.44.104 — Parental Controls: locked category_ids. Refreshed on
+    // every resume (so toggling a lock in Settings + returning here
+    // re-applies immediately). Locked categories disappear from the
+    // sidebar entirely AND their channels are filtered out of the
+    // "All channels" + "★ Favorites" buckets so a kid can't bypass the
+    // lock by browsing all channels.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var lockedIds by remember {
+        mutableStateOf(PinStore.lockedCategoryIds(ctx))
+    }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                lockedIds = PinStore.lockedCategoryIds(ctx)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
+    val uiCategories = remember(categories, lockedIds) {
         listOf(
             XtreamCategory(category_id = FAVORITES_ID, category_name = "★ Favorites"),
             XtreamCategory(category_id = ALL_ID, category_name = "All channels")
-        ) + categories
+        ) + categories.filter { it.category_id !in lockedIds }
     }
 
     // Load categories once (or reuse cached).
@@ -144,9 +166,17 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
     }
 
     // Load channels when selected category changes.
-    LaunchedEffect(selectedCatIndex, uiCategories, allChannelsForFavorites) {
+    LaunchedEffect(selectedCatIndex, uiCategories, allChannelsForFavorites, lockedIds) {
         val p = playlist ?: return@LaunchedEffect
         val cat = uiCategories.getOrNull(selectedCatIndex) ?: return@LaunchedEffect
+        // v1.44.104 — Drop any channel whose category_id is locked.
+        // Applies to the "All channels" and "★ Favorites" virtual
+        // buckets; for a real category we never get here because
+        // locked categories are excluded from `uiCategories` above.
+        fun filterLocked(list: List<MediaCard>): List<MediaCard> =
+            if (lockedIds.isEmpty()) list
+            else list.filter { (it.categoryId == null) || it.categoryId !in lockedIds }
+
         when (cat.category_id) {
             FAVORITES_ID -> {
                 // Collect all favorites across all categories from the cache,
@@ -163,11 +193,13 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                         loadingChans = false
                     }
                 }
-                channels = allChannelsForFavorites.filter { favIds.contains(it.streamId) }
+                channels = filterLocked(
+                    allChannelsForFavorites.filter { favIds.contains(it.streamId) }
+                )
             }
             ALL_ID -> {
                 if (allChannelsForFavorites.isNotEmpty()) {
-                    channels = allChannelsForFavorites
+                    channels = filterLocked(allChannelsForFavorites)
                 } else {
                     loadingChans = true
                     scope.launch {
@@ -175,7 +207,7 @@ fun TVLiveBrowseScreen(nav: NavController, playlistId: String) {
                             allChannelsForFavorites = XtreamApi.getAllStreams(
                                 p.host, p.username, p.password, "live"
                             )
-                            channels = allChannelsForFavorites
+                            channels = filterLocked(allChannelsForFavorites)
                         }
                         loadingChans = false
                     }

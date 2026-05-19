@@ -134,9 +134,15 @@ fun TVUnifiedSearchScreen(
             val live = async { runCatching { XtreamApi.getAllStreams(p.host, p.username, p.password, "live") }.getOrDefault(emptyList()) }
             val mov  = async { runCatching { XtreamApi.getAllStreams(p.host, p.username, p.password, "movie") }.getOrDefault(emptyList()) }
             val ser  = async { runCatching { XtreamApi.getAllStreams(p.host, p.username, p.password, "series") }.getOrDefault(emptyList()) }
-            liveAll = live.await()
-            moviesAll = mov.await()
-            seriesAll = ser.await()
+            // v1.44.104 — Parental Controls: drop anything in a locked
+            // category before search can ever surface it.
+            val locked = com.hushtv.tv.data.PinStore.lockedCategoryIds(ctx)
+            fun strip(list: List<MediaCard>): List<MediaCard> =
+                if (locked.isEmpty()) list
+                else list.filter { (it.categoryId == null) || it.categoryId !in locked }
+            liveAll = strip(live.await())
+            moviesAll = strip(mov.await())
+            seriesAll = strip(ser.await())
         }
         loading = false
     }

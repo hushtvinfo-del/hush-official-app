@@ -1,12 +1,12 @@
 {
-  "versionCode": 503,
-  "versionName": "1.44.103-debug",
+  "versionCode": 504,
+  "versionName": "1.44.104-debug",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "FIX: Parental Controls PIN entry now works with the Shield / Fire Stick remote. Previously it only listened for hardware number keys (which no TV remote has). New version shows a proper 3×4 number pad you navigate with the arrow buttons + OK.",
-    "Initial focus lands on '5' in the centre so any key is at most two D-pad presses away."
+    "FIX: Parental Controls now actually hide locked categories. Previously the lock state was saved but never enforced — locked categories still showed up in Live TV, Movies, Series, and search. Now they are removed from the sidebar entirely AND their channels/movies/shows are filtered out of the 'All' and 'Favorites' buckets so the lock can't be bypassed by browsing 'All'.",
+    "To watch locked content, go to Settings → Parental Controls and toggle off the lock for that category."
   ]
 }
