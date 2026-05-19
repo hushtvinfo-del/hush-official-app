@@ -1,13 +1,12 @@
 {
-  "versionCode": 497,
-  "versionName": "1.44.97",
+  "versionCode": 498,
+  "versionName": "1.44.98",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "PERF: Baseline profile baked into the APK. Fire Stick now AOT-compiles the hot Compose paths (Home, Live TV, player startup, license gate, image loading) at install time instead of interpreting them on first launch — expect another 20-35% faster cold start on top of v1.44.96's gains.",
-    "PERF: profileinstaller runtime added so library-shipped profiles (Compose, Media3, Coil) activate automatically — these alone speed up image decoding and player initialization.",
-    "APK still 13 MB — the profile itself only costs ~14 KB."
+    "FIX: Auto-login now survives app updates again. v1.44.96 / v1.44.97 unintentionally rotated the internal class names used to deserialize the stored Xtream credentials, which forced everyone to log back in. Tightened the proguard rules so the JSON-deserialization path is stable across releases.",
+    "Side benefit: the fix doesn't undo the speedups — APK is still 13 MB, cold start is still as fast as v1.44.97."
   ]
 }

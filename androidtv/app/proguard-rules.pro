@@ -24,8 +24,17 @@
 # ── Moshi (used for all our DTOs) ────────────────────────────────────
 # Moshi reads class annotations at runtime, so the DTO classes and
 # their @JsonClass(generateAdapter = true) companions must stay.
+#
+# v1.44.98 — Tightened rules after v1.44.97 broke login persistence.
+# Root cause: PlaylistStore uses KotlinJsonAdapterFactory (reflection)
+# because we never added a KSP codegen step. R8's name obfuscation +
+# repackaging broke the runtime reflection path, so `adapter.fromJson`
+# returned null on every launch and the app fell back to the login
+# screen. Rules below explicitly preserve everything kotlin-reflect
+# needs.
 -keep class com.squareup.moshi.** { *; }
 -keep,allowobfuscation interface com.squareup.moshi.JsonAdapter
+-keep,allowobfuscation,allowshrinking interface com.squareup.moshi.JsonAdapter$Factory
 -keep @com.squareup.moshi.JsonClass class *
 -keep class **JsonAdapter {
     <init>(...);
@@ -33,13 +42,29 @@
 }
 -keepclassmembers @com.squareup.moshi.JsonClass class * {
     <init>(...);
+    <fields>;
 }
+# Keep EVERY property of every JsonClass-annotated DTO — including
+# property names — so kotlin-reflect can match JSON keys to fields.
+-keepclassmembers,allowoptimization @com.squareup.moshi.JsonClass class * { *; }
+
 # All our data DTOs (TMDB, Xtream, Canada license, sports, requests).
 -keep class com.hushtv.tv.data.**$* { *; }
 -keep class com.hushtv.tv.data.** { *; }
 -keepclassmembers class com.hushtv.tv.data.** {
     <init>(...);
+    <fields>;
 }
+
+# kotlin-reflect runtime — moshi-kotlin uses this for its
+# reflection-based adapter. Without these keeps, R8 strips builtins
+# loader classes that get loaded by Class.forName().
+-keep class kotlin.Metadata { *; }
+-keepclassmembers class kotlin.Metadata { public <methods>; }
+-keep class kotlin.reflect.jvm.internal.impl.builtins.BuiltInsLoaderImpl { *; }
+-keep class kotlin.reflect.jvm.internal.** { *; }
+-dontwarn kotlin.reflect.jvm.internal.**
+-keep class kotlin.coroutines.Continuation { *; }
 
 # ── Retrofit / OkHttp / Okio ─────────────────────────────────────────
 -keepattributes Signature,Exceptions,InnerClasses,EnclosingMethod
@@ -96,11 +121,14 @@
 -dontwarn javax.annotation.**
 
 # ── R8 mode ──────────────────────────────────────────────────────────
-# "Full mode" removes more code but is more aggressive. Disabled while
-# we stabilize — flip to true once a release build has been live for
-# 1-2 weeks without surprises.
--allowaccessmodification
--repackageclasses 'h'
+# v1.44.98 — Conservative R8. We removed `-allowaccessmodification`
+# and `-repackageclasses` after v1.44.97 lost user login state on
+# update. Those two flags together let R8 move classes to a
+# `h.<short>` package and change access modifiers, both of which
+# break the runtime kotlin-reflect path used by KotlinJsonAdapterFactory
+# for our DTOs. The remaining R8 work (dead-code removal, inlining,
+# dex layout) still gives us 95% of the original perf win and the
+# 13 MB APK size.
 
 # Print which rules actually kept stuff (commented; uncomment if
 # debugging an R8 crash and you need to compare).

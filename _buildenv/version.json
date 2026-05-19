@@ -1,12 +1,11 @@
 {
-  "versionCode": 497,
-  "versionName": "1.44.97",
+  "versionCode": 498,
+  "versionName": "1.44.98",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "dev",
   "changelog": [
-    "PERF: Baseline profile baked in. Cold launch on Fire Stick is materially faster — Compose runtime + ExoPlayer + Coil hot paths are AOT-compiled at install time.",
-    "Bumped to 1.44.97 to stay in lockstep with the Canada channel."
+    "FIX: Login persistence across app updates restored. Same root cause + fix as the Canada channel."
   ]
 }
