@@ -95,9 +95,32 @@ object PlayerBuilder {
             setEnableDecoderFallback(true)
         }
 
+        // v1.44.112 — Tightened HTTP timeouts after Fire Stick crash
+        // reports showed the "10-second stall then crash" symptom was
+        // actually a single hung HTTPS request riding all the way to
+        // the old 15s/20s timeouts. Multiplied by ExoPlayer's default
+        // 4-retry policy on the manifest Loader, users were staring at
+        // a black screen for 20-30 seconds before the recovery flow
+        // even kicked in.
+        //
+        // New targets:
+        //   connect = 4000 ms   (TCP + TLS handshake should complete
+        //                        in well under 4 s on any working
+        //                        Wi-Fi; if not, the upstream is gone
+        //                        and waiting longer doesn't help)
+        //   read    = 8000 ms   (HLS manifests are tiny — < 10 KB.
+        //                        An 8 s budget for a single .m3u8
+        //                        fetch is generous. Anything slower
+        //                        is broken upstream.)
+        //
+        // Net effect: worst-case manifest-failure detection time
+        // drops from ~30 s → ~10 s, which is *under* the user's
+        // patience threshold and inside the "Reconnecting…" overlay
+        // window. Recovery kicks in fast enough that to the user it
+        // looks like a brief buffer, not a crash.
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
+            .setConnectTimeoutMs(4_000)
+            .setReadTimeoutMs(8_000)
             .setAllowCrossProtocolRedirects(true)
             .setUserAgent("HushTV/Android-ExoPlayer")
 

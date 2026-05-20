@@ -1,17 +1,17 @@
 {
-  "versionCode": 510,
-  "versionName": "1.44.110",
+  "versionCode": 512,
+  "versionName": "1.44.112",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-20",
   "channel": "canada",
   "changelog": [
-    "FIX: Resolves Google Play Protect's 'harmful app' warning during install. The customer APK no longer requests the screen-recording / microphone permissions that the developer-only demo recorder needed — those permissions are now in the dev-only build flavor. Install will be clean again.",
-    "FIX: Player on-screen options (Audio / Subtitles / Speed / Aspect / Sleep / Info) — D-pad now actually moves focus inside the menu and OK selects.",
-    "FIX: Settings → 'My HushTV Canada License' subtitle now correctly shows $50 CAD / year.",
-    "FIX: Discovery hero shows hi-res TMDB backdrops again.",
+    "FIX (CRITICAL — Fire Stick stalls): Tightened the player's HTTPS timeouts (was 15 s connect / 20 s read, now 4 s / 8 s). Crash reports showed the 'black screen for 10–20 seconds, then app feels frozen' symptom was actually a single hung manifest fetch riding the old 30+ s budget. Recovery now kicks in inside the 'Reconnecting…' overlay window so it looks like a brief buffer, not a crash.",
+    "FIX: Resolved Google Play Protect 'harmful app' warning during install.",
+    "FIX: Player on-screen options menu — D-pad now actually selects options.",
+    "FIX: Settings shows $50 CAD / year correctly.",
+    "FIX: Discovery hero TMDB backdrop fallback.",
     "FIX: Parental Controls hide locked categories everywhere.",
-    "FIX: Speed Test screen fits on smaller TVs.",
     "NEW: 72-hour free trial for first-time Canada users."
   ]
 }
