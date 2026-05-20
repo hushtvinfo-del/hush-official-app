@@ -246,6 +246,27 @@ def _init_schema() -> None:
             "ON canada_processed_emails(message_id)"
         )
 
+        # v1.44.108 — one-time cleanup: any trial row that belongs to a
+        # user with a paid license is stale (the trial → paid promotion
+        # used to leak the trial row, making the admin Trials tab show
+        # licensed users as still on a trial). Remove them so the tab
+        # reflects reality. All future grants run _clear_trial_on_grant
+        # inline so this cleanup is idempotent on subsequent boots.
+        cleared = c.execute(
+            """DELETE FROM canada_trials
+               WHERE xtream_username IN (
+                 SELECT xtream_username FROM canada_licenses
+                 WHERE expires_at > ?
+               )""",
+            (int(time.time() * 1000),),
+        ).rowcount
+        if cleared:
+            log.info(
+                "canada_trials startup cleanup: removed %d stale trial row(s) "
+                "for users who already hold a paid license",
+                cleared,
+            )
+
 
 @contextmanager
 def _conn():
@@ -463,7 +484,11 @@ def _get_license_row(c, xtream_username: str):
 
 def _grant_license(c, xtream_username: str, paid_at: int, order_id: str) -> None:
     """Insert or extend a license. If an active license exists, ADD a year
-    to its current expiry; otherwise expires = paid_at + 1y."""
+    to its current expiry; otherwise expires = paid_at + 1y.
+
+    Also clears any pending trial row for this user — once they're a paid
+    customer, the trial is moot and shouldn't pollute the admin trial list.
+    """
     row = _get_license_row(c, xtream_username)
     now = _now_ms()
     if row and int(row["expires_at"]) > now:
@@ -479,6 +504,29 @@ def _grant_license(c, xtream_username: str, paid_at: int, order_id: str) -> None
               last_order_id=excluded.last_order_id""",
         (xtream_username, paid_at, new_expires, order_id),
     )
+    _clear_trial_on_grant(c, xtream_username)
+
+
+def _clear_trial_on_grant(c, xtream_username: str) -> None:
+    """Remove the trial row for a now-licensed user.
+
+    Rationale: trial rows exist to gate FIRST-TIME free access. Once a
+    paid (or admin-granted) license exists, the trial concept no longer
+    applies — keeping the row makes the admin Trials tab show licensed
+    users as "still on a trial", which they're not.
+
+    Safe to call even if no trial row exists (DELETE is a no-op then).
+    Logged so the audit trail records when a trial got promoted to paid.
+    """
+    cur = c.execute(
+        "DELETE FROM canada_trials WHERE xtream_username=?",
+        (xtream_username,),
+    )
+    if cur.rowcount > 0:
+        log.info(
+            "canada_trials: cleared trial row for %s (promoted to paid license)",
+            xtream_username,
+        )
 
 
 # ── IMAP poller ─────────────────────────────────────────────────────
@@ -1120,6 +1168,7 @@ async def base44_webhook(
                          last_order_id=excluded.last_order_id""",
                     (user, now, new_expires, order_id),
                 )
+                _clear_trial_on_grant(c, user)
                 detail = (
                     f"+{months}m via base44 actor={actor} "
                     f"method={method} amount=${amount_cad:.2f} reason={reason}"
@@ -1242,6 +1291,10 @@ def admin_grant(req: AdminGrantReq, x_admin_token: Optional[str] = Header(None))
                   last_order_id=excluded.last_order_id""",
             (user, now, new_expires, "ADMIN_GRANT"),
         )
+        # Clear any pending trial row — admin-granted users are full
+        # licensed customers, NOT trials. Without this the user shows
+        # up on the Trials tab as "active trial" forever.
+        _clear_trial_on_grant(c, user)
         # v1.44.87 — manual admin grants also push to Base44 so the
         # user record + confirmation email flow is identical to Interac
         # payments. The Order ID we send is unique per grant (using the
