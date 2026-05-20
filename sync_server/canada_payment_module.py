@@ -2161,6 +2161,44 @@ def admin_trials(
                WHERE trial_origin_at IS NOT NULL AND paid_at IS NOT NULL"""
         ).fetchone()["v"]
 
+        # v1.44.108 — Conversion-velocity funnel. How fast do trials
+        # turn into paying customers? Buckets are tuned around the
+        # 72-hour trial window so we can see "converted before trial
+        # ended" vs "came back later".
+        MS_24H = 86_400_000
+        MS_72H = 3 * MS_24H
+        MS_7D  = 7 * MS_24H
+        f_lt_24h  = c.execute(
+            "SELECT COUNT(*) c FROM canada_licenses "
+            "WHERE trial_origin_at IS NOT NULL "
+            "AND (paid_at - trial_origin_at) < ?",
+            (MS_24H,),
+        ).fetchone()["c"]
+        f_24_72h  = c.execute(
+            "SELECT COUNT(*) c FROM canada_licenses "
+            "WHERE trial_origin_at IS NOT NULL "
+            "AND (paid_at - trial_origin_at) >= ? "
+            "AND (paid_at - trial_origin_at) < ?",
+            (MS_24H, MS_72H),
+        ).fetchone()["c"]
+        f_3_7d    = c.execute(
+            "SELECT COUNT(*) c FROM canada_licenses "
+            "WHERE trial_origin_at IS NOT NULL "
+            "AND (paid_at - trial_origin_at) >= ? "
+            "AND (paid_at - trial_origin_at) < ?",
+            (MS_72H, MS_7D),
+        ).fetchone()["c"]
+        f_gt_7d   = c.execute(
+            "SELECT COUNT(*) c FROM canada_licenses "
+            "WHERE trial_origin_at IS NOT NULL "
+            "AND (paid_at - trial_origin_at) >= ?",
+            (MS_7D,),
+        ).fetchone()["c"]
+        # "Never converted" = trial rows that already expired (the user
+        # had a full 72h chance and didn't pay). Currently-active trials
+        # are excluded — their outcome isn't decided yet.
+        f_never   = int(total_expired)
+
     out_rows = []
     for r in rows:
         started  = int(r["started_at"])
@@ -2189,6 +2227,9 @@ def admin_trials(
         round(float(avg_to_convert_ms) / 3_600_000.0, 1)
         if avg_to_convert_ms else None
     )
+    funnel_decided = (f_lt_24h + f_24_72h + f_3_7d + f_gt_7d + f_never)
+    def _pct(n: int) -> float:
+        return round(100.0 * n / max(1, funnel_decided), 1) if funnel_decided else 0.0
     return {
         "now_ms": now,
         "trial_duration_hours": TRIAL_HOURS,
@@ -2200,6 +2241,16 @@ def admin_trials(
             "converted": int(total_converted),
             "conversion_rate_pct": conversion_rate,
             "avg_hours_to_convert": avg_to_convert_hours,
+        },
+        "conversion_funnel": {
+            "decided_total": funnel_decided,
+            "buckets": [
+                {"label": "<24h",        "count": int(f_lt_24h), "pct": _pct(f_lt_24h)},
+                {"label": "24–72h",      "count": int(f_24_72h), "pct": _pct(f_24_72h)},
+                {"label": "3–7 days",    "count": int(f_3_7d),   "pct": _pct(f_3_7d)},
+                {"label": ">7 days",     "count": int(f_gt_7d),  "pct": _pct(f_gt_7d)},
+                {"label": "Never",       "count": int(f_never),  "pct": _pct(f_never)},
+            ],
         },
         "signups_last_14d": [
             {"days_ago": int(b["days_ago"]), "count": int(b["c"])}

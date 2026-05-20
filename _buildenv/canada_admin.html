@@ -352,14 +352,26 @@
         </div>
       </div>
 
-      <!-- Sparkline: signups last 14 days -->
-      <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Signups · last 14 days</h3>
-          <span class="text-[10px] text-slate-500">Each bar = one day. Today is on the right.</span>
+      <!-- Sparkline: signups last 14 days + Conversion funnel side-by-side -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Signups · last 14 days</h3>
+            <span class="text-[10px] text-slate-500">Each bar = one day. Today is on the right.</span>
+          </div>
+          <div id="trf-sparkline" class="flex items-end gap-1.5 h-20" data-testid="trf-sparkline">
+            <div class="text-slate-500 text-xs m-auto">Loading…</div>
+          </div>
         </div>
-        <div id="trf-sparkline" class="flex items-end gap-1.5 h-20" data-testid="trf-sparkline">
-          <div class="text-slate-500 text-xs m-auto">Loading…</div>
+
+        <div class="rounded-lg border border-emerald-700/30 bg-emerald-900/5 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-300">Conversion Funnel</h3>
+            <span class="text-[10px] text-emerald-400/70" id="trf-funnel-total" data-testid="trf-funnel-total">—</span>
+          </div>
+          <div id="trf-funnel" class="space-y-2" data-testid="trf-funnel">
+            <div class="text-slate-500 text-xs">Loading…</div>
+          </div>
         </div>
       </div>
 
@@ -796,6 +808,7 @@ async function loadTrialsFull() {
     window._trfData = d;
     renderTrialsFullStats(d);
     renderTrialsSparkline(d.signups_last_14d || []);
+    renderTrialsFunnel(d.conversion_funnel || {});
     renderTrialsFull();
   } catch (e) {
     $("trf-tbody").innerHTML =
@@ -832,6 +845,45 @@ function renderTrialsSparkline(buckets) {
       <div class="text-[9px] text-slate-500 mb-1">${s.count || ""}</div>
       <div class="w-full ${bg} rounded-sm transition-all" style="height:${Math.max(2, h)}%"></div>
       <div class="text-[9px] text-slate-500 mt-1">${label}</div>
+    </div>`;
+  }).join("");
+}
+
+// 7-day conversion funnel — horizontal bars, color-coded by goodness.
+// Faster conversions = brighter green; "never" = rose. Currently-active
+// trials are excluded from the denominator (decision not yet made).
+function renderTrialsFunnel(f) {
+  const buckets = Array.isArray(f.buckets) ? f.buckets : [];
+  const decided = f.decided_total || 0;
+  $("trf-funnel-total").textContent = decided > 0
+    ? `${decided.toLocaleString()} decided · pending excluded`
+    : "No decided trials yet";
+  if (!buckets.length || decided === 0) {
+    $("trf-funnel").innerHTML = `<div class="text-slate-500 text-xs italic">Once trials start expiring or converting, you'll see the funnel here.</div>`;
+    return;
+  }
+  const colors = {
+    "<24h":     { bar: "bg-emerald-400", text: "text-emerald-300" },
+    "24–72h":   { bar: "bg-emerald-500", text: "text-emerald-300" },
+    "3–7 days": { bar: "bg-amber-500",   text: "text-amber-300"   },
+    ">7 days":  { bar: "bg-amber-600",   text: "text-amber-400"   },
+    "Never":    { bar: "bg-rose-500",    text: "text-rose-300"    },
+  };
+  $("trf-funnel").innerHTML = buckets.map(b => {
+    const c = colors[b.label] || { bar: "bg-slate-500", text: "text-slate-300" };
+    const w = Math.min(100, Math.max(2, b.pct));
+    return `<div class="flex items-center gap-2" data-testid="trf-funnel-${b.label.replace(/[<>–\s]/g, '')}">
+      <div class="w-20 text-[11px] font-semibold ${c.text}">${b.label}</div>
+      <div class="flex-1 h-5 rounded-full bg-slate-800/60 overflow-hidden">
+        <div class="h-full ${c.bar} transition-all flex items-center pl-2"
+             style="width: ${w}%">
+          ${b.pct >= 12 ? `<span class="text-[10px] font-bold text-slate-950">${b.pct}%</span>` : ""}
+        </div>
+      </div>
+      <div class="w-20 text-right text-[11px] ${c.text}">
+        ${b.pct < 12 ? `<span>${b.pct}%</span>` : ""}
+        <span class="text-slate-500">· ${b.count}</span>
+      </div>
     </div>`;
   }).join("");
 }
