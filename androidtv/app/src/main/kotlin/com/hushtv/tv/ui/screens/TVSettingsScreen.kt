@@ -145,7 +145,7 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
                 item {
                     SettingsCard(
                         title = "My HushTV Canada License",
-                        subtitle = "View your $40 CAD / year status, expiry date, and renew",
+                        subtitle = "View your $50 CAD / year status, expiry date, and renew",
                         icon = {
                             Icon(
                                 Icons.Default.WorkspacePremium, null,

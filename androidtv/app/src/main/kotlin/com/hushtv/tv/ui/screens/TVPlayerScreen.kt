@@ -856,6 +856,23 @@ fun TVPlayerScreen(
             .focusable()
             .onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                // v1.44.109 — When the on-screen options menu (Audio /
+                // Subtitles / Speed / etc.) is open, EVERY key must
+                // bubble to the menu's focusable rows. Previously the
+                // root handler ate UP/DOWN/ENTER and applied them to
+                // the underlying player (channel-zap, play-pause toggle,
+                // seek) — so users could see the menu but could not
+                // actually move focus inside it or pick anything.
+                //
+                // Letting events pass through (return false) makes
+                // Compose's normal focus traversal handle UP/DOWN to
+                // walk between OptionRow buttons, and Enter to fire
+                // the focused row's clickableWithEnter. Back still
+                // dismisses via BackHandler inside the menu itself.
+                if (optionsOpen) return@onKeyEvent false
+                // Same gate for the "Are you done?" exit-confirm and
+                // the OpenSubtitles search dialogs.
+                if (areYouDoneOpen || showSubtitleDownload) return@onKeyEvent false
                 controlsTick++
                 when (e.key) {
                     // Channel up / down via arrow keys, CH+/CH-, and media next/prev

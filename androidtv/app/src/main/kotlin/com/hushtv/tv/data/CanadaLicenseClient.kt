@@ -11,7 +11,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 /**
- * HushTV Canada $40/yr CDN proxy fee license client.
+ * HushTV Canada $50/yr CDN proxy fee license client.
  *
  * Talks to the production sync server at `https://hushtv.xyz/api/canada/...`.
  * All public methods are blocking — call from a coroutine on Dispatchers.IO.

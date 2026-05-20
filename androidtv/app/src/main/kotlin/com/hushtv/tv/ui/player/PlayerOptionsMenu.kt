@@ -24,6 +24,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -181,7 +183,16 @@ private fun MainPane(
         letterSpacing = 3.sp
     )
     Spacer(Modifier.height(16.dp))
-    OptionRow(Icons.Default.Audiotrack, "Audio track", "Choose language", onAudio)
+    // v1.44.109 — auto-focus the first row when the menu opens so the
+    // user's D-pad presses immediately move between options rather than
+    // having no visible target. Was previously broken because the
+    // underlying player screen kept consuming key events.
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        runCatching { firstFocus.requestFocus() }
+    }
+    OptionRow(Icons.Default.Audiotrack, "Audio track", "Choose language", onAudio,
+        focusRequester = firstFocus)
     OptionRow(Icons.Default.ClosedCaption, "Subtitles", "Enable / disable / pick", onSubtitle)
     OptionRow(Icons.Default.Speed, "Playback speed", "${trimTrailingZero(playbackSpeed)}×", onSpeed)
     OptionRow(Icons.Default.AspectRatio, "Aspect ratio", aspectMode.label, onAspect)
@@ -263,7 +274,13 @@ private fun SubtitlePane(
 }
 
 @Composable
-private fun OptionRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+private fun OptionRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+) {
     var focused by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -279,6 +296,7 @@ private fun OptionRow(icon: ImageVector, title: String, subtitle: String, onClic
                 if (focused) Cyan else Color(0x14FFFFFF),
                 RoundedCornerShape(12.dp)
             )
+            .let { m -> if (focusRequester != null) m.focusRequester(focusRequester) else m }
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
@@ -328,6 +346,12 @@ private fun TrackPicker(
     if (groups.isEmpty()) {
         Text("No ${title.lowercase()} available in this stream", color = TextSecondary, fontSize = 14.sp)
     } else {
+        // v1.44.109 — auto-focus the first track row so D-pad ENTER
+        // selects it immediately. Without this, focus could remain
+        // on the BackChip and ENTER would close the pane unexpectedly.
+        val firstFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+        var firstClaimed = false
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (allowOff) {
                 item {
@@ -341,9 +365,11 @@ private fun TrackPicker(
                                 .clearOverridesOfType(trackType)
                                 .build()
                             tracksState.value = player.currentTracks
-                        }
+                        },
+                        focusRequester = firstFocus,
                     )
                 }
+                firstClaimed = true
             }
             groups.forEachIndexed { gi, grp ->
                 for (ti in 0 until grp.length) {
@@ -354,6 +380,7 @@ private fun TrackPicker(
                         fmt.codecs?.let { append("  ($it)") }
                     }
                     val selected = grp.isTrackSelected(ti)
+                    val isFirst = !firstClaimed && gi == 0 && ti == 0
                     item(key = "$gi-$ti") {
                         TrackChoice(
                             label = label,
@@ -367,9 +394,11 @@ private fun TrackPicker(
                                     )
                                     .build()
                                 tracksState.value = player.currentTracks
-                            }
+                            },
+                            focusRequester = if (isFirst) firstFocus else null,
                         )
                     }
+                    if (isFirst) firstClaimed = true
                 }
             }
         }
@@ -377,7 +406,12 @@ private fun TrackPicker(
 }
 
 @Composable
-private fun TrackChoice(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun TrackChoice(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+) {
     var focused by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -392,6 +426,7 @@ private fun TrackChoice(label: String, selected: Boolean, onClick: () -> Unit) {
                 if (focused) Cyan else Color.Transparent,
                 RoundedCornerShape(10.dp)
             )
+            .let { m -> if (focusRequester != null) m.focusRequester(focusRequester) else m }
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickableWithEnter(onClick)
@@ -412,11 +447,14 @@ private fun AspectPicker(
         Text("Aspect ratio", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
     Spacer(Modifier.height(14.dp))
-    AspectMode.values().forEach { mode ->
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+    AspectMode.values().forEachIndexed { idx, mode ->
         TrackChoice(
             label = mode.label,
             selected = mode == current,
-            onClick = { onChange(mode) }
+            onClick = { onChange(mode) },
+            focusRequester = if (idx == 0) firstFocus else null,
         )
         Spacer(Modifier.height(4.dp))
     }
@@ -432,12 +470,15 @@ private fun SpeedPicker(
         Text("Playback speed", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
     Spacer(Modifier.height(14.dp))
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
     val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
-    speeds.forEach { sp ->
+    speeds.forEachIndexed { idx, sp ->
         TrackChoice(
             label = "${trimTrailingZero(sp)}×",
             selected = kotlin.math.abs(current - sp) < 0.01f,
-            onClick = { onChange(sp) }
+            onClick = { onChange(sp) },
+            focusRequester = if (idx == 0) firstFocus else null,
         )
         Spacer(Modifier.height(4.dp))
     }
@@ -453,12 +494,15 @@ private fun SleepPicker(
         Text("Sleep timer", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
     Spacer(Modifier.height(14.dp))
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
     val options = listOf(null, 15, 30, 60, 90, 120)
-    options.forEach { opt ->
+    options.forEachIndexed { idx, opt ->
         TrackChoice(
             label = opt?.let { "$it minutes" } ?: "Off",
             selected = currentMinutesLeft == opt,
-            onClick = { onChange(opt) }
+            onClick = { onChange(opt) },
+            focusRequester = if (idx == 0) firstFocus else null,
         )
         Spacer(Modifier.height(4.dp))
     }

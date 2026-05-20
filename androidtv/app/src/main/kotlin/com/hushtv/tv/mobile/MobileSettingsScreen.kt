@@ -106,7 +106,7 @@ fun MobileSettingsScreen(nav: NavController, playlistId: String) {
             SettingsItem(
                 icon = Icons.Default.WorkspacePremium,
                 title = "My HushTV Canada License",
-                subtitle = "View your $40 CAD / year status and renew",
+                subtitle = "View your $50 CAD / year status and renew",
                 onClick = { nav.navigate("canada/license") },
             )
         }
