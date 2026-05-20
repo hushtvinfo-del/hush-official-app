@@ -2003,14 +2003,35 @@ def admin_trials(
     elif status == "expired":
         where = "WHERE expires_at <= ?"
         params.append(now)
+    elif status == "converted":
+        where = "WHERE l.xtream_username IS NOT NULL"
+    elif status == "unconverted":
+        where = "WHERE l.xtream_username IS NULL"
     with _conn() as c:
         rows = c.execute(
             f"""SELECT t.xtream_username, t.started_at, t.expires_at,
                        (l.xtream_username IS NOT NULL) AS converted_to_paid,
-                       l.paid_at AS converted_paid_at
+                       l.paid_at AS converted_paid_at,
+                       d.device_count, d.last_seen_at,
+                       d.platform, d.model, d.app_version
                 FROM canada_trials t
                 LEFT JOIN canada_licenses l
                   ON l.xtream_username = t.xtream_username
+                LEFT JOIN (
+                  SELECT xtream_username,
+                         COUNT(*) AS device_count,
+                         MAX(last_seen_at) AS last_seen_at,
+                         (SELECT platform FROM canada_devices d2
+                            WHERE d2.xtream_username = canada_devices.xtream_username
+                            ORDER BY last_seen_at DESC LIMIT 1) AS platform,
+                         (SELECT model FROM canada_devices d3
+                            WHERE d3.xtream_username = canada_devices.xtream_username
+                            ORDER BY last_seen_at DESC LIMIT 1) AS model,
+                         (SELECT app_version FROM canada_devices d4
+                            WHERE d4.xtream_username = canada_devices.xtream_username
+                            ORDER BY last_seen_at DESC LIMIT 1) AS app_version
+                  FROM canada_devices GROUP BY xtream_username
+                ) d ON d.xtream_username = t.xtream_username
                 {where}
                 ORDER BY
                   CASE WHEN t.expires_at > {now} THEN 0 ELSE 1 END ASC,
@@ -2026,6 +2047,24 @@ def admin_trials(
                INNER JOIN canada_licenses l
                  ON l.xtream_username = t.xtream_username"""
         ).fetchone()["c"]
+        # Trials grouped by signup-day buckets so admin sees velocity.
+        day_buckets = c.execute(
+            """SELECT
+                  CAST((? - started_at) / 86400000 AS INTEGER) AS days_ago,
+                  COUNT(*) c
+               FROM canada_trials
+               WHERE started_at >= ?
+               GROUP BY days_ago
+               ORDER BY days_ago ASC""",
+            (now, now - 14 * 86_400_000),  # last 14 days
+        ).fetchall()
+        # Avg time from trial start to first paid order, in hours.
+        avg_to_convert_ms = c.execute(
+            """SELECT AVG(l.paid_at - t.started_at) v
+               FROM canada_trials t INNER JOIN canada_licenses l
+                 ON l.xtream_username = t.xtream_username
+               WHERE l.paid_at IS NOT NULL"""
+        ).fetchone()["v"]
 
     out_rows = []
     for r in rows:
@@ -2041,10 +2080,19 @@ def admin_trials(
             "status": "active" if is_active else "expired",
             "converted_to_paid": bool(r["converted_to_paid"]),
             "converted_paid_at": int(r["converted_paid_at"]) if r["converted_paid_at"] else None,
+            "device_count": int(r["device_count"]) if r["device_count"] else 0,
+            "last_seen_at": int(r["last_seen_at"]) if r["last_seen_at"] else None,
+            "platform": r["platform"],
+            "model": r["model"],
+            "app_version": r["app_version"],
         })
     conversion_rate = (
         round(100.0 * total_converted / max(1, total_all), 1)
         if total_all else 0.0
+    )
+    avg_to_convert_hours = (
+        round(float(avg_to_convert_ms) / 3_600_000.0, 1)
+        if avg_to_convert_ms else None
     )
     return {
         "now_ms": now,
@@ -2055,7 +2103,12 @@ def admin_trials(
             "expired":   int(total_expired),
             "converted": int(total_converted),
             "conversion_rate_pct": conversion_rate,
+            "avg_hours_to_convert": avg_to_convert_hours,
         },
+        "signups_last_14d": [
+            {"days_ago": int(b["days_ago"]), "count": int(b["c"])}
+            for b in day_buckets
+        ],
         "rows": out_rows,
     }
 

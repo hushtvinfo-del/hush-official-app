@@ -40,6 +40,7 @@
   <div class="flex gap-1 border-b border-slate-700 overflow-x-auto" data-testid="canada-tabs">
     <button data-tab="revenue" data-testid="canada-tab-revenue" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-cyan-400 text-cyan-300 whitespace-nowrap">📊 Revenue</button>
     <button data-tab="licenses" data-testid="canada-tab-licenses" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">👥 Licenses</button>
+    <button data-tab="trials" data-testid="canada-tab-trials" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">🎟 Trials</button>
     <button data-tab="payments" data-testid="canada-tab-payments" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">💰 Payments</button>
     <button data-tab="approve" data-testid="canada-tab-approve" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">✓ Approve / Lookup</button>
     <button data-tab="orders" data-testid="canada-tab-orders" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">📋 Recent Orders</button>
@@ -302,6 +303,119 @@
           <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
         </tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────── TRIALS TAB ─────────────────── -->
+  <section id="tab-trials" class="hidden space-y-6">
+    <div class="rounded-xl border border-cyan-700/40 bg-cyan-900/5 p-5 space-y-5">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 class="text-lg font-black text-cyan-300">🎟 Free Trials — 72-hour signups</h2>
+          <p class="text-xs text-slate-400 mt-1 max-w-2xl">
+            Every brand-new Xtream account gets one 72-hour free trial on first launch. Trials are immutable: once granted, the user can never reset them by reinstalling. Track active usage, conversion to paid, and revoke abusive trials below.
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="loadTrialsFull()" class="rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 text-xs font-semibold">↻ Refresh</button>
+          <button onclick="downloadTrialsCsv()" class="rounded-md bg-cyan-500 hover:bg-cyan-400 text-slate-950 px-3 py-2 text-xs font-black">⬇ CSV</button>
+        </div>
+      </div>
+
+      <!-- Stats grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">Total granted</div>
+          <div class="text-2xl font-bold mt-1" id="trf-total" data-testid="trf-total">…</div>
+        </div>
+        <div class="rounded-lg border border-cyan-700/40 bg-cyan-900/15 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-cyan-300">Active now</div>
+          <div class="text-2xl font-bold mt-1 text-cyan-300" id="trf-active" data-testid="trf-active">…</div>
+        </div>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">Expired</div>
+          <div class="text-2xl font-bold mt-1 text-slate-400" id="trf-expired" data-testid="trf-expired">…</div>
+        </div>
+        <div class="rounded-lg border border-emerald-700/40 bg-emerald-900/15 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-emerald-300">Converted to paid</div>
+          <div class="text-2xl font-bold mt-1 text-emerald-300" id="trf-converted" data-testid="trf-converted">…</div>
+        </div>
+        <div class="rounded-lg border border-emerald-700/40 bg-emerald-900/15 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-emerald-300">Conversion rate</div>
+          <div class="text-2xl font-bold mt-1 text-emerald-300" id="trf-rate" data-testid="trf-rate">…</div>
+          <div class="text-[10px] text-emerald-400/70 mt-0.5">trials → paying customers</div>
+        </div>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">Avg time to convert</div>
+          <div class="text-2xl font-bold mt-1" id="trf-avg-hours" data-testid="trf-avg-hours">…</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">from trial start → payment</div>
+        </div>
+      </div>
+
+      <!-- Sparkline: signups last 14 days -->
+      <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Signups · last 14 days</h3>
+          <span class="text-[10px] text-slate-500">Each bar = one day. Today is on the right.</span>
+        </div>
+        <div id="trf-sparkline" class="flex items-end gap-1.5 h-20" data-testid="trf-sparkline">
+          <div class="text-slate-500 text-xs m-auto">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Filter / search row -->
+      <div class="flex flex-wrap items-center gap-3">
+        <input type="text" id="trf-search" placeholder="Search by Xtream username…"
+          oninput="renderTrialsFull()"
+          data-testid="trf-search"
+          class="flex-1 min-w-[240px] rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm" />
+
+        <div class="flex gap-1 rounded-lg bg-slate-800/50 border border-slate-700 p-1">
+          <button onclick="setTrfFilter('all')"         id="trf-filter-all"         class="trf-filter-btn rounded-md bg-cyan-500/20 text-cyan-300 px-3 py-1 text-xs font-bold">All</button>
+          <button onclick="setTrfFilter('active')"      id="trf-filter-active"      class="trf-filter-btn rounded-md text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">Active</button>
+          <button onclick="setTrfFilter('expired')"     id="trf-filter-expired"     class="trf-filter-btn rounded-md text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">Expired</button>
+          <button onclick="setTrfFilter('converted')"   id="trf-filter-converted"   class="trf-filter-btn rounded-md text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">Converted</button>
+          <button onclick="setTrfFilter('unconverted')" id="trf-filter-unconverted" class="trf-filter-btn rounded-md text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">Unconverted</button>
+        </div>
+
+        <select id="trf-sort"
+          onchange="renderTrialsFull()"
+          data-testid="trf-sort"
+          class="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm">
+          <option value="active_first">Active first, then by expiry</option>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="expiring_soon">Expiring soon</option>
+          <option value="username">Username A→Z</option>
+        </select>
+
+        <div class="text-xs text-slate-400">
+          Showing <strong id="trf-shown-count" data-testid="trf-shown-count">0</strong> of <strong id="trf-loaded-count">0</strong>
+        </div>
+      </div>
+
+      <!-- Trials table -->
+      <div class="overflow-x-auto rounded-lg border border-slate-800">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+            <tr>
+              <th class="text-left px-3 py-3">Username</th>
+              <th class="text-left px-3 py-3">Started</th>
+              <th class="text-left px-3 py-3">Expires</th>
+              <th class="text-left px-3 py-3">Time Remaining</th>
+              <th class="text-right px-3 py-3">Devices</th>
+              <th class="text-left px-3 py-3">Last Active</th>
+              <th class="text-left px-3 py-3">Device Info</th>
+              <th class="text-left px-3 py-3">Status</th>
+              <th class="text-left px-3 py-3">Converted</th>
+              <th class="text-right px-3 py-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="trf-tbody" data-testid="trf-tbody">
+            <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -610,11 +724,200 @@ async function deleteTrial(user) {
       { xtream_username: user, actor: "admin-ui" });
     toast(`✓ Trial wiped for ${user}`, "success");
     loadTrials();
+    loadTrialsFull();
   } catch (e) { toast(e.message, "error"); }
 }
 
+// ── Trials tab (full v1.44.108) — dedicated screen with stats,
+// filter/search, sparkline, and a rich device-aware table.
+window._trfFilter = "all";
+window._trfData = null;
+function setTrfFilter(f) {
+  window._trfFilter = f;
+  ["all","active","expired","converted","unconverted"].forEach(k => {
+    const btn = $("trf-filter-" + k);
+    if (!btn) return;
+    if (k === f) {
+      btn.className = "trf-filter-btn rounded-md bg-cyan-500/20 text-cyan-300 px-3 py-1 text-xs font-bold";
+    } else {
+      btn.className = "trf-filter-btn rounded-md text-slate-400 hover:text-slate-200 px-3 py-1 text-xs";
+    }
+  });
+  loadTrialsFull();
+}
+async function loadTrialsFull() {
+  try {
+    const d = await api("GET",
+      "/trials?limit=2000&status=" + (window._trfFilter || "all"));
+    window._trfData = d;
+    renderTrialsFullStats(d);
+    renderTrialsSparkline(d.signups_last_14d || []);
+    renderTrialsFull();
+  } catch (e) {
+    $("trf-tbody").innerHTML =
+      `<tr><td colspan="10" class="px-4 py-8 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+function renderTrialsFullStats(d) {
+  const t = d.totals || {};
+  $("trf-total").textContent     = (t.all       ?? 0).toLocaleString();
+  $("trf-active").textContent    = (t.active    ?? 0).toLocaleString();
+  $("trf-expired").textContent   = (t.expired   ?? 0).toLocaleString();
+  $("trf-converted").textContent = (t.converted ?? 0).toLocaleString();
+  const rate = (t.conversion_rate_pct ?? 0).toFixed(1);
+  $("trf-rate").textContent = `${rate}%`;
+  $("trf-avg-hours").textContent = t.avg_hours_to_convert == null
+    ? "—"
+    : `${t.avg_hours_to_convert} h`;
+}
+function renderTrialsSparkline(buckets) {
+  // Always show 14 days even if some are empty.
+  const byDay = {};
+  for (const b of buckets) byDay[b.days_ago] = b.count;
+  const series = [];
+  for (let i = 13; i >= 0; i--) series.push({ days_ago: i, count: byDay[i] || 0 });
+  const max = Math.max(1, ...series.map(s => s.count));
+  $("trf-sparkline").innerHTML = series.map(s => {
+    const h = Math.round((s.count / max) * 100);
+    const date = new Date(Date.now() - s.days_ago * 86400000);
+    const label = `${date.getMonth()+1}/${date.getDate()}`;
+    const bg = s.days_ago === 0 ? "bg-cyan-400" : (s.count > 0 ? "bg-cyan-700" : "bg-slate-700");
+    return `<div class="flex-1 flex flex-col items-center group" title="${label}: ${s.count} signups">
+      <div class="text-[9px] text-slate-500 mb-1">${s.count || ""}</div>
+      <div class="w-full ${bg} rounded-sm transition-all" style="height:${Math.max(2, h)}%"></div>
+      <div class="text-[9px] text-slate-500 mt-1">${label}</div>
+    </div>`;
+  }).join("");
+}
+function renderTrialsFull() {
+  const d = window._trfData;
+  if (!d) return;
+  const search = ($("trf-search").value || "").trim().toLowerCase();
+  let rows = (d.rows || []).filter(r => !search ||
+    (r.xtream_username || "").toLowerCase().includes(search));
+
+  // Sort
+  const sort = $("trf-sort").value;
+  const now = d.now_ms || Date.now();
+  if (sort === "newest") rows.sort((a,b) => b.started_at - a.started_at);
+  else if (sort === "oldest") rows.sort((a,b) => a.started_at - b.started_at);
+  else if (sort === "expiring_soon") rows.sort((a,b) => a.expires_at - b.expires_at);
+  else if (sort === "username") rows.sort((a,b) =>
+    (a.xtream_username || "").localeCompare(b.xtream_username || ""));
+  else rows.sort((a,b) => {
+    // active first, then by expiry desc
+    const aActive = a.expires_at > now ? 0 : 1;
+    const bActive = b.expires_at > now ? 0 : 1;
+    if (aActive !== bActive) return aActive - bActive;
+    return b.expires_at - a.expires_at;
+  });
+
+  $("trf-loaded-count").textContent = (d.rows || []).length.toLocaleString();
+  $("trf-shown-count").textContent  = rows.length.toLocaleString();
+
+  if (rows.length === 0) {
+    $("trf-tbody").innerHTML =
+      `<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No trials match this view.</td></tr>`;
+    return;
+  }
+
+  $("trf-tbody").innerHTML = rows.map(r => {
+    const statusPill = r.status === "active"
+      ? `<span class="inline-flex items-center rounded-full bg-cyan-500/20 text-cyan-300 px-2 py-0.5 text-xs font-bold">ACTIVE</span>`
+      : `<span class="inline-flex items-center rounded-full bg-slate-700 text-slate-400 px-2 py-0.5 text-xs">EXPIRED</span>`;
+    const remaining = r.status === "active"
+      ? `<span class="text-cyan-300 font-semibold text-xs">${fmtTrialRemaining(r.remaining_ms)}</span>`
+      : `<span class="text-slate-500 text-xs">—</span>`;
+    const convertedCell = r.converted_to_paid
+      ? `<span class="inline-flex items-center rounded-full bg-emerald-500/20 text-emerald-300 px-2 py-0.5 text-xs font-bold">✓ PAID${r.converted_paid_at ? ` · ${fmtDate(r.converted_paid_at)}` : ""}</span>`
+      : `<span class="text-slate-500 text-xs">—</span>`;
+    const lastActive = r.last_seen_at
+      ? `<span class="text-slate-300 text-xs">${fmtRelative(r.last_seen_at)}</span>`
+      : `<span class="text-slate-500 text-xs italic">never</span>`;
+    const deviceInfo = r.platform || r.model
+      ? `<div class="text-xs">
+           <div class="text-slate-300">${r.model || r.platform || "—"}</div>
+           ${r.app_version ? `<div class="text-[10px] text-slate-500">v${r.app_version}</div>` : ""}
+         </div>`
+      : `<span class="text-slate-500 text-xs">—</span>`;
+    const deviceCountCell = r.device_count > 0
+      ? `<span class="text-slate-200 font-semibold">${r.device_count}</span>`
+      : `<span class="text-slate-500">0</span>`;
+    const revokeBtn = r.status === "active"
+      ? `<button onclick="revokeTrialFull('${escAttr(r.xtream_username)}')" class="rounded-md bg-slate-700 hover:bg-rose-600 text-slate-200 px-2 py-1 text-xs">End</button>`
+      : "";
+    const deleteBtn = `<button onclick="deleteTrialFull('${escAttr(r.xtream_username)}')" class="rounded-md bg-slate-700 hover:bg-rose-700 text-slate-200 px-2 py-1 text-xs ml-1">Wipe</button>`;
+    return `
+      <tr class="border-t border-slate-800 hover:bg-slate-800/30">
+        <td class="px-3 py-2 text-slate-200 font-mono text-xs">${r.xtream_username}</td>
+        <td class="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">${fmtDate(r.started_at)}<br><span class="text-slate-600">${fmtRelative(r.started_at)}</span></td>
+        <td class="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">${fmtDate(r.expires_at)}<br><span class="text-slate-600">${fmtRelative(r.expires_at)}</span></td>
+        <td class="px-3 py-2 whitespace-nowrap">${remaining}</td>
+        <td class="px-3 py-2 text-right">${deviceCountCell}</td>
+        <td class="px-3 py-2 whitespace-nowrap">${lastActive}</td>
+        <td class="px-3 py-2">${deviceInfo}</td>
+        <td class="px-3 py-2">${statusPill}</td>
+        <td class="px-3 py-2">${convertedCell}</td>
+        <td class="px-3 py-2 text-right whitespace-nowrap">${revokeBtn}${deleteBtn}</td>
+      </tr>`;
+  }).join("");
+}
+function escAttr(s) { return String(s || "").replace(/'/g, "&apos;"); }
+
+async function revokeTrialFull(user) {
+  if (!confirm(`End ${user}'s free trial right now? Their app will show the paywall on the next check. They will NOT be eligible for another trial.`)) return;
+  try {
+    await api("POST", "/trials/revoke",
+      { xtream_username: user, actor: "admin-ui" });
+    toast(`✓ Trial ended for ${user}`, "success");
+    loadTrialsFull();
+  } catch (e) { toast(e.message, "error"); }
+}
+async function deleteTrialFull(user) {
+  if (!confirm(`Wipe ${user}'s trial row? They will be eligible for a brand-new 72h trial on their next sign-in. Use only for test accounts / mis-typed usernames.`)) return;
+  try {
+    await api("POST", "/trials/delete",
+      { xtream_username: user, actor: "admin-ui" });
+    toast(`✓ Trial wiped for ${user}`, "success");
+    loadTrialsFull();
+  } catch (e) { toast(e.message, "error"); }
+}
+function downloadTrialsCsv() {
+  const d = window._trfData;
+  if (!d || !d.rows) { toast("Nothing to export yet", "error"); return; }
+  const search = ($("trf-search").value || "").trim().toLowerCase();
+  const rows = d.rows.filter(r => !search ||
+    (r.xtream_username || "").toLowerCase().includes(search));
+  const header = [
+    "xtream_username","started_at_iso","expires_at_iso","status",
+    "device_count","last_seen_at_iso","platform","model","app_version",
+    "converted_to_paid","converted_paid_at_iso",
+  ];
+  const iso = ms => ms ? new Date(ms).toISOString() : "";
+  const csv = [header.join(",")].concat(rows.map(r => [
+    r.xtream_username,
+    iso(r.started_at),
+    iso(r.expires_at),
+    r.status,
+    r.device_count || 0,
+    iso(r.last_seen_at),
+    r.platform || "",
+    r.model || "",
+    r.app_version || "",
+    r.converted_to_paid ? "yes" : "no",
+    iso(r.converted_paid_at),
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `canada_trials_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── tab switching ──
-const TAB_IDS = ["revenue","licenses","payments","approve","orders"];
+const TAB_IDS = ["revenue","licenses","trials","payments","approve","orders"];
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach(b => {
@@ -627,6 +930,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     TAB_IDS.forEach(id => $("tab-"+id).classList.toggle("hidden", id !== k));
     if (k === "revenue")  loadStats();
     if (k === "licenses") loadLicenses();
+    if (k === "trials")   loadTrialsFull();
     if (k === "payments") loadPayments();
     if (k === "orders")   loadOrders();
   });
