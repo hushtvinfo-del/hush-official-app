@@ -538,6 +538,50 @@
 
 <div id="toast" class="fixed bottom-6 right-6 z-50 pointer-events-none transition-all"></div>
 
+<!-- Convert trial → paid license modal (v1.44.108) -->
+<div id="convert-trial-modal" class="hidden fixed inset-0 z-40">
+  <div class="drawer-backdrop absolute inset-0" onclick="closeConvertTrialModal()"></div>
+  <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-slate-900 border border-emerald-700/40 rounded-xl shadow-2xl p-6 space-y-4" data-testid="convert-trial-modal">
+    <div class="flex items-center gap-3">
+      <div class="text-3xl">💎</div>
+      <div>
+        <h3 class="text-lg font-black text-emerald-300">Convert trial to paid license</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Grant a full paid license. The trial row will be cleared automatically.</p>
+      </div>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-slate-400">Xtream username</label>
+        <div id="convert-trial-user" class="mt-1 font-mono text-cyan-300 text-sm bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2" data-testid="convert-trial-user">—</div>
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-slate-400" for="convert-trial-months">License length</label>
+        <select id="convert-trial-months" data-testid="convert-trial-months"
+          class="mt-1 w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm">
+          <option value="1">1 month</option>
+          <option value="3">3 months</option>
+          <option value="6">6 months</option>
+          <option value="12" selected>12 months (1 year — standard)</option>
+          <option value="24">24 months (2 years)</option>
+          <option value="36">36 months (3 years)</option>
+        </select>
+      </div>
+      <div class="rounded-lg border border-emerald-700/30 bg-emerald-900/10 p-3">
+        <p class="text-xs text-emerald-200/90">
+          ✓ Adds a license to <code class="text-emerald-300">canada_licenses</code><br>
+          ✓ Pushes the grant to Base44 (CDN-fee paid record)<br>
+          ✓ Removes the trial row so the user disappears from this tab
+        </p>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 pt-2">
+      <button onclick="closeConvertTrialModal()" class="rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 text-sm font-semibold">Cancel</button>
+      <button onclick="submitConvertTrial()" id="convert-trial-submit" data-testid="convert-trial-submit"
+        class="rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 text-sm font-black">💎 Grant license</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const BASE = "/api/admin/canada";
 const $ = (id) => document.getElementById(id);
@@ -843,8 +887,9 @@ function renderTrialsFull() {
     const deviceCountCell = r.device_count > 0
       ? `<span class="text-slate-200 font-semibold">${r.device_count}</span>`
       : `<span class="text-slate-500">0</span>`;
+    const convertBtn = `<button onclick="convertTrialToLicense('${escAttr(r.xtream_username)}')" class="rounded-md bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 px-2 py-1 text-xs font-bold" title="Convert this trial into a full paid license">💎 Convert</button>`;
     const revokeBtn = r.status === "active"
-      ? `<button onclick="revokeTrialFull('${escAttr(r.xtream_username)}')" class="rounded-md bg-slate-700 hover:bg-rose-600 text-slate-200 px-2 py-1 text-xs">End</button>`
+      ? `<button onclick="revokeTrialFull('${escAttr(r.xtream_username)}')" class="rounded-md bg-slate-700 hover:bg-rose-600 text-slate-200 px-2 py-1 text-xs ml-1">End</button>`
       : "";
     const deleteBtn = `<button onclick="deleteTrialFull('${escAttr(r.xtream_username)}')" class="rounded-md bg-slate-700 hover:bg-rose-700 text-slate-200 px-2 py-1 text-xs ml-1">Wipe</button>`;
     return `
@@ -858,7 +903,7 @@ function renderTrialsFull() {
         <td class="px-3 py-2">${deviceInfo}</td>
         <td class="px-3 py-2">${statusPill}</td>
         <td class="px-3 py-2">${convertedCell}</td>
-        <td class="px-3 py-2 text-right whitespace-nowrap">${revokeBtn}${deleteBtn}</td>
+        <td class="px-3 py-2 text-right whitespace-nowrap">${convertBtn}${revokeBtn}${deleteBtn}</td>
       </tr>`;
   }).join("");
 }
@@ -881,6 +926,42 @@ async function deleteTrialFull(user) {
     toast(`✓ Trial wiped for ${user}`, "success");
     loadTrialsFull();
   } catch (e) { toast(e.message, "error"); }
+}
+
+// ── Convert trial → paid license (v1.44.108) ──
+// Opens a modal so the admin can pick a license length, then POSTs
+// /grant. The backend's _clear_trial_on_grant() removes the trial row,
+// so the list auto-cleans after we reload.
+window._convertTrialUser = null;
+function convertTrialToLicense(user) {
+  window._convertTrialUser = user;
+  $("convert-trial-user").textContent = user;
+  $("convert-trial-months").value = "12";
+  $("convert-trial-submit").disabled = false;
+  $("convert-trial-submit").textContent = "💎 Grant license";
+  $("convert-trial-modal").classList.remove("hidden");
+}
+function closeConvertTrialModal() {
+  $("convert-trial-modal").classList.add("hidden");
+  window._convertTrialUser = null;
+}
+async function submitConvertTrial() {
+  const user = window._convertTrialUser;
+  if (!user) return;
+  const months = parseInt($("convert-trial-months").value, 10) || 12;
+  const btn = $("convert-trial-submit");
+  btn.disabled = true;
+  btn.textContent = "Granting…";
+  try {
+    const r = await api("POST", "/grant", { xtream_username: user, months });
+    closeConvertTrialModal();
+    toast(`✓ ${user} → ${months}-month paid license granted. Trial cleared.`, "success");
+    loadTrialsFull();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "💎 Grant license";
+    toast(e.message, "error");
+  }
 }
 function downloadTrialsCsv() {
   const d = window._trfData;
