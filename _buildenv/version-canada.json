@@ -1,15 +1,15 @@
 {
-  "versionCode": 506,
-  "versionName": "1.44.106-debug",
+  "versionCode": 507,
+  "versionName": "1.44.107",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": false,
   "releasedAt": "2026-02-19",
   "channel": "canada",
   "changelog": [
-    "FIX: Discovery hero now shows hi-res TMDB backdrops again. TMDB's CDN started returning corrupted gzip responses on /trending/movie/week + /trending/tv/week around mid-Feb, which made the Discovery hero silently fall back to whatever low-quality Xtream poster happened to be first in the category (the 'Den of Thieves: Pantera 2' eyesore). The app now tries movie/popular + tv/on_the_air as fallbacks so the hero stays bright and cinematic even when TMDB's trending cache is broken.",
+    "POLISH: Hidden the '-debug' suffix from the version badge in the bottom-right corner — the build is still the same proven non-R8 build, just stops showing 'debug' to end users.",
+    "FIX: Speed Test screen now fits on smaller TVs. Shrunk the speedometer, tightened spacing, and the whole pane scrolls if your TV has heavy overscan.",
+    "FIX: Discovery hero now shows hi-res TMDB backdrops again — bypasses TMDB's broken /trending/* cache via fallback endpoints (movie/popular, tv/on_the_air).",
     "FIX: Parental Controls now actually hide locked categories across Live TV, Movies, Series, and Search.",
-    "FIX: Parental Controls PIN now uses an on-screen D-pad keypad (works with any TV remote).",
-    "NEW: 72-hour free trial for first-time Canada users — no payment required to start watching.",
-    "NEW: Gcore CDN trust badge on the refresh screen."
+    "FIX: Parental Controls PIN now uses an on-screen D-pad keypad (works with any TV remote)."
   ]
 }

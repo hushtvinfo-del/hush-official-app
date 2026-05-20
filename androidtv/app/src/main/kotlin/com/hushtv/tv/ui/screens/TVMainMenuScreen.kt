@@ -831,8 +831,15 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
         // running. Doesn't take focus, doesn't intercept any input —
         // purely informational. Solves the "did you actually update?"
         // ambiguity that bit us during the v1.42.8→22 deploy bug.
+        //
+        // v1.44.107 — strip the "-debug" suffix from the customer-
+        // facing string. The build is still technically a debug
+        // variant (no R8 because the previous "release" build broke
+        // OTA), but end users shouldn't see "debug" in the version.
+        val displayVersion = com.hushtv.tv.BuildConfig.VERSION_NAME
+            .removeSuffix("-debug")
         Text(
-            "v${com.hushtv.tv.BuildConfig.VERSION_NAME} · #${com.hushtv.tv.BuildConfig.VERSION_CODE}",
+            "v$displayVersion · #${com.hushtv.tv.BuildConfig.VERSION_CODE}",
             color = Color(0x66FFFFFF),
             fontSize = 9.sp,
             fontFamily = Inter,

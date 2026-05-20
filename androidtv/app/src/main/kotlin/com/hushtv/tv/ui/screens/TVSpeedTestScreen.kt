@@ -40,7 +40,7 @@ fun TVSpeedTestScreen(nav: NavController) {
         Modifier
             .fillMaxSize()
             .background(BgBlack)
-            .padding(horizontal = 64.dp, vertical = 32.dp),
+            .padding(horizontal = 48.dp, vertical = 20.dp),
     ) {
         Column(Modifier.fillMaxSize()) {
             // Header with back chip.
@@ -50,11 +50,11 @@ fun TVSpeedTestScreen(nav: NavController) {
                 Text(
                     "Speed Test",
                     color = Color.White,
-                    fontSize = 28.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
-            Spacer(Modifier.size(20.dp))
+            Spacer(Modifier.size(12.dp))
             SpeedTestPane(modifier = Modifier.weight(1f))
         }
     }

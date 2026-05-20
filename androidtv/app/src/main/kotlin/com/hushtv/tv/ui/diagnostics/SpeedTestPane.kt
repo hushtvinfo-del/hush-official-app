@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
@@ -103,14 +105,15 @@ fun SpeedTestPane(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 24.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             Modifier
-                .widthIn(max = 460.dp)
+                .widthIn(max = 340.dp)
                 .fillMaxWidth()
-                .aspectRatio(1.6f),
+                .aspectRatio(1.8f),
             contentAlignment = Alignment.Center,
         ) {
             SpeedDial(
@@ -120,7 +123,7 @@ fun SpeedTestPane(modifier: Modifier = Modifier) {
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
 
         // Headline reading — big, hero typography.
         Row(verticalAlignment = Alignment.Bottom) {
@@ -130,20 +133,20 @@ fun SpeedTestPane(modifier: Modifier = Modifier) {
                     animatedSpeed,
                 ),
                 color = Color.White,
-                fontSize = 52.sp,
+                fontSize = 40.sp,
                 fontWeight = FontWeight.Black,
             )
             Spacer(Modifier.width(8.dp))
             Text(
                 "Mbps",
                 color = Color(0xFF94A3B8),
-                fontSize = 18.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = 9.dp),
+                modifier = Modifier.padding(bottom = 7.dp),
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
         // Tier badge + verdict.
         if (running) {
@@ -185,7 +188,7 @@ fun SpeedTestPane(modifier: Modifier = Modifier) {
             )
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(14.dp))
 
         // 4-chip legend strip.
         Row(
@@ -209,7 +212,7 @@ fun SpeedTestPane(modifier: Modifier = Modifier) {
                             if (active) t.color else Color.Transparent,
                             RoundedCornerShape(8.dp),
                         )
-                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                        .padding(vertical = 6.dp, horizontal = 4.dp),
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.fillMaxWidth()) {
@@ -231,7 +234,7 @@ fun SpeedTestPane(modifier: Modifier = Modifier) {
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
         // CTA button — Run / Run again. D-pad-friendly: focusable with
         // visible focus ring; touch-friendly: large hit area.
