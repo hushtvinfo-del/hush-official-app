@@ -1,15 +1,16 @@
 {
-  "versionCode": 509,
-  "versionName": "1.44.109",
+  "versionCode": 510,
+  "versionName": "1.44.110",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
-  "mandatory": false,
+  "mandatory": true,
   "releasedAt": "2026-02-20",
   "channel": "canada",
   "changelog": [
-    "FIX: Player on-screen options (Audio / Subtitles / Speed / Aspect / Sleep / Info) — the D-pad now actually moves focus inside the menu instead of toggling channels or seeking in the background. The first option is auto-focused on open so OK selects it immediately, and sub-panes (Audio track list, Subtitles, Aspect ratio, Speed, Sleep timer) also auto-focus their first row.",
-    "FIX: Settings → 'My HushTV Canada License' subtitle now correctly shows $50 CAD / year (was stale $40 text).",
-    "FIX: Discovery hero shows hi-res TMDB backdrops again — fallback chain when TMDB's /trending cache misbehaves.",
-    "FIX: Parental Controls hide locked categories across Live TV, Movies, Series, and Search.",
+    "FIX: Resolves Google Play Protect's 'harmful app' warning during install. The customer APK no longer requests the screen-recording / microphone permissions that the developer-only demo recorder needed — those permissions are now in the dev-only build flavor. Install will be clean again.",
+    "FIX: Player on-screen options (Audio / Subtitles / Speed / Aspect / Sleep / Info) — D-pad now actually moves focus inside the menu and OK selects.",
+    "FIX: Settings → 'My HushTV Canada License' subtitle now correctly shows $50 CAD / year.",
+    "FIX: Discovery hero shows hi-res TMDB backdrops again.",
+    "FIX: Parental Controls hide locked categories everywhere.",
     "FIX: Speed Test screen fits on smaller TVs.",
     "NEW: 72-hour free trial for first-time Canada users."
   ]

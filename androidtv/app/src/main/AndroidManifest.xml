@@ -6,11 +6,18 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <!-- Auto-pilot Demo Recorder (v1.44.90+) — MediaProjection screen
-         capture runs inside ScreenRecordingService, and audio capture
-         pulls our own process's playback via AudioPlaybackCaptureConfig. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- v1.44.110 — The MediaProjection / RECORD_AUDIO permissions and the
+         ScreenRecordingService are now declared ONLY in the `dev` flavor
+         manifest (src/dev/AndroidManifest.xml). The demo recorder is a
+         developer-only tool we use to capture marketing videos — customers
+         never use it (the UI button is flavor-gated to BuildConfig.UPDATE_CHANNEL
+         == "dev"). Leaving FOREGROUND_SERVICE_MEDIA_PROJECTION + RECORD_AUDIO
+         + a mediaProjection service in the customer-facing APK was triggering
+         Google Play Protect's "harmful app" warning during install because that
+         permission triad is the textbook fingerprint of screen-recorder malware.
+         Stripping them from the shipped canada/official builds eliminates the
+         Play Protect signal while keeping the developer demo recorder fully
+         functional in dev builds. -->
     <!-- Streaming wake locks: lets ExoPlayer.setWakeMode(WAKE_MODE_NETWORK)
          hold a partial WakeLock + WifiLock during playback, preventing
          Android Wi-Fi power save from throttling our IPTV streams after
@@ -74,13 +81,5 @@
             android:name=".notifications.ReminderReceiver"
             android:exported="false" />
 
-        <!-- Auto-pilot Demo Recorder (v1.44.90+). Foreground service that
-             owns the MediaProjection token for the duration of a marketing
-             demo capture. Type "mediaProjection" is required on Android 14+
-             for any service that calls getMediaProjection(). -->
-        <service
-            android:name=".demo.ScreenRecordingService"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
     </application>
 </manifest>

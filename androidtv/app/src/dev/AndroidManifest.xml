@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Dev-flavor-only manifest overlay (v1.44.110+).
+
+    The customer-facing canada/official builds intentionally DO NOT
+    declare the MediaProjection / RECORD_AUDIO permissions or the
+    ScreenRecordingService. Google Play Protect flags that permission
+    triad as the fingerprint of screen-recording malware, which was
+    triggering the "harmful app" install warning on customer devices.
+
+    The Auto-pilot Demo Recorder is a tool the developer uses to
+    capture marketing videos — it never runs in shipped customer
+    builds (the UI button is gated to BuildConfig.UPDATE_CHANNEL ==
+    "dev"). Re-declaring these bits ONLY here means the dev APK still
+    has full demo-capture capability, while canada / official APKs
+    pass Play Protect cleanly.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <application>
+        <!-- Owns the MediaProjection token for the duration of a marketing
+             demo capture. Type "mediaProjection" is required on Android 14+
+             for any service that calls getMediaProjection(). -->
+        <service
+            android:name=".demo.ScreenRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+    </application>
+</manifest>
