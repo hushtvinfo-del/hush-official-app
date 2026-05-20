@@ -804,7 +804,9 @@ async function loadTrialsFull() {
 }
 function renderTrialsFullStats(d) {
   const t = d.totals || {};
-  $("trf-total").textContent     = (t.all       ?? 0).toLocaleString();
+  // "Total granted" = lifetime (currently pending + already converted)
+  // so the number doesn't drop every time a trial is converted to paid.
+  $("trf-total").textContent     = (t.lifetime ?? t.all ?? 0).toLocaleString();
   $("trf-active").textContent    = (t.active    ?? 0).toLocaleString();
   $("trf-expired").textContent   = (t.expired   ?? 0).toLocaleString();
   $("trf-converted").textContent = (t.converted ?? 0).toLocaleString();

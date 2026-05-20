@@ -246,6 +246,21 @@ def _init_schema() -> None:
             "ON canada_processed_emails(message_id)"
         )
 
+        # v1.44.108 — provenance tracking. When a trial row gets cleared
+        # via _clear_trial_on_grant() the original trial.started_at is
+        # copied into canada_licenses.trial_origin_at so we can answer
+        # "what % of paying customers came through the 72h trial funnel?"
+        # NULL means the license was granted without an originating trial
+        # (direct purchase, admin grant before trial system existed, etc).
+        try:
+            c.execute("ALTER TABLE canada_licenses ADD COLUMN trial_origin_at INTEGER")
+        except sqlite3.OperationalError:
+            pass  # already added
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS canada_licenses_trial_origin_idx "
+            "ON canada_licenses(trial_origin_at) WHERE trial_origin_at IS NOT NULL"
+        )
+
         # v1.44.108 — one-time cleanup: any trial row that belongs to a
         # user with a paid license is stale (the trial → paid promotion
         # used to leak the trial row, making the admin Trials tab show
@@ -508,25 +523,39 @@ def _grant_license(c, xtream_username: str, paid_at: int, order_id: str) -> None
 
 
 def _clear_trial_on_grant(c, xtream_username: str) -> None:
-    """Remove the trial row for a now-licensed user.
+    """Remove the trial row for a now-licensed user, preserving lineage.
 
     Rationale: trial rows exist to gate FIRST-TIME free access. Once a
     paid (or admin-granted) license exists, the trial concept no longer
     applies — keeping the row makes the admin Trials tab show licensed
     users as "still on a trial", which they're not.
 
-    Safe to call even if no trial row exists (DELETE is a no-op then).
-    Logged so the audit trail records when a trial got promoted to paid.
+    Lineage: before deleting we copy the trial's `started_at` into
+    canada_licenses.trial_origin_at so future analytics can compute
+    trial → paid conversion velocity. NULL means no originating trial
+    (direct purchase). Safe no-op if no trial row exists.
     """
-    cur = c.execute(
+    row = c.execute(
+        "SELECT started_at FROM canada_trials WHERE xtream_username=?",
+        (xtream_username,),
+    ).fetchone()
+    if row is None:
+        return
+    trial_started_at = int(row["started_at"])
+    c.execute(
+        "UPDATE canada_licenses SET trial_origin_at=? "
+        "WHERE xtream_username=? AND trial_origin_at IS NULL",
+        (trial_started_at, xtream_username),
+    )
+    c.execute(
         "DELETE FROM canada_trials WHERE xtream_username=?",
         (xtream_username,),
     )
-    if cur.rowcount > 0:
-        log.info(
-            "canada_trials: cleared trial row for %s (promoted to paid license)",
-            xtream_username,
-        )
+    log.info(
+        "canada_trials: cleared trial row for %s (promoted to paid license; "
+        "trial_origin_at=%d)",
+        xtream_username, trial_started_at,
+    )
 
 
 # ── IMAP poller ─────────────────────────────────────────────────────
@@ -2095,28 +2124,41 @@ def admin_trials(
         total_all     = c.execute("SELECT COUNT(*) c FROM canada_trials").fetchone()["c"]
         total_active  = c.execute("SELECT COUNT(*) c FROM canada_trials WHERE expires_at > ?", (now,)).fetchone()["c"]
         total_expired = c.execute("SELECT COUNT(*) c FROM canada_trials WHERE expires_at <= ?", (now,)).fetchone()["c"]
+        # Converted = licenses that originated from a trial.
+        # v1.44.108: trial rows are deleted on conversion, so we now
+        # count licenses with trial_origin_at set instead of joining.
+        # This means total_all now represents pending-trial users only;
+        # we expose the true "lifetime trials" figure as a separate stat.
         total_converted = c.execute(
-            """SELECT COUNT(*) c FROM canada_trials t
-               INNER JOIN canada_licenses l
-                 ON l.xtream_username = t.xtream_username"""
+            "SELECT COUNT(*) c FROM canada_licenses WHERE trial_origin_at IS NOT NULL"
         ).fetchone()["c"]
+        # Lifetime trials = currently-pending trials + already-converted.
+        lifetime_trials = total_all + total_converted
         # Trials grouped by signup-day buckets so admin sees velocity.
+        # Includes already-converted trials so the chart isn't misleading
+        # right after a wave of conversions.
         day_buckets = c.execute(
-            """SELECT
-                  CAST((? - started_at) / 86400000 AS INTEGER) AS days_ago,
-                  COUNT(*) c
-               FROM canada_trials
-               WHERE started_at >= ?
-               GROUP BY days_ago
-               ORDER BY days_ago ASC""",
-            (now, now - 14 * 86_400_000),  # last 14 days
+            """SELECT days_ago, SUM(c) AS c FROM (
+                  SELECT CAST((? - started_at) / 86400000 AS INTEGER) AS days_ago,
+                         COUNT(*) c
+                  FROM canada_trials WHERE started_at >= ?
+                  GROUP BY days_ago
+                  UNION ALL
+                  SELECT CAST((? - trial_origin_at) / 86400000 AS INTEGER) AS days_ago,
+                         COUNT(*) c
+                  FROM canada_licenses
+                  WHERE trial_origin_at IS NOT NULL AND trial_origin_at >= ?
+                  GROUP BY days_ago
+               )
+               GROUP BY days_ago ORDER BY days_ago ASC""",
+            (now, now - 14 * 86_400_000, now, now - 14 * 86_400_000),
         ).fetchall()
-        # Avg time from trial start to first paid order, in hours.
+        # Avg time from trial start to paid, in hours. Reads from
+        # canada_licenses.trial_origin_at (set by _clear_trial_on_grant).
         avg_to_convert_ms = c.execute(
-            """SELECT AVG(l.paid_at - t.started_at) v
-               FROM canada_trials t INNER JOIN canada_licenses l
-                 ON l.xtream_username = t.xtream_username
-               WHERE l.paid_at IS NOT NULL"""
+            """SELECT AVG(paid_at - trial_origin_at) v
+               FROM canada_licenses
+               WHERE trial_origin_at IS NOT NULL AND paid_at IS NOT NULL"""
         ).fetchone()["v"]
 
     out_rows = []
@@ -2140,8 +2182,8 @@ def admin_trials(
             "app_version": r["app_version"],
         })
     conversion_rate = (
-        round(100.0 * total_converted / max(1, total_all), 1)
-        if total_all else 0.0
+        round(100.0 * total_converted / max(1, lifetime_trials), 1)
+        if lifetime_trials else 0.0
     )
     avg_to_convert_hours = (
         round(float(avg_to_convert_ms) / 3_600_000.0, 1)
@@ -2152,6 +2194,7 @@ def admin_trials(
         "trial_duration_hours": TRIAL_HOURS,
         "totals": {
             "all":       int(total_all),
+            "lifetime":  int(lifetime_trials),
             "active":    int(total_active),
             "expired":   int(total_expired),
             "converted": int(total_converted),
