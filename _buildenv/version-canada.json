@@ -1,16 +1,18 @@
 {
-  "versionCode": 512,
-  "versionName": "1.44.112",
+  "versionCode": 513,
+  "versionName": "1.44.113",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-20",
   "channel": "canada",
   "changelog": [
-    "FIX (CRITICAL — Fire Stick stalls): Tightened the player's HTTPS timeouts (was 15 s connect / 20 s read, now 4 s / 8 s). Crash reports showed the 'black screen for 10–20 seconds, then app feels frozen' symptom was actually a single hung manifest fetch riding the old 30+ s budget. Recovery now kicks in inside the 'Reconnecting…' overlay window so it looks like a brief buffer, not a crash.",
+    "FIX (CRITICAL — Fire Stick ANRs): Customers on weak Fire Sticks were experiencing the app force-closing ~10 seconds after the home screen loaded. Root cause: an internal license-check loop was running 15× too often, causing UI recomposition pressure that exceeded the frame budget on low-end hardware. Throttled the loop to its original cadence. App startup and paywall unlock remain instant.",
+    "FIX (visibility): Crash reports for true Java crashes and ANRs were being uploaded with no `kind` tag, hiding 138 ANRs/day in the freeze-monitor noise. Both now arrive properly tagged.",
+    "FIX (Fire Stick stalls): Tightened the player's HTTPS timeouts (was 15s/20s, now 4s/8s) so failed streams surface the 'Reconnecting…' overlay inside 10s instead of staring at a black screen.",
     "FIX: Resolved Google Play Protect 'harmful app' warning during install.",
-    "FIX: Player on-screen options menu — D-pad now actually selects options.",
-    "FIX: Settings shows $50 CAD / year correctly.",
+    "FIX: Player on-screen options menu D-pad selection.",
     "FIX: Discovery hero TMDB backdrop fallback.",
+    "FIX: Settings shows $50 CAD / year correctly.",
     "FIX: Parental Controls hide locked categories everywhere.",
     "NEW: 72-hour free trial for first-time Canada users."
   ]

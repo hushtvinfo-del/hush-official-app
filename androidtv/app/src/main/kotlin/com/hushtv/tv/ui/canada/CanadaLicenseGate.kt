@@ -150,7 +150,33 @@ fun CanadaLicenseGate(content: @Composable () -> Unit) {
                 }
             }
 
-            delay(2000)
+            // v1.44.113 — Fire Stick ANR fix. Was `delay(2000)` —
+            // every 2 seconds we triggered a Compose recomposition
+            // cascade by writing to 3 mutable states + the global
+            // CanadaTrialState singleton. On low-end Fire Sticks
+            // (AFTKM, AFTMM, AFTSS) this exceeded the 16 ms frame
+            // budget consistently and accumulated into 5–10 s of
+            // main-thread jank → Android ANR → app force-closed.
+            //
+            // Going from 2 s → 30 s:
+            //   • Drops recomposition load 15× (no more user-visible
+            //     ANRs on weak hardware).
+            //   • Does NOT slow app startup: the FIRST iteration of
+            //     this loop runs immediately on launch (no delay
+            //     before the first check), so license unlock is
+            //     still instant.
+            //   • Does NOT slow paywall unlock: CanadaLockScreen
+            //     calls onUnlocked() directly when the user pays,
+            //     bypassing the polling loop entirely.
+            //   • Trial-expiry boundary detection is unaffected
+            //     (the trialExpiringSoon check fires at 0–120 s
+            //     before expiry, so 30 s polling still catches it).
+            //   • Periodic deep refresh continues at 30 min as before.
+            //
+            // Worst case after this change: a server-side license
+            // flip (rare) is detected up to 30 s later instead of 2 s.
+            // Acceptable trade-off vs Fire Stick crash storm.
+            delay(30_000)
         }
     }
 
