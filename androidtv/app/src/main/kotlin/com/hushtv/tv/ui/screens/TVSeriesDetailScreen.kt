@@ -449,6 +449,68 @@ fun TVSeriesDetailScreen(
                                         streamUrl = url,
                                     ),
                                 )
+                                // v1.44.111 — populate NextEpisodeContext so
+                                // the player can offer "Play next episode"
+                                // 60 s before the credits roll. We bundle the
+                                // full ordered list of every episode across
+                                // every season (Xtream is the source of
+                                // truth for which episodes actually play),
+                                // enriched with TMDB stills + runtimes for
+                                // the currently-selected season (other
+                                // seasons fall back to the series cover —
+                                // a separate background fetch could enrich
+                                // them too but most users binge within a
+                                // season so this is a fine first pass).
+                                val flat = xtreamEpisodesBySeason.toSortedMap(
+                                    compareBy { it.toIntOrNull() ?: Int.MAX_VALUE }
+                                ).flatMap { (sKey, eps) ->
+                                    val sNum = sKey.toIntOrNull() ?: 0
+                                    eps.sortedBy { it.episode_num }.map { e ->
+                                        val tStill = if (sNum == selectedSeasonNum) {
+                                            tmdbSeason?.episodes
+                                                ?.firstOrNull { it.episode_number == e.episode_num }
+                                                ?.still_path
+                                                ?.let { com.hushtv.tv.data.TmdbService.img(it, "w500") }
+                                        } else null
+                                        val tRuntime = if (sNum == selectedSeasonNum) {
+                                            tmdbSeason?.episodes
+                                                ?.firstOrNull { it.episode_number == e.episode_num }
+                                                ?.runtime
+                                        } else null
+                                        val tOverview = if (sNum == selectedSeasonNum) {
+                                            tmdbSeason?.episodes
+                                                ?.firstOrNull { it.episode_number == e.episode_num }
+                                                ?.overview
+                                        } else null
+                                        com.hushtv.tv.data.NextEpisodeContext.Episode(
+                                            xtreamId = e.id,
+                                            container = e.container_extension ?: "mp4",
+                                            seasonNumber = sNum,
+                                            episodeNumber = e.episode_num,
+                                            title = e.title.ifBlank {
+                                                "S${sNum}E${e.episode_num}"
+                                            },
+                                            stillUrl = tStill,
+                                            overview = tOverview,
+                                            runtimeMinutes = tRuntime,
+                                        )
+                                    }
+                                }
+                                val idx = flat.indexOfFirst {
+                                    it.seasonNumber == (selectedSeasonNum ?: -1) &&
+                                        it.episodeNumber == ep.episode_num
+                                }.coerceAtLeast(0)
+                                com.hushtv.tv.data.NextEpisodeContext.set(
+                                    com.hushtv.tv.data.NextEpisodeContext.Context(
+                                        displayTitle = displayTitle,
+                                        playlistId = playlistId,
+                                        host = p.host,
+                                        username = p.username,
+                                        password = p.password,
+                                        episodes = flat,
+                                        currentIndex = idx,
+                                    ),
+                                )
                                 nav.navigate(
                                     "player/$playlistId/${Uri.encode(url)}/${Uri.encode(name)}/false"
                                 )

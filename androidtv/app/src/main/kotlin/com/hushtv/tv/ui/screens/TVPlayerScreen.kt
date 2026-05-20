@@ -818,6 +818,37 @@ fun TVPlayerScreen(
     // When the user taps a quick-action chip in the OSD (CC / Audio / Speed),
     // we jump straight into the matching pane of the options menu.
     var optionsInitialPane by remember { mutableStateOf<String?>(null) }
+
+    // ─── Next-episode prompt (dev-flavor only for now) ────────────────
+    // v1.44.111. When the user is watching a series episode and hits
+    // the last 60 s of the runtime, surface a bottom-right card with
+    // the upcoming episode and a 10-second countdown. The card OWNS
+    // its own focus + countdown; we just toggle visibility and act on
+    // the two callbacks.
+    //
+    // `nextEpCtx`  → pulled once on composition via NextEpisodeContext.
+    // `nextEpDismissedForId` → if the user picks "Stay on this one"
+    //                we set this to the current episode's xtreamId so
+    //                we don't re-open the card every second.
+    // `nextEpCardOpen` → toggled by the position-watching effect.
+    val nextEpFeatureOn = com.hushtv.tv.BuildConfig.UPDATE_CHANNEL == "dev"
+    val nextEpCtx = remember {
+        if (nextEpFeatureOn) com.hushtv.tv.data.NextEpisodeContext.consume() else null
+    }
+    var nextEpDismissedForId by remember { mutableStateOf<String?>(null) }
+    var nextEpCardOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(positionMs, durationMs, nextEpCtx) {
+        val c = nextEpCtx ?: return@LaunchedEffect
+        if (!nextEpFeatureOn || isLive) return@LaunchedEffect
+        if (!c.hasNext) return@LaunchedEffect
+        val cur = c.current ?: return@LaunchedEffect
+        if (nextEpDismissedForId == cur.xtreamId) return@LaunchedEffect
+        if (durationMs <= 0L) return@LaunchedEffect
+        val remaining = durationMs - positionMs
+        val shouldOpen = remaining in 1L..60_000L
+        if (shouldOpen != nextEpCardOpen) nextEpCardOpen = shouldOpen
+    }
+
     var aspectMode by remember { mutableStateOf(AspectMode.FIT) }
     var playbackSpeed by remember { mutableStateOf(1f) }
     var sleepMinutes by remember { mutableStateOf<Int?>(null) }
@@ -873,6 +904,9 @@ fun TVPlayerScreen(
                 // Same gate for the "Are you done?" exit-confirm and
                 // the OpenSubtitles search dialogs.
                 if (areYouDoneOpen || showSubtitleDownload) return@onKeyEvent false
+                // And for the v1.44.111 "Play next episode" card —
+                // its two pills handle their own focus + Enter.
+                if (nextEpCardOpen) return@onKeyEvent false
                 controlsTick++
                 when (e.key) {
                     // Channel up / down via arrow keys, CH+/CH-, and media next/prev
@@ -1810,6 +1844,66 @@ fun TVPlayerScreen(
                     }
                 } else null,
             )
+        }
+
+        // ── Next-episode prompt (v1.44.111, dev flavor only) ──────────
+        // Catch any case where playback hits the very end while the
+        // user was idle on the card — we want auto-advance, NOT a
+        // freeze-frame on the final second.
+        if (nextEpFeatureOn && !isLive && nextEpCardOpen) {
+            val cAlive = nextEpCtx
+            val nx = cAlive?.next
+            if (cAlive != null && nx != null && nextEpDismissedForId != cAlive.current?.xtreamId) {
+                com.hushtv.tv.ui.player.NextEpisodeCard(
+                    next = nx,
+                    countdownSeconds = 10,
+                    onPlayNext = {
+                        // 1) Mark current as resolved so the position
+                        //    watcher doesn't try to reopen us.
+                        nextEpDismissedForId = cAlive.current?.xtreamId
+                        nextEpCardOpen = false
+                        // 2) Push an advanced context so the chained
+                        //    player composition can show the prompt
+                        //    again 60 s before THAT episode ends.
+                        com.hushtv.tv.data.NextEpisodeContext.advance(cAlive)
+                        // 3) Build the URL exactly the way the series
+                        //    detail screen does — same helper, same
+                        //    fallback ext.
+                        val url = com.hushtv.tv.data.XtreamApi.episodeUrl(
+                            cAlive.host, cAlive.username, cAlive.password,
+                            nx.xtreamId, nx.container,
+                        )
+                        val displayName = nx.title.ifBlank {
+                            "${cAlive.displayTitle} S${nx.seasonNumber}E${nx.episodeNumber}"
+                        }
+                        // Subtitle search context tracks the new ep too.
+                        com.hushtv.tv.data.SubtitleSearchContext.set(
+                            com.hushtv.tv.data.SubtitleSearchContext.Query(
+                                title = cAlive.displayTitle,
+                                seasonNumber = nx.seasonNumber,
+                                episodeNumber = nx.episodeNumber.takeIf { it > 0 },
+                                kind = "episode",
+                                streamUrl = url,
+                            ),
+                        )
+                        // Replace the current player route so BACK
+                        // doesn't bounce the user through an
+                        // ever-growing stack of finished episodes.
+                        val route = "player/${cAlive.playlistId}/" +
+                            "${android.net.Uri.encode(url)}/" +
+                            "${android.net.Uri.encode(displayName)}/false"
+                        nav.navigate(route) {
+                            popUpTo("player/{playlistId}/{streamUrl}/{channelName}/{isLive}") {
+                                inclusive = true
+                            }
+                        }
+                    },
+                    onStay = {
+                        nextEpDismissedForId = cAlive.current?.xtreamId
+                        nextEpCardOpen = false
+                    },
+                )
+            }
         }
 
         // Full-screen dialog for OpenSubtitles search/download. Only
