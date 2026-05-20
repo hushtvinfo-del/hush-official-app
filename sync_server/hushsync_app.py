@@ -173,6 +173,16 @@ def _startup() -> None:
     except Exception as e:
         log.exception("demo recording module failed to mount: %s", e)
 
+    # Crash & ANR monitor — read-only aggregation of /var/hushtv-crash/
+    # so the admin UI can show ANR/crash trends, top signatures, and
+    # individual report drill-down. Routes: /api/admin/canada/crashes/*.
+    try:
+        import crash_monitor  # type: ignore
+        app.include_router(crash_monitor.admin_router)
+        log.info("HushTV crash monitor mounted")
+    except Exception as e:
+        log.exception("crash monitor failed to mount: %s", e)
+
 
 @app.get("/api/sync/health")
 def health() -> Dict[str, Any]:

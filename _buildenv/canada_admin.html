@@ -41,6 +41,7 @@
     <button data-tab="revenue" data-testid="canada-tab-revenue" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-cyan-400 text-cyan-300 whitespace-nowrap">📊 Revenue</button>
     <button data-tab="licenses" data-testid="canada-tab-licenses" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">👥 Licenses</button>
     <button data-tab="trials" data-testid="canada-tab-trials" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">🎟 Trials</button>
+    <button data-tab="crashes" data-testid="canada-tab-crashes" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">🩺 Crashes &amp; ANR</button>
     <button data-tab="payments" data-testid="canada-tab-payments" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">💰 Payments</button>
     <button data-tab="approve" data-testid="canada-tab-approve" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">✓ Approve / Lookup</button>
     <button data-tab="orders" data-testid="canada-tab-orders" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">📋 Recent Orders</button>
@@ -430,6 +431,172 @@
       </div>
     </div>
   </section>
+
+  <!-- ─────────────────── CRASHES & ANR TAB ─────────────────── -->
+  <section id="tab-crashes" class="hidden space-y-6">
+    <div class="rounded-xl border border-rose-700/40 bg-rose-900/5 p-5 space-y-5">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 class="text-lg font-black text-rose-300">🩺 Crashes &amp; ANR Monitor</h2>
+          <p class="text-xs text-slate-400 mt-1 max-w-2xl">
+            Live aggregation of every <code>kind=anr</code>, <code>kind=crash</code>, and <code>kind=freeze</code> report uploaded by Canada-channel apps in the field. Use it to confirm fixes are working and to spot regressions before customers report them.
+          </p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <select id="cm-window" onchange="loadCrashes()" data-testid="cm-window"
+            class="rounded-md bg-slate-800 border border-slate-600 px-3 py-2 text-xs">
+            <option value="1">Last 24 hours</option>
+            <option value="3">Last 3 days</option>
+            <option value="7" selected>Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+          <button onclick="loadCrashes()" class="rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 text-xs font-semibold">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- Big-number stats grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="rounded-lg border border-rose-700/40 bg-rose-900/15 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-rose-300">ANRs today</div>
+          <div class="flex items-baseline gap-2 mt-1">
+            <div class="text-2xl font-bold text-rose-300" id="cm-anr-today" data-testid="cm-anr-today">…</div>
+            <div class="text-xs" id="cm-anr-delta" data-testid="cm-anr-delta"></div>
+          </div>
+          <div class="text-[10px] text-rose-400/70 mt-0.5">vs <span id="cm-anr-yest">…</span> yesterday</div>
+        </div>
+        <div class="rounded-lg border border-amber-700/40 bg-amber-900/15 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-amber-300">Java crashes today</div>
+          <div class="flex items-baseline gap-2 mt-1">
+            <div class="text-2xl font-bold text-amber-300" id="cm-crash-today" data-testid="cm-crash-today">…</div>
+            <div class="text-xs" id="cm-crash-delta"></div>
+          </div>
+          <div class="text-[10px] text-amber-400/70 mt-0.5">vs <span id="cm-crash-yest">…</span> yesterday</div>
+        </div>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">ANR (window)</div>
+          <div class="text-2xl font-bold mt-1" id="cm-tot-anr" data-testid="cm-tot-anr">…</div>
+        </div>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">Crash (window)</div>
+          <div class="text-2xl font-bold mt-1" id="cm-tot-crash">…</div>
+        </div>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">Freeze (window)</div>
+          <div class="text-2xl font-bold mt-1" id="cm-tot-freeze">…</div>
+        </div>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">All reports (window)</div>
+          <div class="text-2xl font-bold mt-1" id="cm-tot-all">…</div>
+        </div>
+      </div>
+
+      <!-- Hourly chart -->
+      <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Hourly · last 24 hours</h3>
+          <div class="text-[10px] flex gap-3">
+            <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-sm bg-rose-500"></span> ANR</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-sm bg-amber-500"></span> Crash</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-sm bg-slate-500"></span> Freeze</span>
+          </div>
+        </div>
+        <div id="cm-hourly" class="flex items-end gap-1 h-32" data-testid="cm-hourly">
+          <div class="text-slate-500 text-xs m-auto">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Per-version + per-device breakdown -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">By app version · last 24h (ANR + crash)</h3>
+          <div id="cm-version" class="space-y-1.5" data-testid="cm-version">
+            <div class="text-slate-500 text-xs">Loading…</div>
+          </div>
+        </div>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">By device · last 24h (ANR + crash)</h3>
+          <div id="cm-device" class="space-y-1.5" data-testid="cm-device">
+            <div class="text-slate-500 text-xs">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top crash signatures -->
+      <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Top signatures · window</h3>
+          <div class="flex gap-1 rounded-md bg-slate-800/50 border border-slate-700 p-1">
+            <button onclick="setCmKind('anr')"   id="cm-kind-anr"   class="rounded-sm bg-rose-500/20 text-rose-300 px-3 py-1 text-xs font-bold">ANR</button>
+            <button onclick="setCmKind('crash')" id="cm-kind-crash" class="rounded-sm text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">Crash</button>
+            <button onclick="setCmKind('freeze')" id="cm-kind-freeze" class="rounded-sm text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">Freeze</button>
+            <button onclick="setCmKind('all')"    id="cm-kind-all"   class="rounded-sm text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">All</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+              <tr>
+                <th class="text-left px-3 py-2">Signature</th>
+                <th class="text-right px-3 py-2">Hits</th>
+                <th class="text-left px-3 py-2">Top versions</th>
+                <th class="text-left px-3 py-2">Top devices</th>
+                <th class="text-left px-3 py-2">First seen</th>
+                <th class="text-left px-3 py-2">Last seen</th>
+                <th class="text-right px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody id="cm-top-tbody" data-testid="cm-top-tbody">
+              <tr><td colspan="7" class="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent reports -->
+      <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">Recent reports · newest first</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+              <tr>
+                <th class="text-left px-3 py-2">When</th>
+                <th class="text-left px-3 py-2">Kind</th>
+                <th class="text-left px-3 py-2">Signature</th>
+                <th class="text-left px-3 py-2">Device</th>
+                <th class="text-left px-3 py-2">Version</th>
+                <th class="text-right px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody id="cm-recent-tbody" data-testid="cm-recent-tbody">
+              <tr><td colspan="6" class="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Crash report drill-down modal -->
+  <div id="cm-modal" class="hidden fixed inset-0 z-40">
+    <div class="drawer-backdrop absolute inset-0" onclick="closeCmModal()"></div>
+    <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl max-h-[88vh] overflow-hidden bg-slate-900 border border-rose-700/40 rounded-xl shadow-2xl flex flex-col" data-testid="cm-modal">
+      <div class="flex items-center justify-between gap-3 p-4 border-b border-slate-700">
+        <div>
+          <div class="text-xs uppercase tracking-wider text-rose-300" id="cm-modal-kind">CRASH REPORT</div>
+          <div class="text-sm font-mono text-slate-300" id="cm-modal-sig">—</div>
+        </div>
+        <button onclick="closeCmModal()" class="rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 text-xs">✕ Close</button>
+      </div>
+      <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs border-b border-slate-800">
+        <div><div class="text-slate-500 uppercase text-[10px]">Device</div><div class="font-mono text-slate-200 mt-0.5" id="cm-modal-device">—</div></div>
+        <div><div class="text-slate-500 uppercase text-[10px]">Version</div><div class="font-mono text-slate-200 mt-0.5" id="cm-modal-version">—</div></div>
+        <div><div class="text-slate-500 uppercase text-[10px]">Android SDK</div><div class="font-mono text-slate-200 mt-0.5" id="cm-modal-sdk">—</div></div>
+        <div><div class="text-slate-500 uppercase text-[10px]">Captured at</div><div class="font-mono text-slate-200 mt-0.5" id="cm-modal-captured">—</div></div>
+      </div>
+      <pre id="cm-modal-trace" class="flex-1 overflow-auto text-[11px] leading-relaxed text-slate-200 bg-slate-950 p-4 font-mono whitespace-pre-wrap" data-testid="cm-modal-trace">Loading…</pre>
+    </div>
+  </div>
 
   <!-- ─────────────────── PAYMENTS TAB ─────────────────── -->
   <section id="tab-payments" class="hidden space-y-4">
@@ -1051,8 +1218,221 @@ function downloadTrialsCsv() {
   URL.revokeObjectURL(url);
 }
 
+// ── Crashes & ANR tab (v1.44.113) ──
+// Live aggregation of /var/hushtv-crash/. Pulls /stats for the headline
+// numbers + 24h chart, /top for grouped signatures, /recent for the
+// raw report list. Each row drills into a modal showing the full trace.
+window._cmKind = "anr";
+const CM_BASE = "/api/admin/canada/crashes";
+
+async function loadCrashes() {
+  const days = parseInt(($("cm-window") || {}).value || "7", 10);
+  try {
+    const stats = await apiGetCm(`${CM_BASE}/stats?days=${days}`);
+    renderCmStats(stats);
+    renderCmHourly(stats.hourly_24h || []);
+    renderCmBreakdown("cm-version", stats.version_breakdown_24h || [], "v");
+    renderCmBreakdown("cm-device",  stats.device_breakdown_24h  || [], "device");
+  } catch (e) {
+    $("cm-anr-today").textContent = "—";
+    toast(`Crash stats failed: ${e.message}`, "error");
+  }
+  loadCmTop();
+  loadCmRecent();
+}
+
+// We don't go through `api()` here because the crashes routes live
+// outside the canada admin prefix. Use a tiny GET helper. The browser
+// auto-includes Basic Auth credentials on same-origin fetch requests
+// because the page itself is Basic-Auth-protected by nginx.
+async function apiGetCm(path) {
+  const r = await fetch(path, { credentials: "include" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+  return r.json();
+}
+
+function renderCmStats(d) {
+  const t = d.totals || {};
+  $("cm-tot-anr").textContent    = (t.anr    || 0).toLocaleString();
+  $("cm-tot-crash").textContent  = (t.crash  || 0).toLocaleString();
+  $("cm-tot-freeze").textContent = (t.freeze || 0).toLocaleString();
+  $("cm-tot-all").textContent    = (t.all    || 0).toLocaleString();
+  const tv = d.today_vs_yesterday || {};
+  function fmtDelta(elTodayId, elYestId, elDeltaId, side) {
+    const o = tv[side] || {today:0, yesterday:0, delta:0};
+    $(elTodayId).textContent = o.today.toLocaleString();
+    $(elYestId).textContent  = o.yesterday.toLocaleString();
+    const sign = o.delta > 0 ? "+" : "";
+    const el = $(elDeltaId);
+    el.textContent = `${sign}${o.delta}`;
+    el.className = "text-xs " + (o.delta > 0 ? "text-rose-300" :
+                                  o.delta < 0 ? "text-emerald-300" :
+                                                "text-slate-500");
+  }
+  fmtDelta("cm-anr-today", "cm-anr-yest", "cm-anr-delta", "anr");
+  fmtDelta("cm-crash-today", "cm-crash-yest", "cm-crash-delta", "crash");
+}
+
+function renderCmHourly(buckets) {
+  if (!buckets.length) {
+    $("cm-hourly").innerHTML = `<div class="text-slate-500 text-xs m-auto">No data.</div>`;
+    return;
+  }
+  const max = Math.max(1, ...buckets.map(b => b.anr + b.crash + b.freeze + b.other));
+  $("cm-hourly").innerHTML = buckets.map(b => {
+    const total = b.anr + b.crash + b.freeze + b.other;
+    const h = Math.round((total / max) * 100);
+    const anrH    = total === 0 ? 0 : Math.round((b.anr    / total) * h);
+    const crashH  = total === 0 ? 0 : Math.round((b.crash  / total) * h);
+    const freezeH = total === 0 ? 0 : Math.round((b.freeze / total) * h);
+    const otherH  = Math.max(0, h - anrH - crashH - freezeH);
+    return `<div class="flex-1 flex flex-col items-end group" title="${b.hour}: ${b.anr} ANR, ${b.crash} crash, ${b.freeze} freeze, ${b.other} other">
+      <div class="text-[9px] text-slate-500 mb-0.5">${total || ""}</div>
+      <div class="w-full flex flex-col justify-end" style="height:100%">
+        <div class="w-full bg-rose-500"    style="height:${anrH}%"></div>
+        <div class="w-full bg-amber-500"   style="height:${crashH}%"></div>
+        <div class="w-full bg-slate-500/70" style="height:${freezeH}%"></div>
+        <div class="w-full bg-slate-700"   style="height:${otherH}%"></div>
+      </div>
+      <div class="text-[9px] text-slate-500 mt-1">${b.hour.slice(0,2)}</div>
+    </div>`;
+  }).join("");
+}
+
+function renderCmBreakdown(elId, rows, keyName) {
+  const el = $(elId);
+  if (!rows.length) {
+    el.innerHTML = `<div class="text-slate-500 text-xs">No data for last 24h.</div>`;
+    return;
+  }
+  const max = Math.max(1, ...rows.map(r => r.count));
+  el.innerHTML = rows.map(r => {
+    const label = r[keyName] || r.version || r.device || "?";
+    const w = Math.max(4, Math.round((r.count / max) * 100));
+    return `<div class="flex items-center gap-2 text-xs">
+      <div class="w-44 truncate text-slate-300 font-mono">${escapeHtml(label)}</div>
+      <div class="flex-1 h-3 rounded bg-slate-800 overflow-hidden">
+        <div class="h-full bg-rose-500/70" style="width:${w}%"></div>
+      </div>
+      <div class="w-10 text-right text-slate-400 font-semibold">${r.count}</div>
+    </div>`;
+  }).join("");
+}
+
+function setCmKind(k) {
+  window._cmKind = k;
+  ["anr","crash","freeze","all"].forEach(x => {
+    const b = $("cm-kind-" + x);
+    if (!b) return;
+    if (x === k) {
+      b.className = "rounded-sm bg-rose-500/20 text-rose-300 px-3 py-1 text-xs font-bold";
+    } else {
+      b.className = "rounded-sm text-slate-400 hover:text-slate-200 px-3 py-1 text-xs";
+    }
+  });
+  loadCmTop();
+}
+
+async function loadCmTop() {
+  const days = parseInt(($("cm-window") || {}).value || "7", 10);
+  try {
+    const d = await apiGetCm(`${CM_BASE}/top?days=${days}&kind=${window._cmKind}&limit=25`);
+    const rows = d.groups || [];
+    if (!rows.length) {
+      $("cm-top-tbody").innerHTML =
+        `<tr><td colspan="7" class="px-3 py-6 text-center text-slate-500">Nothing to show in this window.</td></tr>`;
+      return;
+    }
+    $("cm-top-tbody").innerHTML = rows.map(g => {
+      const v = (g.top_versions || []).map(x => `${x.v}<span class="text-slate-500"> ×${x.n}</span>`).join("<br>");
+      const d2 = (g.top_devices || []).map(x => `${escapeHtml(x.d.replace(/-[\da-f]+$/, ""))}<span class="text-slate-500"> ×${x.n}</span>`).join("<br>");
+      return `<tr class="border-t border-slate-800 hover:bg-slate-800/30">
+        <td class="px-3 py-2 font-mono text-xs text-slate-200 max-w-[400px] truncate" title="${escapeHtml(g.signature)}">${escapeHtml(g.signature)}</td>
+        <td class="px-3 py-2 text-right font-bold text-rose-300">${g.count}</td>
+        <td class="px-3 py-2 text-[11px] text-slate-300">${v}</td>
+        <td class="px-3 py-2 text-[11px] text-slate-300">${d2}</td>
+        <td class="px-3 py-2 text-[11px] text-slate-400 whitespace-nowrap">${fmtCmTs(g.first_seen)}</td>
+        <td class="px-3 py-2 text-[11px] text-slate-400 whitespace-nowrap">${fmtCmTs(g.last_seen)}</td>
+        <td class="px-3 py-2 text-right">
+          <button onclick="openCmReport('${escAttr(g.sample_file)}')" class="rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1 text-xs">View</button>
+        </td>
+      </tr>`;
+    }).join("");
+  } catch (e) {
+    $("cm-top-tbody").innerHTML =
+      `<tr><td colspan="7" class="px-3 py-6 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+
+async function loadCmRecent() {
+  const days = parseInt(($("cm-window") || {}).value || "7", 10);
+  try {
+    const d = await apiGetCm(`${CM_BASE}/recent?days=${days}&kind=all&limit=100`);
+    const rows = d.rows || [];
+    if (!rows.length) {
+      $("cm-recent-tbody").innerHTML =
+        `<tr><td colspan="6" class="px-3 py-6 text-center text-slate-500">No reports.</td></tr>`;
+      return;
+    }
+    $("cm-recent-tbody").innerHTML = rows.map(r => {
+      const kindColor = r.kind === "anr"   ? "bg-rose-500/20 text-rose-300" :
+                        r.kind === "crash" ? "bg-amber-500/20 text-amber-300" :
+                        r.kind === "freeze" ? "bg-slate-700 text-slate-300" :
+                                              "bg-slate-800 text-slate-500";
+      return `<tr class="border-t border-slate-800 hover:bg-slate-800/30">
+        <td class="px-3 py-2 text-[11px] text-slate-400 whitespace-nowrap">${fmtCmTs(r.captured_at)}</td>
+        <td class="px-3 py-2"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${kindColor}">${r.kind.toUpperCase()}</span></td>
+        <td class="px-3 py-2 font-mono text-[11px] text-slate-300 max-w-[340px] truncate" title="${escapeHtml(r.signature)}">${escapeHtml(r.signature)}</td>
+        <td class="px-3 py-2 text-[11px] text-slate-300 font-mono">${escapeHtml(r.device.replace(/-[\da-f]+$/, ""))}</td>
+        <td class="px-3 py-2 text-[11px] text-slate-400 font-mono">${escapeHtml(r.app_version || "?")}</td>
+        <td class="px-3 py-2 text-right"><button onclick="openCmReport('${escAttr(r.file)}')" class="rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1 text-xs">View</button></td>
+      </tr>`;
+    }).join("");
+  } catch (e) {
+    $("cm-recent-tbody").innerHTML =
+      `<tr><td colspan="6" class="px-3 py-6 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+
+async function openCmReport(file) {
+  $("cm-modal").classList.remove("hidden");
+  $("cm-modal-trace").textContent = "Loading…";
+  $("cm-modal-sig").textContent = file;
+  try {
+    const d = await apiGetCm(`${CM_BASE}/report?file=${encodeURIComponent(file)}`);
+    $("cm-modal-kind").textContent = (d.kind || "report").toUpperCase();
+    $("cm-modal-sig").textContent = file;
+    $("cm-modal-device").textContent = d.device || "?";
+    $("cm-modal-version").textContent = `${d.app_version || "?"} (#${d.version_code || "?"})`;
+    $("cm-modal-sdk").textContent = d.android_sdk || "?";
+    $("cm-modal-captured").textContent = d.captured_at || "?";
+    $("cm-modal-trace").textContent = d.trace || "(no trace)";
+  } catch (e) {
+    $("cm-modal-trace").textContent = `Failed to load: ${e.message}`;
+  }
+}
+function closeCmModal() { $("cm-modal").classList.add("hidden"); }
+
+function fmtCmTs(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString();
+  } catch { return iso; }
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+
 // ── tab switching ──
-const TAB_IDS = ["revenue","licenses","trials","payments","approve","orders"];
+const TAB_IDS = ["revenue","licenses","trials","crashes","payments","approve","orders"];
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach(b => {
@@ -1066,6 +1446,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     if (k === "revenue")  loadStats();
     if (k === "licenses") loadLicenses();
     if (k === "trials")   loadTrialsFull();
+    if (k === "crashes")  loadCrashes();
     if (k === "payments") loadPayments();
     if (k === "orders")   loadOrders();
   });
