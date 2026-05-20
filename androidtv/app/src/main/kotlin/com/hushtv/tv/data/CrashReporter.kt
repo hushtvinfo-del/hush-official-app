@@ -292,17 +292,23 @@ object CrashReporter {
         // (crash.log) and the ANR watchdog log (anr.log). Each is
         // tracked separately via its own mtime so we can ship one
         // without re-shipping the other.
+        //
+        // v1.44.112 — pass an explicit `kind` so the crash dashboard
+        // can split true Java crashes (kind=crash) from ANRs
+        // (kind=anr). Previously both were uploaded with kind=none
+        // which mixed them in with freeze-monitor noise and made the
+        // "show me crashes" filter useless.
         var anyUploaded = false
-        for ((name, mtimeKey) in arrayOf(
-            "crash.log" to KEY_LAST_UPLOADED_MTIME,
-            "anr.log"   to KEY_LAST_UPLOADED_ANR_MTIME,
+        for ((name, mtimeKey, kind) in arrayOf(
+            Triple("crash.log", KEY_LAST_UPLOADED_MTIME,     "crash"),
+            Triple("anr.log",   KEY_LAST_UPLOADED_ANR_MTIME, "anr"),
         )) {
             val f = File(ctx.filesDir, name)
             if (!f.exists() || f.length() == 0L) continue
             val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val lastMtime = prefs.getLong(mtimeKey, 0L)
             if (!force && f.lastModified() == lastMtime) continue
-            val body = buildPayload(ctx, f.readText())
+            val body = buildPayload(ctx, f.readText(), kind)
             if (postJson(ENDPOINT, body)) {
                 prefs.edit().putLong(mtimeKey, f.lastModified()).apply()
                 anyUploaded = true
@@ -311,7 +317,7 @@ object CrashReporter {
         return anyUploaded
     }
 
-    private fun buildPayload(ctx: Context, trace: String): String {
+    private fun buildPayload(ctx: Context, trace: String, kind: String): String {
         val fmtUtc = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
@@ -354,6 +360,12 @@ object CrashReporter {
             put("app_version", appVersion)
             put("version_code", versionCode)
             put("captured_at", capturedAt)
+            // v1.44.112 — explicit kind. The crash dashboard splits
+            // "true Java exceptions" from "ANR watchdog hangs" by
+            // this tag. Was previously omitted, causing all 138
+            // recent ANRs to be filed as kind=none and hidden in
+            // the freeze-monitor noise.
+            put("kind", kind)
             // Keep a marker so the dashboard can tell new-format logs
             // apart from old-format ones at a glance.
             put("installed_version", BuildConfig.VERSION_NAME)

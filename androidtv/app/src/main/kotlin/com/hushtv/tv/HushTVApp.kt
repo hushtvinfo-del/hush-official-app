@@ -61,6 +61,24 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // can ship it. Closes the diagnostic gap that ate v1.44.0–.2:
         // ANRs are SIGKILL'd by the OS and bypass every JVM handler.
         com.hushtv.tv.data.AnrWatchdog.start(this)
+
+        // v1.44.112 — (dev only) main-thread StrictMode. Logs any
+        // disk read/write or network call accidentally landing on the
+        // main thread, plus slow-call detection, so we can spot
+        // future regressions before they hit production. Penalty is
+        // LOG (never crash) so this stays diagnostic — no behaviour
+        // change for the user. Off in canada/official builds.
+        if (BuildConfig.UPDATE_CHANNEL == "dev") {
+            android.os.StrictMode.setThreadPolicy(
+                android.os.StrictMode.ThreadPolicy.Builder()
+                    .detectDiskReads()
+                    .detectDiskWrites()
+                    .detectNetwork()
+                    .detectCustomSlowCalls()
+                    .penaltyLog()
+                    .build(),
+            )
+        }
     }
 
     /**
