@@ -455,6 +455,55 @@
         </div>
       </div>
 
+      <!-- v1.44.118 — per-user search. Filters every panel on this tab
+           to a specific Xtream username. -->
+      <div class="rounded-lg border border-cyan-700/40 bg-cyan-900/10 p-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="text-xs font-bold text-cyan-300 whitespace-nowrap">🔍 Filter by user:</div>
+          <input type="text" id="cm-user-search" data-testid="cm-user-search"
+            placeholder="Xtream username (e.g. bfam23)…"
+            oninput="onCmUserSearchInput()"
+            class="flex-1 min-w-[240px] rounded-md bg-slate-800 border border-slate-600 px-3 py-2 text-sm font-mono" />
+          <button onclick="clearCmUserSearch()" id="cm-user-clear"
+            class="hidden rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 text-xs">Clear</button>
+          <div id="cm-user-summary" data-testid="cm-user-summary" class="hidden text-xs text-cyan-300"></div>
+        </div>
+        <div class="text-[10px] text-slate-500 mt-1 ml-7">
+          When a user is selected, all stats + tables below filter to that user only. Old reports (pre-v1.44.118) have no username attached — they only show up in the unfiltered view.
+        </div>
+        <!-- User-profile card, only visible when filter is active -->
+        <div id="cm-user-profile" class="hidden mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2 pt-3 border-t border-cyan-700/20">
+          <div class="rounded-md bg-slate-900/60 p-2">
+            <div class="text-[9px] uppercase text-slate-500">Total reports</div>
+            <div class="text-lg font-bold text-cyan-300" id="cm-uprof-total">…</div>
+          </div>
+          <div class="rounded-md bg-slate-900/60 p-2">
+            <div class="text-[9px] uppercase text-rose-400">ANRs</div>
+            <div class="text-lg font-bold text-rose-300" id="cm-uprof-anr">…</div>
+          </div>
+          <div class="rounded-md bg-slate-900/60 p-2">
+            <div class="text-[9px] uppercase text-amber-400">Crashes</div>
+            <div class="text-lg font-bold text-amber-300" id="cm-uprof-crash">…</div>
+          </div>
+          <div class="rounded-md bg-slate-900/60 p-2">
+            <div class="text-[9px] uppercase text-slate-500">First seen</div>
+            <div class="text-xs font-mono text-slate-300 mt-0.5" id="cm-uprof-first">…</div>
+          </div>
+          <div class="rounded-md bg-slate-900/60 p-2">
+            <div class="text-[9px] uppercase text-slate-500">Last seen</div>
+            <div class="text-xs font-mono text-slate-300 mt-0.5" id="cm-uprof-last">…</div>
+          </div>
+          <div class="rounded-md bg-slate-900/60 p-2 col-span-2 sm:col-span-3">
+            <div class="text-[9px] uppercase text-slate-500">Devices used</div>
+            <div class="text-[11px] font-mono text-slate-300 mt-0.5 break-all" id="cm-uprof-devices">…</div>
+          </div>
+          <div class="rounded-md bg-slate-900/60 p-2 col-span-2">
+            <div class="text-[9px] uppercase text-slate-500">App versions seen</div>
+            <div class="text-[11px] font-mono text-slate-300 mt-0.5" id="cm-uprof-versions">…</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Big-number stats grid -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div class="rounded-lg border border-rose-700/40 bg-rose-900/15 p-3">
@@ -563,13 +612,14 @@
                 <th class="text-left px-3 py-2">When</th>
                 <th class="text-left px-3 py-2">Kind</th>
                 <th class="text-left px-3 py-2">Signature</th>
+                <th class="text-left px-3 py-2">User</th>
                 <th class="text-left px-3 py-2">Device</th>
                 <th class="text-left px-3 py-2">Version</th>
                 <th class="text-right px-3 py-2"></th>
               </tr>
             </thead>
             <tbody id="cm-recent-tbody" data-testid="cm-recent-tbody">
-              <tr><td colspan="6" class="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
+              <tr><td colspan="7" class="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
             </tbody>
           </table>
         </div>
@@ -588,7 +638,8 @@
         </div>
         <button onclick="closeCmModal()" class="rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 text-xs">✕ Close</button>
       </div>
-      <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs border-b border-slate-800">
+      <div class="p-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs border-b border-slate-800">
+        <div><div class="text-slate-500 uppercase text-[10px]">Xtream user</div><div class="font-mono text-cyan-300 mt-0.5" id="cm-modal-user">—</div></div>
         <div><div class="text-slate-500 uppercase text-[10px]">Device</div><div class="font-mono text-slate-200 mt-0.5" id="cm-modal-device">—</div></div>
         <div><div class="text-slate-500 uppercase text-[10px]">Version</div><div class="font-mono text-slate-200 mt-0.5" id="cm-modal-version">—</div></div>
         <div><div class="text-slate-500 uppercase text-[10px]">Android SDK</div><div class="font-mono text-slate-200 mt-0.5" id="cm-modal-sdk">—</div></div>
@@ -1223,12 +1274,73 @@ function downloadTrialsCsv() {
 // numbers + 24h chart, /top for grouped signatures, /recent for the
 // raw report list. Each row drills into a modal showing the full trace.
 window._cmKind = "anr";
+window._cmUserFilter = "";
+let _cmUserDebounce = 0;
 const CM_BASE = "/api/admin/canada/crashes";
+
+function cmUserParam() {
+  return window._cmUserFilter ? `&user=${encodeURIComponent(window._cmUserFilter)}` : "";
+}
+
+function onCmUserSearchInput() {
+  clearTimeout(_cmUserDebounce);
+  _cmUserDebounce = setTimeout(() => {
+    const v = ($("cm-user-search").value || "").trim();
+    window._cmUserFilter = v;
+    $("cm-user-clear").classList.toggle("hidden", !v);
+    if (v) {
+      loadCmUserProfile(v);
+    } else {
+      $("cm-user-profile").classList.add("hidden");
+      $("cm-user-summary").classList.add("hidden");
+    }
+    loadCrashes();
+  }, 280);
+}
+
+function clearCmUserSearch() {
+  $("cm-user-search").value = "";
+  window._cmUserFilter = "";
+  $("cm-user-clear").classList.add("hidden");
+  $("cm-user-profile").classList.add("hidden");
+  $("cm-user-summary").classList.add("hidden");
+  loadCrashes();
+}
+
+async function loadCmUserProfile(username) {
+  try {
+    const d = await apiGetCm(`${CM_BASE}/user/${encodeURIComponent(username)}?days=30`);
+    const t = d.totals || {};
+    const found = d.found && t.all > 0;
+    $("cm-user-summary").classList.remove("hidden");
+    $("cm-user-summary").textContent = found
+      ? `Showing ${t.all} report(s) for "${username}" in the last 30 days`
+      : `No reports found for "${username}". Old reports (pre-v1.44.118) don't have usernames attached.`;
+    if (!found) {
+      $("cm-user-profile").classList.add("hidden");
+      return;
+    }
+    $("cm-user-profile").classList.remove("hidden");
+    $("cm-uprof-total").textContent = t.all.toLocaleString();
+    $("cm-uprof-anr").textContent   = (t.anr || 0).toLocaleString();
+    $("cm-uprof-crash").textContent = (t.crash || 0).toLocaleString();
+    $("cm-uprof-first").textContent = fmtCmTs(d.first_seen);
+    $("cm-uprof-last").textContent  = fmtCmTs(d.last_seen);
+    $("cm-uprof-devices").innerHTML =
+      (d.devices || []).map(x => `${escapeHtml(x.device)} <span class="text-slate-500">×${x.count}</span>`).join("<br>") || "—";
+    $("cm-uprof-versions").innerHTML =
+      (d.versions || []).map(x => `${escapeHtml(x.version)} <span class="text-slate-500">×${x.count}</span>`).join(", ") || "—";
+  } catch (e) {
+    $("cm-user-summary").classList.remove("hidden");
+    $("cm-user-summary").textContent = `Lookup failed: ${e.message}`;
+    $("cm-user-profile").classList.add("hidden");
+  }
+}
 
 async function loadCrashes() {
   const days = parseInt(($("cm-window") || {}).value || "7", 10);
   try {
-    const stats = await apiGetCm(`${CM_BASE}/stats?days=${days}`);
+    const stats = await apiGetCm(`${CM_BASE}/stats?days=${days}${cmUserParam()}`);
     renderCmStats(stats);
     renderCmHourly(stats.hourly_24h || []);
     renderCmBreakdown("cm-version", stats.version_breakdown_24h || [], "v");
@@ -1336,7 +1448,7 @@ function setCmKind(k) {
 async function loadCmTop() {
   const days = parseInt(($("cm-window") || {}).value || "7", 10);
   try {
-    const d = await apiGetCm(`${CM_BASE}/top?days=${days}&kind=${window._cmKind}&limit=25`);
+    const d = await apiGetCm(`${CM_BASE}/top?days=${days}&kind=${window._cmKind}&limit=25${cmUserParam()}`);
     const rows = d.groups || [];
     if (!rows.length) {
       $("cm-top-tbody").innerHTML =
@@ -1367,11 +1479,11 @@ async function loadCmTop() {
 async function loadCmRecent() {
   const days = parseInt(($("cm-window") || {}).value || "7", 10);
   try {
-    const d = await apiGetCm(`${CM_BASE}/recent?days=${days}&kind=all&limit=100`);
+    const d = await apiGetCm(`${CM_BASE}/recent?days=${days}&kind=all&limit=100${cmUserParam()}`);
     const rows = d.rows || [];
     if (!rows.length) {
       $("cm-recent-tbody").innerHTML =
-        `<tr><td colspan="6" class="px-3 py-6 text-center text-slate-500">No reports.</td></tr>`;
+        `<tr><td colspan="7" class="px-3 py-6 text-center text-slate-500">No reports.</td></tr>`;
       return;
     }
     $("cm-recent-tbody").innerHTML = rows.map(r => {
@@ -1379,10 +1491,14 @@ async function loadCmRecent() {
                         r.kind === "crash" ? "bg-amber-500/20 text-amber-300" :
                         r.kind === "freeze" ? "bg-slate-700 text-slate-300" :
                                               "bg-slate-800 text-slate-500";
+      const userCell = r.xtream_username
+        ? `<span class="text-cyan-300 font-mono cursor-pointer hover:underline" onclick="document.getElementById('cm-user-search').value='${escAttr(r.xtream_username)}'; onCmUserSearchInput();">${escapeHtml(r.xtream_username)}</span>`
+        : `<span class="text-slate-600 text-[10px] italic">—</span>`;
       return `<tr class="border-t border-slate-800 hover:bg-slate-800/30">
         <td class="px-3 py-2 text-[11px] text-slate-400 whitespace-nowrap">${fmtCmTs(r.captured_at)}</td>
         <td class="px-3 py-2"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${kindColor}">${r.kind.toUpperCase()}</span></td>
         <td class="px-3 py-2 font-mono text-[11px] text-slate-300 max-w-[340px] truncate" title="${escapeHtml(r.signature)}">${escapeHtml(r.signature)}</td>
+        <td class="px-3 py-2 text-[11px]">${userCell}</td>
         <td class="px-3 py-2 text-[11px] text-slate-300 font-mono">${escapeHtml(r.device.replace(/-[\da-f]+$/, ""))}</td>
         <td class="px-3 py-2 text-[11px] text-slate-400 font-mono">${escapeHtml(r.app_version || "?")}</td>
         <td class="px-3 py-2 text-right"><button onclick="openCmReport('${escAttr(r.file)}')" class="rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1 text-xs">View</button></td>
@@ -1390,7 +1506,7 @@ async function loadCmRecent() {
     }).join("");
   } catch (e) {
     $("cm-recent-tbody").innerHTML =
-      `<tr><td colspan="6" class="px-3 py-6 text-center text-rose-400">${e.message}</td></tr>`;
+      `<tr><td colspan="7" class="px-3 py-6 text-center text-rose-400">${e.message}</td></tr>`;
   }
 }
 
@@ -1402,6 +1518,7 @@ async function openCmReport(file) {
     const d = await apiGetCm(`${CM_BASE}/report?file=${encodeURIComponent(file)}`);
     $("cm-modal-kind").textContent = (d.kind || "report").toUpperCase();
     $("cm-modal-sig").textContent = file;
+    $("cm-modal-user").textContent = d.xtream_username || "—";
     $("cm-modal-device").textContent = d.device || "?";
     $("cm-modal-version").textContent = `${d.app_version || "?"} (#${d.version_code || "?"})`;
     $("cm-modal-sdk").textContent = d.android_sdk || "?";

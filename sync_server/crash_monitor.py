@@ -118,6 +118,12 @@ def _scan(days: int) -> list[dict]:
                 "app_version": d.get("app_version", "?"),
                 "version_code": d.get("version_code", "?"),
                 "installed_version": d.get("installed_version", "?"),
+                # v1.44.118 — identifiers from the Android client.
+                # Empty string for old reports that pre-date the change.
+                "xtream_username": d.get("xtream_username", ""),
+                "xtream_host": d.get("xtream_host", ""),
+                "playlist_id": d.get("playlist_id", ""),
+                "playlist_count": d.get("playlist_count", ""),
                 "signature": _signature(trace),
                 "trace_len": len(trace),
             })
@@ -167,12 +173,16 @@ def _signature(trace: str) -> str:
 @admin_router.get("/stats")
 def crash_stats(
     days: int = Query(7, ge=1, le=30),
+    user: str = Query("", description="Filter by Xtream username (case-insensitive substring)"),
     x_admin_token: Optional[str] = Header(None),
 ) -> dict:
     """Top-level stats for the dashboard: report counts, kind breakdown,
     hourly chart for the last 24h, per-version breakdown."""
     _check_admin(x_admin_token)
     rows = _scan(days)
+    if user:
+        u = user.lower().strip()
+        rows = [r for r in rows if u in (r.get("xtream_username") or "").lower()]
     now = datetime.now(timezone.utc)
 
     # Kind totals over the window
@@ -270,12 +280,16 @@ def crash_top(
     days: int = Query(1, ge=1, le=14),
     kind: str = Query("anr", regex=r"^(anr|crash|freeze|all)$"),
     limit: int = Query(20, ge=1, le=100),
+    user: str = Query("", description="Filter by Xtream username (case-insensitive substring)"),
     x_admin_token: Optional[str] = Header(None),
 ) -> dict:
     """Top crash signatures grouped, with a representative-report file
     pointer so the admin can drill in to one example."""
     _check_admin(x_admin_token)
     rows = _scan(days)
+    if user:
+        u = user.lower().strip()
+        rows = [r for r in rows if u in (r.get("xtream_username") or "").lower()]
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     grouped: dict[str, dict] = {}
@@ -320,11 +334,15 @@ def crash_recent(
     days: int = Query(1, ge=1, le=14),
     kind: str = Query("all", regex=r"^(anr|crash|freeze|playback_telemetry|diagnostic|other|all)$"),
     limit: int = Query(50, ge=1, le=500),
+    user: str = Query("", description="Filter by Xtream username (case-insensitive substring)"),
     x_admin_token: Optional[str] = Header(None),
 ) -> dict:
     """Most recent crash/anr reports, newest first."""
     _check_admin(x_admin_token)
     rows = _scan(days)
+    if user:
+        u = user.lower().strip()
+        rows = [r for r in rows if u in (r.get("xtream_username") or "").lower()]
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     out = []
     for r in rows:
@@ -336,6 +354,88 @@ def crash_recent(
         out.append(r)
     out.sort(key=lambda r: r.get("captured_at") or "", reverse=True)
     return {"window_days": days, "kind": kind, "rows": out[:limit]}
+
+
+@admin_router.get("/user/{username}")
+def crash_user(
+    username: str,
+    days: int = Query(30, ge=1, le=30),
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Return a per-user crash profile: first-seen, last-seen, total
+    reports, breakdown by kind/version/device, and the most recent
+    25 individual reports. Used by the admin Crashes tab's user
+    search box (v1.44.118)."""
+    _check_admin(x_admin_token)
+    u = username.lower().strip()
+    if not u:
+        raise HTTPException(400, "username required")
+    rows = _scan(days)
+    matches = [r for r in rows if u in (r.get("xtream_username") or "").lower()]
+    if not matches:
+        return {
+            "username": username,
+            "window_days": days,
+            "found": False,
+            "totals": {"all": 0, "anr": 0, "crash": 0, "freeze": 0},
+            "first_seen": None,
+            "last_seen": None,
+            "devices": [],
+            "versions": [],
+            "recent": [],
+        }
+    by_kind = Counter(r["kind"] for r in matches)
+    by_device = Counter(r["device"] for r in matches if r["device"] != "?")
+    by_version = Counter(r["app_version"] for r in matches if r["app_version"] != "?")
+    timestamps = sorted(filter(None, (r["captured_at"] for r in matches)))
+    matches.sort(key=lambda r: r.get("captured_at") or "", reverse=True)
+    return {
+        "username": username,
+        "window_days": days,
+        "found": True,
+        "totals": {
+            "all":    len(matches),
+            "anr":    by_kind.get("anr", 0),
+            "crash":  by_kind.get("crash", 0),
+            "freeze": by_kind.get("freeze", 0),
+            "other":  sum(by_kind.values()) - by_kind.get("anr", 0)
+                      - by_kind.get("crash", 0) - by_kind.get("freeze", 0),
+        },
+        "first_seen": timestamps[0] if timestamps else None,
+        "last_seen":  timestamps[-1] if timestamps else None,
+        "devices": [
+            {"device": d, "count": n} for d, n in by_device.most_common()
+        ],
+        "versions": [
+            {"version": v, "count": n} for v, n in by_version.most_common()
+        ],
+        "recent": matches[:25],
+    }
+
+
+@admin_router.get("/usernames")
+def crash_usernames(
+    days: int = Query(7, ge=1, le=30),
+    limit: int = Query(50, ge=1, le=500),
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Autocomplete: list distinct Xtream usernames seen in recent
+    reports, ranked by total report count. Used by the admin search
+    box for type-ahead suggestions."""
+    _check_admin(x_admin_token)
+    rows = _scan(days)
+    counter: Counter = Counter()
+    for r in rows:
+        u = (r.get("xtream_username") or "").strip()
+        if u:
+            counter[u] += 1
+    return {
+        "window_days": days,
+        "users": [
+            {"username": u, "reports": n}
+            for u, n in counter.most_common(limit)
+        ],
+    }
 
 
 @admin_router.get("/report")
@@ -366,6 +466,9 @@ def crash_report(
         "app_version": d.get("app_version", "?"),
         "version_code": d.get("version_code", "?"),
         "installed_version": d.get("installed_version", "?"),
+        "xtream_username": d.get("xtream_username", ""),
+        "xtream_host": d.get("xtream_host", ""),
+        "playlist_id": d.get("playlist_id", ""),
         "captured_at": d.get("captured_at"),
         "sent_at": d.get("sent_at"),
         "trace": d.get("trace", ""),

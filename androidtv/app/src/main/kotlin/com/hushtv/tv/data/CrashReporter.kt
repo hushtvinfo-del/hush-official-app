@@ -369,6 +369,24 @@ object CrashReporter {
             // Keep a marker so the dashboard can tell new-format logs
             // apart from old-format ones at a glance.
             put("installed_version", BuildConfig.VERSION_NAME)
+            // v1.44.118 — attach the active Xtream username (and a few
+            // other identifiers) so the admin Crashes tab can filter
+            // every panel by a specific customer. Look-up is best-effort
+            // and wrapped in runCatching: if the playlist store throws
+            // mid-crash (e.g. corrupted prefs file), we still ship the
+            // trace under the regular fields.
+            runCatching {
+                val playlists = PlaylistStore.getAll(ctx)
+                // First playlist is the canonical one for Canada users
+                // (single-account flow); fallback to "" if none yet.
+                val pl = playlists.firstOrNull()
+                if (pl != null) {
+                    put("xtream_username", pl.username)
+                    put("xtream_host", pl.host)
+                    put("playlist_id", pl.id)
+                }
+                put("playlist_count", playlists.size.toString())
+            }
             put("trace", safeTrace)
         }
     }

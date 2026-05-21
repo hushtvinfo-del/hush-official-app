@@ -1,19 +1,19 @@
 {
-  "versionCode": 517,
-  "versionName": "1.44.117",
+  "versionCode": 518,
+  "versionName": "1.44.118",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-21",
   "channel": "canada",
   "changelog": [
-    "FIX: Bumped Navigation Compose 2.8.1 → 2.8.5 to fix the IndexOutOfBounds crash that fired when the BACK button was pressed during a navigation transition on some Fire TVs.",
-    "FIX (v516): 4 distinct Movie/Series crashes on weak Fire Sticks (channel-zap bounds, sports nav race, search regex memory, low-RAM image cache, Compose double-release).",
+    "DIAGNOSTIC: Crash reports now include the Xtream username so support can look up any customer's history by name in the admin panel.",
+    "FIX (v517): Bumped Navigation Compose for one more BACK-button crash on Fire TV.",
+    "FIX (v516): 4 distinct Movie/Series crashes on weak Fire Sticks.",
     "FIX (v515): 'Switch to Lite Mode' takes effect instantly.",
-    "FIX (v514): Permanent Fire Stick ANR fix — Moshi codegen eliminates the kotlin-reflect global lock.",
-    "FIX (v513): License-check loop throttled to 30 s.",
+    "FIX (v514): Permanent ANR fix — Moshi codegen replaces kotlin-reflect.",
+    "FIX (v513): License-check loop throttled.",
     "FIX (v512): Player HTTP timeouts tightened.",
-    "FIX (v510): Resolved Play Protect 'harmful app' warning.",
-    "FIX (v509): Player on-screen options menu D-pad selection.",
+    "FIX (v510): Resolved Play Protect warning.",
     "NEW: 72-hour free trial for first-time Canada users."
   ]
 }
