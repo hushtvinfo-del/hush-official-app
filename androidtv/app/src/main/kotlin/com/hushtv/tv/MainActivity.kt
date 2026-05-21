@@ -248,7 +248,16 @@ private fun AppContent() {
             // mis-classification complaint surface on premium
             // devices forever.
             val ctx = LocalContext.current
-            val savedMode = remember { com.hushtv.tv.data.AppModeStore.load(ctx) }
+            // v1.44.115 — collect the AppMode StateFlow so Settings'
+            // "Switch to Lite Mode" toggle takes effect IMMEDIATELY.
+            // Previously this read with `remember { load(ctx) }` which
+            // runs only once on first composition; with launchSingleTop
+            // navigation, the menu route is reused and the prefs change
+            // never made it back into LocalIsLiteMode. Reactive flow
+            // means every save() from Settings emits a new value and
+            // this scope recomposes, flipping the entire UI tree.
+            val savedMode by com.hushtv.tv.data.AppModeStore.flow(ctx)
+                .collectAsState()
             val isLite = savedMode == com.hushtv.tv.data.AppMode.LITE
             androidx.compose.runtime.CompositionLocalProvider(
                 com.hushtv.tv.data.LocalIsLiteMode provides isLite,

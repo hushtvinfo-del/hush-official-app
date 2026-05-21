@@ -65,6 +65,29 @@ object AppModeStore {
     private const val KEY_MODE = "mode"
     private const val KEY_PROMPTED = "prompted"
 
+    // v1.44.115 — reactive cache. Settings calls save(), Compose reads
+    // flow(). Previously the live UI never picked up a mode change
+    // because callers used `remember { load(ctx) }` which only runs
+    // once per composition. With the flow, every observer recomposes
+    // immediately when the user toggles Lite/Pro from Settings.
+    @Volatile private var _flow: kotlinx.coroutines.flow.MutableStateFlow<AppMode>? = null
+
+    private fun flowFor(ctx: Context): kotlinx.coroutines.flow.MutableStateFlow<AppMode> {
+        _flow?.let { return it }
+        synchronized(this) {
+            _flow?.let { return it }
+            val f = kotlinx.coroutines.flow.MutableStateFlow(load(ctx))
+            _flow = f
+            return f
+        }
+    }
+
+    /** Compose-friendly observable. Read with `flow(ctx).collectAsState()`
+     *  in MainActivity so any save() call from Settings re-renders the
+     *  whole tree with the new LocalIsLiteMode value. */
+    fun flow(ctx: Context): kotlinx.coroutines.flow.StateFlow<AppMode> =
+        flowFor(ctx)
+
     fun load(ctx: Context): AppMode {
         val raw = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_MODE, null)
@@ -75,6 +98,9 @@ object AppModeStore {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_MODE, mode.name)
             .apply()
+        // Push to all observers so the UI updates without needing a
+        // fresh activity composition.
+        flowFor(ctx).value = mode
     }
 
     /** True once the first-launch capability dialog has been shown
