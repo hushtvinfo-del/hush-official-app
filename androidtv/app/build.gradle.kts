@@ -16,8 +16,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 515
-        versionName = "1.44.115"
+        versionCode = 516
+        versionName = "1.44.116"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -280,7 +280,7 @@ tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
 
 dependencies {
     // Compose BOM
-    val composeBom = platform("androidx.compose:compose-bom:2024.09.03")
+    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
 
     // Core AndroidX

@@ -345,11 +345,28 @@ fun TVSportsPage(
                     // runs on Back from the player, there's nothing
                     // to re-show — Sports is what they see.
                     pickerGameId = null
-                    nav.navigate(
-                        "player/$playlistId/" +
-                            "${android.net.Uri.encode(url)}/" +
-                            "${android.net.Uri.encode(title)}/true"
-                    )
+                    // v1.44.116 — wrap in try/catch. The crash dashboard
+                    // showed 10× IllegalArgumentException("Navigation
+                    // destination that matches route player/...") from
+                    // this call site, all on rapid double-clicks where
+                    // pickerGameId=null clears the sheet AND the nav
+                    // host pops the outer Sports route at the same
+                    // instant, leaving no destination for the player
+                    // route to land on. Suppress the throw; the user
+                    // sees nothing worse than the sheet closing
+                    // (correct behaviour) — and the app stays alive.
+                    runCatching {
+                        nav.navigate(
+                            "player/$playlistId/" +
+                                "${android.net.Uri.encode(url)}/" +
+                                "${android.net.Uri.encode(title)}/true"
+                        )
+                    }.onFailure {
+                        android.util.Log.w(
+                            "TVSportsPage",
+                            "swallowed nav crash: ${it.message}",
+                        )
+                    }
                 },
             )
         }

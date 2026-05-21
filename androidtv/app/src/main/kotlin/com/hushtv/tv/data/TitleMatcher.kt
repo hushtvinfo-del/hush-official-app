@@ -46,7 +46,14 @@ object TitleMatcher {
      * (which would then dangerously match on 2-word threshold).
      */
     fun normalize(raw: String): String {
-        var s = raw.lowercase()
+        // v1.44.116 — bound input length. Some users' Xtream library
+        // titles are absurdly long (full URLs as titles, or stuffed
+        // metadata). On low-memory devices (1 GB RAM Fire Stick AFTKM
+        // / AFTSS) the ICU regex matcher would OOM trying to allocate
+        // a backtracking buffer proportional to input size, crashing
+        // the app with U_MEMORY_ALLOCATION_ERROR. 1024 chars is more
+        // than enough — TMDB titles never exceed ~120.
+        var s = raw.take(1024).lowercase()
         s = s.replace(BRACKETED, " ")
         s = s.replace(LEADING_COUNTRY, "")
         s = s.replace(TRAILING_PIPE, "")

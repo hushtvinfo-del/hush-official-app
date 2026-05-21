@@ -263,8 +263,20 @@ class HushTVApp : Application(), ImageLoaderFactory {
                 // add(HushBundleMapper)
             }
             .memoryCache {
+                // v1.44.116 — clamp memory cache aggressively on
+                // low-RAM devices. The earlier 20%-of-heap value
+                // worked on 2 GB+ Fire Sticks but on 1 GB devices
+                // (AFTKM / AFTSS / AFTKRT) Coil would grow to ~200 MB
+                // of bitmaps and the next image load crashed with
+                // OutOfMemoryError or a Canvas-recycled-bitmap
+                // exception. 10% on those devices ≈ 80 MB which is
+                // plenty for the 10-15 posters visible at once, and
+                // leaves headroom for the player + EPG.
+                val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+                val totalRamMb = am.memoryClass  // dvm heap budget in MB
+                val pct = if (totalRamMb <= 96) 0.10 else 0.20
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.20)
+                    .maxSizePercent(pct)
                     .build()
             }
             .diskCache {

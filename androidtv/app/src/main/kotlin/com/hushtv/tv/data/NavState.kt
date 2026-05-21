@@ -33,7 +33,14 @@ object NavState {
     /** Returns the next channel after current (wraps). */
     fun nextChannel(): MediaCard? {
         if (liveChannels.isEmpty()) return null
-        val next = ((currentChannelIndex + 1) % liveChannels.size).coerceAtLeast(0)
+        // v1.44.116 — guard against stale currentChannelIndex when the
+        // user has just switched Xtream playlists / categories while
+        // the player is still alive. Without this, we crashed with
+        // ArrayIndexOutOfBoundsException: length=3; index=11 because
+        // currentChannelIndex retained the old (longer) category's
+        // index and overflowed the new (shorter) channel list.
+        val safeCur = currentChannelIndex.coerceIn(-1, liveChannels.lastIndex)
+        val next = ((safeCur + 1) % liveChannels.size).coerceAtLeast(0)
         rememberPlayback(next)
         return liveChannels[next]
     }
@@ -41,8 +48,9 @@ object NavState {
     /** Returns the previous channel (wraps). */
     fun prevChannel(): MediaCard? {
         if (liveChannels.isEmpty()) return null
-        val prev = if (currentChannelIndex <= 0) liveChannels.size - 1
-                   else currentChannelIndex - 1
+        val safeCur = currentChannelIndex.coerceIn(-1, liveChannels.lastIndex)
+        val prev = if (safeCur <= 0) liveChannels.size - 1
+                   else safeCur - 1
         rememberPlayback(prev)
         return liveChannels[prev]
     }
