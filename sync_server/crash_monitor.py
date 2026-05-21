@@ -72,7 +72,7 @@ def _classify_kind(d: dict) -> str:
     anr.log uploads. We infer from the trace header `thread=...` so the
     dashboard groups them correctly with newer reports."""
     k = (d.get("kind") or "").strip().lower()
-    if k in ("crash", "anr", "freeze", "diagnostic", "playback_telemetry"):
+    if k in ("crash", "anr", "freeze", "diagnostic", "playback_telemetry", "exit_info"):
         return k
     trace = d.get("trace", "") or ""
     if "thread=anr-watchdog" in trace:
@@ -83,6 +83,8 @@ def _classify_kind(d: dict) -> str:
         return "playback_telemetry"
     if "thread=diagnostic" in trace:
         return "diagnostic"
+    if "thread=exit-info" in trace:
+        return "exit_info"
     # Plain crash.log has lines like "Exception in thread main" or stack.
     if re.search(r"Caused by:|Exception in thread|FATAL EXCEPTION", trace):
         return "crash"
@@ -139,9 +141,21 @@ def _signature(trace: str) -> str:
     For an ANR it's "thread=anr-watchdog::top-main-stack-frame".
     For a crash it's "ExceptionClass::file:line of top app frame".
     For a freeze report it's the FREEZE-REPORT reason if present.
+    For an exit-info report it's "EXIT::<reason>::<signal-name>".
     """
     if not trace:
         return "(empty)"
+    # EXIT-INFO (ApplicationExitInfo capture, v1.44.120+)
+    if "thread=exit-info" in trace:
+        reason = "?"
+        signame = "?"
+        m = re.search(r"EXIT-INFO reason=(\S+)", trace)
+        if m:
+            reason = m.group(1)
+        m = re.search(r"status=\d+ \(([^)]+)\)", trace)
+        if m:
+            signame = m.group(1)
+        return f"EXIT::{reason}::{signame}"
     # ANR
     if "thread=anr-watchdog" in trace:
         m = re.search(
@@ -261,6 +275,7 @@ def crash_stats(
             "freeze":    kind_total.get("freeze", 0),
             "playback":  kind_total.get("playback_telemetry", 0),
             "diagnostic": kind_total.get("diagnostic", 0),
+            "exit_info": kind_total.get("exit_info", 0),
             "other":     kind_total.get("other", 0),
         },
         "today_vs_yesterday": {
@@ -278,7 +293,7 @@ def crash_stats(
 @admin_router.get("/top")
 def crash_top(
     days: int = Query(1, ge=1, le=14),
-    kind: str = Query("anr", regex=r"^(anr|crash|freeze|all)$"),
+    kind: str = Query("anr", regex=r"^(anr|crash|freeze|exit_info|all)$"),
     limit: int = Query(20, ge=1, le=100),
     user: str = Query("", description="Filter by Xtream username (case-insensitive substring)"),
     x_admin_token: Optional[str] = Header(None),
@@ -332,7 +347,7 @@ def crash_top(
 @admin_router.get("/recent")
 def crash_recent(
     days: int = Query(1, ge=1, le=14),
-    kind: str = Query("all", regex=r"^(anr|crash|freeze|playback_telemetry|diagnostic|other|all)$"),
+    kind: str = Query("all", regex=r"^(anr|crash|freeze|playback_telemetry|diagnostic|exit_info|other|all)$"),
     limit: int = Query(50, ge=1, le=500),
     user: str = Query("", description="Filter by Xtream username (case-insensitive substring)"),
     x_admin_token: Optional[str] = Header(None),
@@ -398,8 +413,10 @@ def crash_user(
             "anr":    by_kind.get("anr", 0),
             "crash":  by_kind.get("crash", 0),
             "freeze": by_kind.get("freeze", 0),
+            "exit_info": by_kind.get("exit_info", 0),
             "other":  sum(by_kind.values()) - by_kind.get("anr", 0)
-                      - by_kind.get("crash", 0) - by_kind.get("freeze", 0),
+                      - by_kind.get("crash", 0) - by_kind.get("freeze", 0)
+                      - by_kind.get("exit_info", 0),
         },
         "first_seen": timestamps[0] if timestamps else None,
         "last_seen":  timestamps[-1] if timestamps else None,

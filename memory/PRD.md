@@ -1,3 +1,111 @@
+## v1.44.120 (Canada channel) — Diagnostic: ApplicationExitInfo capture — 2026-02-21
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (25.3 MB)
+- **Manifest**: https://hushtv.xyz/version-canada.json
+- **versionCode**: 520 / **versionName**: 1.44.120
+- **Build variant**: `assembleCanadaDebug` (no R8, no minification, applicationId `com.hushtv.tv.canada.debug` preserved)
+
+### Problem being diagnosed
+AFTSS 1 GB Fire Stick users (`19530123`, `irandall16`, `jamvan55@gmail.com`)
+reported silent app shutdowns on startup. Server-side crash audit showed
+**zero Java exceptions captured** for those users despite the app dying —
+the classic fingerprint of (a) kernel low-memory kill, (b) native crash
+inside ExoPlayer libavcodec.so / Coil bitmap decoder, or (c) OS signal
+kill. None of those reach Java land, so `Thread.setDefaultUncaughtExceptionHandler`
+is blind to them.
+
+### What landed (Option A — diagnostic-first)
+- **NEW `ExitInfoCollector.kt`** — wraps Android's first-party
+  `ApplicationExitInfo` API (API 30+) to capture post-mortem exit
+  reasons after each launch. Each abnormal exit (REASON_CRASH_NATIVE,
+  REASON_LOW_MEMORY, REASON_SIGNALED, REASON_ANR, REASON_CRASH,
+  REASON_INITIALIZATION_FAILURE, REASON_EXCESSIVE_RESOURCE_USAGE,
+  REASON_PERMISSION_CHANGE) is serialised into a structured payload
+  containing reason name, POSIX signal name (SIGSEGV / SIGABRT / …),
+  PSS + RSS at moment of death, importance level, OS-attached native
+  tombstone or main-thread dump, plus a memory snapshot (memoryClass,
+  isLowRamDevice, availMem, lowMemThreshold). Uploaded to the existing
+  `/crash/submit/<token>` endpoint with `kind="exit_info"`.
+- **Watermark dedup** — SharedPreferences-backed high-watermark on
+  exit timestamps so each exit is only ever reported once.
+- **Noise filter** — user-requested exits, package updates, dependency
+  deaths, and normal lifecycle shutdowns are filtered out so the
+  signal-to-noise ratio stays high.
+- **No-op on API < 30** (Fire OS 7 / Android 9) — those devices fall
+  back to the existing crash.log / anr.log pipeline. ApplicationExitInfo
+  doesn't exist there.
+- **CrashReporter enhancement** — every existing crash / ANR / freeze /
+  diagnostic payload now carries the same memory snapshot fields so
+  support can correlate freezes with low-memory state at a glance.
+
+### Server side
+- `crash_monitor.py`:
+  - `_classify_kind()` recognises `kind=exit_info` (explicit + via
+    `thread=exit-info` header for forward-compat).
+  - `_signature()` groups exit-info reports as `EXIT::<REASON>::<SIGNAL>`
+    so the admin sees "EXIT::CRASH_NATIVE::SIGSEGV" or
+    "EXIT::LOW_MEMORY::SIGKILL" as a single signature.
+  - `/api/admin/canada/crashes/stats` returns a new `totals.exit_info`
+    bucket.
+  - `/api/admin/canada/crashes/recent?kind=exit_info` and
+    `/api/admin/canada/crashes/top?kind=exit_info` accept the new kind.
+- 7 new pytests in `tests/test_crash_monitor_exit_info.py` covering
+  classification, signature grouping, stats roll-up, and endpoint
+  regex acceptance. Full sync_server suite (44 tests) green.
+
+### Admin UI (`/admin → Crashes & ANR Monitor`)
+- New fuchsia summary tile **"EXIT-INFO · NATIVE / OOM"** with
+  "ApplicationExitInfo · v1.44.120+" subtitle.
+- New **Exit-info** filter pill in the Top Signatures section.
+- Exit-info kind chip renders fuchsia in the recent reports table.
+
+### Live URLs verified
+- `https://hushtv.xyz/version-canada.json` → v1.44.120 / 520
+- `https://hushtv.xyz/hushtv-canada.apk` → 25.3 MB, fresh Last-Modified
+- `https://hushtv.xyz/api/admin/canada/crashes/stats?days=1` → returns
+  `totals.exit_info: <count>` (currently 0 — clients haven't shipped yet)
+- End-to-end smoke test: POST'd a synthetic `kind=exit_info, reason=LOW_MEMORY, status=9` →
+  showed up in `/recent?kind=exit_info` as `EXIT::LOW_MEMORY::SIGKILL` →
+  grouped in `/top?kind=exit_info` as `x1` → admin UI tile incremented.
+  Test reports cleaned up afterwards.
+
+### Files touched
+- **NEW** `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/ExitInfoCollector.kt`
+- **NEW** `/app/sync_server/tests/test_crash_monitor_exit_info.py`
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushTVApp.kt` (wired collector into onCreate)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/CrashReporter.kt` (memory snapshot fields)
+- MODIFIED `/app/androidtv/app/build.gradle.kts` (versionCode 520 / versionName 1.44.120)
+- MODIFIED `/app/sync_server/crash_monitor.py` (exit_info classification + signature + endpoints)
+- MODIFIED `/app/_buildenv/canada_admin.html` (fuchsia tile + filter pill + chip color)
+- MODIFIED `/app/_buildenv/version-canada.json` (520 / 1.44.120 + changelog)
+- DEPLOYED to 66.163.113.147:
+  - `/var/www/hushtv/hushtv-canada.apk`
+  - `/var/www/hushtv/version-canada.json`
+  - `/var/www/hushtv/admin.html`
+  - `/opt/hushtv-sync/crash_monitor.py`
+  - `systemctl restart hushtv-sync` → active
+
+### Next session — what to watch
+Once a few AFTSS users OTA-update to v1.44.120 and trigger another
+silent shutdown, the new fuchsia tile on the admin dashboard will
+populate. Look at `EXIT::<REASON>::<SIGNAL>` grouping:
+- **`EXIT::CRASH_NATIVE::SIGSEGV`** → confirms native crash inside
+  libavcodec / Coil. Pull the tombstone from the trace, identify the
+  faulting `.so`, and either disable that codec path on low-RAM devices
+  or upgrade the underlying lib.
+- **`EXIT::LOW_MEMORY::SIGKILL`** → confirms kernel OOM kill. Look at
+  `pss` / `rss` at time of death — if `pss > ~150 MB` on a 96 MB
+  memoryClass device, we need more aggressive memory trimming
+  (Option B Phase 2 — defer Discovery TMDB preloads, drop Coil cache
+  further, possibly skip the Discovery rail entirely on AFTSS).
+- **`EXIT::ANR::*`** → ANR-watchdog should already cover this, but
+  if exit_info catches them and our `anr.log` doesn't, there's a
+  watchdog gap to fix.
+
+---
+
+
 ## v1.44.105-debug (Canada channel) — Shipped 2026-02-19
 
 ### Release

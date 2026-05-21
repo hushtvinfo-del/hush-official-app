@@ -534,6 +534,11 @@
           <div class="text-[10px] uppercase tracking-wider text-slate-400">Freeze (window)</div>
           <div class="text-2xl font-bold mt-1" id="cm-tot-freeze">…</div>
         </div>
+        <div class="rounded-lg border border-fuchsia-700/40 bg-fuchsia-900/15 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-fuchsia-300">Exit-info · native / OOM</div>
+          <div class="text-2xl font-bold mt-1 text-fuchsia-300" id="cm-tot-exit" data-testid="cm-tot-exit">…</div>
+          <div class="text-[10px] text-fuchsia-400/70 mt-0.5">ApplicationExitInfo · v1.44.120+</div>
+        </div>
         <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
           <div class="text-[10px] uppercase tracking-wider text-slate-400">All reports (window)</div>
           <div class="text-2xl font-bold mt-1" id="cm-tot-all">…</div>
@@ -579,6 +584,7 @@
             <button onclick="setCmKind('anr')"   id="cm-kind-anr"   class="rounded-sm bg-rose-500/20 text-rose-300 px-3 py-1 text-xs font-bold">ANR</button>
             <button onclick="setCmKind('crash')" id="cm-kind-crash" class="rounded-sm text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">Crash</button>
             <button onclick="setCmKind('freeze')" id="cm-kind-freeze" class="rounded-sm text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">Freeze</button>
+            <button onclick="setCmKind('exit_info')" id="cm-kind-exit_info" class="rounded-sm text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">Exit-info</button>
             <button onclick="setCmKind('all')"    id="cm-kind-all"   class="rounded-sm text-slate-400 hover:text-slate-200 px-3 py-1 text-xs">All</button>
           </div>
         </div>
@@ -1368,6 +1374,7 @@ function renderCmStats(d) {
   $("cm-tot-anr").textContent    = (t.anr    || 0).toLocaleString();
   $("cm-tot-crash").textContent  = (t.crash  || 0).toLocaleString();
   $("cm-tot-freeze").textContent = (t.freeze || 0).toLocaleString();
+  $("cm-tot-exit").textContent   = (t.exit_info || 0).toLocaleString();
   $("cm-tot-all").textContent    = (t.all    || 0).toLocaleString();
   const tv = d.today_vs_yesterday || {};
   function fmtDelta(elTodayId, elYestId, elDeltaId, side) {
@@ -1433,7 +1440,7 @@ function renderCmBreakdown(elId, rows, keyName) {
 
 function setCmKind(k) {
   window._cmKind = k;
-  ["anr","crash","freeze","all"].forEach(x => {
+  ["anr","crash","freeze","exit_info","all"].forEach(x => {
     const b = $("cm-kind-" + x);
     if (!b) return;
     if (x === k) {
@@ -1490,6 +1497,7 @@ async function loadCmRecent() {
       const kindColor = r.kind === "anr"   ? "bg-rose-500/20 text-rose-300" :
                         r.kind === "crash" ? "bg-amber-500/20 text-amber-300" :
                         r.kind === "freeze" ? "bg-slate-700 text-slate-300" :
+                        r.kind === "exit_info" ? "bg-fuchsia-500/20 text-fuchsia-300" :
                                               "bg-slate-800 text-slate-500";
       const userCell = r.xtream_username
         ? `<span class="text-cyan-300 font-mono cursor-pointer hover:underline" onclick="document.getElementById('cm-user-search').value='${escAttr(r.xtream_username)}'; onCmUserSearchInput();">${escapeHtml(r.xtream_username)}</span>`

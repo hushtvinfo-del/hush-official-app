@@ -387,6 +387,23 @@ object CrashReporter {
                 }
                 put("playlist_count", playlists.size.toString())
             }
+            // v1.44.120 — attach a memory snapshot so the admin can see
+            // memory class + low-RAM flag + available memory at the
+            // moment of crash. Critical for correlating the AFTSS /
+            // AFTKM 1 GB Fire Stick silent-shutdown bug — those devices
+            // report memoryClass=96 and the snapshot tells us whether
+            // the system was already in `lowMemory` state.
+            runCatching {
+                val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                val mi = android.app.ActivityManager.MemoryInfo()
+                am.getMemoryInfo(mi)
+                put("memory_class_mb", am.memoryClass.toString())
+                put("is_low_ram_device", am.isLowRamDevice.toString())
+                put("avail_mem_mb", (mi.availMem / (1024 * 1024)).toString())
+                put("total_mem_mb", (mi.totalMem / (1024 * 1024)).toString())
+                put("low_mem_threshold_mb", (mi.threshold / (1024 * 1024)).toString())
+                put("low_memory_flag", mi.lowMemory.toString())
+            }
             put("trace", safeTrace)
         }
     }

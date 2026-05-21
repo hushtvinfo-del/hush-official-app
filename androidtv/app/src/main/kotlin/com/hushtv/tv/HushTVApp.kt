@@ -51,6 +51,14 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // If a crash was captured during the last session, POST it to
         // the server in the background. Silent-no-op if nothing's new.
         com.hushtv.tv.data.CrashReporter.uploadIfPending(this)
+        // v1.44.120 — post-mortem capture for silent app shutdowns
+        // (kernel OOM kills, native SIGSEGV in libavcodec / Coil
+        // bitmap decoder, signal kills). Uses Android's first-party
+        // ApplicationExitInfo API (API 30+) so no NDK / native code
+        // is needed. No-op on Fire OS 7 (Android 9). Closes the
+        // diagnostic gap that hid AFTSS 1 GB Fire Stick startup
+        // crashes from `19530123`, `irandall16`, `jamvan55@gmail.com`.
+        com.hushtv.tv.data.ExitInfoCollector.collect(this)
         // v1.44.54 — load the themed-pack bundle from APK assets so
         // any "extra" Moods & Themes rows are merged into
         // HushThemedLists.all on the first composition. Cheap
