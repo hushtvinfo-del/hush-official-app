@@ -822,6 +822,20 @@
 const BASE = "/api/admin/canada";
 const $ = (id) => document.getElementById(id);
 
+// v1.44.120 — Some password managers store the admin URL as
+// `https://user:pass@hushtv.xyz/admin`. When Chrome resolves a
+// relative fetch() URL against that document URL, the resulting
+// URL carries `user:pass@…` in its userinfo and `new Request()`
+// rejects it with:
+//   "Failed to execute 'fetch' on 'Window': Request cannot be
+//    constructed from a URL that includes credentials"
+// Prefix every API call with `location.origin` so the resolved
+// URL has no userinfo — credentials still travel as the
+// Authorization header (cached by the browser after the Basic
+// Auth dialog) so authentication keeps working.
+const ORIGIN = location.origin;
+function abs(path) { return ORIGIN + path; }
+
 function fmtDate(ms) {
   if (!ms) return "—";
   return new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
@@ -843,7 +857,7 @@ function toast(msg, type="info") {
 }
 
 async function api(method, path, body) {
-  const r = await fetch(BASE + path, {
+  const r = await fetch(abs(BASE + path), {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
@@ -857,7 +871,7 @@ async function api(method, path, body) {
   return r.json();
 }
 async function publicApi(path) {
-  const r = await fetch("/api/canada" + path);
+  const r = await fetch(abs("/api/canada" + path));
   if (!r.ok) throw new Error("HTTP " + r.status);
   return r.json();
 }
@@ -865,7 +879,7 @@ async function publicApi(path) {
 // ── Demo recordings (v1.44.90) — separate base path ──
 const DEMO_BASE = "/api/admin/demo";
 async function apiDemo(method, path, body) {
-  const r = await fetch(DEMO_BASE + path, {
+  const r = await fetch(abs(DEMO_BASE + path), {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
@@ -1364,7 +1378,7 @@ async function loadCrashes() {
 // auto-includes Basic Auth credentials on same-origin fetch requests
 // because the page itself is Basic-Auth-protected by nginx.
 async function apiGetCm(path) {
-  const r = await fetch(path, { credentials: "include" });
+  const r = await fetch(abs(path), { credentials: "include" });
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
   return r.json();
 }
@@ -2065,7 +2079,7 @@ async function loadOrders() {
 
 // ── boot ──
 $("i-username").addEventListener("keydown", e => { if (e.key === "Enter") doLookup(); });
-fetch("/api/canada/health").then(r => r.json()).then(d => {
+fetch(abs("/api/canada/health")).then(r => r.json()).then(d => {
   $("server-amount").textContent = "$" + (d.expected_amount_cad ?? "?");
 }).catch(() => $("server-amount").textContent = "$?");
 loadStats();
