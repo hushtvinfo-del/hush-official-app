@@ -16,8 +16,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 516
-        versionName = "1.44.116"
+        versionCode = 517
+        versionName = "1.44.117"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -306,7 +306,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.navigation:navigation-compose:2.8.1")
+    implementation("androidx.navigation:navigation-compose:2.8.5")
 
     // Media3 (ExoPlayer) — HLS + UI
     implementation("androidx.media3:media3-exoplayer:1.4.1")
