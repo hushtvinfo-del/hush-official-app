@@ -1,6 +1,11 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    // v1.44.114 — KSP code generator. Activates the existing
+    // @JsonClass(generateAdapter = true) annotations on every Moshi
+    // model in this module so adapters are baked in at compile time
+    // (no runtime kotlin-reflect → no global-lock ANR on Fire Stick).
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -11,8 +16,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 513
-        versionName = "1.44.113"
+        versionCode = 514
+        versionName = "1.44.114"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -324,6 +329,12 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.moshi:moshi:1.15.1")
     implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
+    // v1.44.114 — compile-time adapter generator for @JsonClass models.
+    // Without this, every JSON parse falls back to kotlin-reflect's
+    // RuntimeTypeMapper which holds a global lock for 2-5 s on Fire
+    // Stick first-call → main-thread ANR. Generating adapters at
+    // compile time eliminates that path entirely.
+    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1")
 
     // Image loading
     implementation("io.coil-kt:coil-compose:2.7.0")

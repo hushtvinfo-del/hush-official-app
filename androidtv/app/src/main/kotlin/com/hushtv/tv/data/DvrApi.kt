@@ -130,16 +130,16 @@ object DvrApi {
     )
 
     @JsonClass(generateAdapter = true)
-    private data class EventsEnvelope(
+    internal data class EventsEnvelope(
         val events: List<Event> = emptyList(),
         val now: Long = 0L,
     )
 
     @JsonClass(generateAdapter = true)
-    private data class ScheduledEnvelope(val scheduled: List<Scheduled> = emptyList())
+    internal data class ScheduledEnvelope(val scheduled: List<Scheduled> = emptyList())
 
     @JsonClass(generateAdapter = true)
-    private data class PassesEnvelope(val season_passes: List<SeasonPass> = emptyList())
+    internal data class PassesEnvelope(val season_passes: List<SeasonPass> = emptyList())
 
     @JsonClass(generateAdapter = true)
     data class XtreamCreds(
@@ -150,7 +150,7 @@ object DvrApi {
     )
 
     @JsonClass(generateAdapter = true)
-    private data class ScheduleBody(
+    internal data class ScheduleBody(
         val user_id: String,
         val channel_url: String,
         val channel_name: String,
@@ -171,7 +171,7 @@ object DvrApi {
     )
 
     @JsonClass(generateAdapter = true)
-    private data class SeasonPassBody(
+    internal data class SeasonPassBody(
         val user_id: String,
         val series_title: String,
         val poster: String,
@@ -183,10 +183,10 @@ object DvrApi {
     )
 
     @JsonClass(generateAdapter = true)
-    private data class RecordingsEnvelope(val recordings: List<Recording> = emptyList())
+    internal data class RecordingsEnvelope(val recordings: List<Recording> = emptyList())
 
     @JsonClass(generateAdapter = true)
-    private data class RecordNowBody(
+    internal data class RecordNowBody(
         val user_id: String,
         val channel_url: String,
         val channel_name: String,

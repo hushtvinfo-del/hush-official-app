@@ -40,7 +40,7 @@ data class EpgProgram(
 }
 
 @JsonClass(generateAdapter = true)
-private data class EpgEntryRaw(
+internal data class EpgEntryRaw(
     val id: String? = null,
     val title: String = "",
     val description: String = "",
@@ -52,7 +52,7 @@ private data class EpgEntryRaw(
 )
 
 @JsonClass(generateAdapter = true)
-private data class EpgResponse(
+internal data class EpgResponse(
     val epg_listings: List<EpgEntryRaw>? = emptyList()
 )
 

@@ -101,16 +101,16 @@ object HushXxxApi {
     )
 
     @JsonClass(generateAdapter = true)
-    private data class ScenesEnvelope(val scenes: List<Scene> = emptyList())
+    internal data class ScenesEnvelope(val scenes: List<Scene> = emptyList())
 
     @JsonClass(generateAdapter = true)
-    private data class CategoriesEnvelope(val categories: List<Category> = emptyList())
+    internal data class CategoriesEnvelope(val categories: List<Category> = emptyList())
 
     @JsonClass(generateAdapter = true)
-    private data class PerformersEnvelope(val performers: List<Performer> = emptyList())
+    internal data class PerformersEnvelope(val performers: List<Performer> = emptyList())
 
     @JsonClass(generateAdapter = true)
-    private data class StudiosEnvelope(val studios: List<Studio> = emptyList())
+    internal data class StudiosEnvelope(val studios: List<Studio> = emptyList())
 
     @JsonClass(generateAdapter = true)
     data class SearchResult(

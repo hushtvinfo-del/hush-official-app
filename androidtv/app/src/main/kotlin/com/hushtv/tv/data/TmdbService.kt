@@ -404,7 +404,7 @@ object TmdbService {
     )
 
     @JsonClass(generateAdapter = true)
-    private data class PersonCreditsResp(
+    internal data class PersonCreditsResp(
         val id: Int = 0,
         val cast: List<PersonCredit> = emptyList(),
     )
