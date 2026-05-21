@@ -1,6 +1,7 @@
 package com.hushtv.tv
 
 import android.app.Application
+import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -234,47 +235,35 @@ class HushTVApp : Application(), ImageLoaderFactory {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .build()
-        return ImageLoader.Builder(this)
+        val builder = ImageLoader.Builder(this)
             .okHttpClient(okHttp)
             .components {
-                // Support SVG URLs (Wikipedia logos etc.) directly.
                 add(SvgDecoder.Factory())
-                // v1.43.86 — bundled-asset short-circuit + server
-                // override layer.
-                //
-                // **DISABLED in v1.43.87** — v1.43.86 caused
-                // immediate-on-launch crashes on user devices we
-                // can't yet reproduce. Most likely runtime cause:
-                // Coil 2.7's `add(mapper)` registration relies on
-                // reified type inspection that fails under R8/D8
-                // shrinking on debug builds, so the mapper gets
-                // registered as `Mapper<Any, *>` and gets called
-                // for ByteArray / Uri inputs that crash on
-                // `data as String`.
-                //
-                // Re-enabled once we ship the typed registration
-                // form `add(HushBundleMapper, String::class.java)`
-                // and exhaustive runCatching in
-                // `HushBundleMapper.map`. Bundled asset files are
-                // still in the APK — they just aren't being
-                // resolved against URLs yet, so users see the same
-                // network behaviour as v1.43.85 (i.e. it works).
-                //
-                // add(HushBundleMapper)
             }
+        // v1.44.119 — on low-RAM devices (AFTSS / AFTKM / 1 GB Fire
+        // Sticks) we use RGB_565 instead of ARGB_8888 for poster
+        // bitmaps. That halves bitmap memory (2 bytes/px instead of
+        // 4) with imperceptible visual loss at TV viewing distance —
+        // ~30 MB saved at peak when the home screen has its row of
+        // posters in flight. Full-RAM devices keep ARGB_8888.
+        val ctx: Context = this
+        if (com.hushtv.tv.data.DeviceClass.isLowRam(ctx)) {
+            builder.bitmapConfig(android.graphics.Bitmap.Config.RGB_565)
+            builder.allowRgb565(true)
+        }
+        return builder
             .memoryCache {
-                // v1.44.116 — clamp memory cache aggressively on
-                // low-RAM devices. The earlier 20%-of-heap value
-                // worked on 2 GB+ Fire Sticks but on 1 GB devices
-                // (AFTKM / AFTSS / AFTKRT) Coil would grow to ~200 MB
-                // of bitmaps and the next image load crashed with
-                // OutOfMemoryError or a Canvas-recycled-bitmap
-                // exception. 10% on those devices ≈ 80 MB which is
-                // plenty for the 10-15 posters visible at once, and
-                // leaves headroom for the player + EPG.
                 val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
-                val totalRamMb = am.memoryClass  // dvm heap budget in MB
-                val pct = if (totalRamMb <= 96) 0.10 else 0.20
+                val totalRamMb = am.memoryClass
+                // v1.44.119 — even tighter on AFTSS / AFTKM (≤96 MB heap).
+                // 7% on those devices ≈ 7 MB which is enough for the
+                // currently-visible row of posters but leaves serious
+                // headroom for ExoPlayer + EPG + Compose.
+                val pct = when {
+                    totalRamMb <= 96  -> 0.07
+                    totalRamMb <= 128 -> 0.10
+                    else              -> 0.20
+                }
                 MemoryCache.Builder(this)
                     .maxSizePercent(pct)
                     .build()

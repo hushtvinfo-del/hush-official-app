@@ -177,6 +177,19 @@ private fun buildCardsFromCache(
 
 /** Fire-and-forget Coil prefetch — warms the disk cache for each URL. */
 private fun prefetchAll(ctx: android.content.Context, urls: List<String>) {
+    // v1.44.119 — on low-RAM devices (AFTSS / AFTKM, 1 GB total)
+    // we DO NOT prefetch the full backdrop set. Backdrops at w1280
+    // are ~3.5 MB ARGB bitmaps each, and prefetching the rotation
+    // pool pushed the home screen over the kernel-OOM cliff.
+    //
+    // Trade-off: the first backdrop swap (when the user focuses a
+    // discovery card) now triggers a network fetch + decode that
+    // takes 200-500 ms. Subsequent swaps stay snappy because the
+    // bitmap goes into Coil's memory cache. Acceptable on the few
+    // devices that hit this path; not visible on full-RAM Fire TVs.
+    if (com.hushtv.tv.data.DeviceClass.isLowRam(ctx)) {
+        return
+    }
     val loader = ctx.imageLoader
     urls.forEach { url ->
         val req = ImageRequest.Builder(ctx).data(url).build()

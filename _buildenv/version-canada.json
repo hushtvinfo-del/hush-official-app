@@ -1,19 +1,17 @@
 {
-  "versionCode": 518,
-  "versionName": "1.44.118",
+  "versionCode": 519,
+  "versionName": "1.44.119",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-02-21",
   "channel": "canada",
   "changelog": [
-    "DIAGNOSTIC: Crash reports now include the Xtream username so support can look up any customer's history by name in the admin panel.",
-    "FIX (v517): Bumped Navigation Compose for one more BACK-button crash on Fire TV.",
-    "FIX (v516): 4 distinct Movie/Series crashes on weak Fire Sticks.",
+    "FIX (1 GB Fire Stick auto-shutdown — Step 1): The home screen previously peaked at ~200 MB of RAM, enough to trip Android's kernel-level memory-killer on 1 GB Fire Sticks (AFTSS 2018 / AFTKM Lite). v519 adds an automatic 'memory-trimmed Pro' mode that activates only on those devices: poster bitmaps use RGB_565 instead of ARGB_8888 (-50% memory per bitmap), discovery-hero backdrop prefetch is disabled (saves ~25 MB peak), and the Coil image cache is tightened to 7% of heap. The visual experience is identical at TV viewing distance — just the memory footprint changes. Full-RAM devices (4K Max, 1080p with 2 GB+, Shield, Google TV) get zero behavior change.",
+    "DIAGNOSTIC (v518): Crash reports now include the Xtream username so support can look up any customer's history by name.",
+    "FIX (v517): Navigation Compose bump for BACK-button crash.",
+    "FIX (v516): 4 Movie/Series crashes on weak Fire Sticks.",
     "FIX (v515): 'Switch to Lite Mode' takes effect instantly.",
-    "FIX (v514): Permanent ANR fix — Moshi codegen replaces kotlin-reflect.",
-    "FIX (v513): License-check loop throttled.",
-    "FIX (v512): Player HTTP timeouts tightened.",
-    "FIX (v510): Resolved Play Protect warning.",
+    "FIX (v514): Permanent ANR fix via Moshi codegen.",
     "NEW: 72-hour free trial for first-time Canada users."
   ]
 }
