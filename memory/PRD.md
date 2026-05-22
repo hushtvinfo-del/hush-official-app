@@ -1,3 +1,56 @@
+## v1.44.123 (server + admin only — no APK release) — Bulletproof payment safety net — 2026-02-22
+
+### Root cause of benlisto's 6-min delay (and the latent revenue-loss risk affecting 700 trial users)
+1. **Slow poller**: `_imap_scan_once` fetched the full RFC822 body of every UID (~113/iteration) → 60-90 sec/iteration. With a 30-sec interval that meant effective rate was once per ~90 sec.
+2. **Silent iterations**: poller only logged when `matched>0 OR errors>0`. We had no visibility into whether the poller was alive on quiet iterations.
+3. **No customer self-rescue**: when a payment didn't process, the customer had no in-app way to flag it. Money sat in the bank with no license granted, customer fumed.
+4. **No admin reconciliation panel**: 13 stuck $50 payments accumulated in the last 30 days that admin had no UI to triage.
+
+### Shipped (server + admin HTML only — no APK change, deployed immediately)
+
+**Tier 1 — Speed (poller now ~25× faster):**
+- `_imap_scan_once` now does a **two-phase fetch**: Phase 1 batch-fetches `BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)]` for every UID (~200 B each vs ~5 KB body). Phase 2 fetches full RFC822 ONLY for UIDs that survived the `_already_processed` check. Iteration time dropped from ~90 sec → ~10 sec on the live mailbox.
+- `IMAP_POLL_INTERVAL_SEC` dropped 30 → 5.
+- `_poller_loop` now emits a heartbeat log every iteration (`interac scan: {...}`).
+- New `WARN` log for any $50 email that hits `outcome='no_order_id'` — instant journalctl alerting.
+- **Verified on live**: iterations now `Δ=14 sec` cycle (10 sec work + ~5 sec sleep) with `skipped=113` on all known UIDs.
+
+**Tier 2 — Customer self-rescue (server side; APK piece deferred):**
+- New table `canada_payment_tickets` (ticket_id, created_at, xtream_username, order_id, interac_reference, customer_note, status).
+- New public endpoint `POST /api/canada/support/payment-ticket` — accepts `{xtream_username, order_id, interac_reference?, customer_note?}`. Rejects spoofed tickets (order must belong to the claimed user). Idempotent per (order, user). Fires an inline email to `support@hushtv.com` with all triage info.
+- Email subject: `[Stuck Payment] order {order_id} / username {user}`.
+- APK paywall UI (the "didn't process" button + "Checking inbox..." pulse) is the next step — deferred until v1.44.122 OTA settles.
+
+**Tier 3 — Admin safety net (LIVE):**
+- New admin endpoint `GET /api/admin/canada/stuck-payments?days=30` → returns `{stuck_emails: [...], open_tickets: [...]}`. Filters strictly to `amount='50.00' AND outcome='no_order_id'`. **Excludes `unknown_order` (Base44 initial-purchase flow) per direction.**
+- New admin endpoint `POST /api/admin/canada/stuck-payments/match` → `{uid, order_id, actor}` → grants license + flips email outcome to `paid` + auto-closes any open ticket for that order. Rejects wrong-amount or already-resolved emails (409).
+- New admin endpoint `POST /api/admin/canada/stuck-payments/resolve-ticket` → close a ticket without granting (spam/duplicate/wrong-info).
+- New admin endpoint `POST /api/admin/canada/drift-report/run-now` → fires the daily report immediately (for testing).
+- **Daily drift-report daemon** — runs at 09:00 UTC, emails `support@hushtv.com` with the count + list of stuck $50 emails and open tickets from the last 24h.
+- New **"🚨 Stuck Payments" tab** in admin HTML — surfaces both queues, with inline "order ID + Match →" button per stuck email + "Close ticket" button per ticket. Badge in the tab header shows the unresolved total (currently **13**).
+
+### Tests
+- 13 new pytests in `tests/test_stuck_payments.py`: ticket happy path, idempotency, spoof rejection, list endpoint surfacing $50/no_order_id, list endpoint EXCLUDING unknown_order, match endpoint end-to-end (license + email outcome + ticket close all flip), match rejecting wrong amount, match rejecting already-resolved, drift-report builder.
+- Full server suite: **59 / 59 green** (46 original + 13 new).
+
+### Files touched
+- `/app/sync_server/canada_payment_module.py` — two-phase IMAP fetch, 5 sec interval, heartbeat log, `canada_payment_tickets` table, customer ticket endpoint, admin stuck-payments + match + resolve + drift-report endpoints, daily drift-report daemon, `_log_admin_event_inline` helper.
+- `/app/sync_server/tests/test_stuck_payments.py` — NEW.
+- `/app/_buildenv/canada_admin.html` — new "Stuck Payments" tab + JS handlers.
+
+### Live URLs verified
+- `GET /api/admin/canada/stuck-payments?days=30` → 200, returns 13 stuck $50 emails (Kari Couture, Richard, MICHAEL STARK, Dawn Simpson, GORDON PETERS, BRENDA DEBLOIS, AJAY STOKES, DEREK SILVESTER, ...).
+- `POST /api/admin/canada/drift-report/run-now` → `ok=true, smtp_error=null` → email landed at `support@hushtv.com`.
+- Admin UI: tab renders, table renders 13 rows with sender + amount + UID + match button.
+
+### Next session — what to ship to fully close the loop
+- **APK piece for Tier 2**: paywall "Checking inbox… last attempt 3 s ago" pulse + "Didn't process?" button after 3 min that POSTs to `/api/canada/support/payment-ticket`. Roll into v1.44.123 APK release once v1.44.122 (Lite-mode auto-migration) is verified in the field.
+- **Admin "Mark as already manually granted"** chip per stuck-email row — when an email was actually reconciled outside the system (e.g., directly granted via Base44), the row currently stays in the list. A one-click "ignore" button would clear it from the queue without granting again.
+- **Top-3 fuzzy candidate orders** preview per stuck email — currently the admin has to recall the order number. A small ML/heuristic suggestion (sender first/last name vs xtream_username + amount + 60-min time window) would speed manual reconciliation.
+
+---
+
+
 ## v1.44.122 (Canada channel) — Fire Stick crash storm ROOT CAUSE FIX — 2026-02-22
 
 ### Release

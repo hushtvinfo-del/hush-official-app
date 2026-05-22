@@ -45,6 +45,7 @@
     <button data-tab="payments" data-testid="canada-tab-payments" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">💰 Payments</button>
     <button data-tab="approve" data-testid="canada-tab-approve" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">✓ Approve / Lookup</button>
     <button data-tab="orders" data-testid="canada-tab-orders" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">📋 Recent Orders</button>
+    <button data-tab="stuck" data-testid="canada-tab-stuck" class="tab-btn px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-rose-400 hover:text-rose-200 whitespace-nowrap">🚨 Stuck Payments <span id="stuck-tab-badge" class="ml-1 rounded-full bg-rose-500/30 text-rose-200 text-[10px] px-1.5 py-0.5 hidden"></span></button>
   </div>
 
   <!-- ─────────────────── REVENUE TAB ─────────────────── -->
@@ -766,6 +767,78 @@
           <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
         </tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────── STUCK PAYMENTS TAB (v1.44.123) ─────────────────── -->
+  <section id="tab-stuck" class="hidden space-y-6" data-testid="stuck-tab">
+    <div class="rounded-xl border border-rose-700/40 bg-rose-900/10 p-4">
+      <div class="flex items-start gap-3">
+        <div class="text-3xl">🚨</div>
+        <div class="flex-1">
+          <h2 class="text-lg font-bold text-rose-200">Stuck $50 Payments</h2>
+          <p class="text-sm text-rose-200/80 mt-1">
+            Every Interac e-transfer email that landed in <code>Hushtv.info@gmail.com</code> with amount
+            <strong>= $50.00 CAD</strong> but whose order ID our parser couldn't extract,
+            <strong>and</strong> every customer-submitted "my payment didn't work" ticket from the in-app paywall.
+            Filtered to <strong>last 30 days</strong>. <code>unknown_order</code> rows are intentionally
+            excluded — those belong to the Base44 initial-purchase flow.
+          </p>
+          <div class="flex gap-2 mt-3">
+            <button onclick="loadStuckPayments()" class="rounded-lg border border-rose-600 bg-rose-700/40 hover:bg-rose-700/60 px-4 py-1.5 text-sm font-semibold text-rose-100" data-testid="stuck-refresh">↻ Refresh</button>
+            <button onclick="runDriftReportNow()" class="rounded-lg border border-amber-600 bg-amber-700/30 hover:bg-amber-700/50 px-4 py-1.5 text-sm font-semibold text-amber-100" data-testid="stuck-drift-now">📧 Email daily report to support@hushtv.com</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stuck $50 emails table -->
+    <div>
+      <h3 class="text-sm font-bold uppercase tracking-wider text-slate-300 mb-2">
+        $50 emails with no extractable order ID
+        <span id="stuck-emails-count" class="text-rose-300">(0)</span>
+      </h3>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+            <tr>
+              <th class="text-left px-4 py-3">Received</th>
+              <th class="text-left px-4 py-3">Sender (from Interac email)</th>
+              <th class="text-left px-4 py-3">Amount</th>
+              <th class="text-left px-4 py-3">UID</th>
+              <th class="text-left px-4 py-3">Action</th>
+            </tr>
+          </thead>
+          <tbody id="stuck-emails-tbody" data-testid="stuck-emails-tbody">
+            <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Open customer tickets table -->
+    <div>
+      <h3 class="text-sm font-bold uppercase tracking-wider text-slate-300 mb-2">
+        Customer-reported stuck payments
+        <span id="stuck-tickets-count" class="text-amber-300">(0)</span>
+      </h3>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-800/70 text-xs uppercase tracking-wider text-slate-400">
+            <tr>
+              <th class="text-left px-4 py-3">Submitted</th>
+              <th class="text-left px-4 py-3">Xtream Username</th>
+              <th class="text-left px-4 py-3">Order ID</th>
+              <th class="text-left px-4 py-3">Interac Ref (customer claim)</th>
+              <th class="text-left px-4 py-3">Note</th>
+              <th class="text-left px-4 py-3">Action</th>
+            </tr>
+          </thead>
+          <tbody id="stuck-tickets-tbody" data-testid="stuck-tickets-tbody">
+            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -1591,7 +1664,7 @@ function escapeHtml(s) {
 
 
 // ── tab switching ──
-const TAB_IDS = ["revenue","licenses","trials","crashes","payments","approve","orders"];
+const TAB_IDS = ["revenue","licenses","trials","crashes","payments","approve","orders","stuck"];
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach(b => {
@@ -1608,6 +1681,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     if (k === "crashes")  loadCrashes();
     if (k === "payments") loadPayments();
     if (k === "orders")   loadOrders();
+    if (k === "stuck")    loadStuckPayments();
   });
 });
 
@@ -2097,8 +2171,126 @@ async function loadOrders() {
   }
 }
 
-// ── boot ──
-$("i-username").addEventListener("keydown", e => { if (e.key === "Enter") doLookup(); });
+// ── v1.44.123 STUCK PAYMENTS SAFETY NET ──────────────────────────
+// Loads the dual queue (auto-flagged $50 emails + customer tickets),
+// renders each with an inline "Match to order [X]" form, and on the
+// admin's click POSTs to /admin/canada/stuck-payments/match. Badges
+// the tab heading with the total count.
+async function loadStuckPayments() {
+  try {
+    const data = await api("GET", "/stuck-payments?days=30");
+    renderStuckEmails(data.stuck_emails || []);
+    renderStuckTickets(data.open_tickets || []);
+    const total = (data.stuck_emails_count || 0) + (data.open_tickets_count || 0);
+    const badge = $("stuck-tab-badge");
+    if (total > 0) {
+      badge.textContent = total;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+  } catch (e) {
+    $("stuck-emails-tbody").innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-rose-400">${e.message}</td></tr>`;
+    $("stuck-tickets-tbody").innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-rose-400">${e.message}</td></tr>`;
+  }
+}
+
+function renderStuckEmails(rows) {
+  $("stuck-emails-count").textContent = `(${rows.length})`;
+  if (rows.length === 0) {
+    $("stuck-emails-tbody").innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-emerald-500">✓ No unmatched $50 emails in the last 30 days. System healthy.</td></tr>`;
+    return;
+  }
+  $("stuck-emails-tbody").innerHTML = rows.map(e => {
+    // Escape sender name for safe insertion into HTML.
+    const senderText = (e.sender || "").replace(/</g, "&lt;");
+    return `<tr class="border-t border-slate-800 hover:bg-slate-800/30">
+      <td class="px-4 py-3 text-slate-400 text-xs">${fmtDate(e.processed_at)}</td>
+      <td class="px-4 py-3">${senderText}</td>
+      <td class="px-4 py-3 font-mono text-emerald-300">$${e.amount}</td>
+      <td class="px-4 py-3 font-mono text-slate-500 text-xs">${e.uid}</td>
+      <td class="px-4 py-3">
+        <div class="flex gap-1">
+          <input type="text" id="match-input-${e.uid}" placeholder="order ID" class="rounded bg-slate-800 border border-slate-600 px-2 py-1 text-xs font-mono w-28" data-testid="match-input-${e.uid}">
+          <button onclick="matchStuckEmail('${e.uid}')" class="rounded bg-emerald-600 hover:bg-emerald-500 px-3 py-1 text-xs font-bold text-white" data-testid="match-btn-${e.uid}">Match →</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function renderStuckTickets(rows) {
+  $("stuck-tickets-count").textContent = `(${rows.length})`;
+  if (rows.length === 0) {
+    $("stuck-tickets-tbody").innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-emerald-500">✓ No open customer tickets.</td></tr>`;
+    return;
+  }
+  $("stuck-tickets-tbody").innerHTML = rows.map(t => {
+    const note = (t.customer_note || "").replace(/</g, "&lt;");
+    const ref = (t.interac_reference || "").replace(/</g, "&lt;");
+    return `<tr class="border-t border-slate-800 hover:bg-slate-800/30">
+      <td class="px-4 py-3 text-slate-400 text-xs">${fmtDate(t.created_at)}</td>
+      <td class="px-4 py-3 font-mono text-cyan-300">${t.xtream_username}</td>
+      <td class="px-4 py-3 font-mono">${t.order_id}</td>
+      <td class="px-4 py-3 text-slate-400 text-xs">${ref || "—"}</td>
+      <td class="px-4 py-3 text-slate-400 text-xs">${note || "—"}</td>
+      <td class="px-4 py-3">
+        <button onclick="resolveTicket('${t.ticket_id}')" class="rounded bg-slate-700 hover:bg-slate-600 px-3 py-1 text-xs font-semibold text-slate-200" data-testid="resolve-ticket-${t.ticket_id}">Close ticket</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+async function matchStuckEmail(uid) {
+  const input = $(`match-input-${uid}`);
+  const orderId = (input?.value || "").trim();
+  if (!/^\d+$/.test(orderId)) {
+    toast("Enter the 8-digit order ID first", "error");
+    input?.focus();
+    return;
+  }
+  try {
+    const r = await api("POST", "/stuck-payments/match", {
+      uid, order_id: orderId, actor: "admin",
+    });
+    toast(`License granted to ${r.xtream_username} — order ${r.order_id} paid ✓`, "success");
+    await loadStuckPayments();
+    // Also refresh the revenue dashboard so the new payment shows up.
+    if (typeof loadStats === "function") loadStats();
+  } catch (e) {
+    toast(e.message, "error");
+  }
+}
+
+async function resolveTicket(ticketId) {
+  if (!confirm(`Close ticket ${ticketId} without granting a license?`)) return;
+  try {
+    await api("POST", "/stuck-payments/resolve-ticket", {
+      ticket_id: ticketId, actor: "admin",
+      resolution_note: "manually closed by admin",
+    });
+    toast("Ticket closed", "success");
+    await loadStuckPayments();
+  } catch (e) {
+    toast(e.message, "error");
+  }
+}
+
+async function runDriftReportNow() {
+  if (!confirm("Send the daily drift report to support@hushtv.com right now?")) return;
+  try {
+    const r = await api("POST", "/drift-report/run-now");
+    const s = r.stats || {};
+    toast(r.ok
+      ? `Drift report sent: ${s.stuck_emails || 0} stuck emails, ${s.open_tickets || 0} open tickets`
+      : `SMTP error: ${r.smtp_error || "unknown"}`,
+      r.ok ? "success" : "error");
+  } catch (e) {
+    toast(e.message, "error");
+  }
+}
+
+
 fetch(abs("/api/canada/health")).then(r => r.json()).then(d => {
   $("server-amount").textContent = "$" + (d.expected_amount_cad ?? "?");
 }).catch(() => $("server-amount").textContent = "$?");

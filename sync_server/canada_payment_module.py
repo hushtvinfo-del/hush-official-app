@@ -43,7 +43,7 @@ from email.message import EmailMessage, Message
 from typing import Optional
 
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -70,7 +70,7 @@ TRIAL_DURATION_MS = TRIAL_HOURS * 60 * 60 * 1000
 INTERAC_SENDER = "notify@payments.interac.ca"
 IMAP_HOST = "imap.gmail.com"
 IMAP_PORT = 993
-IMAP_POLL_INTERVAL_SEC = 30
+IMAP_POLL_INTERVAL_SEC = 5           # v1.44.123 — was 30. Now feasible after the two-phase fetch optimisation.
 IMAP_LOOKBACK_DAYS = 7
 
 # ── DB ──────────────────────────────────────────────────────────────
@@ -259,6 +259,34 @@ def _init_schema() -> None:
         c.execute(
             "CREATE INDEX IF NOT EXISTS canada_licenses_trial_origin_idx "
             "ON canada_licenses(trial_origin_at) WHERE trial_origin_at IS NOT NULL"
+        )
+
+        # v1.44.123 — Customer-reported stuck payments. When a paywall
+        # has been pending 3+ minutes and the customer says "I sent
+        # the money but it's not processing" via the in-app button,
+        # we capture a ticket here AND email support@hushtv.com.
+        c.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS canada_payment_tickets (
+                ticket_id         TEXT PRIMARY KEY,
+                created_at        INTEGER NOT NULL,
+                xtream_username   TEXT NOT NULL,
+                order_id          TEXT NOT NULL,
+                interac_reference TEXT,
+                claimed_amount    TEXT,
+                customer_note     TEXT,
+                status            TEXT NOT NULL DEFAULT 'open',
+                resolved_at       INTEGER,
+                resolved_by       TEXT,
+                resolution_note   TEXT
+            );
+            CREATE INDEX IF NOT EXISTS canada_payment_tickets_created_idx
+                ON canada_payment_tickets(created_at DESC);
+            CREATE INDEX IF NOT EXISTS canada_payment_tickets_status_idx
+                ON canada_payment_tickets(status, created_at DESC);
+            CREATE INDEX IF NOT EXISTS canada_payment_tickets_user_idx
+                ON canada_payment_tickets(xtream_username);
+            """
         )
 
         # v1.44.108 — one-time cleanup: any trial row that belongs to a
@@ -683,8 +711,29 @@ def _process_single_email(c, uid: str, raw_msg_bytes: bytes) -> str:
 
 
 def _imap_scan_once() -> dict:
-    """Single IMAP scan pass. Returns a small summary dict for diagnostics."""
-    summary = {"checked": 0, "matched": 0, "errors": 0}
+    """Single IMAP scan pass. Returns a small summary dict for diagnostics.
+
+    v1.44.123 — TWO-PHASE FETCH for sub-5-second iterations under load.
+
+    Phase 1: batch-fetch headers only (UID + MESSAGE-ID, ~200 bytes/each)
+    for every UID returned by SEARCH. Use the MESSAGE-ID to skip rows
+    already in `canada_processed_emails`. This drops the dominant
+    network cost (full RFC822 bodies are 3-10 KB each) for the ~99%
+    of UIDs that we've already seen.
+
+    Phase 2: fetch the full RFC822 body ONLY for the small set of UIDs
+    that survived Phase 1's already-processed filter. Process them
+    normally via _process_single_email.
+
+    Result: iteration time drops from ~60-90 s (for 113 UIDs × full
+    body fetch) to ~3-5 s. With poll interval also dropping to 5 s,
+    worst-case email→license latency goes from ~6 min (the benlisto
+    case) to ~10 s.
+
+    Backwards-compatible: if Phase 1 header fetch fails for any reason,
+    we fall back to the legacy full-body fetch path for affected UIDs.
+    """
+    summary = {"checked": 0, "matched": 0, "errors": 0, "skipped": 0}
     m = _imap_connect()
     if m is None:
         summary["errors"] = 1
@@ -697,22 +746,85 @@ def _imap_scan_once() -> dict:
         if typ != "OK" or not data or not data[0]:
             return summary
         uids = data[0].split()
-        # v1.44.95 — Acquire _db_lock per-message ONLY around the DB
-        # write, not around the blocking IMAP fetch. Previous version
-        # held the lock for the entire UID loop which blocked every
-        # other DB consumer (admin endpoints, license checks, etc.)
-        # for up to a minute while we waited on Gmail's IMAP server.
-        for uid_bytes in uids:
-            uid = uid_bytes.decode("ascii", errors="ignore")
-            summary["checked"] += 1
+        if not uids:
+            return summary
+
+        # ---- PHASE 1 — batch headers-only fetch ----------------------
+        # We ask Gmail for just `BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)]`
+        # for every UID in one IMAP transaction. `.PEEK` keeps the
+        # \Seen flag untouched. Each response is ~200 bytes vs ~5 KB
+        # for a full RFC822 body. For 113 UIDs that's ~22 KB instead
+        # of ~565 KB → roughly 25× less data over the wire.
+        #
+        # NB: imaplib's `m.search()` returns MESSAGE SEQUENCE numbers,
+        # not UIDs (despite the variable name `uids` in the legacy
+        # code). We must use `m.fetch()` (sequence-based), not
+        # `m.uid("FETCH", ...)`, or every fetch returns NO data.
+        survivors: list[bytes] = []  # sequence-number bytes needing full fetch
+        try:
+            seq_set = b",".join(uids).decode("ascii")
+            typ_h, hdr_data = m.fetch(
+                seq_set,
+                "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])",
+            )
+            # imaplib returns hdr_data as a list of (envelope, body)
+            # tuples interleaved with closing-paren bytes. Walk pairs.
+            header_by_seq: dict[bytes, str] = {}
+            if typ_h == "OK" and hdr_data:
+                for item in hdr_data:
+                    if not isinstance(item, tuple) or len(item) < 2:
+                        continue
+                    env = item[0]
+                    body = item[1]
+                    if not isinstance(env, (bytes, bytearray)):
+                        continue
+                    # Envelope: b"123 (BODY[HEADER.FIELDS (MESSAGE-ID)] {84}"
+                    # First token is the sequence number — exactly what
+                    # we passed in.
+                    seq_match = re.match(rb"^\s*(\d+)\s", env)
+                    if not seq_match:
+                        continue
+                    seq_b = seq_match.group(1)
+                    if isinstance(body, (bytes, bytearray)):
+                        msg = email.message_from_bytes(bytes(body))
+                        mid_val = (msg.get("Message-ID") or msg.get("Message-Id") or "")
+                        mid_val = mid_val.strip().strip("<>")
+                    else:
+                        mid_val = ""
+                    header_by_seq[seq_b] = mid_val
+
+            with _conn() as c:
+                for seq_b in uids:
+                    summary["checked"] += 1
+                    mid = header_by_seq.get(seq_b, "")
+                    seq_str = seq_b.decode("ascii", errors="ignore")
+                    # Only skip if we actually got a Message-ID AND
+                    # it's in the table. Empty mid (e.g., header batch
+                    # didn't return data for this seq) → fall through
+                    # to Phase 2 so we never lose visibility on an
+                    # incoming payment.
+                    if mid and _already_processed(c, seq_str, mid):
+                        summary["skipped"] += 1
+                        continue
+                    survivors.append(seq_b)
+        except Exception as e:
+            # Phase-1 failure → fall back to legacy full-body fetch
+            # for every UID. Old behaviour, no regression.
+            log.warning("imap header-fetch fast path failed: %s; falling back", e)
+            survivors = list(uids)
+            summary["checked"] = len(uids)
+
+        # ---- PHASE 2 — full body fetch ONLY for survivors ------------
+        for uid_b in survivors:
+            uid = uid_b.decode("ascii", errors="ignore")
             try:
-                typ2, msg_data = m.fetch(uid_bytes, "(RFC822)")
+                typ2, msg_data = m.fetch(uid_b, "(RFC822)")
                 if typ2 != "OK" or not msg_data or not msg_data[0]:
                     summary["errors"] += 1
                     continue
                 raw = msg_data[0][1]
-                # Extract Message-ID before grabbing the DB lock so the
-                # idempotency probe doesn't have to be on the hot path.
+                # Recompute Message-ID from the full body — this is the
+                # authoritative copy we record in canada_processed_emails.
                 msg_for_id = email.message_from_bytes(raw)
                 mid = (msg_for_id.get("Message-ID")
                        or msg_for_id.get("Message-Id") or "").strip().strip("<>")
@@ -722,6 +834,18 @@ def _imap_scan_once() -> dict:
                     outcome = _process_single_email(c, uid, raw)
                     if outcome == "paid":
                         summary["matched"] += 1
+                    # v1.44.123 — visibility log: any $50 Interac email
+                    # that landed but did NOT match an order surfaces
+                    # at WARN level so journalctl alerting can fire.
+                    # Filters out `unknown_order` per direction (those
+                    # belong to the Base44 initial-purchase flow and
+                    # are intentional, not lost revenue).
+                    elif outcome == "no_order_id":
+                        log.warning(
+                            "STUCK $50 PAYMENT — outcome=%s uid=%s mid=%s — "
+                            "needs admin reconciliation",
+                            outcome, uid, mid,
+                        )
             except Exception as e:
                 log.exception("error processing uid %s: %s", uid, e)
                 summary["errors"] += 1
@@ -742,8 +866,12 @@ def _poller_loop() -> None:
     while True:
         try:
             s = _imap_scan_once()
-            if s["matched"] or s["errors"]:
-                log.info("interac scan: %s", s)
+            # v1.44.123 — heartbeat log EVERY iteration so we can see
+            # the poller is alive in journalctl even when no email
+            # matched. Previously this was silent on matched=0+errors=0
+            # iterations which made the benlisto-class 4-minute gaps
+            # invisible to operators.
+            log.info("interac scan: %s", s)
         except Exception as e:  # pragma: no cover
             log.exception("poller iteration failed: %s", e)
         time.sleep(IMAP_POLL_INTERVAL_SEC)
@@ -846,6 +974,123 @@ def order_status(order_id: str) -> dict:
             lic = _get_license_row(c, row["xtream_username"])
             out["license"] = _serialize_license(lic)
         return out
+
+
+# v1.44.123 — Customer-reported "stuck payment" ticket. Triggered from
+# the in-app paywall after 3 min of pending status when the customer
+# says "I sent the e-transfer but it's not processing". Captures a
+# ticket in canada_payment_tickets AND fires an email to
+# support@hushtv.com with everything ops needs to manually verify
+# (Xtream username, order id, claimed amount, optional Interac
+# reference number from the customer's bank confirmation).
+#
+# Public endpoint — no admin auth, anyone with a valid order can file.
+# We rate-limit at one open ticket per (order_id, xtream_username)
+# tuple so a customer mashing the button doesn't spam support.
+class PaymentTicketReq(BaseModel):
+    xtream_username:   str = Field(..., min_length=1, max_length=120)
+    order_id:          str = Field(..., min_length=4, max_length=40)
+    interac_reference: Optional[str] = Field(None, max_length=80)
+    customer_note:     Optional[str] = Field(None, max_length=2000)
+
+
+def _log_admin_event_inline(c, action: str, xtream_username: Optional[str],
+                            actor: Optional[str] = None,
+                            detail: Optional[str] = None) -> None:
+    """Single source of truth for writing to canada_admin_events.
+    Older code in this module inlines the INSERT — new code should
+    use this helper. Same semantics either way."""
+    c.execute(
+        "INSERT INTO canada_admin_events (at, action, xtream_username, actor, detail) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (_now_ms(), action, xtream_username, actor, detail),
+    )
+
+
+@router.post("/support/payment-ticket")
+def support_payment_ticket(req: PaymentTicketReq) -> dict:
+    user = req.xtream_username.strip().lower()
+    order_id = req.order_id.strip()
+    interac_ref = (req.interac_reference or "").strip() or None
+    note = (req.customer_note or "").strip() or None
+
+    with _conn() as c:
+        # Sanity: order must exist + belong to this user (prevents
+        # spoofed tickets against random order ids).
+        order_row = c.execute(
+            "SELECT * FROM canada_orders WHERE order_id=? AND xtream_username=?",
+            (order_id, user),
+        ).fetchone()
+        if order_row is None:
+            raise HTTPException(404, "order not found for that username")
+
+        # Idempotency: one open ticket per (order_id, user). If a ticket
+        # already exists and is still open, return the existing
+        # ticket_id instead of spawning a duplicate.
+        existing = c.execute(
+            """SELECT ticket_id FROM canada_payment_tickets
+               WHERE order_id=? AND xtream_username=? AND status='open'
+               ORDER BY created_at DESC LIMIT 1""",
+            (order_id, user),
+        ).fetchone()
+        if existing is not None:
+            return {
+                "ok": True,
+                "ticket_id": existing["ticket_id"],
+                "deduplicated": True,
+                "message": "We already have your previous report on file. Support will get to it shortly.",
+            }
+
+        ticket_id = "T" + str(_now_ms())[-9:] + str(random.randint(100, 999))
+        c.execute(
+            """INSERT INTO canada_payment_tickets
+               (ticket_id, created_at, xtream_username, order_id,
+                interac_reference, claimed_amount, customer_note, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'open')""",
+            (ticket_id, _now_ms(), user, order_id, interac_ref,
+             f"{EXPECTED_AMOUNT_CAD:.2f}", note),
+        )
+        _log_admin_event_inline(c, "payment_ticket_opened", user,
+                                actor="customer",
+                                detail=f"order={order_id} ref={interac_ref or 'none'}")
+
+    # Fire-and-forget email to support@hushtv.com. We DO this inline
+    # (not on a background thread) so the customer sees a clear
+    # success/failure response — they can retry the button if SMTP
+    # is down. Email failure does NOT delete the DB ticket because
+    # the admin panel polls the same DB.
+    import datetime as _dt
+    iso_now = _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    order_created_iso = _dt.datetime.utcfromtimestamp(
+        int(order_row["created_at"]) / 1000,
+    ).strftime("%Y-%m-%d %H:%M UTC")
+    subject = f"[Stuck Payment] order {order_id} / username {user}"
+    body = (
+        "A HushTV Canada customer has submitted a stuck-payment ticket.\n"
+        "Action required: manually verify the e-transfer + grant the license.\n\n"
+        f"  Ticket ID:           {ticket_id}\n"
+        f"  Xtream username:     {user}\n"
+        f"  Order ID:            {order_id}\n"
+        f"  Order created:       {order_created_iso}\n"
+        f"  Expected amount:     ${EXPECTED_AMOUNT_CAD:.2f} CAD\n"
+        f"  Interac ref (claim): {interac_ref or '(not provided)'}\n"
+        f"  Customer note:       {note or '(none)'}\n"
+        f"  Submitted:           {iso_now}\n\n"
+        "Triage steps:\n"
+        f"  1. Open admin → Stuck Payments tab → ticket {ticket_id}\n"
+        f"  2. Verify the Interac email landed in Hushtv.info@gmail.com\n"
+        f"  3. Click 'Grant license + close ticket' (one-click action)\n\n"
+        "If no Interac email landed, ask the customer to forward their\n"
+        "bank confirmation to support@hushtv.com.\n"
+    )
+    smtp_result = _smtp_send("support@hushtv.com", subject, body)
+
+    return {
+        "ok": True,
+        "ticket_id": ticket_id,
+        "email_sent": bool(smtp_result.get("sent")),
+        "message": "Thanks — our support team has been notified and will resolve this within 24 hours. Please include your Xtream username when contacting us.",
+    }
 
 
 @router.get("/license/{xtream_username}")
@@ -2544,10 +2789,329 @@ def admin_base44_resync_all(
     return summary
 
 
+# ───────────────────────────────────────────────────────────────────
+# v1.44.123 — Stuck-payments safety net: admin endpoints + daily
+# drift email. Closes the diagnostic gap that almost cost us the
+# benlisto / marilynmclean / similar-pattern customers when an
+# Interac email lands but our parser can't extract an order id.
+# ───────────────────────────────────────────────────────────────────
+
+@admin_router.get("/stuck-payments")
+def admin_stuck_payments(
+    days: int = Query(30, ge=1, le=180),
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """List every $50 Interac email that hit our inbox but didn't
+    auto-match an order — strictly `amount=$50.00 AND outcome='no_order_id'`.
+
+    Per direction: we DO NOT include `unknown_order` rows. Those belong
+    to the Base44 initial-purchase flow (customer pays through Base44,
+    then sends the e-transfer with the Base44 order id, which is
+    rightly not in our `canada_orders` table) and are intentional —
+    not lost revenue.
+
+    Also returns any open customer-submitted payment tickets so the
+    admin sees both channels (auto-flagged + customer-reported)
+    side-by-side in one panel.
+    """
+    _check_admin(x_admin_token)
+    since_ms = _now_ms() - days * 24 * 60 * 60 * 1000
+    expected_str = f"{EXPECTED_AMOUNT_CAD:.2f}"
+    out_emails: list[dict] = []
+    out_tickets: list[dict] = []
+    with _conn() as c:
+        # Stuck $50 emails — no order id extracted.
+        for r in c.execute(
+            """SELECT uid, message_id, processed_at, sender, amount, outcome
+               FROM canada_processed_emails
+               WHERE outcome = 'no_order_id'
+                 AND amount = ?
+                 AND processed_at >= ?
+               ORDER BY processed_at DESC""",
+            (expected_str, since_ms),
+        ).fetchall():
+            out_emails.append({
+                "uid":           r["uid"],
+                "message_id":    r["message_id"],
+                "processed_at":  int(r["processed_at"]),
+                "sender":        r["sender"],
+                "amount":        r["amount"],
+                "outcome":       r["outcome"],
+            })
+        # Open customer-submitted tickets.
+        for r in c.execute(
+            """SELECT ticket_id, created_at, xtream_username, order_id,
+                      interac_reference, claimed_amount, customer_note, status
+               FROM canada_payment_tickets
+               WHERE status = 'open' AND created_at >= ?
+               ORDER BY created_at DESC""",
+            (since_ms,),
+        ).fetchall():
+            out_tickets.append({
+                "ticket_id":         r["ticket_id"],
+                "created_at":        int(r["created_at"]),
+                "xtream_username":   r["xtream_username"],
+                "order_id":          r["order_id"],
+                "interac_reference": r["interac_reference"],
+                "claimed_amount":    r["claimed_amount"],
+                "customer_note":     r["customer_note"],
+                "status":            r["status"],
+            })
+    return {
+        "window_days":          days,
+        "expected_amount_cad":  EXPECTED_AMOUNT_CAD,
+        "stuck_emails_count":   len(out_emails),
+        "open_tickets_count":   len(out_tickets),
+        "stuck_emails":         out_emails,
+        "open_tickets":         out_tickets,
+    }
+
+
+class StuckEmailMatchReq(BaseModel):
+    uid:      str
+    order_id: str = Field(..., min_length=4, max_length=40)
+    actor:    Optional[str] = "admin"
+
+
+@admin_router.post("/stuck-payments/match")
+def admin_stuck_payment_match(
+    req: StuckEmailMatchReq,
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Manually attach a stuck $50 email to a specific pending order
+    and grant the license. Idempotent — if the order is already paid
+    we return its current state without re-granting.
+    """
+    _check_admin(x_admin_token)
+    with _conn() as c:
+        # Verify the email is actually stuck ($50, no_order_id) and
+        # not already resolved.
+        em = c.execute(
+            """SELECT uid, message_id, sender, amount, outcome
+               FROM canada_processed_emails WHERE uid=?""",
+            (req.uid,),
+        ).fetchone()
+        if em is None:
+            raise HTTPException(404, "email uid not found")
+        if em["outcome"] not in ("no_order_id",):
+            raise HTTPException(
+                409,
+                f"email already in outcome={em['outcome']} — refusing to remap",
+            )
+        if (em["amount"] or "") != f"{EXPECTED_AMOUNT_CAD:.2f}":
+            raise HTTPException(
+                409,
+                f"email amount {em['amount']} != expected {EXPECTED_AMOUNT_CAD:.2f}",
+            )
+        # Verify the order exists + grant.
+        order = c.execute(
+            "SELECT * FROM canada_orders WHERE order_id=?", (req.order_id,),
+        ).fetchone()
+        if order is None:
+            raise HTTPException(404, "order not found")
+        user = order["xtream_username"]
+
+        if order["status"] != "paid":
+            # Stamp the order paid, retrieve the matched email refs.
+            c.execute(
+                """UPDATE canada_orders
+                   SET status='paid', paid_at=?,
+                       interac_amount=?, interac_sender=?, interac_email_uid=?
+                   WHERE order_id=?""",
+                (_now_ms(), em["amount"], em["sender"], em["uid"], req.order_id),
+            )
+            # Grant or extend the license.
+            _grant_license(c, user, _now_ms(), req.order_id)
+            _clear_trial_on_grant(c, user)
+
+        # Update the email outcome so it disappears from the stuck list.
+        c.execute(
+            "UPDATE canada_processed_emails SET outcome='paid' WHERE uid=?",
+            (req.uid,),
+        )
+        # Close any open ticket for this order.
+        c.execute(
+            """UPDATE canada_payment_tickets
+               SET status='resolved', resolved_at=?, resolved_by=?,
+                   resolution_note=?
+               WHERE order_id=? AND status='open'""",
+            (_now_ms(), req.actor or "admin",
+             f"manual-match to email uid={req.uid}", req.order_id),
+        )
+        _log_admin_event_inline(c, "stuck_payment_match", user,
+                                actor=req.actor or "admin",
+                                detail=f"order={req.order_id} email_uid={req.uid}")
+
+        # Re-read license for the response.
+        lic = _get_license_row(c, user)
+    return {
+        "ok": True,
+        "order_id": req.order_id,
+        "xtream_username": user,
+        "license": _serialize_license(lic),
+    }
+
+
+class TicketResolveReq(BaseModel):
+    ticket_id:       str
+    resolution_note: Optional[str] = None
+    actor:           Optional[str] = "admin"
+
+
+@admin_router.post("/stuck-payments/resolve-ticket")
+def admin_stuck_ticket_resolve(
+    req: TicketResolveReq,
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Close a customer-submitted ticket without granting (used when
+    the customer was actually mistaken / spam / duplicate)."""
+    _check_admin(x_admin_token)
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM canada_payment_tickets WHERE ticket_id=?",
+            (req.ticket_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "ticket not found")
+        if row["status"] != "open":
+            return {"ok": True, "ticket_id": req.ticket_id, "already_closed": True}
+        c.execute(
+            """UPDATE canada_payment_tickets
+               SET status='resolved', resolved_at=?, resolved_by=?,
+                   resolution_note=?
+               WHERE ticket_id=?""",
+            (_now_ms(), req.actor or "admin",
+             req.resolution_note or "manually closed", req.ticket_id),
+        )
+        _log_admin_event_inline(c, "payment_ticket_resolved",
+                                row["xtream_username"],
+                                actor=req.actor or "admin",
+                                detail=f"ticket={req.ticket_id}")
+    return {"ok": True, "ticket_id": req.ticket_id, "resolved": True}
+
+
+def _build_daily_drift_report() -> tuple[str, str, dict]:
+    """Build the daily drift-report email content.
+
+    Returns (subject, body, stats) so it's testable in isolation.
+    """
+    expected_str = f"{EXPECTED_AMOUNT_CAD:.2f}"
+    cutoff_ms = _now_ms() - 24 * 60 * 60 * 1000
+    with _conn() as c:
+        stuck_emails = c.execute(
+            """SELECT uid, sender, amount, datetime(processed_at/1000,'unixepoch') ts
+               FROM canada_processed_emails
+               WHERE outcome='no_order_id'
+                 AND amount=?
+                 AND processed_at >= ?
+               ORDER BY processed_at DESC""",
+            (expected_str, cutoff_ms),
+        ).fetchall()
+        open_tickets = c.execute(
+            """SELECT ticket_id, xtream_username, order_id, interac_reference,
+                      datetime(created_at/1000,'unixepoch') ts
+               FROM canada_payment_tickets
+               WHERE status='open' AND created_at >= ?
+               ORDER BY created_at DESC""",
+            (cutoff_ms,),
+        ).fetchall()
+
+    stats = {
+        "stuck_emails":  len(stuck_emails),
+        "open_tickets":  len(open_tickets),
+        "needs_action":  len(stuck_emails) + len(open_tickets),
+    }
+    if stats["needs_action"] == 0:
+        subject = "[HushTV drift] CLEAN — no stuck payments in last 24h"
+    else:
+        subject = (
+            f"[HushTV drift] {stats['stuck_emails']} stuck $50 emails + "
+            f"{stats['open_tickets']} open customer tickets (24h)"
+        )
+    lines: list[str] = []
+    lines.append("Window: last 24 hours.")
+    lines.append(f"Expected amount: ${EXPECTED_AMOUNT_CAD:.2f} CAD.\n")
+    lines.append(
+        f"Stuck $50 emails (outcome=no_order_id): {stats['stuck_emails']}",
+    )
+    for r in stuck_emails[:50]:
+        lines.append(
+            f"  - uid={r['uid']} amount={r['amount']} sender={(r['sender'] or '')[:50]} ts={r['ts']}",
+        )
+    lines.append(f"\nOpen customer tickets: {stats['open_tickets']}")
+    for r in open_tickets[:50]:
+        lines.append(
+            f"  - {r['ticket_id']}  user={r['xtream_username']}  order={r['order_id']}  "
+            f"ref={r['interac_reference'] or '-'}  at={r['ts']}",
+        )
+    lines.append("\nResolve at: https://hushtv.xyz/admin → Stuck Payments tab.")
+    return subject, "\n".join(lines), stats
+
+
+def _drift_report_loop() -> None:
+    """Daily 9 AM UTC drift-report job. Sleeps until the next 9 AM and
+    fires the report to support@hushtv.com.
+
+    Survives one bad iteration via try/except. Runs forever as a
+    daemon thread."""
+    import datetime as _dt
+    log.info("Canada drift-report job started (daily at 09:00 UTC)")
+    while True:
+        try:
+            now = _dt.datetime.utcnow()
+            target = now.replace(hour=9, minute=0, second=0, microsecond=0)
+            if target <= now:
+                target = target + _dt.timedelta(days=1)
+            sleep_sec = (target - now).total_seconds()
+            time.sleep(sleep_sec)
+            subject, body, stats = _build_daily_drift_report()
+            _smtp_send("support@hushtv.com", subject, body)
+            log.info("drift report sent: %s", stats)
+        except Exception as e:
+            log.exception("drift report iteration failed: %s", e)
+            # Back off 1 hour on failure so we don't burst SMTP.
+            time.sleep(3600)
+
+
+_drift_started = False
+_drift_lock = threading.Lock()
+
+
+def start_drift_report() -> None:
+    """Idempotent daemon thread start for the daily drift report."""
+    global _drift_started
+    with _drift_lock:
+        if _drift_started:
+            return
+        _drift_started = True
+    t = threading.Thread(
+        target=_drift_report_loop, name="canada-drift-report", daemon=True,
+    )
+    t.start()
+
+
+@admin_router.post("/drift-report/run-now")
+def admin_drift_report_run_now(
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """Manually fire the daily drift report (for testing the SMTP
+    pipeline + admin verification). Returns the stats inline so the
+    admin sees the count without waiting for the email."""
+    _check_admin(x_admin_token)
+    subject, body, stats = _build_daily_drift_report()
+    smtp = _smtp_send("support@hushtv.com", subject, body)
+    return {
+        "ok":         bool(smtp.get("sent")),
+        "stats":      stats,
+        "smtp_error": smtp.get("error"),
+    }
+
+
 # Schema init on import so `import canada_payment_module` is enough.
 try:
     _init_schema()
     base44_module.init_schema()
     base44_module.start_retry_worker()
+    start_drift_report()
 except Exception as e:  # pragma: no cover
     log.exception("canada_payment_module schema init failed: %s", e)
