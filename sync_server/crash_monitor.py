@@ -72,7 +72,7 @@ def _classify_kind(d: dict) -> str:
     anr.log uploads. We infer from the trace header `thread=...` so the
     dashboard groups them correctly with newer reports."""
     k = (d.get("kind") or "").strip().lower()
-    if k in ("crash", "anr", "freeze", "diagnostic", "playback_telemetry", "exit_info"):
+    if k in ("crash", "anr", "freeze", "diagnostic", "playback_telemetry", "exit_info", "boot_died"):
         return k
     trace = d.get("trace", "") or ""
     if "thread=anr-watchdog" in trace:
@@ -85,6 +85,8 @@ def _classify_kind(d: dict) -> str:
         return "diagnostic"
     if "thread=exit-info" in trace:
         return "exit_info"
+    if "thread=boot-died" in trace:
+        return "boot_died"
     # Plain crash.log has lines like "Exception in thread main" or stack.
     if re.search(r"Caused by:|Exception in thread|FATAL EXCEPTION", trace):
         return "crash"
@@ -156,6 +158,12 @@ def _signature(trace: str) -> str:
         if m:
             signame = m.group(1)
         return f"EXIT::{reason}::{signame}"
+    # BOOT-DIED (boot-phase tracker, v1.44.121+) — group by the last
+    # successfully-reached stage, so admin sees e.g. "BOOT::main_setContent"
+    # to spot which phase is the most common death point.
+    if "thread=boot-died" in trace:
+        m = re.search(r"BOOT-DIED last_stage=(\S+)", trace)
+        return f"BOOT::{m.group(1) if m else '?'}"
     # ANR
     if "thread=anr-watchdog" in trace:
         m = re.search(
@@ -276,6 +284,7 @@ def crash_stats(
             "playback":  kind_total.get("playback_telemetry", 0),
             "diagnostic": kind_total.get("diagnostic", 0),
             "exit_info": kind_total.get("exit_info", 0),
+            "boot_died": kind_total.get("boot_died", 0),
             "other":     kind_total.get("other", 0),
         },
         "today_vs_yesterday": {
@@ -293,7 +302,7 @@ def crash_stats(
 @admin_router.get("/top")
 def crash_top(
     days: int = Query(1, ge=1, le=14),
-    kind: str = Query("anr", regex=r"^(anr|crash|freeze|exit_info|all)$"),
+    kind: str = Query("anr", regex=r"^(anr|crash|freeze|exit_info|boot_died|all)$"),
     limit: int = Query(20, ge=1, le=100),
     user: str = Query("", description="Filter by Xtream username (case-insensitive substring)"),
     x_admin_token: Optional[str] = Header(None),
@@ -347,7 +356,7 @@ def crash_top(
 @admin_router.get("/recent")
 def crash_recent(
     days: int = Query(1, ge=1, le=14),
-    kind: str = Query("all", regex=r"^(anr|crash|freeze|playback_telemetry|diagnostic|exit_info|other|all)$"),
+    kind: str = Query("all", regex=r"^(anr|crash|freeze|playback_telemetry|diagnostic|exit_info|boot_died|other|all)$"),
     limit: int = Query(50, ge=1, le=500),
     user: str = Query("", description="Filter by Xtream username (case-insensitive substring)"),
     x_admin_token: Optional[str] = Header(None),
@@ -414,9 +423,10 @@ def crash_user(
             "crash":  by_kind.get("crash", 0),
             "freeze": by_kind.get("freeze", 0),
             "exit_info": by_kind.get("exit_info", 0),
+            "boot_died": by_kind.get("boot_died", 0),
             "other":  sum(by_kind.values()) - by_kind.get("anr", 0)
                       - by_kind.get("crash", 0) - by_kind.get("freeze", 0)
-                      - by_kind.get("exit_info", 0),
+                      - by_kind.get("exit_info", 0) - by_kind.get("boot_died", 0),
         },
         "first_seen": timestamps[0] if timestamps else None,
         "last_seen":  timestamps[-1] if timestamps else None,

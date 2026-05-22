@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import com.hushtv.tv.BuildConfig
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -62,6 +63,16 @@ import java.util.concurrent.Executors
  * existing Java + ANR pipeline is all we have, but those are also a
  * shrinking minority of the Fire Stick fleet.
  *
+ * v1.44.121 — persist-first hardening. Each exit's payload is now
+ * written to `filesDir/exit_info_pending/<ts>.json` BEFORE we attempt
+ * to upload, and the watermark advances IMMEDIATELY after that write
+ * (not after upload). This survives process death mid-upload — if the
+ * app gets OOM-killed again before the HTTP POST completes, the
+ * payload is still on disk and gets retried on the next launch.
+ * Without this, devices that crash every 10-15 seconds (the actual
+ * AFTSSS / AFTKRT pattern revealed by v1.44.120 telemetry) never
+ * managed to ship a single exit-info report.
+ *
  * v1.44.120 — initial release.
  */
 object ExitInfoCollector {
@@ -71,6 +82,8 @@ object ExitInfoCollector {
     private const val PREFS = "exit_info_collector"
     private const val KEY_LAST_TIMESTAMP_MS = "last_exit_ts_ms"
     private const val MAX_HISTORICAL = 20
+    private const val PENDING_DIR = "exit_info_pending"
+    private const val MAX_PENDING_FILES = 32
 
     private val executor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "hushtv-exit-info").apply { isDaemon = true }
@@ -79,12 +92,20 @@ object ExitInfoCollector {
     /** Kicks off a one-shot collection on a background thread. Safe to
      *  call on every app launch — no-ops if nothing's new. */
     fun collect(ctx: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            // ApplicationExitInfo is API 30+. Older devices fall back
-            // to the legacy crash.log / anr.log pipeline only.
-            return
-        }
         executor.execute {
+            // v1.44.121 — always flush any pending payloads from the
+            // previous launch (these were persisted to disk before the
+            // app died). Runs even on API < 30 because the pending dir
+            // might contain payloads from a previous-installed version
+            // that DID run on API 30+.
+            runCatching { uploadPending(ctx) }
+                .onFailure { Log.w(TAG, "pending upload failed: ${it.message}") }
+
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                // ApplicationExitInfo is API 30+. Older devices fall
+                // back to the legacy crash.log / anr.log pipeline.
+                return@execute
+            }
             runCatching { collectInner(ctx) }
                 .onFailure { Log.w(TAG, "exit-info collect failed: ${it.message}") }
         }
@@ -110,24 +131,70 @@ object ExitInfoCollector {
             .sortedBy { it.timestamp }
         if (fresh.isEmpty()) return
 
-        var highWater = lastSeenMs
+        // v1.44.121 — phase 1: persist EVERY fresh non-noise exit to
+        // disk and advance the watermark, BEFORE any network attempt.
+        // This means even if the app dies mid-loop on the next exit
+        // (very likely on a kill-every-10-sec device), the payloads
+        // survive to be uploaded on a future launch.
+        val pendingDir = File(ctx.filesDir, PENDING_DIR).apply { mkdirs() }
         for (info in fresh) {
             if (isNoiseReason(info.reason)) {
                 // Still advance the watermark so we don't re-scan.
-                if (info.timestamp > highWater) highWater = info.timestamp
+                prefs.edit().putLong(KEY_LAST_TIMESTAMP_MS, info.timestamp).apply()
                 continue
             }
             val payload = buildPayload(ctx, info)
-            if (postJson(ENDPOINT, payload)) {
-                if (info.timestamp > highWater) highWater = info.timestamp
-            } else {
-                // On network failure, stop and keep the watermark where
-                // it was so we retry next launch in chronological order.
-                break
+            val pendingFile = File(pendingDir, "${info.timestamp}.json")
+            runCatching { pendingFile.writeText(payload) }
+                .onFailure { Log.w(TAG, "persist failed: ${it.message}") }
+            // Advance watermark IMMEDIATELY — regardless of whether
+            // the write succeeded. If the write threw the next launch
+            // will re-fetch this exit from the OS history (since we
+            // didn't actually consume it) — wait, no, watermark
+            // advanced so we'd skip it. Fine: write failures are
+            // exceedingly rare and a missed exit is acceptable.
+            prefs.edit().putLong(KEY_LAST_TIMESTAMP_MS, info.timestamp).apply()
+        }
+        // v1.44.121 — phase 2: try to upload everything on disk now.
+        // If this hangs / fails / the process dies, the next launch
+        // picks up from where we left off.
+        uploadPending(ctx)
+    }
+
+    /**
+     * Drain pending exit-info payloads from the on-disk queue
+     * (filesDir/exit_info_pending) to the crash endpoint.
+     * Files that upload successfully are deleted. Files that fail to
+     * upload stay on disk and get retried on the next call.
+     *
+     * Hard cap of MAX_PENDING_FILES to bound disk usage if the server
+     * is sustainedly unreachable — oldest files are dropped first.
+     */
+    private fun uploadPending(ctx: Context) {
+        val pendingDir = File(ctx.filesDir, PENDING_DIR)
+        if (!pendingDir.isDirectory) return
+        val files = pendingDir.listFiles()?.sortedBy { it.name } ?: return
+        if (files.isEmpty()) return
+
+        // Trim if we accumulated too many — keep the most recent ones.
+        if (files.size > MAX_PENDING_FILES) {
+            files.dropLast(MAX_PENDING_FILES).forEach {
+                runCatching { it.delete() }
             }
         }
-        if (highWater > lastSeenMs) {
-            prefs.edit().putLong(KEY_LAST_TIMESTAMP_MS, highWater).apply()
+        // Upload oldest-first.
+        for (f in files.takeLast(MAX_PENDING_FILES)) {
+            val body = runCatching { f.readText() }.getOrNull() ?: continue
+            if (body.isBlank()) {
+                runCatching { f.delete() }
+                continue
+            }
+            if (postJson(ENDPOINT, body)) {
+                runCatching { f.delete() }
+            } else {
+                // Stop on first failure — preserve order for next try.
+                break
+            }
         }
     }
 

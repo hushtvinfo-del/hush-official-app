@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        com.hushtv.tv.data.BootPhaseTracker.mark(this, "main_oncreate_start")
         // Must be called before super.onCreate(). Instantly shows the pure-black
         // splash background — the animated wordmark is rendered by Compose.
         installSplashScreen()
@@ -107,7 +108,24 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        com.hushtv.tv.data.BootPhaseTracker.mark(this, "main_setContent")
         setContent {
+            // v1.44.121 — boot-phase tracker. The first composition
+            // means Compose successfully initialised. A LaunchedEffect
+            // with a 5-second delay marks REACHED_ALIVE so the
+            // BootPhaseTracker knows this launch was healthy and
+            // doesn't upload its trace next time.
+            val markCtx = LocalContext.current
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                com.hushtv.tv.data.BootPhaseTracker.mark(markCtx, "main_first_compose")
+                // Wait one frame, mark first_frame.
+                kotlinx.coroutines.delay(50)
+                com.hushtv.tv.data.BootPhaseTracker.mark(markCtx, "ui_first_frame")
+                // Wait 5 sec, mark alive — this is the success signal.
+                kotlinx.coroutines.delay(5_000)
+                com.hushtv.tv.data.BootPhaseTracker.mark(markCtx, com.hushtv.tv.data.BootPhaseTracker.REACHED_ALIVE)
+                com.hushtv.tv.data.BootPhaseTracker.rotateOnAlive(markCtx)
+            }
             HushTVTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize().background(BgBlack),

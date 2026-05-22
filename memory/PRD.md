@@ -1,3 +1,82 @@
+## v1.44.121 (Canada channel) — Triple-fix for AFTSSS/AFTKRT OOM kills — 2026-02-22
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (25.3 MB)
+- **Manifest**: https://hushtv.xyz/version-canada.json
+- **versionCode**: 521 / **versionName**: 1.44.121
+- **Build variant**: `assembleCanadaDebug`
+
+### Problem (still being diagnosed)
+After v1.44.120 shipped ApplicationExitInfo capture, telemetry revealed:
+- **1,747 exit-info reports in 14 hours**, dominated by:
+  - `EXIT::SIGNALED::SIGKILL` (kernel kill) — 575 hits
+  - `EXIT::LOW_MEMORY::signal-0` (lmkd OOM) — 412 hits
+  - vs **only 3 CRASH_NATIVE** events total
+- **Top crash devices**: Amazon-AFTKM (1 GB, 76 ANR+crashes/day), Amazon-AFTKRT (2 GB but 128 MB heap, 71/day), Amazon-AFTMM (32/day), **Amazon-AFTSSS (2 GB but 128 MB heap, 25/day)**
+- **User report**: `marilynmclean@hotmail.com` on AFTSSS crashing 10-15 sec after launch with ZERO crash reports surviving
+
+→ Diagnosis: **kernel OOM kills, NOT native crashes**. The old `memoryClass ≤ 96` low-RAM threshold missed the entire 128-MB-heap Fire Stick fleet (AFTKRT, AFTSSS) even though their per-app heap is tight enough to OOM under the home-screen poster/backdrop peak.
+
+### What landed in v1.44.121
+
+**P0a — Memory-trim threshold bump (`DeviceClass.kt`)**
+- Threshold raised from `memoryClass ≤ 96 MB` → `≤ 128 MB`
+- Now also applies to AFTKRT (Fire 4K 2nd gen, 2GB) and AFTSSS (Fire 4K Max, 2GB)
+- These devices now get: RGB_565 posters (~30 MB saved at peak), no Discovery hero backdrop prefetch
+- Coil `memoryCache` percentage dropped from 10% → 7% for the 128 MB bucket (matches the existing 96 MB bucket; 7% of 128 MB ≈ 9 MB)
+
+**P0b — `ExitInfoCollector` persist-first hardening**
+- Each exit payload is now written to `filesDir/exit_info_pending/<ts>.json` **before** the HTTP upload attempt
+- Watermark advances **per-exit immediately** (not at end-of-loop)
+- Survives process death mid-upload — payloads from a dying-every-10-sec device are now retried on the next launch
+- `uploadPending()` drains the queue oldest-first on every launch; hard cap of 32 files to bound disk
+- Closes the gap that hid `marilynmclean@hotmail.com`'s crashes entirely from telemetry
+
+**P1 — NEW `BootPhaseTracker` (works on ALL API levels — closes the Android 9 / API 28 blind spot)**
+- Writes a tiny `<epoch_ms>|<phase>` line to `filesDir/boot_phase.log` at each phase
+- Canonical phases: `app_oncreate_start` → `app_oncreate_anr` → `app_oncreate_end` → `main_oncreate_start` → `main_setContent` → `main_first_compose` → `ui_first_frame` → **`ui_alive_5s`** (= success)
+- On next launch, if the previous run didn't reach `ui_alive_5s`, the trace is uploaded as `kind=boot_died` with `last_stage=<the last stage reached>`
+- File-IO based — works on Android 9 / API 28 AFTSS 1 GB Fire Sticks where ApplicationExitInfo doesn't exist
+- Admin dashboard groups by `BOOT::<stage>` so we'll see "60% of failures happen between `main_setContent` and `main_first_compose`" at a glance
+
+### Server side
+- `_classify_kind()` recognises `kind=boot_died` (explicit + via `thread=boot-died` header)
+- `_signature()` groups boot-died reports as `BOOT::<last_stage>`
+- `/stats.totals.boot_died` bucket added
+- `/recent` and `/top` accept `kind=boot_died`
+- 9 sync_server tests passing (3 new tests for boot_died classification + signature)
+
+### Admin UI
+- New orange "BOOT-DIED · 1 GB Fire Sticks" summary tile
+- New "Boot-died" filter pill
+- Orange chip color for boot_died kind
+
+### Live verification
+- OTA manifest: `v521 / 1.44.121 mandatory`
+- Stats endpoint shows new `boot_died: 0` bucket (will populate as clients update)
+- End-to-end smoke test of `kind=boot_died` synthetic report → showed up in `/recent` as `BOOT::main_setContent`, grouped in `/top` → cleaned up
+- Screenshot: admin tile renders correctly
+
+### Files touched
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/DeviceClass.kt` (threshold 96→128)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushTVApp.kt` (Coil cache pct + boot phase marks)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/ExitInfoCollector.kt` (persist-first, per-exit watermark, queue drain)
+- **NEW**     `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/BootPhaseTracker.kt`
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/MainActivity.kt` (boot phase marks at activity onCreate, setContent, first composition, 5-sec alive timer)
+- MODIFIED `/app/androidtv/app/build.gradle.kts` (versionCode 521 / 1.44.121)
+- MODIFIED `/app/sync_server/crash_monitor.py` (boot_died kind + signature + endpoints)
+- MODIFIED `/app/sync_server/tests/test_crash_monitor_exit_info.py` (+3 tests)
+- MODIFIED `/app/_buildenv/canada_admin.html` (orange boot_died tile + filter pill + chip)
+- MODIFIED `/app/_buildenv/version-canada.json` (521 / 1.44.121 + changelog)
+
+### Next session — what to watch
+- Within 24h, the **orange `BOOT-DIED` tile** populates. Filter by AFTSS/AFTKM and look at the most common `BOOT::<stage>` signature — that tells us EXACTLY which startup phase is dying on 1 GB Fire Sticks. If it's `main_setContent` or `main_first_compose`, we'll know to defer more of HomeDiscoveryData / TMDB prefetch. If it's `app_oncreate_end`, we'll know an `Application.onCreate` initializer is too heavy.
+- Watch AFTKRT / AFTSSS counts — if they drop sharply post-v521, the memory-trim threshold bump worked. If they don't, the OOM is happening even with RGB_565 + tighter Coil cache, and we need to defer Discovery rail entirely on those devices.
+- `marilynmclean@hotmail.com` specifically — query her per-user crash profile in 24h. Either she's silent now (= fixed) or boot_died reports finally appear (= we have the smoking gun).
+
+---
+
+
 ## v1.44.120 (Canada channel) — Diagnostic: ApplicationExitInfo capture — 2026-02-21
 
 ### Release

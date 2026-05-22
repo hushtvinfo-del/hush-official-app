@@ -64,6 +64,24 @@ def test_classify_kind_recognizes_thread_header():
     assert cm._classify_kind({"kind": "", "trace": trace}) == "exit_info"
 
 
+def test_classify_kind_recognizes_boot_died():
+    trace = (
+        "===== HushTV 2026-02-21T01:23:45Z v1.44.121#521 thread=boot-died =====\n"
+        "BOOT-DIED last_stage=main_setContent\n"
+    )
+    assert cm._classify_kind({"kind": "boot_died", "trace": trace}) == "boot_died"
+    # And from header alone
+    assert cm._classify_kind({"kind": "", "trace": trace}) == "boot_died"
+
+
+def test_signature_boot_died_groups_by_stage():
+    trace = (
+        "===== HushTV 2026-02-21T01:23:45Z v1.44.121#521 thread=boot-died =====\n"
+        "BOOT-DIED last_stage=main_setContent\n"
+    )
+    assert cm._signature(trace) == "BOOT::main_setContent"
+
+
 def test_signature_native_crash():
     trace = (
         "===== HushTV 2026-02-20T01:23:45Z v1.44.120#520 thread=exit-info =====\n"

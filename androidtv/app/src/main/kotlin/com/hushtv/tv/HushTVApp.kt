@@ -26,6 +26,13 @@ import java.util.concurrent.TimeUnit
 class HushTVApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
+        // v1.44.121 — boot-phase tracker. BEFORE anything else (other
+        // than super.onCreate), so we capture the very first marker
+        // even if the crash happens 1 line later. Reads any
+        // previous-launch trace and uploads it if the previous run
+        // died, then truncates for this launch's marks.
+        com.hushtv.tv.data.BootPhaseTracker.collectAndRotate(this)
+        com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oncreate_start")
         installCrashHandler()
         // v1.43.83 → v1.43.88: REMOVED installMainLooperResilience.
         // The re-entrant `Looper.loop()` posted as a runnable was
@@ -58,6 +65,9 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // is needed. No-op on Fire OS 7 (Android 9). Closes the
         // diagnostic gap that hid AFTSS 1 GB Fire Stick startup
         // crashes from `19530123`, `irandall16`, `jamvan55@gmail.com`.
+        // v1.44.121 — also drains `filesDir/exit_info_pending/` for
+        // reports persisted by a previous launch that died before
+        // upload completed.
         com.hushtv.tv.data.ExitInfoCollector.collect(this)
         // v1.44.54 — load the themed-pack bundle from APK assets so
         // any "extra" Moods & Themes rows are merged into
@@ -70,6 +80,7 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // can ship it. Closes the diagnostic gap that ate v1.44.0–.2:
         // ANRs are SIGKILL'd by the OS and bypass every JVM handler.
         com.hushtv.tv.data.AnrWatchdog.start(this)
+        com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oncreate_anr")
 
         // v1.44.112 — (dev only) main-thread StrictMode. Logs any
         // disk read/write or network call accidentally landing on the
@@ -88,6 +99,7 @@ class HushTVApp : Application(), ImageLoaderFactory {
                     .build(),
             )
         }
+        com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oncreate_end")
     }
 
     /**
@@ -248,12 +260,13 @@ class HushTVApp : Application(), ImageLoaderFactory {
             .components {
                 add(SvgDecoder.Factory())
             }
-        // v1.44.119 — on low-RAM devices (AFTSS / AFTKM / 1 GB Fire
-        // Sticks) we use RGB_565 instead of ARGB_8888 for poster
-        // bitmaps. That halves bitmap memory (2 bytes/px instead of
-        // 4) with imperceptible visual loss at TV viewing distance —
-        // ~30 MB saved at peak when the home screen has its row of
-        // posters in flight. Full-RAM devices keep ARGB_8888.
+        // v1.44.119/121 — on low-RAM devices (AFTSS / AFTKM / AFTSSS /
+        // AFTKRT — anything with per-app heap ≤ 128 MB) we use RGB_565
+        // instead of ARGB_8888 for poster bitmaps. That halves bitmap
+        // memory (2 bytes/px instead of 4) with imperceptible visual
+        // loss at TV viewing distance — ~30 MB saved at peak when the
+        // home screen has its row of posters in flight. Full-RAM
+        // devices keep ARGB_8888.
         val ctx: Context = this
         if (com.hushtv.tv.data.DeviceClass.isLowRam(ctx)) {
             builder.bitmapConfig(android.graphics.Bitmap.Config.RGB_565)
@@ -263,13 +276,14 @@ class HushTVApp : Application(), ImageLoaderFactory {
             .memoryCache {
                 val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
                 val totalRamMb = am.memoryClass
-                // v1.44.119 — even tighter on AFTSS / AFTKM (≤96 MB heap).
-                // 7% on those devices ≈ 7 MB which is enough for the
-                // currently-visible row of posters but leaves serious
-                // headroom for ExoPlayer + EPG + Compose.
+                // v1.44.121 — telemetry showed AFTKRT / AFTSSS (the
+                // 128 MB heap class) were the TOP crash devices despite
+                // the previous 10% cap. Drop them to the same 7% as
+                // the 96 MB heap class. 7% of 128 MB ≈ 9 MB which is
+                // enough for the currently-visible row of posters but
+                // leaves serious headroom for ExoPlayer + EPG + Compose.
                 val pct = when {
-                    totalRamMb <= 96  -> 0.07
-                    totalRamMb <= 128 -> 0.10
+                    totalRamMb <= 128 -> 0.07
                     else              -> 0.20
                 }
                 MemoryCache.Builder(this)
