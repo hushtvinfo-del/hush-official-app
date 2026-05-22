@@ -28,70 +28,65 @@ class HushTVApp : Application(), ImageLoaderFactory {
         super.onCreate()
         // v1.44.121 — boot-phase tracker. BEFORE anything else (other
         // than super.onCreate), so we capture the very first marker
-        // even if the crash happens 1 line later. Reads any
-        // previous-launch trace and uploads it if the previous run
-        // died, then truncates for this launch's marks.
+        // even if the crash happens 1 line later.
         com.hushtv.tv.data.BootPhaseTracker.collectAndRotate(this)
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oncreate_start")
-        // v1.44.122 — one-shot migration for Fire-Stick / weak-device
-        // users mistakenly running Pro mode. v1.44.121 telemetry showed
-        // 1,700+ silent OOM kills/day on Fire Sticks running Pro UI
-        // while equivalent-spec Skyworth users on Lite had ZERO crashes
-        // — the entire delta was the Pro Compose tree being too heavy
-        // to compose without ANR on Fire OS. Migration auto-demotes
-        // these users to Lite and arms a toast so they know why their
-        // UI changed. Runs at-most-once; manual Pro re-selection is
-        // respected forever. Must run BEFORE setContent so the first
-        // composition already reflects the new mode.
-        com.hushtv.tv.data.AppModeStore.runAutoMigrationV122IfNeeded(this)
+
+        // v1.44.123 — install the crash handler FIRST (before anything
+        // that could throw). If anything below this line crashes the
+        // JVM, the trace lands in crash.log instead of vanishing.
         installCrashHandler()
-        // v1.43.83 → v1.43.88: REMOVED installMainLooperResilience.
-        // The re-entrant `Looper.loop()` posted as a runnable was
-        // suspected of preventing crash-log uploads on Google TV /
-        // Fire OS 12+ (the platforms throw on nested looper entry).
-        // We're better off letting Android's default crash dialog
-        // fire — the JVM uncaught-exception handler installed
-        // above persists the trace to disk for next-boot upload,
-        // and unknown framework races (FocusRequester, LazyLayout
-        // pinnable, Navigation destination) happen rarely enough
-        // that swallowing them isn't worth the diagnostic blackout.
+        com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_crashhandler")
+
+        // v1.44.122/123 — Lite-mode auto-migration. Runs on the main
+        // thread BEFORE any UI composes so the very first frame
+        // reflects the right mode. v1.44.123 extends the migration
+        // to UNSET (fresh install) users — irandall16 reinstalled
+        // v1.44.122 onto AFTKRT (memoryClass=192, totalRam=1669) and
+        // landed on Pro because the migration only matched currentMode
+        // == PRO. Fresh installs now also auto-route to Lite.
+        com.hushtv.tv.data.AppModeStore.runAutoMigrationV122IfNeeded(this)
+        com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_migration")
+
         com.hushtv.tv.data.EventLog.log(
             "app",
             "onCreate v${BuildConfig.VERSION_NAME}#${BuildConfig.VERSION_CODE}",
         )
-        // Enable HTTP disk cache for Xtream JSON calls.
-        XtreamApi.enableDiskCache(this)
-        // v1.43.86 — load any cached bundled-asset overrides from
-        // disk so the Coil mapper can short-circuit immediately on
-        // first frame.
-        // **DISABLED in v1.43.87** — see HushTVApp.newImageLoader().
-        // com.hushtv.tv.data.BundleOverrides.load(this)
-        // If a crash was captured during the last session, POST it to
-        // the server in the background. Silent-no-op if nothing's new.
-        com.hushtv.tv.data.CrashReporter.uploadIfPending(this)
-        // v1.44.120 — post-mortem capture for silent app shutdowns
-        // (kernel OOM kills, native SIGSEGV in libavcodec / Coil
-        // bitmap decoder, signal kills). Uses Android's first-party
-        // ApplicationExitInfo API (API 30+) so no NDK / native code
-        // is needed. No-op on Fire OS 7 (Android 9). Closes the
-        // diagnostic gap that hid AFTSS 1 GB Fire Stick startup
-        // crashes from `19530123`, `irandall16`, `jamvan55@gmail.com`.
-        // v1.44.121 — also drains `filesDir/exit_info_pending/` for
-        // reports persisted by a previous launch that died before
-        // upload completed.
-        com.hushtv.tv.data.ExitInfoCollector.collect(this)
-        // v1.44.54 — load the themed-pack bundle from APK assets so
-        // any "extra" Moods & Themes rows are merged into
-        // HushThemedLists.all on the first composition. Cheap
-        // (~20 ms, runs once). Remote refresh is kicked off later
-        // by BootRefreshScreen alongside the main library prime.
-        com.hushtv.tv.data.ThemePackLoader.loadBundledSync(this)
-        // v1.44.3 — start the ANR watchdog. Detects main-thread freezes
-        // >4s and writes a stack trace to anr.log so the next launch
-        // can ship it. Closes the diagnostic gap that ate v1.44.0–.2:
-        // ANRs are SIGKILL'd by the OS and bypass every JVM handler.
-        com.hushtv.tv.data.AnrWatchdog.start(this)
-        com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oncreate_anr")
+        com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_eventlog")
+
+        // v1.44.123 — DEFERRED INIT. Everything below was previously
+        // synchronous in Application.onCreate, peaking heap usage at
+        // a moment when the Android system has zero patience for
+        // slow app starts. AFTKRT (Fire 4K 2nd gen, memoryClass=192,
+        // totalRam=1669 MB) was getting SIGKILL'd before the activity
+        // could even claim a window. Moving these to a background
+        // HandlerThread fired ~50ms after onCreate returns means the
+        // window can attach + first frame can render before the
+        // heavyweight init completes. None of this work is on the
+        // critical path for showing the splash → boot refresh screen.
+        val deferredInit = android.os.HandlerThread("hushtv-deferred-init").apply {
+            // Lower priority so the deferred init never starves UI.
+            start()
+        }
+        android.os.Handler(deferredInit.looper).post {
+            runCatching {
+                XtreamApi.enableDiskCache(this)
+                com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_xtream_cache")
+                com.hushtv.tv.data.CrashReporter.uploadIfPending(this)
+                com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_crash_upload")
+                com.hushtv.tv.data.ExitInfoCollector.collect(this)
+                com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_exit_collector")
+                com.hushtv.tv.data.ThemePackLoader.loadBundledSync(this)
+                com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_themepack")
+                com.hushtv.tv.data.AnrWatchdog.start(this)
+                com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_anr_watchdog")
+            }.onFailure { e ->
+                android.util.Log.e("HushTVApp", "deferred init failed: ${e.message}", e)
+            }
+            // Quit the HandlerThread after the init runnable finishes
+            // so we don't hold a thread + looper forever.
+            deferredInit.quitSafely()
+        }
 
         // v1.44.112 — (dev only) main-thread StrictMode. Logs any
         // disk read/write or network call accidentally landing on the

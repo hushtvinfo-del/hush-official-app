@@ -1,3 +1,56 @@
+## v1.44.123 (Canada channel) — Fresh-install Fire Stick crash loop FIX + onCreate deferred init — 2026-02-22
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (25.3 MB)
+- **versionCode**: 523 / **versionName**: 1.44.123 / mandatory=true
+
+### Root cause (irandall16@hotmail.com specifically)
+- v1.44.120 BootPhaseTracker (shipped earlier) finally captured the smoking gun for irandall16's AFTKRT (memoryClass=192, totalRam=1669 MB): **`BOOT::app_oncreate_start`** — meaning each launch died between mark #1 and mark #2 of `HushTVApp.onCreate`, before the activity could attach.
+- v1.44.122 Lite-mode auto-migration didn't fix it because the migration only triggered for users `currentMode == PRO`. Fresh-install / reinstall users have `currentMode == UNSET` → migration skipped → `MainActivity.isLite = (savedMode == LITE)` evaluated to `false` for UNSET → Pro UI rendered → onCreate's heavyweight init OOM-killed before window attach.
+- 19 historical `EXIT::SIGNALED::SIGKILL` reports = kernel killing the process unconditionally before any Java exception could fire.
+
+### Fix shipped (four pieces)
+
+**Part A — Granular boot-phase marks** (`HushTVApp.kt`)
+- Added 9 marks between every onCreate call: `app_oc_post_crashhandler`, `app_oc_post_migration`, `app_oc_post_eventlog`, `app_oc_post_xtream_cache`, `app_oc_post_crash_upload`, `app_oc_post_exit_collector`, `app_oc_post_themepack`, `app_oc_post_anr_watchdog`, `app_oncreate_end`.
+- Next death's `boot_died` report will pinpoint the EXACT line dying.
+
+**Part B — Fresh-install defensive Lite default** (`AppMode.kt` + `MainActivity.kt`)
+- `runAutoMigrationV122IfNeeded` now also fires for `currentMode == UNSET` (not just `PRO`). Toast still only shown for PRO → LITE (UNSET users were never running Pro so no surprise to explain).
+- `MainActivity.isLite` falls back to `DeviceCapability.detect()` when `savedMode == UNSET`. Last line of defense if migration fails to save() before first composition.
+
+**Part C — Defer heavy init off main thread** (`HushTVApp.kt`)
+- `XtreamApi.enableDiskCache`, `CrashReporter.uploadIfPending`, `ExitInfoCollector.collect`, `ThemePackLoader.loadBundledSync`, `AnrWatchdog.start` all moved into a single `HandlerThread.post {}` that fires ~50ms after `onCreate` returns.
+- Main thread of `Application.onCreate` finishes in <50ms — activity window attaches + first frame renders before any of the heavy init completes.
+- HandlerThread `quitSafely()` after the init runnable finishes so we don't leak a thread.
+
+**Part D — `app_mode` + `migration_state` in every payload** (`AppMode.kt` + `CrashReporter.kt` + `ExitInfoCollector.kt` + `BootPhaseTracker.kt`)
+- New `AppModeStore.snapshotMode(ctx)` → "LITE" / "PRO" / "UNSET".
+- New `AppModeStore.snapshotMigrationState(ctx)` → "migrated_v122" / "pristine".
+- Every crash, exit-info, and boot-died report now includes both. Admin Crashes tab can immediately distinguish "Pro UI killed device" from "Lite UI killed device" and see whether v1.44.122/123 auto-migration actually took effect for the dying user.
+
+### Files touched
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushTVApp.kt` — granular marks + deferred HandlerThread init
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/MainActivity.kt` — UNSET → DeviceCapability fallback
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/AppMode.kt` — UNSET path in migration + snapshot helpers
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/CrashReporter.kt` — app_mode / migration_state fields
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/ExitInfoCollector.kt` — app_mode / migration_state fields
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/BootPhaseTracker.kt` — app_mode / migration_state fields
+- `/app/androidtv/app/build.gradle.kts` — versionCode 523 / 1.44.123
+- `/app/_buildenv/version-canada.json` — OTA manifest
+
+### Live URLs verified
+- `https://hushtv.xyz/version-canada.json` → v523 / 1.44.123 / mandatory
+- `https://hushtv.xyz/hushtv-canada.apk` → 25.3 MB, fresh Last-Modified
+
+### What to watch in the next session
+- **irandall16's next boot_died trace** should now have a much more specific `last_stage`. If still dying at `app_oncreate_start` → the BootPhaseTracker itself is the problem. If dying at `app_oc_post_migration` → the migration's heavy `ActivityManager.getMemoryInfo()` Binder call is the problem. Etc. We'll know.
+- Crash reports now show `app_mode=LITE` for users who took the migration — confirm field is populated correctly.
+- AFTKRT / AFTSSS aggregate crash count should drop 80%+ within 48h as the deferred init lets the activity attach before OOM-killer can fire.
+
+---
+
+
 ## v1.44.123 (server + admin only — no APK release) — Bulletproof payment safety net — 2026-02-22
 
 ### Root cause of benlisto's 6-min delay (and the latent revenue-loss risk affecting 700 trial users)

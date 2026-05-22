@@ -404,6 +404,12 @@ object CrashReporter {
                 put("low_mem_threshold_mb", (mi.threshold / (1024 * 1024)).toString())
                 put("low_memory_flag", mi.lowMemory.toString())
             }
+            // v1.44.123 — attach AppMode + migration state so the admin
+            // can immediately see whether the dying app was running
+            // Pro vs Lite and whether the v1.44.122/123 auto-migration
+            // has actually taken effect for this user.
+            put("app_mode", com.hushtv.tv.data.AppModeStore.snapshotMode(ctx))
+            put("migration_state", com.hushtv.tv.data.AppModeStore.snapshotMigrationState(ctx))
             put("trace", safeTrace)
         }
     }

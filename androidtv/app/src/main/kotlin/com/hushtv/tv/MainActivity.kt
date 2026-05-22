@@ -296,7 +296,22 @@ private fun AppContent() {
             // this scope recomposes, flipping the entire UI tree.
             val savedMode by com.hushtv.tv.data.AppModeStore.flow(ctx)
                 .collectAsState()
-            val isLite = savedMode == com.hushtv.tv.data.AppMode.LITE
+            // v1.44.123 — if savedMode is UNSET (fresh install where
+            // the migration hasn't fired yet — e.g., the migration
+            // crashed before save() completed), fall back to the
+            // device capability detector. Prevents fresh-install
+            // users from getting the heavy Pro UI for one frame
+            // before the migration's save() lands, which on weak
+            // devices was enough to OOM-kill the process.
+            val isLite = when (savedMode) {
+                com.hushtv.tv.data.AppMode.LITE -> true
+                com.hushtv.tv.data.AppMode.PRO  -> false
+                com.hushtv.tv.data.AppMode.UNSET ->
+                    runCatching {
+                        com.hushtv.tv.data.DeviceCapability.detect(ctx).recommended ==
+                            com.hushtv.tv.data.AppMode.LITE
+                    }.getOrDefault(false)
+            }
             androidx.compose.runtime.CompositionLocalProvider(
                 com.hushtv.tv.data.LocalIsLiteMode provides isLite,
             ) {

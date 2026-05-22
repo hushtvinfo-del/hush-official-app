@@ -125,6 +125,23 @@ object AppModeStore {
             .apply()
     }
 
+    /** Returns "LITE", "PRO", or "UNSET" for inclusion in crash /
+     *  exit-info / boot-died report payloads so the admin Crashes tab
+     *  can filter by mode and we can confirm migrations actually took
+     *  effect on the device. Best-effort — returns "?" on any read
+     *  failure. */
+    fun snapshotMode(ctx: Context): String =
+        runCatching { load(ctx).name }.getOrDefault("?")
+
+    /** Returns "migrated_v122", "pristine", or "?". Lets the admin
+     *  see at a glance whether a crashing user has actually had the
+     *  v1.44.122/123 auto-migration applied. */
+    fun snapshotMigrationState(ctx: Context): String = runCatching {
+        val migrated = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_MIGRATED_V122, false)
+        if (migrated) "migrated_v122" else "pristine"
+    }.getOrDefault("?")
+
     /**
      * v1.44.122 — one-shot migration for users who landed on PRO mode
      * on a Fire Stick (or any device that the v1.44.121 capability
@@ -133,21 +150,28 @@ object AppModeStore {
      * Fire Sticks running Pro, while Skyworth and similar TVs on
      * Lite have zero crashes.
      *
-     * Migration rule: if the user is currently on PRO and the
-     * v1.44.122 capability detector now recommends LITE for their
-     * device, silently switch them to LITE and arm the one-time
-     * "we optimized your device" toast.
+     * v1.44.123 — also applies to UNSET (fresh-install) users whose
+     * device the detector recommends as Lite. The v1.44.122 release
+     * left a hole: a user who uninstalls + reinstalls (like
+     * irandall16@hotmail.com on an AFTKRT) lands with `KEY_MODE=null`
+     * → `currentMode=UNSET` → migration was skipped → UI defaulted to
+     * Pro (because `MainActivity.isLite = savedMode == LITE` treats
+     * UNSET as not-Lite). Now an UNSET user also gets the recommended
+     * mode written to prefs immediately, so the app composes the
+     * RIGHT UI on the very first frame.
+     *
+     * Migration rule (v1.44.123): if the device detector recommends
+     * LITE AND the user is currently on PRO **or UNSET**, write LITE
+     * to prefs. PRO users also get the one-time toast; UNSET users
+     * don't (they were never running Pro to begin with, no surprise
+     * to explain).
      *
      * Runs at-most-once per device — gated by [KEY_AUTO_MIGRATED_V122].
-     * If the user manually toggles back to Pro from Settings later,
-     * their choice is respected forever because the gate never
-     * re-fires.
+     * If the user manually toggles to Pro from Settings later, their
+     * choice is respected forever because the gate never re-fires.
      *
-     * Safe to call from any thread; uses synchronous SharedPreferences
-     * commit which is the same pattern as load/save.
-     *
-     * @return `true` if the migration ran (= a toast should be shown
-     * on the next composition), `false` otherwise.
+     * @return `true` if the migration ran AND should show a toast
+     * (only true for PRO → LITE, not UNSET → LITE).
      */
     fun runAutoMigrationV122IfNeeded(ctx: Context): Boolean {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -157,19 +181,23 @@ object AppModeStore {
 
         val currentRaw = prefs.getString(KEY_MODE, null)
         val currentMode = AppMode.fromString(currentRaw)
-        // Only migrate users currently on Pro. UNSET users will get
-        // the first-launch dialog anyway, Lite users are already
-        // where we want them.
-        if (currentMode != AppMode.PRO) return false
+        // v1.44.123 — accept UNSET (fresh install) in addition to PRO.
+        if (currentMode != AppMode.PRO && currentMode != AppMode.UNSET) return false
 
         val recommended = runCatching { DeviceCapability.detect(ctx).recommended }
             .getOrDefault(AppMode.PRO)
         if (recommended != AppMode.LITE) return false
 
-        // Demote: switch to Lite + arm the toast for the next launch.
+        // Demote: switch to Lite. Toast only fires for PRO→LITE
+        // transitions; UNSET→LITE is the first-launch experience so
+        // we shouldn't surprise the user with a "we changed your
+        // settings" message they never set.
         save(ctx, AppMode.LITE)
-        prefs.edit().putBoolean(KEY_MIGRATION_TOAST_PENDING, true).apply()
-        return true
+        if (currentMode == AppMode.PRO) {
+            prefs.edit().putBoolean(KEY_MIGRATION_TOAST_PENDING, true).apply()
+            return true
+        }
+        return false
     }
 
     /** Read + clear the one-time post-migration toast flag. Returns

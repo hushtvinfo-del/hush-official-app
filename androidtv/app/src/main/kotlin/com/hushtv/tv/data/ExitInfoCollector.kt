@@ -288,6 +288,10 @@ object ExitInfoCollector {
             put("exit_pss_kb", info.pss.toString())
             put("exit_rss_kb", info.rss.toString())
             put("exit_importance", importance)
+            // v1.44.123 — app_mode + migration state for cross-correlation
+            // with crash + boot_died reports.
+            put("app_mode", com.hushtv.tv.data.AppModeStore.snapshotMode(ctx))
+            put("migration_state", com.hushtv.tv.data.AppModeStore.snapshotMigrationState(ctx))
             // v1.44.118 identifiers so the admin Crashes tab can
             // filter exit-info reports by Xtream username.
             runCatching {

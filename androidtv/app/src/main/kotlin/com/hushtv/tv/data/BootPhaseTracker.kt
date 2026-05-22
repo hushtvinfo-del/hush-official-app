@@ -225,6 +225,17 @@ object BootPhaseTracker {
             put("installed_version", BuildConfig.VERSION_NAME)
             put("kind", "boot_died")
             put("last_stage", lastStage)
+            // v1.44.123 — app_mode + migration state. Critical for
+            // confirming whether the v122/123 Lite-mode auto-migration
+            // actually fired for the dying user. If a boot_died report
+            // arrives with app_mode=PRO + migration_state=migrated_v122
+            // we know the migration ran but the device is STILL on
+            // Pro — pointing to a different bug. If migration_state=
+            // pristine + app_mode=UNSET, the migration never ran and
+            // the fresh-install fallback in MainActivity.isLite is the
+            // last line of defense.
+            put("app_mode", AppModeStore.snapshotMode(ctx))
+            put("migration_state", AppModeStore.snapshotMigrationState(ctx))
             runCatching {
                 val playlists = PlaylistStore.getAll(ctx)
                 val pl = playlists.firstOrNull()
