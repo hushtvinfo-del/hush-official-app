@@ -33,6 +33,17 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // died, then truncates for this launch's marks.
         com.hushtv.tv.data.BootPhaseTracker.collectAndRotate(this)
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oncreate_start")
+        // v1.44.122 — one-shot migration for Fire-Stick / weak-device
+        // users mistakenly running Pro mode. v1.44.121 telemetry showed
+        // 1,700+ silent OOM kills/day on Fire Sticks running Pro UI
+        // while equivalent-spec Skyworth users on Lite had ZERO crashes
+        // — the entire delta was the Pro Compose tree being too heavy
+        // to compose without ANR on Fire OS. Migration auto-demotes
+        // these users to Lite and arms a toast so they know why their
+        // UI changed. Runs at-most-once; manual Pro re-selection is
+        // respected forever. Must run BEFORE setContent so the first
+        // composition already reflects the new mode.
+        com.hushtv.tv.data.AppModeStore.runAutoMigrationV122IfNeeded(this)
         installCrashHandler()
         // v1.43.83 → v1.43.88: REMOVED installMainLooperResilience.
         // The re-entrant `Looper.loop()` posted as a runnable was
@@ -276,14 +287,9 @@ class HushTVApp : Application(), ImageLoaderFactory {
             .memoryCache {
                 val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
                 val totalRamMb = am.memoryClass
-                // v1.44.121 — telemetry showed AFTKRT / AFTSSS (the
-                // 128 MB heap class) were the TOP crash devices despite
-                // the previous 10% cap. Drop them to the same 7% as
-                // the 96 MB heap class. 7% of 128 MB ≈ 9 MB which is
-                // enough for the currently-visible row of posters but
-                // leaves serious headroom for ExoPlayer + EPG + Compose.
                 val pct = when {
-                    totalRamMb <= 128 -> 0.07
+                    totalRamMb <= 96  -> 0.07
+                    totalRamMb <= 128 -> 0.10
                     else              -> 0.20
                 }
                 MemoryCache.Builder(this)

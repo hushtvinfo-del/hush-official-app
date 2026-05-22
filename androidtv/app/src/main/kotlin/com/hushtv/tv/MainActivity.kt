@@ -126,6 +126,26 @@ class MainActivity : ComponentActivity() {
                 com.hushtv.tv.data.BootPhaseTracker.mark(markCtx, com.hushtv.tv.data.BootPhaseTracker.REACHED_ALIVE)
                 com.hushtv.tv.data.BootPhaseTracker.rotateOnAlive(markCtx)
             }
+            // v1.44.122 — one-time post-migration toast. If the
+            // HushTVApp.onCreate auto-migration flipped this device
+            // from Pro → Lite on this launch, surface a Toast so the
+            // user knows why their UI changed and where to opt back in.
+            // The flag is read-and-cleared so this fires exactly once
+            // per device, ever.
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                // Wait until the UI is actually alive before showing
+                // a Toast — System Toast against a still-composing
+                // window has been a Fire OS hang source historically.
+                kotlinx.coroutines.delay(2_500)
+                if (com.hushtv.tv.data.AppModeStore.consumeMigrationToast(markCtx)) {
+                    android.widget.Toast.makeText(
+                        markCtx,
+                        "We optimized HushTV for your device. " +
+                            "Switch back to Pro in Settings → App Mode.",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
             HushTVTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize().background(BgBlack),

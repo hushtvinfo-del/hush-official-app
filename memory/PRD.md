@@ -1,3 +1,55 @@
+## v1.44.122 (Canada channel) — Fire Stick crash storm ROOT CAUSE FIX — 2026-02-22
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (25.3 MB)
+- **versionCode**: 522 / **versionName**: 1.44.122 / mandatory=true
+
+### Root cause (user-identified via "Skyworth works, Fire Sticks don't")
+The user's diagnostic insight cracked a 2-year bug. `AppMode.kt` lines 165-174 had a blanket premium-brand bypass that included **"AMAZON"** alongside NVIDIA/GOOGLE/etc:
+
+```kotlin
+val PREMIUM_DEVICE_BRANDS = setOf("NVIDIA", "AMAZON", "GOOGLE", "XIAOMI", ...)
+if (isPremiumBrand) return Result(AppMode.PRO, ...)
+```
+
+So **every** Fire Stick — AFTSS (1 GB), AFTKM (1 GB), AFTSSS (2 GB but 128 MB heap), AFTKRT (2 GB but 128 MB heap) — was force-pushed to Pro mode, skipping the objective RAM/cores test. Skyworth TVs (not in the list) fell through to the heuristic, got recommended Lite, and ran the flat animation-free UI perfectly. Pro mode loads ~11 simultaneous backdrops + Ken-Burns + AnimatedContent on first composition — fine on a Shield, fatal on a 1-2 GB Fire Stick where Fire OS's slow ART triggers ANR at the 4-sec watchdog threshold, then the OS kills the process around T+10-15 s. Exactly the timing every Fire Stick user reported.
+
+### Fix
+- `AppMode.kt` — removed AMAZON from premium-brand list; added per-app `memoryClass ≥ 192 MB` as the actual capability gate. Only genuinely-powerful streaming boxes (Shield, Fire TV Cube 3rd-gen, Chromecast 4K) pass. All Fire Sticks now correctly route to Lite mode.
+- **One-shot silent migration** (`runAutoMigrationV122IfNeeded`): on first v1.44.122 launch, if the user is currently on Pro AND the new detector recommends Lite, the mode auto-flips to Lite. Gated by `KEY_AUTO_MIGRATED_V122` (one-shot, never re-runs). Manual Pro re-selection from Settings is respected forever.
+- **One-time post-migration toast**: `consumeMigrationToast()` returns true exactly once after the migration runs; MainActivity shows a Toast 2.5 s after first frame: *"We optimized HushTV for your device. Switch back to Pro in Settings → App Mode."*
+- Migration runs in `HushTVApp.onCreate()` BEFORE `setContent`, so the first composition already reflects Lite mode (no flicker, no double-mount).
+
+### Reverted from v1.44.121
+- `DeviceClass.LOW_RAM_HEAP_MB` restored from 128 → 96. The 128 MB devices (AFTSSS, AFTKRT) are now handled by Lite mode which skips the entire heavy Compose tree — strictly better than trimming bitmap allocation.
+- Coil `memoryCache` percentage buckets restored to 7% / 10% / 20% (was 7% / 7% / 20% in v1.44.121).
+
+### Kept from v1.44.121 (diagnostic-only, zero risk)
+- `BootPhaseTracker` — closes the Android 9 / API 28 / AFTSS blind spot ApplicationExitInfo can't reach.
+- `ExitInfoCollector` persist-first hardening — every payload written to disk BEFORE the HTTP attempt + per-exit watermark, so devices that die mid-upload still ship reports on the next launch.
+
+### Files touched
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/AppMode.kt` — premium list, capability gate, migration + toast helpers
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushTVApp.kt` — migration hook in onCreate; Coil cache buckets reverted
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/MainActivity.kt` — post-migration toast LaunchedEffect
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/DeviceClass.kt` — threshold reverted to 96 MB
+- `/app/androidtv/app/build.gradle.kts` — versionCode 522 / 1.44.122
+- `/app/_buildenv/version-canada.json` — OTA manifest updated
+
+### Live URLs verified
+- `https://hushtv.xyz/version-canada.json` → v522 / 1.44.122 / mandatory
+- `https://hushtv.xyz/hushtv-canada.apk` → 25.3 MB, fresh Last-Modified
+
+### Next session — what to watch
+Within 24 h post-OTA, the Fire Stick ANR count in `/admin → Crashes` should crater. Specifically:
+- Expect AFTKM (currently ~76 ANR+crashes/day) to drop to <5 — same as Skyworth's baseline.
+- Expect AFTKRT (~71/day) to drop similarly.
+- `marilynmclean@hotmail.com` should stop being silent.
+- If the Lite-mode UI still ANRs, the issue is in shared code (data layer, license polling) — but Skyworth's 0-ANR baseline strongly argues against this.
+
+---
+
+
 ## v1.44.121 (Canada channel) — Triple-fix for AFTSSS/AFTKRT OOM kills — 2026-02-22
 
 ### Release

@@ -64,6 +64,15 @@ object AppModeStore {
     private const val PREFS = "app_mode_prefs"
     private const val KEY_MODE = "mode"
     private const val KEY_PROMPTED = "prompted"
+    // v1.44.122 — one-shot key for the auto-migration. Once true,
+    // we never run the migration again so a user who deliberately
+    // sets Pro on a Fire Stick after the migration is respected
+    // and never silently demoted back to Lite.
+    private const val KEY_AUTO_MIGRATED_V122 = "auto_migrated_v122"
+    // v1.44.122 — one-shot key for the "We optimized your device"
+    // toast. Set after the migration fires so the toast shows once
+    // on the FIRST launch of v1.44.122, then never again.
+    private const val KEY_MIGRATION_TOAST_PENDING = "migration_toast_pending"
 
     // v1.44.115 — reactive cache. Settings calls save(), Compose reads
     // flow(). Previously the live UI never picked up a mode change
@@ -115,6 +124,63 @@ object AppModeStore {
             .putBoolean(KEY_PROMPTED, true)
             .apply()
     }
+
+    /**
+     * v1.44.122 — one-shot migration for users who landed on PRO mode
+     * on a Fire Stick (or any device that the v1.44.121 capability
+     * detector wrongly flagged as "premium" via brand alone). The
+     * v1.44.120 telemetry confirmed 1,700+ silent OOM kills/day on
+     * Fire Sticks running Pro, while Skyworth and similar TVs on
+     * Lite have zero crashes.
+     *
+     * Migration rule: if the user is currently on PRO and the
+     * v1.44.122 capability detector now recommends LITE for their
+     * device, silently switch them to LITE and arm the one-time
+     * "we optimized your device" toast.
+     *
+     * Runs at-most-once per device — gated by [KEY_AUTO_MIGRATED_V122].
+     * If the user manually toggles back to Pro from Settings later,
+     * their choice is respected forever because the gate never
+     * re-fires.
+     *
+     * Safe to call from any thread; uses synchronous SharedPreferences
+     * commit which is the same pattern as load/save.
+     *
+     * @return `true` if the migration ran (= a toast should be shown
+     * on the next composition), `false` otherwise.
+     */
+    fun runAutoMigrationV122IfNeeded(ctx: Context): Boolean {
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_AUTO_MIGRATED_V122, false)) return false
+        // Mark the gate FIRST so a crash mid-migration can't loop.
+        prefs.edit().putBoolean(KEY_AUTO_MIGRATED_V122, true).apply()
+
+        val currentRaw = prefs.getString(KEY_MODE, null)
+        val currentMode = AppMode.fromString(currentRaw)
+        // Only migrate users currently on Pro. UNSET users will get
+        // the first-launch dialog anyway, Lite users are already
+        // where we want them.
+        if (currentMode != AppMode.PRO) return false
+
+        val recommended = runCatching { DeviceCapability.detect(ctx).recommended }
+            .getOrDefault(AppMode.PRO)
+        if (recommended != AppMode.LITE) return false
+
+        // Demote: switch to Lite + arm the toast for the next launch.
+        save(ctx, AppMode.LITE)
+        prefs.edit().putBoolean(KEY_MIGRATION_TOAST_PENDING, true).apply()
+        return true
+    }
+
+    /** Read + clear the one-time post-migration toast flag. Returns
+     *  `true` exactly once after [runAutoMigrationV122IfNeeded]
+     *  flipped the mode; every subsequent call returns `false`. */
+    fun consumeMigrationToast(ctx: Context): Boolean {
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_MIGRATION_TOAST_PENDING, false)) return false
+        prefs.edit().putBoolean(KEY_MIGRATION_TOAST_PENDING, false).apply()
+        return true
+    }
 }
 
 /**
@@ -146,12 +212,37 @@ object DeviceCapability {
         val reason: String,
     )
 
-    /** Brands that ship dedicated streaming hardware. ALWAYS get Pro
-     *  unless the device truly can't handle it (very old generation). */
+    /** Brands that ship genuinely-powerful streaming hardware where
+     *  brand alone is enough to guarantee Pro can run smoothly.
+     *
+     *  v1.44.122 — AMAZON removed. The brand alone is not enough
+     *  because Fire OS spans a huge range from the Fire TV Cube
+     *  (3rd gen, 2 GB heap class, fast A73 cores) all the way down
+     *  to the AFTKM Fire Stick Lite (96 MB heap, slow A55 cores)
+     *  which crashes within 10-15 s of the home screen mounting in
+     *  Pro mode (v1.44.120 telemetry confirmed). Amazon devices now
+     *  fall through to the objective memoryClass + RAM + cores test
+     *  below — only the actual Fire TV Cube (≥192 MB heap) gets PRO,
+     *  every Fire Stick gets LITE. Same UI Skyworth users already
+     *  run, which has zero crashes on weaker hardware. */
     private val PREMIUM_DEVICE_BRANDS = setOf(
-        "NVIDIA", "AMAZON", "GOOGLE", "XIAOMI", "ONN", "ROKU",
+        "NVIDIA",
+        // Note: "GOOGLE" stays (Chromecast 4K w/ Google TV is genuinely
+        // fast, all current Pixel Tablet variants are fast). "XIAOMI"
+        // (Mi Box S 4K is fast). "ONN" (the 4K Pro is genuinely capable).
+        // "ROKU" doesn't run our APK anyway. Brand-only bypass is for
+        // devices where the WHOLE catalog is fast.
+        "GOOGLE", "XIAOMI", "ONN", "ROKU",
         "TIVO", "DYNALINK", "WALMART",
     )
+
+    /** Per-app Java heap budget (memoryClass) is the most reliable
+     *  signal that a device can actually run the Pro Compose UI.
+     *  Fire Sticks all sit at 96 or 128 MB. Fire TV Cube (3rd gen)
+     *  and NVIDIA Shield Pro sit at 192+ MB. Standard Android TV
+     *  set-tops sit at 96-128 MB. The 192 MB floor cleanly separates
+     *  "real streaming box" from "embedded TV stick". */
+    private const val PRO_HEAP_CLASS_FLOOR_MB = 192
 
     fun detect(ctx: Context): Result {
         val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -161,10 +252,16 @@ object DeviceCapability {
         val cores = runCatching { Runtime.getRuntime().availableProcessors() }.getOrDefault(2)
         val manuf = (Build.MANUFACTURER ?: "").uppercase()
         val model = (Build.MODEL ?: "").uppercase()
+        // v1.44.122 — actual per-app heap budget. The objective test
+        // for whether the Pro Compose tree can run without OOM-killing
+        // the device.
+        val heapMb = runCatching { am.memoryClass }.getOrDefault(0)
 
         // Premium dedicated streaming devices: always Pro.
-        // (NVIDIA Shield, Fire TV / Fire Stick 4K, Chromecast w/ Google TV,
-        //  Onn 4K Pro, Xiaomi Mi Box 4K, Roku, etc.)
+        // (NVIDIA Shield, Chromecast w/ Google TV 4K, Mi Box 4K, etc.)
+        // v1.44.122 — Amazon removed; Fire Sticks fall through to the
+        // objective heap+RAM+cores test so AFTSS/AFTKM/AFTSSS/AFTKRT
+        // get LITE (same UI Skyworth users already run smoothly).
         val isPremiumBrand = PREMIUM_DEVICE_BRANDS.any { manuf.contains(it) }
         if (isPremiumBrand) {
             return Result(
@@ -173,22 +270,28 @@ object DeviceCapability {
             )
         }
 
-        // For everything else (built-in smart TVs, generic boxes,
-        // unknown brands), use objective performance heuristics:
-        //   • >= 2GB total RAM
+        // v1.44.122 — objective performance heuristic. ALL THREE must
+        // pass for Pro:
+        //   • per-app heap class >= 192 MB (= "real streaming box",
+        //     not a Fire Stick / generic TV stick)
+        //   • total RAM >= 2 GB
         //   • >= 4 CPU cores
-        // Anything below either bar gets Lite.
+        // The heap-class gate is the new safety net that catches the
+        // 2 GB Fire Sticks (AFTSSS/AFTKRT) — they have enough total
+        // RAM and cores but their per-app heap is only 128 MB which
+        // OOM-stalls the Pro Compose tree on first composition.
+        val plentyHeap = heapMb >= PRO_HEAP_CLASS_FLOOR_MB
         val plentyRam = totalMb >= 2048
         val plentyCores = cores >= 4
 
         return when {
-            plentyRam && plentyCores -> Result(
+            plentyHeap && plentyRam && plentyCores -> Result(
                 AppMode.PRO, totalMb, cores, manuf, model,
                 reason = "Your device looks capable — Pro is recommended.",
             )
             else -> Result(
                 AppMode.LITE, totalMb, cores, manuf, model,
-                reason = "Built-in smart TVs run smoother on Lite.",
+                reason = "Lite is faster and more stable on this device.",
             )
         }
     }
