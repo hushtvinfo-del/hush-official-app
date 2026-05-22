@@ -829,12 +829,24 @@ const $ = (id) => document.getElementById(id);
 // rejects it with:
 //   "Failed to execute 'fetch' on 'Window': Request cannot be
 //    constructed from a URL that includes credentials"
-// Prefix every API call with `location.origin` so the resolved
-// URL has no userinfo — credentials still travel as the
-// Authorization header (cached by the browser after the Basic
-// Auth dialog) so authentication keeps working.
-const ORIGIN = location.origin;
-function abs(path) { return ORIGIN + path; }
+//
+// When the URL has NO credentials in it (the normal flow — browser
+// auth dialog → realm cache), we MUST keep the path relative because
+// some browsers (mobile Chrome in particular) attach cached Basic
+// Auth credentials only to subresource requests that share the
+// document's resolved URL. Switching to absolute URLs in that case
+// drops the cached Authorization header and every fetch hangs on
+// a 401 challenge with no visible dialog.
+//
+// So: use absolute (origin-only, no userinfo) URLs ONLY when the
+// page itself was loaded with credentials in the URL; otherwise
+// keep paths relative so the realm cache flows.
+function abs(path) {
+  if (location.username || location.password) {
+    return location.origin + path;
+  }
+  return path;
+}
 
 function fmtDate(ms) {
   if (!ms) return "—";
