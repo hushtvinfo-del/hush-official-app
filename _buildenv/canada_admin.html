@@ -784,8 +784,9 @@
             Filtered to <strong>last 30 days</strong>. <code>unknown_order</code> rows are intentionally
             excluded — those belong to the Base44 initial-purchase flow.
           </p>
-          <div class="flex gap-2 mt-3">
+          <div class="flex gap-2 mt-3 flex-wrap">
             <button onclick="loadStuckPayments()" class="rounded-lg border border-rose-600 bg-rose-700/40 hover:bg-rose-700/60 px-4 py-1.5 text-sm font-semibold text-rose-100" data-testid="stuck-refresh">↻ Refresh</button>
+            <button onclick="runFullReconcileScan()" class="rounded-lg border border-emerald-600 bg-emerald-700/40 hover:bg-emerald-700/60 px-4 py-1.5 text-sm font-semibold text-emerald-100" data-testid="stuck-full-rescan">🔍 Re-scan ALL Interac emails &amp; auto-activate matched licenses</button>
             <button onclick="runDriftReportNow()" class="rounded-lg border border-amber-600 bg-amber-700/30 hover:bg-amber-700/50 px-4 py-1.5 text-sm font-semibold text-amber-100" data-testid="stuck-drift-now">📧 Email daily report to support@hushtv.com</button>
           </div>
         </div>
@@ -2287,6 +2288,54 @@ async function runDriftReportNow() {
       r.ok ? "success" : "error");
   } catch (e) {
     toast(e.message, "error");
+  }
+}
+
+// v1.44.126 — One-click full reconciliation.
+// Re-fetches every Interac email from the last 90 days, re-runs
+// the parser, and auto-activates any pending order whose memo
+// matches. Idempotent — already-paid orders are skipped.
+async function runFullReconcileScan() {
+  if (!confirm(
+    "Re-scan ALL Interac e-Transfer emails from the last 90 days and "
+    + "auto-activate any matching pending licenses?\n\n"
+    + "Safe to run anytime — already-paid orders are skipped.\n"
+    + "This can take 1-3 minutes depending on inbox size."
+  )) return;
+  const btn = document.querySelector('[data-testid="stuck-full-rescan"]');
+  const originalText = btn?.textContent;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "🔍 Scanning… please wait";
+    btn.classList.add("opacity-50");
+  }
+  try {
+    const r = await api("POST", "/reconcile/full-scan?days=90");
+    const msg =
+      `Scanned ${r.checked} Interac emails in ${r.duration_sec || "?"}s\n\n`
+      + `✅ Newly activated licenses: ${r.newly_activated}\n`
+      + `   Already paid (no-op): ${r.already_paid}\n`
+      + `   No order ID in memo: ${r.no_order_id}\n`
+      + `   Unknown order (Base44 flow — left alone): ${r.unknown_order}\n`
+      + `   Amount < $50: ${r.amount_too_low}\n`
+      + `   Errors: ${r.errors}`;
+    alert(msg);
+    if (r.newly_activated > 0) {
+      toast(`Activated ${r.newly_activated} new license(s)! Dashboard refreshing…`, "success");
+    } else {
+      toast(`Re-scan complete — no new payments to activate.`, "info");
+    }
+    // Refresh the stuck-payments queue + revenue stats.
+    await loadStuckPayments();
+    if (typeof loadStats === "function") loadStats();
+  } catch (e) {
+    toast("Re-scan failed: " + e.message, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      btn.classList.remove("opacity-50");
+    }
   }
 }
 

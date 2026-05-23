@@ -3107,6 +3107,111 @@ def admin_drift_report_run_now(
     }
 
 
+@admin_router.post("/reconcile/full-scan")
+def admin_reconcile_full_scan(
+    days: int = Query(90, ge=1, le=365),
+    x_admin_token: Optional[str] = Header(None),
+) -> dict:
+    """v1.44.126 — One-click manual reconciliation.
+
+    Re-fetches EVERY Interac email from the last N days (default 90,
+    max 365), re-runs the parser, and reconciles any pending order
+    whose memo line now matches. Lets the admin recover from any
+    edge case the auto-poller might have missed without having to
+    SSH or write SQL.
+
+    Safety:
+      • [_process_single_email] is fully idempotent. Orders already
+        `status='paid'` short-circuit to outcome='already_paid' and
+        the license is NOT re-granted. No double-billing risk.
+      • `unknown_order` outcomes (per user direction: these belong
+        to the Base44 initial-purchase flow) are recorded but never
+        cause a license grant — only orders that exist in our
+        `canada_orders` table can be reconciled.
+      • Only `amount = $50 CAD` emails ever trigger a grant. Anything
+        below threshold lands at `amount_too_low` and is skipped.
+
+    Returns a summary the admin UI displays as a toast.
+    """
+    _check_admin(x_admin_token)
+
+    summary = {
+        "checked": 0,
+        "newly_activated": 0,    # paid this run that had a pending order
+        "already_paid":   0,     # order was already paid
+        "no_order_id":    0,     # parser couldn't extract order_id
+        "unknown_order":  0,     # Base44 flow (intentional)
+        "amount_too_low": 0,
+        "errors":         0,
+        "scan_days":      days,
+        "started_at":     _now_ms(),
+    }
+
+    m = _imap_connect()
+    if m is None:
+        summary["errors"] = 1
+        summary["error_detail"] = "imap connect failed"
+        return summary
+
+    try:
+        m.select("INBOX")
+        since = time.strftime(
+            "%d-%b-%Y", time.gmtime(time.time() - days * 86400),
+        )
+        typ, data = m.search(
+            None, '(SINCE "%s" FROM "%s")' % (since, INTERAC_SENDER),
+        )
+        if typ != "OK" or not data or not data[0]:
+            return summary
+        uids = data[0].split()
+
+        # Full-body fetch + re-process every email. We deliberately
+        # SKIP the `_already_processed` short-circuit because the
+        # whole point of this endpoint is to retry rows that were
+        # previously marked no_order_id / amount_too_low.
+        for uid_b in uids:
+            uid = uid_b.decode("ascii", errors="ignore")
+            summary["checked"] += 1
+            try:
+                typ2, msg_data = m.fetch(uid_b, "(RFC822)")
+                if typ2 != "OK" or not msg_data or not msg_data[0]:
+                    summary["errors"] += 1
+                    continue
+                raw = msg_data[0][1]
+                with _conn() as c:
+                    outcome = _process_single_email(c, uid, raw)
+                # Tally by outcome.
+                if outcome == "paid":
+                    summary["newly_activated"] += 1
+                elif outcome == "already_paid":
+                    summary["already_paid"] += 1
+                elif outcome == "no_order_id":
+                    summary["no_order_id"] += 1
+                elif outcome == "unknown_order":
+                    summary["unknown_order"] += 1
+                elif outcome == "amount_too_low":
+                    summary["amount_too_low"] += 1
+            except Exception as e:
+                log.exception("reconcile full-scan: uid %s failed: %s", uid, e)
+                summary["errors"] += 1
+    finally:
+        try:
+            m.close()
+        except Exception:
+            pass
+        try:
+            m.logout()
+        except Exception:
+            pass
+
+    summary["finished_at"] = _now_ms()
+    summary["duration_sec"] = round(
+        (summary["finished_at"] - summary["started_at"]) / 1000, 1,
+    )
+    log.info("admin full-scan complete: %s", summary)
+    return summary
+
+
 # Schema init on import so `import canada_payment_module` is enough.
 try:
     _init_schema()
