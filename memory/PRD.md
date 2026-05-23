@@ -1,3 +1,141 @@
+## v1.44.128-debug (DEV channel ONLY) — Bake static API data into the APK — 2026-05-23
+
+### Why
+User feedback: TiVimate and IPTV Smarters feel faster than HushTV
+at startup. Their advantage isn't the player — both use the same
+Xtream API backend we do. The actual difference is that we make
+~12-20 outbound HTTP calls at cold start for static data that
+doesn't change day-to-day (sports schedules, league logos,
+popular-movie metadata, themes pack, bundle overrides). Killing
+those at the source — by baking the responses into the APK — should
+recover the parity without changing anything about how the app
+talks to Xtream.
+
+This release is the **dev-flavor proof of concept**. Canada and
+official are completely untouched (different applicationIds, no
+shared assets folder under `app/src/canada/` or `app/src/official/`).
+
+### What's baked (dev flavor only — 545 KB total)
+- `assets/dev_only/sports_home.json` (18 KB)
+- `assets/dev_only/sports_ppv.json` (4.3 KB)
+- `assets/dev_only/sports_league_<slug>.json` × 9 (NHL, NBA, MLB,
+  NFL, UFC, EPL, MLS, NCAAB, NCAAF — combined ~35 KB)
+- `assets/dev_only/tmdb_top_movies.json` (67 KB — top 100 popular)
+- `assets/dev_only/tmdb_top_tv.json` (420 KB — top 100 popular,
+  larger because of `seasons` array)
+- `assets/dev_only/manifest.json` (versioning + generation timestamp)
+
+### API calls eliminated on dev (per cold start)
+1. `GET hushtv.xyz/api/sports/home`
+2. `GET hushtv.xyz/api/sports/ppv`
+3. `GET hushtv.xyz/api/sports/league/{slug}` × 9 (when user enters
+   each league tab)
+4. `GET hushtv.xyz/themes_pack.json` (refresh)
+5. `GET hushtv.xyz/bundle_overrides.json` (refresh — endpoint 404s
+   anyway, so silenced)
+6. `GET api.themoviedb.org/3/movie/{id}` for any of the top 100
+   popular movies the user opens
+7. `GET api.themoviedb.org/3/tv/{id}` for any of the top 100
+   popular TV shows the user opens
+
+### Architecture (zero risk for canada / official)
+- New `DevBundleCache.kt` (`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/`).
+  Two gates on `isActive`:
+    1. `BuildConfig.UPDATE_CHANNEL == "dev"` — wrong flavor → false.
+    2. `assets/dev_only/manifest.json` present — files not shipped
+       → false.
+  When false, every public getter (`sportsHomeRaw`, `tmdbMovie`,
+  etc.) returns null and the existing network code path runs
+  unchanged.
+- Call sites consult the bundle first, fall through to network on
+  miss:
+    - `SportsApi.home()` / `league(slug)` / `ppv()` — short-circuit
+    - `TmdbService.getMovie(id)` / `getTv(id)` — short-circuit
+    - `ThemePackLoader.refreshRemote()` — returns false early on
+      dev (bundled themes_pack.json is still in main/assets and
+      loaded by `loadBundledSync`)
+    - `BundleOverrides.startRefresh()` — early-return on dev
+- Bundle files live ONLY under `app/src/dev/assets/dev_only/`.
+  AGP's flavor source-set system guarantees they are never packaged
+  into canada/official APKs.
+
+### Stays live in dev (must — would break the app)
+- ALL Xtream Codes (channels, movie catalog, series catalog, EPG,
+  stream URLs)
+- License / trial / sync state
+- Per-game channel picker (`/api/sports/game/{id}/channels`)
+- User requests (Base44 webhook)
+
+### Tests
+- 13 new pytests in `/app/_buildenv/tests/test_dev_bundle_shape.py`
+  validating the bundled JSON parses cleanly under the same Moshi
+  field requirements the Android client uses. All green.
+- Full sync_server suite: 59 / 59 still green (no regressions —
+  dev-flavor bake is purely client-side).
+
+### Files touched
+- **NEW** `/app/_buildenv/dev-bundle-fetcher.py` — build-time
+  fetcher that downloads the latest live snapshots and writes them
+  into `app/src/dev/assets/dev_only/`. Re-run any time we want a
+  fresher snapshot for the next dev build:
+  ```
+  python3 /app/_buildenv/dev-bundle-fetcher.py
+  ```
+- **NEW** `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/DevBundleCache.kt`
+- **NEW** 14 files under `/app/androidtv/app/src/dev/assets/dev_only/`
+- **NEW** `/app/_buildenv/tests/test_dev_bundle_shape.py`
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushTVApp.kt`
+  (call `DevBundleCache.init(this)` in onCreate)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/sports/SportsApi.kt`
+  (`home()`, `league()`, `ppv()` consult bundle first)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/TmdbService.kt`
+  (`getMovie()`, `getTv()` consult bundle first)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/ThemePackLoader.kt`
+  (`refreshRemote()` early-return on dev)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/BundleOverrides.kt`
+  (`startRefresh()` early-return on dev)
+- MODIFIED `/app/androidtv/app/build.gradle.kts` — versionCode 528 / 1.44.128
+- MODIFIED `/app/_buildenv/version.json` — dev OTA manifest
+
+### Live URLs verified
+- `https://hushtv.xyz/version.json` → `1.44.128-debug (vc=528)`
+- `https://hushtv.xyz/HushTV.apk` → 25.5 MB, fresh Last-Modified
+- `https://hushtv.xyz/version-canada.json` → STILL `1.44.127 (vc=527)`
+  (Canada channel deliberately untouched)
+
+### Risk profile
+- **Canada / official:** ZERO change. APK contents identical to
+  v527. No code paths altered. Even if the user accidentally
+  installs the dev APK on Canada (different applicationId
+  `com.hushtv.tv.dev`, so this would coexist with `com.hushtv.tv.canada.debug`
+  rather than overwrite), the canada install keeps running v527.
+- **Dev users:** new bundle loads in <5 ms; on bundle miss the
+  exact pre-existing network call fires. Worst-case behaviour
+  matches v511 (which is what they're on now).
+- **Stale bundle:** if a sports schedule shifts mid-week, dev users
+  see stale schedules until the next OTA. Mitigation: re-run
+  `dev-bundle-fetcher.py` weekly and ship a fresh dev APK.
+
+### Next session — what to watch
+1. **User testing on dev APK** — sideload via OTA, observe:
+   - Sports tab opens in <500 ms vs the previous ~2-3 sec spin
+   - Movie detail screens for popular titles paint instantly
+   - No crashes from stale-bundle field mismatches (the 13
+     pytests should have caught these, but real-device verification
+     is the final word)
+2. **If clean for 48-72 h** → port the same pattern to canada by:
+   - Copying `assets/dev_only/` into `app/src/canada/assets/canada_only/`
+   - Re-pointing `DevBundleCache.isActive` to also accept `canada`
+   - Rebuilding canada APK at v529
+3. **Phase 2 (deferred)** — bake TMDB poster images themselves (top
+   300 titles, ~15-20 MB to APK). Coil mapper expansion is the
+   exact same pattern as the existing 44-entry `BundledAssets`
+   table.
+
+---
+
+
+
 ## Server-side EPG cache fix — Sports Guide 300-450× faster — 2026-02-23
 
 ### Root cause

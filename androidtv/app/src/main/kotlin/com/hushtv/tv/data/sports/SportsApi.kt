@@ -84,17 +84,47 @@ object SportsApi {
         }
     }
 
+    private inline fun <reified T> parseBundled(raw: String): T? {
+        // Helper that parses a bundled JSON string with the same
+        // Moshi adapter chain we use for live network responses.
+        // Logs (but doesn't crash) on adapter failure so a stale
+        // bundle just falls through to the network code path.
+        return runCatching {
+            moshi.adapter(T::class.java).fromJson(raw)
+        }.getOrElse { e ->
+            Log.w(TAG, "bundle parse failed: ${e.javaClass.simpleName}: ${e.message}")
+            null
+        }
+    }
+
     /** Top-of-page payload — hero + ppv + per-league buckets. */
-    fun home(): SportsHomeResponse? =
-        getJson<SportsHomeResponse>("/api/sports/home")
+    fun home(): SportsHomeResponse? {
+        // v1.44.128-dev — dev flavor short-circuits to a bundled
+        // snapshot baked into the APK by dev-bundle-fetcher.py.
+        // Canada / official: DevBundleCache.isActive == false so
+        // this returns null and we fall through to the existing
+        // network call unchanged.
+        com.hushtv.tv.data.DevBundleCache.sportsHomeRaw()?.let { raw ->
+            parseBundled<SportsHomeResponse>(raw)?.let { return it }
+        }
+        return getJson<SportsHomeResponse>("/api/sports/home")
+    }
 
     /** Full game list for one league, grouped by date on the client. */
-    fun league(slug: String, days: Int = 7): SportsLeagueResponse? =
-        getJson<SportsLeagueResponse>("/api/sports/league/$slug?days=$days")
+    fun league(slug: String, days: Int = 7): SportsLeagueResponse? {
+        com.hushtv.tv.data.DevBundleCache.sportsLeagueRaw(slug)?.let { raw ->
+            parseBundled<SportsLeagueResponse>(raw)?.let { return it }
+        }
+        return getJson<SportsLeagueResponse>("/api/sports/league/$slug?days=$days")
+    }
 
     /** Upcoming PPV events (UFC / boxing / wrestling + admin-curated). */
-    fun ppv(): SportsPpvListResponse? =
-        getJson<SportsPpvListResponse>("/api/sports/ppv")
+    fun ppv(): SportsPpvListResponse? {
+        com.hushtv.tv.data.DevBundleCache.sportsPpvRaw()?.let { raw ->
+            parseBundled<SportsPpvListResponse>(raw)?.let { return it }
+        }
+        return getJson<SportsPpvListResponse>("/api/sports/ppv")
+    }
 
     /**
      * v1.44.27 — EPG channel picker for a game.

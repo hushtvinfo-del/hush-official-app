@@ -87,6 +87,11 @@ object BundleOverrides {
     /** Kick off a background refresh of the override blob. Safe
      *  to call repeatedly — debounces against [REFRESH_MS]. */
     fun startRefresh(ctx: Context, scope: CoroutineScope) {
+        // v1.44.128-dev — skip remote overrides entirely on the dev
+        // flavor; the endpoint currently 404s anyway and dev testing
+        // is about minimising boot-time HTTP traffic.
+        if (DevBundleCache.isActive) return
+
         refreshJob?.cancel()
         refreshJob = scope.launch(Dispatchers.IO) {
             // Initial settle + refresh-throttle check.

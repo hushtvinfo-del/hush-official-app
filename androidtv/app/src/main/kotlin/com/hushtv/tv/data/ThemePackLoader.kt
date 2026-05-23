@@ -156,6 +156,12 @@ object ThemePackLoader {
      * that would persist until the next cold launch).
      */
     suspend fun refreshRemote(ctx: Context): Boolean = withContext(Dispatchers.IO) {
+        // v1.44.128-dev — DEV flavor uses the bundled themes_pack.json
+        // baked into the APK and never hits the network. Skipping the
+        // refresh keeps cold-start API traffic down for testers.
+        // Canada / official continue to refresh from hushtv.xyz.
+        if (DevBundleCache.isActive) return@withContext false
+
         val sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val lastFetched = sp.getLong(KEY_FETCHED_AT, 0L)

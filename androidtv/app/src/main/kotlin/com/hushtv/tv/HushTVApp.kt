@@ -38,6 +38,13 @@ class HushTVApp : Application(), ImageLoaderFactory {
         installCrashHandler()
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_crashhandler")
 
+        // v1.44.128-dev — initialise the DEV-flavor bundled-asset cache
+        // EARLY (cheap, just stores the Context). On canada / official
+        // this is a no-op because the bundle files aren't shipped, so
+        // isActive returns false and every lookup short-circuits to
+        // network. See DevBundleCache.kt for details.
+        com.hushtv.tv.data.DevBundleCache.init(this)
+
         com.hushtv.tv.data.EventLog.log(
             "app",
             "onCreate v${BuildConfig.VERSION_NAME}#${BuildConfig.VERSION_CODE}",

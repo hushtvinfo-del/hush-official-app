@@ -1,13 +1,17 @@
 {
-  "versionCode": 511,
-  "versionName": "1.44.111-debug",
+  "versionCode": 528,
+  "versionName": "1.44.128-debug",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
-  "releasedAt": "2026-02-20",
+  "releasedAt": "2026-05-23",
   "channel": "dev",
   "changelog": [
-    "NEW (DEV-ONLY): 'Play next episode' card. While watching a series, a bottom-right card appears 60 s before the credits with the upcoming episode's still, S/E label, runtime, plot snippet, and a 10-second countdown ring. Pick 'Play next episode' or 'Stay on this one' — countdown auto-fires Play Next if you do nothing. BACK = Stay. Focus auto-grabs the primary button so OK confirms immediately. Card never blocks the underlying video and never steals D-pad input for the player.",
-    "FIX: Resolves Google Play Protect 'harmful app' warning (canada channel only, but inherited here).",
+    "NEW (DEV-ONLY, experimental): Bake static API data into the APK. The dev flavor no longer hits the network for sports schedules (NHL, NBA, MLB, NFL, UFC, EPL, MLS, NCAAB, NCAAF + PPV), top-100 popular movie/TV metadata, the themes pack, or bundle-override patches. Sports tab opens instantly, popular-movie detail screens render without a TMDB round-trip. Canada/official: zero change.",
+    "PERF: ~12 fewer outbound HTTP calls during cold start on the dev flavor.",
+    "INHERITED from v1.44.127: Auto cache-clear on launch.",
+    "INHERITED from v1.44.125: Fire Stick black-screen-on-play fix.",
+    "INHERITED from v1.44.124: Migration moved off main thread.",
+    "NEW (DEV-ONLY): 'Play next episode' card.",
     "FIX: Player on-screen options menu D-pad focus.",
     "FIX: Discovery hero TMDB fallback.",
     "FIX: Parental Controls hide locked categories everywhere."

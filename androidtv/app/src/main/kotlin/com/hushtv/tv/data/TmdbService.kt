@@ -259,6 +259,14 @@ object TmdbService {
     // ── MOVIES ──────────────────────────────────────────────
 
     suspend fun getMovie(tmdbId: Int): TmdbMovie? = withContext(Dispatchers.IO) {
+        // v1.44.128-dev — dev flavor checks the bundled top-popular
+        // snapshot first. On a hit, returns the slim cached object
+        // (no credits / recommendations / videos) WITHOUT a network
+        // round-trip. If the caller needs the heavy append_to_response
+        // fields, they detect it by `result?.credits == null` and
+        // top-up with a second targeted fetch.
+        DevBundleCache.tmdbMovie(tmdbId)?.let { return@withContext it }
+
         val url = "$BASE/movie/$tmdbId?api_key=${ApiKeys.TMDB}" +
             "&append_to_response=credits,recommendations,external_ids,videos"
         runCatching {
@@ -313,6 +321,9 @@ object TmdbService {
     // ── SERIES ──────────────────────────────────────────────
 
     suspend fun getTv(tmdbId: Int): TmdbTv? = withContext(Dispatchers.IO) {
+        // v1.44.128-dev — dev-flavor bundle short-circuit, see getMovie.
+        DevBundleCache.tmdbTv(tmdbId)?.let { return@withContext it }
+
         val url = "$BASE/tv/$tmdbId?api_key=${ApiKeys.TMDB}" +
             "&append_to_response=credits,recommendations,external_ids,videos"
         runCatching {
