@@ -1,3 +1,43 @@
+## v1.44.125 (Canada channel) — Fire Stick black-screen-on-play FIX — 2026-02-23
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (25.3 MB)
+- **versionCode**: 525 / **versionName**: 1.44.125 / mandatory=true
+
+### Root cause (yjXXWMThs2 + similar reports)
+- Mini preview windows (300x170 px) worked: they use `PlayerView(c)` default constructor → `surface_type="surface_view"` → routes video frames directly to the hardware overlay plane, bypassing the GPU compositor.
+- Full-screen player (1080p / 4K) was broken: `TVPlayerScreen.kt` line 1088 inflated `res/layout/player_view_texture.xml` with `surface_type="texture_view"` → requires the GPU compositor to handle every video frame.
+- TextureView was introduced in v1.44.36 to fix a 1-2 px bright vertical line on the right edge of dark scenes (ExoPlayer issue #8394 — HW overlay chroma upsampling overshoot on Sony Bravia + NVIDIA Shield).
+- **Fire Stick GPUs (and similar weak Android TV chipsets) silently fail to composite TextureView at full-screen resolution.** Frames are accepted but never rendered, producing a black screen with audio playing. The decoder works fine — proven by mini preview rendering perfectly.
+
+### Fix shipped
+- `TVPlayerScreen.kt` factory now forks on `isLite`:
+  - `isLite=true` → `PlayerView(c)` default constructor (= SurfaceView). Same path the mini preview uses. Guaranteed to render.
+  - `isLite=false` → existing XML-inflated TextureView path. Pro-mode users on capable hardware (Shield, Bravia, Fire TV Cube) keep visual polish.
+- One change covers Live TV + movies + series. All three use `TVPlayerScreen.kt`.
+
+### User reports addressed
+- **yjXXWMThs2** (Fire Stick 4K, "mini preview works, full-screen channel/movie/series goes black") — FIXED in v525.
+- **rtstier@telus.net** (boot kick — fixed in v524) + **marychaisson56@gmail.com** (15-sec home-screen kick — fixed in v524) — both can now also actually watch content in v525.
+
+### Files touched
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/TVPlayerScreen.kt` — SurfaceView fork for Lite mode
+- `/app/androidtv/app/build.gradle.kts` — versionCode 525 / 1.44.125
+- `/app/_buildenv/version-canada.json` — OTA manifest
+
+### Live URLs verified
+- `https://hushtv.xyz/version-canada.json` → v525 / 1.44.125 / mandatory
+- `https://hushtv.xyz/hushtv-canada.apk` → 25.3 MB, fresh Last-Modified
+
+### Next session — what to watch (24h post-OTA)
+- 🔴 **Black-screen reports should drop to zero** for Fire Stick + weak Android TV users.
+- 🔴 **v523 boot_died counts at `app_oc_post_crashhandler`** should drop to zero — v524 moved the migration off main thread.
+- 🟡 **Pro-mode users on capable devices**: confirm TextureView is still in use (the edge-bleed fix still applies).
+- ⚠️ **Watch for any new player surface/init failures** after the surface_type switch — they'd show up as `EXIT::SIGNALED::SIGKILL` from the player thread or as ANRs on `PlayerView.setPlayer`.
+
+---
+
+
 ## v1.44.124 (Canada channel) — CRITICAL FIX: migration was killing v123 users — 2026-02-22
 
 ### Release

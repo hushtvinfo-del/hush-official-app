@@ -88,6 +88,10 @@ fun TVPlayerScreen(
     isLive: Boolean
 ) {
     val ctx = LocalContext.current
+    // v1.44.125 — read Lite mode to drive the SurfaceView vs
+    // TextureView fork in the player factory below. SurfaceView is
+    // the only path that reliably renders fullscreen on Fire Sticks.
+    val isLite = com.hushtv.tv.data.LocalIsLiteMode.current
 
     // Current stream state — can change as user zaps with CH+/-.
     var currentUrl by remember { mutableStateOf(streamUrl) }
@@ -1078,18 +1082,48 @@ fun TVPlayerScreen(
     ) {
         AndroidView(
             factory = { c ->
-                // v1.44.36: inflate from XML so we can use
-                // surface_type="texture_view" — the default SurfaceView
-                // produces a 1-2 pixel bright vertical line on the right
-                // edge of dark scenes (HW overlay chroma upsampling
-                // overshoot, ExoPlayer issue #8394). TextureView routes
-                // frames through GPU compositing which clamps edge
-                // sampling. See res/layout/player_view_texture.xml.
-                val view = android.view.LayoutInflater.from(c).inflate(
-                    com.hushtv.tv.R.layout.player_view_texture,
-                    null,
-                    false,
-                ) as PlayerView
+                // v1.44.36 / v1.44.125 — TextureView vs SurfaceView selection.
+                //
+                // v1.44.36 introduced TextureView via res/layout/player_view_texture.xml
+                // to fix a 1-2 px bright vertical line on the right edge of
+                // dark scenes (HW overlay chroma upsampling overshoot —
+                // ExoPlayer issue #8394) — observed on Sony Bravia + NVIDIA
+                // Shield.
+                //
+                // v1.44.125 reverts to SurfaceView for low-end devices.
+                // Fire Sticks (AFTSS / AFTKM / AFTSSS / AFTKRT / AFTMM) and
+                // generic Android TV embedded chips have GPU compositors
+                // that silently FAIL to render TextureView at full-screen
+                // resolution — the TextureView accepts video frames but
+                // the GPU never composites them, resulting in a black
+                // screen with audio playing. Symptom reported by 3+
+                // customers on v1.44.123: "mini preview window plays
+                // fine, but full-screen channel/movie/series goes black."
+                // The mini preview uses the default SurfaceView path
+                // (which routes to the hardware overlay plane, bypassing
+                // the GPU) so it always works.
+                //
+                // Decision rule:
+                //   • Lite-mode users → SurfaceView (guaranteed to render)
+                //   • Pro-mode users → TextureView (visual polish)
+                // Lite is the safer default for any TV stick / weak chip.
+                val useTextureView = !isLite
+                val view = if (useTextureView) {
+                    android.view.LayoutInflater.from(c).inflate(
+                        com.hushtv.tv.R.layout.player_view_texture,
+                        null,
+                        false,
+                    ) as PlayerView
+                } else {
+                    // Default constructor → surface_type="surface_view"
+                    // → routes directly to the HW video overlay plane,
+                    // bypassing the GPU compositor entirely. Battle-
+                    // tested by Fire Stick / weak Android TV chipsets
+                    // for years.
+                    PlayerView(c).apply {
+                        useController = false
+                    }
+                }
                 view.player = player
                 view
             },
