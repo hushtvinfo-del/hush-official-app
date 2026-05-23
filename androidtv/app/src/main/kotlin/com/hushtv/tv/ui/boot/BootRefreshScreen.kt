@@ -104,6 +104,28 @@ import java.io.File
  */
 @Composable
 fun BootRefreshScreen(onDone: () -> Unit) {
+    // v1.44.132 — Lite-mode shortcut. On weak GPU Fire Sticks
+    // (AFTSSS, AFTSS, AFTKM, AFTKRT, etc.) the original animated
+    // boot refresh — gradient brush + animateFloatAsState progress
+    // + rememberInfiniteTransition pulse + AnimatedVisibility fades
+    // — repeatedly ANR'd the main thread (Compose layer matrix
+    // recalc on every animation frame). Crash Monitor showed a
+    // user stuck in a refresh→ANR→refresh loop. The simplified
+    // composable below has the same network sequence and timing
+    // but draws a STATIC frame (no animations) so the GPU work
+    // per frame is near zero. Net effect: same UX, no ANR.
+    val ctx = LocalContext.current
+    val isLite = remember { com.hushtv.tv.data.AppModeStore.load(ctx) == com.hushtv.tv.data.AppMode.LITE ||
+        com.hushtv.tv.data.DeviceClass.isLowRam(ctx) }
+    if (isLite) {
+        BootRefreshScreenLite(onDone)
+    } else {
+        BootRefreshScreenPro(onDone)
+    }
+}
+
+@Composable
+private fun BootRefreshScreenPro(onDone: () -> Unit) {
     val ctx = LocalContext.current
     var stepLabel by remember { mutableStateOf("Refreshing your library…") }
     var progress by remember { mutableStateOf(0f) }
@@ -120,268 +142,16 @@ fun BootRefreshScreen(onDone: () -> Unit) {
     )
 
     LaunchedEffect(Unit) {
-        // Sequence with progress tracking. Each step runs inside a
-        // withTimeoutOrNull to protect against any individual API
-        // hanging — the user's experience is the priority, not the
-        // perfection of cache invalidation.
-        runCatching {
-            val playlist = withContext(Dispatchers.IO) {
-                val id = LastProfileStore.load(ctx) ?: return@withContext null
-                PlaylistStore.find(ctx, id)
-            }
-            if (playlist == null) {
-                onDone(); return@LaunchedEffect
-            }
-
-            // Slots that the "Building home" step will fill in as
-            // earlier steps complete. Each step populates just its
-            // own slot so if one times out we still build a partial
-            // rail set rather than blocking the home screen on one
-            // slow endpoint.
-            var liveCats: List<com.hushtv.tv.data.XtreamCategory> = emptyList()
-            var movieCats: List<com.hushtv.tv.data.XtreamCategory> = emptyList()
-            var seriesCats: List<com.hushtv.tv.data.XtreamCategory> = emptyList()
-            var liveByCat: Map<String, List<com.hushtv.tv.data.MediaCard>> = emptyMap()
-            var moviesByCat: Map<String, List<com.hushtv.tv.data.MediaCard>> = emptyMap()
-            var seriesByCat: Map<String, List<com.hushtv.tv.data.MediaCard>> = emptyMap()
-
-            val steps = mutableListOf<BootStep>()
-            steps += BootStep("Clearing cache…") {
-                withContext(Dispatchers.IO) {
-                    runCatching { XtreamApi.flushHttpCache() }
-                    runCatching { trimCoilCache(ctx) }
-                }
-            }
-            steps += BootStep("Refreshing categories…") {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        withTimeoutOrNull(2_500) {
-                            liveCats = XtreamApi.getCategories(
-                                playlist.host, playlist.username,
-                                playlist.password, "live",
-                            )
-                        }
-                    }
-                    runCatching {
-                        withTimeoutOrNull(2_500) {
-                            movieCats = XtreamApi.getCategories(
-                                playlist.host, playlist.username,
-                                playlist.password, "movie",
-                            )
-                        }
-                    }
-                    runCatching {
-                        withTimeoutOrNull(2_500) {
-                            seriesCats = XtreamApi.getCategories(
-                                playlist.host, playlist.username,
-                                playlist.password, "series",
-                            )
-                        }
-                    }
-                    // v1.44.102 — First successful network round-trip.
-                    // If any of the three category fetches returned
-                    // data, the device IS talking to the Gcore-fronted
-                    // edge. Flip the badge so the user sees "Connected
-                    // to Gcore CDN" while the rest of refresh runs.
-                    if (liveCats.isNotEmpty() || movieCats.isNotEmpty() ||
-                        seriesCats.isNotEmpty()
-                    ) {
-                        gcoreConnected = true
-                    }
-                }
-            }
-            steps += BootStep("Refreshing Live TV…") {
-                withContext(Dispatchers.IO) {
-                    // Warm OkHttp disk cache for the "all live" URL
-                    // (used by the Live TV browse screen).
-                    runCatching {
-                        withTimeoutOrNull(3_000) {
-                            XtreamApi.getAllStreams(
-                                playlist.host, playlist.username,
-                                playlist.password, "live",
-                            )
-                        }
-                    }
-                    // Also fetch streams for the first (home-rendered)
-                    // live category specifically. This warms the exact
-                    // URL key the home screen uses AND lets us build
-                    // the rails cache without a second network round.
-                    val firstLive = liveCats.firstOrNull()
-                    if (firstLive != null) {
-                        runCatching {
-                            withTimeoutOrNull(3_000) {
-                                val streams = XtreamApi.getStreamsForCategory(
-                                    playlist.host, playlist.username,
-                                    playlist.password, "live", firstLive.category_id,
-                                )
-                                liveByCat = mapOf(firstLive.category_id to streams)
-                            }
-                        }
-                    }
-                }
-            }
-            steps += BootStep("Refreshing Movies…") {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        withTimeoutOrNull(3_000) {
-                            XtreamApi.getAllStreams(
-                                playlist.host, playlist.username,
-                                playlist.password, "movie",
-                            )
-                        }
-                    }
-                    // Fetch the first 3 movie categories (home renders 3 rails).
-                    // Run in parallel via coroutineScope + async; each has
-                    // its own 2 s cap inside a shared 4 s outer timeout so
-                    // one slow one can't stall the boot.
-                    val targetCats = movieCats.take(3)
-                    if (targetCats.isNotEmpty()) {
-                        runCatching {
-                            withTimeoutOrNull(4_000) {
-                                kotlinx.coroutines.coroutineScope {
-                                    val results = targetCats.map { c ->
-                                        async(Dispatchers.IO) {
-                                            withTimeoutOrNull(2_000) {
-                                                c.category_id to XtreamApi.getStreamsForCategory(
-                                                    playlist.host, playlist.username,
-                                                    playlist.password, "movie", c.category_id,
-                                                )
-                                            }
-                                        }
-                                    }.awaitAll().filterNotNull().toMap()
-                                    moviesByCat = results
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            steps += BootStep("Refreshing Series…") {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        withTimeoutOrNull(3_000) {
-                            XtreamApi.getAllStreams(
-                                playlist.host, playlist.username,
-                                playlist.password, "series",
-                            )
-                        }
-                    }
-                    val firstSeries = seriesCats.firstOrNull()
-                    if (firstSeries != null) {
-                        runCatching {
-                            withTimeoutOrNull(3_000) {
-                                val streams = XtreamApi.getStreamsForCategory(
-                                    playlist.host, playlist.username,
-                                    playlist.password, "series", firstSeries.category_id,
-                                )
-                                seriesByCat = mapOf(firstSeries.category_id to streams)
-                            }
-                        }
-                    }
-                }
-            }
-            steps += BootStep("Building home…") {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        val rails = com.hushtv.tv.data.HomeRailsCache.build(
-                            playlistId = playlist.id,
-                            liveCategories = liveCats,
-                            movieCategories = movieCats,
-                            seriesCategories = seriesCats,
-                            liveByCat = liveByCat,
-                            moviesByCat = moviesByCat,
-                            seriesByCat = seriesByCat,
-                        )
-                        com.hushtv.tv.data.HomeRailsCache.put(rails)
-                        // Persist for instant first-frame on the next
-                        // cold launch (before boot refresh completes).
-                        com.hushtv.tv.data.HomeRailsCache.persist(ctx, rails)
-                    }
-                }
-            }
-            steps += BootStep("Syncing requests…") {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        withTimeoutOrNull(2_500) {
-                            // Re-fetch the request list on next
-                            // page load. We simply mark the
-                            // existing cache stale by clearing
-                            // it; the My Requests screen will
-                            // refetch on its next composition.
-                            com.hushtv.tv.data.RequestCache
-                                .put(emptyList())
-                        }
-                    }
-                }
-            }
-
-            // Hard 11-second wall-clock cap on the NETWORK-bound
-            // sequence above. Library indexing + themed-list
-            // matching run OUTSIDE this cap because they MUST
-            // complete before the home page renders — the cache
-            // they fill is what makes home preview pills paint
-            // with real cover art on first frame.
-            withTimeoutOrNull(11_000) {
-                steps.forEachIndexed { idx, step ->
-                    stepLabel = step.label
-                    step.action.invoke()
-                    // Reserve last 2 progress slots for the post-cap
-                    // indexing + theme-matching steps below.
-                    progress = (idx + 1).toFloat() / (steps.size + 2)
-                }
-            }
-
-            // Post-cap step 1: prime the LibraryIndex. Has its own
-            // 8 s budget — most providers finish in 1-2 s, but a
-            // huge catalog over a slow link can need more. The
-            // OkHttp HTTP cache populated by the network steps
-            // above usually means this completes in well under 1 s
-            // because getAllStreams hits cache.
-            stepLabel = "Indexing your library…"
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    withTimeoutOrNull(8_000) {
-                        LibraryIndex.reset()
-                        com.hushtv.tv.data.ThemedMatchCache.reset()
-                        LibraryIndex.prime(ctx, playlist)
-                    }
-                }
-            }
-
-            // Themed-list matching is now LAZY — it kicks off async
-            // (NOT blocking boot) just like Decades. The themes
-            // catalog screen also defensively re-primes when
-            // entered, so the user never sees a blank state. This
-            // matches the user-requested "curate when I open the
-            // themes section, not before" behavior.
-            com.hushtv.tv.data.ThemedMatchCache.primeAsync(ctx, playlist)
-
-            // v1.44.54 — background-refresh the remote themed pack
-            // (https://hushtv.xyz/themes_pack.json). This is how new
-            // "Moods & Themes" rows reach users without an APK
-            // build. If the remote pack is newer than what we
-            // already have in prefs, the catalog's "extra" rows
-            // change on next app open. Silent no-op if the network
-            // is down or the pack hasn't changed.
-            GlobalScope.launch(Dispatchers.IO) {
-                runCatching {
-                    com.hushtv.tv.data.ThemePackLoader.refreshRemote(ctx)
-                }
-            }
-
-            // Decade-year prime — kicked off async (NOT blocking
-            // boot). 90 years × ~250 candidates is heavier than
-            // themes, so we let it warm up in the background while
-            // the user lands on the home screen. Year-detail
-            // screens fall back to a synchronous match-on-open if
-            // the cache hasn't reached that year yet.
-            com.hushtv.tv.data.DecadeYearMatchCache.primeAsync(ctx, playlist)
-        }
-        // Smooth-out: hold full bar at 100% briefly before
-        // transitioning so the user sees the success state.
-        progress = 1f
-        delay(220)
-        onDone()
+        // v1.44.132 — Network sequence extracted to shared
+        // runBootRefresh() so Pro and Lite variants stay
+        // byte-identical in behaviour. Only rendering differs.
+        runBootRefresh(
+            ctx = ctx,
+            onProgress = { progress = it },
+            onLabel = { stepLabel = it },
+            onGcoreConnected = { gcoreConnected = true },
+            onDone = onDone,
+        )
     }
 
     Box(
@@ -547,6 +317,342 @@ private data class BootStep(
     val label: String,
     val action: suspend () -> Unit,
 )
+
+/**
+ * v1.44.132 — Lite-mode boot refresh, designed for the weakest
+ * Fire Stick GPUs (AFTSSS, AFTSS, AFTKM, AFTKRT). Same network
+ * sequence as [BootRefreshScreenPro], same timing budgets — only
+ * the rendering is different:
+ *
+ *   • Solid color background (no gradient brush)
+ *   • Static progress value (no `animateFloatAsState`)
+ *   • Static dot color (no `rememberInfiniteTransition`)
+ *   • Static step label (no `AnimatedVisibility` fade)
+ *
+ * Compose still recomposes the screen each time `progress` or
+ * `stepLabel` mutates, but those are infrequent (~9 times over
+ * 12 s). The expensive per-frame work (matrix recalc, gradient
+ * rasterisation, layer composition for fade animations) is
+ * completely eliminated — which was killing weak Fire Sticks
+ * with `Matrix.constructor-impl` and `Surface.nativeAllocateBuffers`
+ * ANRs (see crash report on marychaisson56@gmail.com).
+ */
+@Composable
+private fun BootRefreshScreenLite(onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    var stepLabel by remember { mutableStateOf("Refreshing your library…") }
+    var progress by remember { mutableStateOf(0f) }
+    var gcoreConnected by remember { mutableStateOf(false) }
+
+    // Same network sequence as Pro — extracted into runBootRefresh
+    // to share the implementation byte-for-byte. The Pro variant
+    // calls the same function; only the rendering differs.
+    LaunchedEffect(Unit) {
+        runBootRefresh(
+            ctx = ctx,
+            onProgress = { progress = it },
+            onLabel = { stepLabel = it },
+            onGcoreConnected = { gcoreConnected = true },
+            onDone = onDone,
+        )
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0B1424)),  // solid — no gradient
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 480.dp)
+                .padding(horizontal = 32.dp, vertical = 40.dp),
+        ) {
+            com.hushtv.tv.ui.HushTVLogo(fontSize = 48.sp)
+            Spacer(Modifier.height(36.dp))
+            Text(
+                "Refreshing your library",
+                color = TextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
+                softWrap = false,
+                maxLines = 1,
+            )
+            Spacer(Modifier.height(20.dp))
+            // Raw progress — Compose still updates the bar when
+            // `progress` mutates, but there's no per-frame tween
+            // animation eating GPU.
+            LinearProgressIndicator(
+                progress = { progress },
+                color = Cyan,
+                trackColor = Color(0x22FFFFFF),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(999.dp)),
+            )
+            Spacer(Modifier.height(14.dp))
+            // Plain Text, no AnimatedVisibility.
+            Text(
+                stepLabel,
+                color = TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.4.sp,
+                maxLines = 1,
+                softWrap = false,
+            )
+            Spacer(Modifier.height(18.dp))
+            // Static Gcore pill — solid dot, no pulse animation.
+            GcoreConnectBadgeStatic(connected = gcoreConnected)
+        }
+    }
+}
+
+@Composable
+private fun GcoreConnectBadgeStatic(connected: Boolean) {
+    val label = if (connected) "Connected to Gcore CDN" else "Connecting to Gcore CDN…"
+    val dotColor = if (connected) Color(0xFF22C55E) else Color(0xFFFF6B00)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .background(color = Color(0xFF0E1217), shape = RoundedCornerShape(20.dp))
+            .border(width = 1.dp, color = Color(0xFF1F2937), shape = RoundedCornerShape(20.dp))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.ic_gcore),
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(dotColor),
+        )
+        Spacer(Modifier.width(7.dp))
+        Text(
+            label,
+            color = if (connected) Color(0xFF86EFAC) else Color(0xFFFCD34D),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+/**
+ * Shared network-refresh sequence used by BOTH the Pro and Lite
+ * boot refresh composables. Extracted into a top-level suspend
+ * function so the two variants diverge only in rendering, never
+ * in behaviour.
+ */
+private suspend fun runBootRefresh(
+    ctx: Context,
+    onProgress: (Float) -> Unit,
+    onLabel: (String) -> Unit,
+    onGcoreConnected: () -> Unit,
+    onDone: () -> Unit,
+) {
+    runCatching {
+        val playlist = withContext(Dispatchers.IO) {
+            val id = LastProfileStore.load(ctx) ?: return@withContext null
+            PlaylistStore.find(ctx, id)
+        }
+        if (playlist == null) {
+            onDone(); return
+        }
+        var liveCats: List<com.hushtv.tv.data.XtreamCategory> = emptyList()
+        var movieCats: List<com.hushtv.tv.data.XtreamCategory> = emptyList()
+        var seriesCats: List<com.hushtv.tv.data.XtreamCategory> = emptyList()
+        var liveByCat: Map<String, List<com.hushtv.tv.data.MediaCard>> = emptyMap()
+        var moviesByCat: Map<String, List<com.hushtv.tv.data.MediaCard>> = emptyMap()
+        var seriesByCat: Map<String, List<com.hushtv.tv.data.MediaCard>> = emptyMap()
+
+        val steps = mutableListOf<BootStep>()
+        steps += BootStep("Clearing cache…") {
+            withContext(Dispatchers.IO) {
+                runCatching { XtreamApi.flushHttpCache() }
+                runCatching { trimCoilCache(ctx) }
+            }
+        }
+        steps += BootStep("Refreshing categories…") {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    withTimeoutOrNull(2_500) {
+                        liveCats = XtreamApi.getCategories(
+                            playlist.host, playlist.username,
+                            playlist.password, "live",
+                        )
+                    }
+                }
+                runCatching {
+                    withTimeoutOrNull(2_500) {
+                        movieCats = XtreamApi.getCategories(
+                            playlist.host, playlist.username,
+                            playlist.password, "movie",
+                        )
+                    }
+                }
+                runCatching {
+                    withTimeoutOrNull(2_500) {
+                        seriesCats = XtreamApi.getCategories(
+                            playlist.host, playlist.username,
+                            playlist.password, "series",
+                        )
+                    }
+                }
+                if (liveCats.isNotEmpty() || movieCats.isNotEmpty() ||
+                    seriesCats.isNotEmpty()
+                ) {
+                    onGcoreConnected()
+                }
+            }
+        }
+        steps += BootStep("Refreshing Live TV…") {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    withTimeoutOrNull(3_000) {
+                        XtreamApi.getAllStreams(
+                            playlist.host, playlist.username,
+                            playlist.password, "live",
+                        )
+                    }
+                }
+                val firstLive = liveCats.firstOrNull()
+                if (firstLive != null) {
+                    runCatching {
+                        withTimeoutOrNull(3_000) {
+                            val streams = XtreamApi.getStreamsForCategory(
+                                playlist.host, playlist.username,
+                                playlist.password, "live", firstLive.category_id,
+                            )
+                            liveByCat = mapOf(firstLive.category_id to streams)
+                        }
+                    }
+                }
+            }
+        }
+        steps += BootStep("Refreshing Movies…") {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    withTimeoutOrNull(3_000) {
+                        XtreamApi.getAllStreams(
+                            playlist.host, playlist.username,
+                            playlist.password, "movie",
+                        )
+                    }
+                }
+                val targetCats = movieCats.take(3)
+                if (targetCats.isNotEmpty()) {
+                    runCatching {
+                        withTimeoutOrNull(4_000) {
+                            kotlinx.coroutines.coroutineScope {
+                                val results = targetCats.map { c ->
+                                    async(Dispatchers.IO) {
+                                        withTimeoutOrNull(2_000) {
+                                            c.category_id to XtreamApi.getStreamsForCategory(
+                                                playlist.host, playlist.username,
+                                                playlist.password, "movie", c.category_id,
+                                            )
+                                        }
+                                    }
+                                }.awaitAll().filterNotNull().toMap()
+                                moviesByCat = results
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        steps += BootStep("Refreshing Series…") {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    withTimeoutOrNull(3_000) {
+                        XtreamApi.getAllStreams(
+                            playlist.host, playlist.username,
+                            playlist.password, "series",
+                        )
+                    }
+                }
+                val firstSeries = seriesCats.firstOrNull()
+                if (firstSeries != null) {
+                    runCatching {
+                        withTimeoutOrNull(3_000) {
+                            val streams = XtreamApi.getStreamsForCategory(
+                                playlist.host, playlist.username,
+                                playlist.password, "series", firstSeries.category_id,
+                            )
+                            seriesByCat = mapOf(firstSeries.category_id to streams)
+                        }
+                    }
+                }
+            }
+        }
+        steps += BootStep("Building home…") {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val rails = com.hushtv.tv.data.HomeRailsCache.build(
+                        playlistId = playlist.id,
+                        liveCategories = liveCats,
+                        movieCategories = movieCats,
+                        seriesCategories = seriesCats,
+                        liveByCat = liveByCat,
+                        moviesByCat = moviesByCat,
+                        seriesByCat = seriesByCat,
+                    )
+                    com.hushtv.tv.data.HomeRailsCache.put(rails)
+                    com.hushtv.tv.data.HomeRailsCache.persist(ctx, rails)
+                }
+            }
+        }
+        steps += BootStep("Syncing requests…") {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    withTimeoutOrNull(2_500) {
+                        com.hushtv.tv.data.RequestCache.put(emptyList())
+                    }
+                }
+            }
+        }
+
+        withTimeoutOrNull(11_000) {
+            steps.forEachIndexed { idx, step ->
+                onLabel(step.label)
+                step.action.invoke()
+                onProgress((idx + 1).toFloat() / (steps.size + 2))
+            }
+        }
+
+        onLabel("Indexing your library…")
+        withContext(Dispatchers.IO) {
+            runCatching {
+                withTimeoutOrNull(8_000) {
+                    LibraryIndex.reset()
+                    com.hushtv.tv.data.ThemedMatchCache.reset()
+                    LibraryIndex.prime(ctx, playlist)
+                }
+            }
+        }
+
+        com.hushtv.tv.data.ThemedMatchCache.primeAsync(ctx, playlist)
+        GlobalScope.launch(Dispatchers.IO) {
+            runCatching { com.hushtv.tv.data.ThemePackLoader.refreshRemote(ctx) }
+        }
+        com.hushtv.tv.data.DecadeYearMatchCache.primeAsync(ctx, playlist)
+    }
+    onProgress(1f)
+    delay(220)
+    onDone()
+}
 
 /** Best-effort Coil image cache trim. Failure is silent. */
 private fun trimCoilCache(ctx: Context) {

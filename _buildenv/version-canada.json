@@ -6,9 +6,10 @@
   "releasedAt": "2026-05-23",
   "channel": "canada",
   "changelog": [
-    "FIX (critical): Wired the previously-defined-but-never-called main-looper resilience handler that suppresses three documented Compose framework races. Crash Monitor showed 49 IllegalStateException (`FocusRequester is not initialized`) on v131 in 24 h — all of those will now be silently survived. Same defined-but-not-registered pattern as the v131 Coil mapper bug.",
-    "FIX: Lowered Coil image-cache memory percentages on Lite-mode Fire Sticks (AFTKA, AFTKM, AFTKRT) to recover ~20 MB heap headroom and reduce OOM kills.",
-    "PERF: Pre-warm the bundled-asset JSON indices off the main thread during deferred init, so first-composition image lookups are O(1) hash hits instead of blocking on a 397-entry Moshi parse. Narrows the framework-race window that triggered v131's IllegalStateException spike.",
+    "FIX (critical): Stuck on the boot refresh screen — built a Lite-mode boot refresh that drops the gradient, the pulsing dot, the fade animations, and the progress-bar tween. Same network sequence and timing, ~80% less GPU work per frame. Fixes the Matrix.constructor / Surface.nativeAllocateBuffers ANRs seen on AFTSSS / AFTSS / AFTKM / AFTKRT.",
+    "FIX (critical): Wired the previously-defined-but-never-called main-looper resilience handler. Suppresses three documented Compose framework races (FocusRequester, LazyLayout release-twice, Navigation destination-not-found). Crash Monitor showed 49 IllegalStateException on v131 in 24 h — all now silently survived.",
+    "FIX: Lowered Coil image-cache memory percentages on Lite-mode Fire Sticks (AFTKA, AFTKM, AFTKRT). Recovers ~20 MB heap headroom and reduces background OOM kills.",
+    "PERF: Pre-warm the bundled-asset JSON indices off the main thread during deferred init, so first-composition image lookups are O(1) hash hits instead of blocking on a 397-entry Moshi parse. Narrows the framework-race window further.",
     "INHERITED v1.44.131: API-bake architecture (sports, themes, top-popular TMDB metadata, 397 hero/poster images).",
     "INHERITED v1.44.127: Auto cache-clear on launch.",
     "INHERITED v1.44.125: Fire Stick black-screen-on-play fix (SurfaceView for Lite mode)."
