@@ -69,6 +69,17 @@ class HushTVApp : Application(), ImageLoaderFactory {
                 // mode within one frame of the save() call landing.
                 com.hushtv.tv.data.AppModeStore.runAutoMigrationV122IfNeeded(this)
                 com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_migration")
+                // v1.44.127 — clear app cache (Coil bitmaps, OkHttp
+                // Xtream JSON, subtitles, home-rails cache) once per
+                // 6 hours. Mimics the Settings → Clear Cache button
+                // that several support cases said "fixed it" — we
+                // automate it so TV-remote users don't have to dive
+                // into Fire OS settings. Throttled so rapid restarts
+                // don't all re-download images. MUST run BEFORE
+                // XtreamApi.enableDiskCache so OkHttp doesn't have
+                // the cache journal open when we delete.
+                com.hushtv.tv.data.AppCacheCleaner.clearIfDue(this)
+                com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_cache_clear")
                 XtreamApi.enableDiskCache(this)
                 com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_xtream_cache")
                 com.hushtv.tv.data.CrashReporter.uploadIfPending(this)
