@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -63,6 +64,46 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- v1.44.126 — Disable auto-init startup initializers that
+             fire BEFORE our Application.onCreate and consume memory
+             we have no control over. APK inspection of v1.44.125 showed
+             two initializers run before any of our code:
+
+               * androidx.emoji2.text.EmojiCompatInitializer
+                   Loads + parses the EmojiCompat font from disk
+                   (~5-10 MB peak memory). We don't use emoji compat
+                   anywhere (codebase grep returns 0 matches and our
+                   style guidelines ban emoji in the UI), so this is
+                   pure overhead. The lifecycle of every Fire Stick
+                   process starts with an unnecessary disk I/O storm
+                   that on AFTKM/AFTSS contributes to lmkd firing
+                   before our onCreate even runs.
+
+               * androidx.profileinstaller.ProfileInstallerInitializer
+                   Installs the AOT compile profile on the FIRST launch
+                   via synchronous disk I/O. Nice-to-have perf optimisation
+                   on fast eMMC but on weak Fire Stick flash this is
+                   exactly the kind of blocking I/O that contributes
+                   to startup OOM kills. Disabling it means ART JITs
+                   the same code on demand instead — slightly slower
+                   hot paths first launch, but no I/O storm.
+
+             We KEEP ProcessLifecycleInitializer because we depend on
+             ProcessLifecycleOwner for the trial countdown + license
+             foreground/background events. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+            <meta-data
+                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+                tools:node="remove" />
+        </provider>
 
         <!-- Required so the OS package installer can read the APK we download. -->
         <provider
