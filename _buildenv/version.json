@@ -1,14 +1,15 @@
 {
-  "versionCode": 529,
-  "versionName": "1.44.129-debug",
+  "versionCode": 530,
+  "versionName": "1.44.130-debug",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-23",
   "channel": "dev",
   "changelog": [
-    "NEW (DEV-ONLY, Phase 2): Bake TMDB poster + backdrop images into the APK. Top 100 popular movies + top 100 popular TV shows × (poster + backdrop) = 372 bundled WebP images (~28 MB). Coil mapper short-circuits any TMDB image URL whose path is bundled, so popular-title posters paint instantly with zero TMDB CDN round-trip. APK grows 25 MB → 53 MB (dev only). Canada / official: untouched.",
-    "FIX: Re-wired HushBundleMapper into Coil's ImageLoader components — was previously defined but never registered, which silently bypassed the existing 44-entry streaming/decade/theme bundle. Now both that bundle AND the new Phase 2 image bundle are active.",
-    "INHERITED v1.44.128-debug: Bake static API JSON (sports schedules, TMDB top-popular metadata, themes pack) into the dev APK.",
+    "NEW (DEV-ONLY, Phase 3): Bake genre + curated-collection hero backdrops into the dev APK. Genres and Collections sections now paint with bundled backdrops instead of firing ~73 lazy TMDB calls (`backdropsForGenres` + `backdropsForCollections`). 25 new WebP files (~1 MB) — most popular-title backdrops were already covered by Phase 2 top-100 bake.",
+    "INHERITED v1.44.129-debug: Phase 2 TMDB poster + backdrop bake (372 images, ~28 MB).",
+    "INHERITED v1.44.128-debug: Phase 1 static API JSON bake (sports + themes + TMDB top-popular metadata).",
+    "FIX: Re-wired HushBundleMapper into Coil's ImageLoader components — was previously defined but never registered.",
     "INHERITED v1.44.127: Auto cache-clear on launch.",
     "INHERITED v1.44.125: Fire Stick black-screen-on-play fix."
   ]

@@ -1,3 +1,121 @@
+## v1.44.130-debug (DEV channel ONLY) — Phase 3 API bake: genre + collection backdrops — 2026-05-23
+
+### Continuation of v128/129 dev-bake
+Phase 1 (v128) baked the static API JSON. Phase 2 (v129) baked the
+top-100 popular movie + TV poster + backdrop images. Phase 3 (v130)
+closes the remaining high-volume lazy TMDB load surfaces: the
+genre hero backdrops + curated franchise collection hero backdrops.
+Same dev-only gating — canada / official remain at v527 / 1.44.127
+untouched.
+
+### Release
+- **APK**: https://hushtv.xyz/HushTV.apk (56 MB, +1 MB from v129)
+- **Manifest**: https://hushtv.xyz/version.json
+- **versionCode**: 530 / **versionName**: 1.44.130-debug
+- **Build variant**: `assembleDevDebug`
+
+### Lazy TMDB calls eliminated (Phase 3)
+1. `TmdbService.backdropsForGenres(kind="movie", genreIds=…)` —
+   was ~13 parallel /discover/movie?with_genres=N requests when
+   the user enters Genres. Plus per-genre /movie/{id} fetches for
+   the "preferred override" titles (Action → The Wrecking Crew,
+   Adventure → Jurassic Park, etc.).
+2. `TmdbService.backdropsForGenres(kind="series", …)` — same for
+   TV genres (~10 parallel /discover/tv requests).
+3. `TmdbService.backdropsForCollections(collectionIds=…)` — 20
+   parallel /collection/{id} fetches when the user enters
+   Collections (Star Wars, Marvel Avengers, Harry Potter, James
+   Bond, LOTR, John Wick, etc.).
+
+Net: **~43 lazy TMDB calls eliminated** on the Discover landing
+flow.
+
+### What got added to the bundle
+- 25 net-new WebP files written (+1.0 MB)
+- 30 collection/genre backdrops happened to be top-100 popular
+  titles already covered by Phase 2 — those reused the existing
+  bundled WebP (no duplicate download). This is a happy
+  side-effect of path-keyed lookup: Phase 2 + Phase 3 share the
+  bundle.
+- Total `img_map.json` entries: **397** (was 372 after v129)
+- File naming convention adds two new prefixes:
+  - `g<tmdb_genre_id>_b.webp` — movie genre backdrop
+  - `h<tmdb_genre_id>_b.webp` — tv genre backdrop
+  - `c<tmdb_collection_id>_b.webp` — curated collection backdrop
+
+### Architecture (zero risk for canada / official)
+Same as Phase 2 — Coil mapper consults `DevBundleCache.resolveImage()`
+which short-circuits on a path match. Canada / official ship without
+`assets/dev_only/img_map.json` so the resolver returns null and the
+network code path runs unchanged.
+
+### Phase 3 fetcher additions
+- `_parse_curated_collection_ids()` — regex-parses
+  `CollectionsData.kt` for the 20 hand-curated franchise IDs (Star
+  Wars, Marvel, Harry Potter, etc.). Auto-syncs whenever the
+  curator adds/removes a franchise.
+- `_fetch_genre_backdrop(kind, genre_id)` — mirrors the on-device
+  `backdropsForGenres` discovery logic; picks the most-popular
+  title with a backdrop_path for the requested genre.
+- `_fetch_collection_backdrop(collection_id)` — single GET against
+  /collection/{id}, returns the collection's `backdrop_path`.
+- `bake_discover_backdrops()` — orchestrates Phase 3, re-uses
+  Phase 2 entries (path collision → no re-download), writes the
+  expanded img_map.json with all 397 entries.
+- TMDB published genre lists (`/genre/movie/list` + `/genre/tv/list`)
+  are fetched so every genre TMDB exposes is baked — future
+  GenresData.kt updates with new genres still hit the bundle.
+
+### Tests
+- 2 new pytests in `tests/test_dev_bundle_shape.py`:
+  - `test_phase3_summary_in_manifest` — confirms manifest records
+    Phase 3 stats and ≥80% delivery rate
+  - `test_phase3_genre_and_collection_files_present` — sanity
+    checks at least one `g*_b.webp` (movie genre) and one
+    `c*_b.webp` (collection) file exists
+- 18 / 18 dev-bundle shape tests pass (was 16 before)
+- 59 / 59 sync_server tests still green
+
+### Files touched
+- MODIFIED `/app/_buildenv/dev-bundle-fetcher.py` — added
+  `_parse_curated_collection_ids`, `_fetch_genre_backdrop`,
+  `_fetch_collection_backdrop`, `bake_discover_backdrops`;
+  updated `main()` to call Phase 3 after Phase 2.
+- MODIFIED `/app/androidtv/app/build.gradle.kts` — versionCode 530 / 1.44.130
+- MODIFIED `/app/_buildenv/version.json` — dev OTA manifest
+- MODIFIED `/app/_buildenv/tests/test_dev_bundle_shape.py` — +2 tests
+- **NEW** 25 WebP files added to `app/src/dev/assets/dev_only/img/`
+  (`g*_b.webp`, `h*_b.webp`, `c*_b.webp`)
+- UPDATED `app/src/dev/assets/dev_only/img_map.json` — 372 → 397 entries
+
+### Live URLs verified
+- `https://hushtv.xyz/version.json` → `1.44.130-debug (vc=530)`
+- `https://hushtv.xyz/HushTV.apk` → 56 MB, fresh Last-Modified
+- `https://hushtv.xyz/version-canada.json` → STILL `1.44.127 (vc=527)`
+
+### Risk profile
+Same as Phase 2 — canada/official APK unchanged, dev users get
+56 MB download (1 MB heavier than v129), worst-case behaviour on
+bundle miss = network fetch identical to v511.
+
+### Cumulative API calls eliminated on dev (Phases 1+2+3)
+- ~12 cold-start JSON calls (sports, themes, bundle overrides,
+  per-game leagues entry)
+- Per-title TMDB metadata lookups for top 100 movies + top 100 TV
+- All TMDB image loads for popular titles (poster + backdrop)
+- ~43 lazy Discover-flow TMDB calls (genres + collections)
+
+What's left lazy on dev:
+- Per-title TMDB lookups OUTSIDE the top 100 (e.g. obscure indie
+  movies in the user's Xtream catalog)
+- `/api/sports/game/{id}/channels` (must stay live — needs user's
+  Xtream creds)
+- Xtream catalog, EPG, license check, sync state (all must stay live)
+
+---
+
+
+
 ## v1.44.129-debug (DEV channel ONLY) — Phase 2 API bake: TMDB image bundle — 2026-05-23
 
 ### Continuation of v1.44.128 dev-bake (Phase 1)

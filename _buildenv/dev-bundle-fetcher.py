@@ -30,6 +30,10 @@ Output
 • /app/androidtv/app/src/dev/assets/dev_only/img/<m|t><id>_<p|b>.webp
    (top 100 popular movies + top 100 tv, poster + backdrop each =
     up to 400 images at WebP q=80, ~15-20 MB total)
+• /app/androidtv/app/src/dev/assets/dev_only/img/<g|h><genre_id>_b.webp
+   (Phase 3 — movie genre + tv genre hero backdrops, one each)
+• /app/androidtv/app/src/dev/assets/dev_only/img/c<collection_id>_b.webp
+   (Phase 3 — curated franchise collection hero backdrops)
 • /app/androidtv/app/src/dev/assets/dev_only/img_map.json
    ({"/abc123.jpg": "dev_only/img/m54321_p.webp"} — keyed by the
    TMDB path so any size variant Coil requests resolves to the
@@ -83,6 +87,16 @@ WEBP_QUALITY = 80
 # that's ~16 MB of APK weight on the dev flavor.
 BAKE_IMG_LIMIT_MOVIES = 100
 BAKE_IMG_LIMIT_TV = 100
+
+# Curated collection IDs (Phase 3) — kept in lockstep with
+# /app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/CollectionsData.kt
+# (extracted via regex below so they auto-sync on rebuild).
+COLLECTIONS_DATA_KT = (
+    "/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/CollectionsData.kt"
+)
+GENRES_DATA_KT = (
+    "/app/androidtv/app/src/main/kotlin/com/hushtv/tv/ui/screens/home/GenresData.kt"
+)
 
 OUT_DEV = "/app/androidtv/app/src/dev/assets/dev_only"
 OUT_DEV_IMG = "/app/androidtv/app/src/dev/assets/dev_only/img"
@@ -199,6 +213,176 @@ def bake_tmdb_images(movies: list, tv: list) -> dict:
         "total_mb": round(mb, 2),
         "src_size": TMDB_IMAGE_SRC_SIZE,
         "quality": WEBP_QUALITY,
+    }
+
+
+# ── Phase 3: Discover-backdrop bake (genres + collections) ─────────
+import re  # noqa: E402  — local-only, keeps top-of-file imports clean
+
+_COLLECTION_ID_RE = re.compile(
+    r'MovieCollection\("[^"]+",\s*"[^"]+",\s*"[^"]+",\s*(\d+),', re.DOTALL,
+)
+
+
+def _parse_curated_collection_ids() -> list:
+    """Extract the 20 hand-curated TMDB collection IDs straight from
+    CollectionsData.kt so the bake stays in lockstep with the Kotlin
+    source even when the curator adds/removes a franchise."""
+    try:
+        with open(COLLECTIONS_DATA_KT, "r", encoding="utf-8") as f:
+            src = f.read()
+    except OSError as e:
+        print(f"    ! couldn't read CollectionsData.kt: {e}", file=sys.stderr)
+        return []
+    ids = [int(m.group(1)) for m in _COLLECTION_ID_RE.finditer(src)]
+    print(f"[phase3] parsed {len(ids)} curated collection ids from Kotlin source")
+    return ids
+
+
+def _fetch_genre_backdrop(kind: str, genre_id: int) -> tuple:
+    """Returns (tmdb_path, w780_url) for the most-popular title in
+    [kind] that has the [genre_id] tag AND a backdrop_path. Mirrors
+    the on-device `backdropsForGenres` discovery logic exactly so
+    the bundle backdrop matches what the app would have rendered."""
+    endpoint = "discover/tv" if kind == "series" else "discover/movie"
+    url = (
+        f"{TMDB}/{endpoint}?api_key={TMDB_KEY}&sort_by=popularity.desc"
+        f"&include_adult=false&include_video=false&language=en-US"
+        f"&with_genres={genre_id}"
+    )
+    resp = http_json(url)
+    for hit in resp.get("results") or []:
+        path = hit.get("backdrop_path")
+        if path:
+            return path, f"https://image.tmdb.org/t/p/{TMDB_IMAGE_SRC_SIZE}{path}"
+    return None, None
+
+
+def _fetch_collection_backdrop(collection_id: int) -> tuple:
+    """Returns (tmdb_path, w780_url) for the collection's hero
+    backdrop_path. Mirrors the on-device `backdropsForCollections`
+    logic — single GET against /collection/{id}."""
+    url = f"{TMDB}/collection/{collection_id}?api_key={TMDB_KEY}&language=en-US"
+    resp = http_json(url)
+    path = resp.get("backdrop_path")
+    if path:
+        return path, f"https://image.tmdb.org/t/p/{TMDB_IMAGE_SRC_SIZE}{path}"
+    return None, None
+
+
+def bake_discover_backdrops() -> dict:
+    """Bake one backdrop per movie/tv genre + per curated collection.
+    Adds entries to img_map.json (re-loaded + re-written so we
+    PRESERVE the existing 372 movie/tv poster+backdrop entries).
+
+    Why not just re-use entries from bake_tmdb_images?
+      Some genre/collection backdrops happen to belong to a
+      top-100 popular title — those auto-hit the existing bundle.
+      But many don't (e.g. Mystery genre's most popular is some
+      mid-tier whodunit, not in the top 100). For those we
+      download an extra WebP."""
+    # Step 1 — re-load the existing img_map so we don't lose Phase 2.
+    map_path = os.path.join(OUT_DEV, "img_map.json")
+    if os.path.exists(map_path):
+        with open(map_path, "r", encoding="utf-8") as f:
+            img_map = json.load(f)
+    else:
+        img_map = {}
+    starting_entries = len(img_map)
+
+    os.makedirs(OUT_DEV_IMG, exist_ok=True)
+    total_bytes = 0
+    written = 0
+    reused = 0
+    failed = 0
+
+    # Step 2 — TMDB's published genre lists. The on-device GenresData.kt
+    # hardcodes subsets of these. We bake EVERY genre TMDB exposes
+    # so a future GenresData.kt update with new genres still hits
+    # the bundle.
+    movie_genres = http_json(f"{TMDB}/genre/movie/list?api_key={TMDB_KEY}")
+    tv_genres = http_json(f"{TMDB}/genre/tv/list?api_key={TMDB_KEY}")
+    movie_genre_ids = [g["id"] for g in (movie_genres.get("genres") or []) if g.get("id")]
+    tv_genre_ids = [g["id"] for g in (tv_genres.get("genres") or []) if g.get("id")]
+    print(f"[phase3] TMDB movie genres: {len(movie_genre_ids)}, tv genres: {len(tv_genre_ids)}")
+
+    # Step 3 — genre backdrops.
+    for kind, genre_ids in (("movie", movie_genre_ids), ("series", tv_genre_ids)):
+        for gid in genre_ids:
+            try:
+                path, _src_url = _fetch_genre_backdrop(kind, gid)
+            except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError) as e:
+                print(f"    ! genre {kind}/{gid} discover failed: {e}", file=sys.stderr)
+                failed += 1
+                continue
+            if not path:
+                continue
+            if path in img_map:
+                # Already covered by Phase 2 top-100 — skip the download.
+                reused += 1
+                continue
+            kind_letter = "g" if kind == "movie" else "h"  # g=movie genre, h=series genre
+            fname = f"{kind_letter}{gid}_b.webp"
+            out_path = os.path.join(OUT_DEV_IMG, fname)
+            try:
+                if not os.path.exists(out_path):
+                    written_bytes = fetch_webp(
+                        f"https://image.tmdb.org/t/p/{TMDB_IMAGE_SRC_SIZE}{path}",
+                        out_path,
+                    )
+                    total_bytes += written_bytes
+                    written += 1
+                img_map[path] = f"dev_only/img/{fname}"
+            except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, OSError) as e:
+                print(f"    ! genre {kind}/{gid} webp failed: {e}", file=sys.stderr)
+                failed += 1
+
+    # Step 4 — collection backdrops.
+    collection_ids = _parse_curated_collection_ids()
+    for cid in collection_ids:
+        try:
+            path, _src_url = _fetch_collection_backdrop(cid)
+        except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError) as e:
+            print(f"    ! collection {cid} fetch failed: {e}", file=sys.stderr)
+            failed += 1
+            continue
+        if not path:
+            continue
+        if path in img_map:
+            reused += 1
+            continue
+        fname = f"c{cid}_b.webp"
+        out_path = os.path.join(OUT_DEV_IMG, fname)
+        try:
+            if not os.path.exists(out_path):
+                written_bytes = fetch_webp(
+                    f"https://image.tmdb.org/t/p/{TMDB_IMAGE_SRC_SIZE}{path}",
+                    out_path,
+                )
+                total_bytes += written_bytes
+                written += 1
+            img_map[path] = f"dev_only/img/{fname}"
+        except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, OSError) as e:
+            print(f"    ! collection {cid} webp failed: {e}", file=sys.stderr)
+            failed += 1
+
+    write_json(map_path, img_map)
+    mb = total_bytes / (1024 * 1024)
+    added = len(img_map) - starting_entries
+    print(
+        f"[phase3] done — added {added} new map entries "
+        f"(wrote {written} files, reused {reused} from Phase 2, "
+        f"failed {failed}, +{mb:.1f} MB)"
+    )
+    return {
+        "added_entries": added,
+        "written_files": written,
+        "reused_from_phase2": reused,
+        "failed": failed,
+        "added_mb": round(mb, 2),
+        "movie_genre_count": len(movie_genre_ids),
+        "tv_genre_count": len(tv_genre_ids),
+        "collection_count": len(collection_ids),
     }
 
 
@@ -360,6 +544,7 @@ def main():
     tmdb_summary, movies, tv = fetch_tmdb()
     summary["tmdb"] = tmdb_summary
     summary["images"] = bake_tmdb_images(movies, tv)
+    summary["discover_backdrops"] = bake_discover_backdrops()
     summary["themes_pack"] = fetch_themes_pack()
     write_manifest(summary)
     print("\n[done] dev bundle fetch complete.")

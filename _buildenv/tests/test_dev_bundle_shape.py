@@ -173,3 +173,42 @@ def test_img_map_values_resolve_to_actual_files():
         full = os.path.join(OUT_DEV, rel)
         assert os.path.isfile(full), f"img_map points to missing file: {full}"
         assert os.path.getsize(full) > 500, f"suspiciously small webp: {full}"
+
+
+# ── Phase 3: discover-backdrop bake ────────────────────────────────
+
+
+def test_phase3_summary_in_manifest():
+    """Manifest must record what was baked in Phase 3 so future
+    incremental rebuilds can detect drift / regressions."""
+    d = _load("manifest.json")
+    db = d.get("discover_backdrops")
+    assert db is not None, "manifest missing discover_backdrops section"
+    assert db.get("movie_genre_count", 0) >= 15, "fewer movie genres than expected"
+    assert db.get("tv_genre_count", 0) >= 10, "fewer tv genres than expected"
+    assert db.get("collection_count", 0) >= 15, "fewer curated collections than expected"
+    # added_entries + reused_from_phase2 should equal genres+collections
+    # roughly. failures are tolerated up to ~10%.
+    expected_targets = (
+        db["movie_genre_count"] + db["tv_genre_count"] + db["collection_count"]
+    )
+    delivered = db["added_entries"] + db["reused_from_phase2"]
+    assert delivered >= int(0.8 * expected_targets), \
+        f"too many phase3 fetch failures: delivered={delivered}, expected≥{expected_targets}"
+
+
+def test_phase3_genre_and_collection_files_present():
+    """Sanity-check at least one genre-backdrop file (g<id>_b.webp
+    or h<id>_b.webp) and at least one collection-backdrop file
+    (c<id>_b.webp) exist in img/ after Phase 3."""
+    img_dir = os.path.join(OUT_DEV, "img")
+    if not os.path.exists(img_dir):
+        pytest.skip("img/ dir not generated yet")
+    names = os.listdir(img_dir)
+    has_movie_genre = any(n.startswith("g") and n.endswith("_b.webp") for n in names)
+    has_collection = any(n.startswith("c") and n.endswith("_b.webp") for n in names)
+    # tv-genre files use 'h' prefix; not all tv genres yield a backdrop
+    # (some are admin-only / smaller genre buckets), so we don't hard-
+    # assert their presence — just movie-genre + collection.
+    assert has_movie_genre, "no movie-genre backdrop files (g*_b.webp) found"
+    assert has_collection, "no collection backdrop files (c*_b.webp) found"
