@@ -296,13 +296,14 @@ private fun AppContent() {
             // this scope recomposes, flipping the entire UI tree.
             val savedMode by com.hushtv.tv.data.AppModeStore.flow(ctx)
                 .collectAsState()
-            // v1.44.123 — if savedMode is UNSET (fresh install where
-            // the migration hasn't fired yet — e.g., the migration
-            // crashed before save() completed), fall back to the
-            // device capability detector. Prevents fresh-install
-            // users from getting the heavy Pro UI for one frame
-            // before the migration's save() lands, which on weak
-            // devices was enough to OOM-kill the process.
+            // v1.44.123/124 — if savedMode is UNSET (fresh install,
+            // or v1.44.124 where the migration is deferred to a
+            // background thread and hasn't fired yet), pick the
+            // safest default for THIS device. v1.44.124 makes the
+            // default LITE on any failure path — Pro UI mounting is
+            // what was killing weak Fire Sticks, so when in doubt
+            // err on the Lite side. Users on capable hardware can
+            // toggle back to Pro in Settings → App Mode.
             val isLite = when (savedMode) {
                 com.hushtv.tv.data.AppMode.LITE -> true
                 com.hushtv.tv.data.AppMode.PRO  -> false
@@ -310,7 +311,7 @@ private fun AppContent() {
                     runCatching {
                         com.hushtv.tv.data.DeviceCapability.detect(ctx).recommended ==
                             com.hushtv.tv.data.AppMode.LITE
-                    }.getOrDefault(false)
+                    }.getOrDefault(true)  // v124: safer default
             }
             androidx.compose.runtime.CompositionLocalProvider(
                 com.hushtv.tv.data.LocalIsLiteMode provides isLite,

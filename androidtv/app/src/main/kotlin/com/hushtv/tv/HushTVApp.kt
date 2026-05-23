@@ -38,38 +38,37 @@ class HushTVApp : Application(), ImageLoaderFactory {
         installCrashHandler()
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_crashhandler")
 
-        // v1.44.122/123 — Lite-mode auto-migration. Runs on the main
-        // thread BEFORE any UI composes so the very first frame
-        // reflects the right mode. v1.44.123 extends the migration
-        // to UNSET (fresh install) users — irandall16 reinstalled
-        // v1.44.122 onto AFTKRT (memoryClass=192, totalRam=1669) and
-        // landed on Pro because the migration only matched currentMode
-        // == PRO. Fresh installs now also auto-route to Lite.
-        com.hushtv.tv.data.AppModeStore.runAutoMigrationV122IfNeeded(this)
-        com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_migration")
-
         com.hushtv.tv.data.EventLog.log(
             "app",
             "onCreate v${BuildConfig.VERSION_NAME}#${BuildConfig.VERSION_CODE}",
         )
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_eventlog")
 
-        // v1.44.123 — DEFERRED INIT. Everything below was previously
-        // synchronous in Application.onCreate, peaking heap usage at
-        // a moment when the Android system has zero patience for
-        // slow app starts. AFTKRT (Fire 4K 2nd gen, memoryClass=192,
-        // totalRam=1669 MB) was getting SIGKILL'd before the activity
-        // could even claim a window. Moving these to a background
-        // HandlerThread fired ~50ms after onCreate returns means the
-        // window can attach + first frame can render before the
-        // heavyweight init completes. None of this work is on the
-        // critical path for showing the splash → boot refresh screen.
+        // v1.44.124 — DEFERRED INIT (expanded from v1.44.123). Now
+        // includes runAutoMigrationV122IfNeeded — v1.44.123 telemetry
+        // showed 12 users dying at `app_oc_post_crashhandler` in 24h
+        // because the migration call's first-access SharedPreferences
+        // lazy-load (reading `app_mode_prefs.xml` from disk) blocked
+        // the main thread long enough on busy Fire Stick eMMC that
+        // the ANR watchdog fired → SIGKILL. Moving it OFF the main
+        // thread eliminates the kill while still applying Lite mode:
+        // MainActivity's first composition reads UNSET → falls back
+        // to DeviceCapability.detect() → uses Lite UI. When the
+        // deferred migration completes ~100ms later, save() pushes
+        // LITE to the StateFlow which re-emits and the UI switches
+        // permanently to Lite. For PRO users being demoted, they
+        // briefly see Pro UI until the StateFlow re-emits — better
+        // than the v123 outcome of the app dying entirely.
         val deferredInit = android.os.HandlerThread("hushtv-deferred-init").apply {
-            // Lower priority so the deferred init never starves UI.
             start()
         }
         android.os.Handler(deferredInit.looper).post {
             runCatching {
+                // Migration FIRST so the StateFlow re-emits as soon
+                // as possible — Compose will recompose to the right
+                // mode within one frame of the save() call landing.
+                com.hushtv.tv.data.AppModeStore.runAutoMigrationV122IfNeeded(this)
+                com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_migration")
                 XtreamApi.enableDiskCache(this)
                 com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_xtream_cache")
                 com.hushtv.tv.data.CrashReporter.uploadIfPending(this)
@@ -83,8 +82,6 @@ class HushTVApp : Application(), ImageLoaderFactory {
             }.onFailure { e ->
                 android.util.Log.e("HushTVApp", "deferred init failed: ${e.message}", e)
             }
-            // Quit the HandlerThread after the init runnable finishes
-            // so we don't hold a thread + looper forever.
             deferredInit.quitSafely()
         }
 

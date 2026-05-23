@@ -1,3 +1,42 @@
+## v1.44.124 (Canada channel) — CRITICAL FIX: migration was killing v123 users — 2026-02-22
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (25.3 MB)
+- **versionCode**: 524 / **versionName**: 1.44.124 / mandatory=true
+
+### Root cause (v123 telemetry made it crystal clear)
+v1.44.123's granular boot marks paid off immediately. **All 12 v123 `boot_died` reports in 24h died at the same mark: `app_oc_post_crashhandler`**. That's between `installCrashHandler()` and `AppModeStore.runAutoMigrationV122IfNeeded()`. The migration call was killing the app.
+
+Most likely mechanism: the migration's **first-access SharedPreferences lazy-load** (reading `app_mode_prefs.xml` from disk for the first time in the process lifetime) blocked the main thread > 4 sec on busy Fire Stick eMMC → ANR watchdog fired → SIGKILL.
+
+### Fix shipped
+1. **Migration moved off main thread** into the existing `hushtv-deferred-init` HandlerThread. Main thread `Application.onCreate` now finishes in <30ms. SharedPreferences disk lazy-load happens on the background thread where it can take its time without triggering the ANR watchdog.
+2. **MainActivity.isLite UNSET fallback defaults to LITE** (was Pro) on any failure path. Safer default for any TV stick. The reactive StateFlow means PRO→LITE migration applies ~100ms later automatically once the deferred init writes save(LITE).
+3. Note: only PRO users being demoted will briefly see Pro UI before the StateFlow re-emits LITE. Fresh-install users get LITE on first frame via the UNSET → DeviceCapability.detect() fallback.
+
+### User reports addressed
+- **rtstier@telus.net** (AFTSSS, kicked out on boot) — should be fixed; v124 boots to Lite UI by default.
+- **marychaisson56@gmail.com** (Fire 4K, 15-sec home screen kick) — same root cause; should be fixed.
+- **yjXXWMThs2** (Live TV black screen on channel click) — DIFFERENT bug (ExoPlayer HW decoder failure on AFTMM Android 7.1). v124 does NOT fix this; needs separate investigation in next iteration.
+
+### Files touched
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushTVApp.kt` — migration moved into deferred init runnable
+- `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/MainActivity.kt` — UNSET fallback default flipped to Lite
+- `/app/androidtv/app/build.gradle.kts` — versionCode 524 / 1.44.124
+- `/app/_buildenv/version-canada.json` — OTA manifest
+
+### Live verified
+- OTA: `v524 / 1.44.124 mandatory=true`
+- APK: 25.3 MB, fresh Last-Modified
+
+### Next session — what to watch
+- 🔴 **rtstier + marychaisson telemetry within 24h.** Expect `boot_died` count for v524 to drop to near-zero. The remaining few (if any) will have a more specific last_stage that pinpoints the next bug.
+- 🔴 **yjXXWMThs2's Live TV black-screen bug** — separate investigation. Likely ExoPlayer HW decoder failing on AFTMM (Fire OS 5 / Android 7.1) — need to inspect player init telemetry, check `androidTv` API level minimums, possibly disable HW decoder on AFTMM and force SW decoder.
+- 🟡 **Verify `app_mode=LITE` populates correctly** in v524 crash reports.
+
+---
+
+
 ## v1.44.123 (Canada channel) — Fresh-install Fire Stick crash loop FIX + onCreate deferred init — 2026-02-22
 
 ### Release
