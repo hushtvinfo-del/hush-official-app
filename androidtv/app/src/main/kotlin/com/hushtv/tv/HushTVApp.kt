@@ -280,6 +280,18 @@ class HushTVApp : Application(), ImageLoaderFactory {
             .okHttpClient(okHttp)
             .components {
                 add(SvgDecoder.Factory())
+                // v1.44.128-dev — Register the Coil URL mapper that
+                // short-circuits image loads to bundled assets BEFORE
+                // any network hit. Resolution chain (see HushBundleMapper):
+                //   1. DEV-flavor TMDB image bundle (Phase 2, ~16 MB)
+                //   2. Server override map (BundleOverrides)
+                //   3. APK-bundled streaming/decade/theme assets (44 entries)
+                //   4. Pass-through to the original URL
+                // NOTE: this was a pre-existing wiring bug — the mapper
+                // existed but was never added to .components{}, which
+                // meant the original 44-entry BundledAssets table was
+                // also silently bypassed. Fixed alongside Phase 2.
+                add(HushBundleMapper)
             }
         // v1.44.119/121 — on low-RAM devices (AFTSS / AFTKM / AFTSSS /
         // AFTKRT — anything with per-app heap ≤ 128 MB) we use RGB_565

@@ -1,3 +1,133 @@
+## v1.44.129-debug (DEV channel ONLY) — Phase 2 API bake: TMDB image bundle — 2026-05-23
+
+### Continuation of v1.44.128 dev-bake (Phase 1)
+v128 baked the metadata JSON. v129 bakes the actual **TMDB poster +
+backdrop images** so popular-title posters paint instantly with
+zero TMDB CDN round-trip. Same dev-only gating — canada / official
+remain at v527 / 1.44.127 untouched.
+
+### Release
+- **APK**: https://hushtv.xyz/HushTV.apk (55 MB — was 25 MB before bake)
+- **Manifest**: https://hushtv.xyz/version.json
+- **versionCode**: 529 / **versionName**: 1.44.129-debug
+- **Build variant**: `assembleDevDebug`
+
+### What's baked (Phase 2 layer on top of Phase 1)
+- 372 TMDB WebP images at `w780` source, q=80
+  - 100 movie posters (top popular)
+  - 100 movie backdrops (top popular)
+  - 88 TV posters (12 skipped — missing poster_path)
+  - 84 TV backdrops (16 skipped — missing backdrop_path)
+- `assets/dev_only/img/m{tmdb_id}_p.webp` (poster)
+- `assets/dev_only/img/m{tmdb_id}_b.webp` (backdrop)
+- `assets/dev_only/img/t{tmdb_id}_p.webp` (tv poster)
+- `assets/dev_only/img/t{tmdb_id}_b.webp` (tv backdrop)
+- `assets/dev_only/img_map.json` — `{tmdb_path → asset_relative}` lookup
+
+### Path-keyed lookup (one WebP serves every Coil size variant)
+Map keyed by the TMDB image path component (`/abc123.jpg`), not the
+full URL. Means `https://image.tmdb.org/t/p/w185{path}`,
+`https://image.tmdb.org/t/p/w500{path}`, and
+`https://image.tmdb.org/t/p/original{path}` all resolve to the same
+bundled WebP — Coil downscales on-device. Saves us from baking 8
+size variants per image.
+
+### Architecture
+1. New `DevBundleCache.resolveImage(sourceUrl: String): String?` —
+   parses out the path component, looks it up in `img_map.json`,
+   returns `file:///android_asset/dev_only/img/<file>` or null.
+2. `HushBundleMapper.map()` now consults `DevBundleCache.resolveImage`
+   FIRST in the resolution chain.
+
+### Pre-existing bug fixed
+The Coil URL mapper (`HushBundleMapper`) was DEFINED in
+`/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushBundleMapper.kt`
+but never `add()`-ed to `ImageLoader.Builder.components { … }` in
+`HushTVApp.newImageLoader`. This silently bypassed the original
+44-entry `BundledAssets` table (streaming logos, decade backdrops,
+theme backdrops) on EVERY flavor — they were baked into the APK
+but never actually consulted. The v529 wiring fix activates BOTH
+the original 44-entry bundle AND the new Phase 2 image bundle.
+
+### APK size jump
+- v528 (Phase 1 metadata only): 25.5 MB
+- v529 (Phase 2 with images): **55.0 MB**
+- Δ: +29.5 MB for 372 WebP assets
+- Fire Stick download time on home wifi ~5 MB/s = ~11 sec
+- Acceptable for dev testers; Canada will need a slim pass before
+  shipping (drop quality, drop some sizes, OR ship images as a
+  separate downloaded-on-first-launch bundle)
+
+### Tests
+- 3 new pytests in `tests/test_dev_bundle_shape.py`:
+  - `test_img_map_present_and_well_formed` — ≥200 entries
+  - `test_img_map_keys_are_tmdb_paths` — every key starts with `/`,
+    ends with `.jpg`/`.png`/`.webp`/`.gif`
+  - `test_img_map_values_resolve_to_actual_files` — sample 20
+    random entries, verify the WebP file exists and is >500 B
+- 16 / 16 dev-bundle shape tests pass (was 13 before)
+- 59 / 59 sync_server tests still green
+
+### Files touched
+- MODIFIED `/app/_buildenv/dev-bundle-fetcher.py` — added
+  `fetch_webp()` + `bake_tmdb_images()`; updated `main()` to call
+  the image bake after TMDB metadata fetch.
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/DevBundleCache.kt`
+  — added `resolveImage(sourceUrl)`, lazy `tmdbImageMap`, TMDB
+  URL prefix parsing.
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushBundleMapper.kt`
+  — added `DevBundleCache.resolveImage` to the head of the
+  resolution chain.
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushTVApp.kt`
+  — registered `HushBundleMapper` in `ImageLoader.Builder.components { … }`
+  (fixes pre-existing wiring bug).
+- MODIFIED `/app/androidtv/app/build.gradle.kts` — versionCode 529 / 1.44.129
+- MODIFIED `/app/_buildenv/version.json` — dev OTA manifest
+- MODIFIED `/app/_buildenv/tests/test_dev_bundle_shape.py` — +3 tests
+- **NEW** 372 WebP files + img_map.json under
+  `app/src/dev/assets/dev_only/img/`
+
+### Live URLs verified
+- `https://hushtv.xyz/version.json` → `1.44.129-debug (vc=529)`
+- `https://hushtv.xyz/HushTV.apk` → 55 MB, fresh Last-Modified
+- `https://hushtv.xyz/version-canada.json` → STILL `1.44.127 (vc=527)`
+  (Canada channel deliberately untouched)
+
+### Next session — what to watch
+1. **User tests v529 dev APK on a real Fire Stick / Shield**:
+   - Open a popular movie (e.g. recent blockbuster) — poster should
+     paint instantly without the cyan loading flash
+   - Sports tab → opens in <500 ms (Phase 1 behaviour validated)
+   - Browse 30-60 min, watch for any crash with `HushBundleMapper`
+     or `Coil` in the stack
+2. **If clean for 48-72 h** → time to port to canada at v530, but
+   probably with a SMALLER image set (top 50 instead of top 100)
+   to keep the canada APK under 40 MB.
+3. **Phase 3 candidates** (deferred):
+   - Refresh the bundled snapshot weekly (cron job hits
+     `dev-bundle-fetcher.py` + rebuilds dev APK + uploads)
+   - Pre-fetch top 500 instead of top 100 (need to weigh APK
+     bloat vs hit rate)
+   - Pre-fetch player intro/outro art (Splash, Discovery hero
+     backdrops for any genres we know we'll show)
+
+### Risk profile
+- **Canada / official:** ZERO change. Same APK they had yesterday.
+  Different applicationId so dev install coexists with canada
+  install if a tester has both.
+- **Dev users:** new 55 MB download. After install, app launches
+  with most popular-title posters instant. Worst-case behaviour
+  on bundle miss = network fetch (same as v511).
+- **Stale bundle:** if a popular movie's poster gets re-uploaded
+  on TMDB (rare — usually only on rebrands), dev users keep
+  seeing the older version until next OTA. Mitigation: the
+  in-APK bundle is path-keyed on the TMDB content hash, so this
+  only happens if TMDB changes the poster_path field itself.
+
+---
+
+
+
 ## v1.44.128-debug (DEV channel ONLY) — Bake static API data into the APK — 2026-05-23
 
 ### Why

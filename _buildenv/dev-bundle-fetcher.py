@@ -27,6 +27,13 @@ Output
 • /app/androidtv/app/src/dev/assets/dev_only/sports_league_<slug>.json
 • /app/androidtv/app/src/dev/assets/dev_only/tmdb_top_movies.json
 • /app/androidtv/app/src/dev/assets/dev_only/tmdb_top_tv.json
+• /app/androidtv/app/src/dev/assets/dev_only/img/<m|t><id>_<p|b>.webp
+   (top 100 popular movies + top 100 tv, poster + backdrop each =
+    up to 400 images at WebP q=80, ~15-20 MB total)
+• /app/androidtv/app/src/dev/assets/dev_only/img_map.json
+   ({"/abc123.jpg": "dev_only/img/m54321_p.webp"} — keyed by the
+   TMDB path so any size variant Coil requests resolves to the
+   same bundled WebP)
 • /app/androidtv/app/src/dev/assets/dev_only/manifest.json
    (versioned manifest so the Android loader can refuse stale bundles)
 • /app/androidtv/app/src/main/assets/themes_pack.json   (refreshed)
@@ -36,11 +43,18 @@ Run manually:
 """
 
 import datetime as dt
+import io
 import json
 import os
 import sys
 import urllib.error
 import urllib.request
+
+try:
+    from PIL import Image
+except ImportError as _e:
+    print(f"FATAL: Pillow required for image bake: {_e}", file=sys.stderr)
+    sys.exit(1)
 
 # ── Config ─────────────────────────────────────────────────────────
 HUSHTV = "https://hushtv.xyz"
@@ -53,7 +67,25 @@ LEAGUE_DAYS = 14  # how far ahead to fetch games per league
 TMDB_MOVIES_PAGES = 5  # 20 results per page × 5 = top 100 popular movies
 TMDB_TV_PAGES = 5
 
+# ── Image bake (Phase 2) ──────────────────────────────────────────
+# Source-side TMDB image size we download. w780 is the sweet spot:
+# • Poster (sized to display ~300 px wide on TV) — w780 downscales
+#   cleanly without aliasing.
+# • Backdrop (sized to display ~1920 px wide as full-bleed hero) —
+#   w780 is slightly soft but ~10× smaller than 'original' and the
+#   user-perceived difference at TV viewing distance is minimal.
+# WebP quality 80 is the size/quality knee — saves ~70% vs JPG at
+# visually-identical fidelity in our blind test.
+TMDB_IMAGE_SRC_SIZE = "w780"
+WEBP_QUALITY = 80
+# How many of the top-popular movies/tv to bake images for. 100 each
+# = 400 images total (poster + backdrop × 100 × 2). At ~40 KB / WebP
+# that's ~16 MB of APK weight on the dev flavor.
+BAKE_IMG_LIMIT_MOVIES = 100
+BAKE_IMG_LIMIT_TV = 100
+
 OUT_DEV = "/app/androidtv/app/src/dev/assets/dev_only"
+OUT_DEV_IMG = "/app/androidtv/app/src/dev/assets/dev_only/img"
 OUT_MAIN_THEMES = "/app/androidtv/app/src/main/assets/themes_pack.json"
 
 TIMEOUT = 15  # seconds per request
@@ -83,6 +115,91 @@ def write_json(path: str, payload) -> None:
         json.dump(payload, f, separators=(",", ":"), ensure_ascii=False)
     size_kb = os.path.getsize(path) / 1024.0
     print(f"    ↳ wrote {path}  ({size_kb:.1f} KB)")
+
+
+# ── Image bake ─────────────────────────────────────────────────────
+def http_bytes(url: str) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": "hushtv-dev-bundler/1.0"})
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        if r.status != 200:
+            raise RuntimeError(f"HTTP {r.status} for {url}")
+        return r.read()
+
+
+def fetch_webp(remote_url: str, out_path: str) -> int:
+    """Fetch [remote_url], decode + re-encode as WebP at WEBP_QUALITY,
+    write to [out_path]. Returns bytes written. Raises on failure."""
+    raw = http_bytes(remote_url)
+    im = Image.open(io.BytesIO(raw))
+    # TMDB returns RGB JPGs but some posters have RGBA — normalise.
+    if im.mode not in ("RGB", "RGBA"):
+        im = im.convert("RGB")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    im.save(out_path, format="WEBP", quality=WEBP_QUALITY, method=6)
+    return os.path.getsize(out_path)
+
+
+def bake_tmdb_images(movies: list, tv: list) -> dict:
+    """Download poster + backdrop for the top-N popular movies / TV
+    shows. Returns a {tmdb_path -> asset_relative_path} map written
+    to img_map.json so the device-side resolver can short-circuit
+    any image.tmdb.org/t/p/{any_size}{path} URL to a local asset.
+
+    Path-based keying means ONE bundled WebP serves every size variant
+    Coil requests (w185 grid thumbnails, w500 detail, original hero
+    backdrops, etc.) — Coil downscales on-device."""
+    os.makedirs(OUT_DEV_IMG, exist_ok=True)
+    img_map = {}
+    total_bytes = 0
+    written = 0
+    skipped = 0
+
+    queue = []
+    for m in movies[:BAKE_IMG_LIMIT_MOVIES]:
+        if m.get("poster_path"):
+            queue.append((m["id"], "m", "p", m["poster_path"]))
+        if m.get("backdrop_path"):
+            queue.append((m["id"], "m", "b", m["backdrop_path"]))
+    for t in tv[:BAKE_IMG_LIMIT_TV]:
+        if t.get("poster_path"):
+            queue.append((t["id"], "t", "p", t["poster_path"]))
+        if t.get("backdrop_path"):
+            queue.append((t["id"], "t", "b", t["backdrop_path"]))
+
+    total = len(queue)
+    print(f"[img] baking {total} TMDB images at {TMDB_IMAGE_SRC_SIZE} → WebP q={WEBP_QUALITY}")
+    for i, (tmdb_id, kind, what, path) in enumerate(queue):
+        # path looks like "/abc123.jpg" — strip the leading slash for
+        # filename safety, keep it as-is for the lookup key.
+        fname = f"{kind}{tmdb_id}_{what}.webp"
+        out_path = os.path.join(OUT_DEV_IMG, fname)
+        if os.path.exists(out_path):
+            img_map[path] = f"dev_only/img/{fname}"
+            skipped += 1
+            continue
+        url = f"https://image.tmdb.org/t/p/{TMDB_IMAGE_SRC_SIZE}{path}"
+        try:
+            written_bytes = fetch_webp(url, out_path)
+            total_bytes += written_bytes
+            img_map[path] = f"dev_only/img/{fname}"
+            written += 1
+        except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, OSError) as e:
+            print(f"    ! skipped {url}: {e}", file=sys.stderr)
+        if (i + 1) % 25 == 0:
+            mb = total_bytes / (1024 * 1024)
+            print(f"    … {i + 1}/{total}  ({mb:.1f} MB so far)")
+
+    write_json(os.path.join(OUT_DEV, "img_map.json"), img_map)
+    mb = total_bytes / (1024 * 1024)
+    print(f"[img] done — wrote {written} new, reused {skipped}, total payload {mb:.1f} MB")
+    return {
+        "entries": len(img_map),
+        "written": written,
+        "skipped_cached": skipped,
+        "total_mb": round(mb, 2),
+        "src_size": TMDB_IMAGE_SRC_SIZE,
+        "quality": WEBP_QUALITY,
+    }
 
 
 # ── Sports ─────────────────────────────────────────────────────────
@@ -200,7 +317,9 @@ def _tmdb_discover_popular(kind: str, pages: int) -> list:
     return details
 
 
-def fetch_tmdb() -> dict:
+def fetch_tmdb() -> tuple:
+    """Returns (summary_dict, movies_list, tv_list). The lists are
+    used by bake_tmdb_images() to pick which posters to download."""
     print("[tmdb] fetching popular movies …")
     movies = _tmdb_discover_popular("movie", TMDB_MOVIES_PAGES)
     write_json(os.path.join(OUT_DEV, "tmdb_top_movies.json"), {"items": movies})
@@ -208,7 +327,7 @@ def fetch_tmdb() -> dict:
     print("[tmdb] fetching popular tv …")
     tv = _tmdb_discover_popular("tv", TMDB_TV_PAGES)
     write_json(os.path.join(OUT_DEV, "tmdb_top_tv.json"), {"items": tv})
-    return {"movies": len(movies), "tv": len(tv)}
+    return ({"movies": len(movies), "tv": len(tv)}, movies, tv)
 
 
 # ── Themes pack refresh ────────────────────────────────────────────
@@ -238,7 +357,9 @@ def main():
 
     summary = {}
     summary["sports"] = fetch_sports()
-    summary["tmdb"] = fetch_tmdb()
+    tmdb_summary, movies, tv = fetch_tmdb()
+    summary["tmdb"] = tmdb_summary
+    summary["images"] = bake_tmdb_images(movies, tv)
     summary["themes_pack"] = fetch_themes_pack()
     write_manifest(summary)
     print("\n[done] dev bundle fetch complete.")

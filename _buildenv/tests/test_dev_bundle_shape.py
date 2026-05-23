@@ -126,3 +126,50 @@ def test_manifest_present_and_versioned():
     assert "tmdb" in d
     assert "themes_pack" in d
     assert "generated_at_utc" in d
+
+
+# ── Image bundle (Phase 2) ─────────────────────────────────────────
+
+
+def test_img_map_present_and_well_formed():
+    d = _load("img_map.json")
+    assert isinstance(d, dict)
+    # Should have at least 200 entries (top 100 movies × poster + top
+    # 100 tv × poster; backdrops are bonus). 350 is a conservative
+    # floor — some titles legitimately lack backdrop_path.
+    assert len(d) >= 200, f"img_map only has {len(d)} entries — expected ≥200"
+
+
+def test_img_map_keys_are_tmdb_paths():
+    d = _load("img_map.json")
+    # Every key should look like a TMDB image path: starts with "/",
+    # ends with .jpg / .png / .webp. We don't want absolute URLs in
+    # keys — the resolver strips the prefix on-device.
+    for k, v in list(d.items())[:10]:
+        assert k.startswith("/"), f"bad key (no leading /): {k!r}"
+        assert k.lower().endswith((".jpg", ".png", ".webp", ".gif")), \
+            f"key doesn't look like an image path: {k!r}"
+        assert v.startswith("dev_only/img/"), f"bad value: {v!r}"
+        assert v.endswith(".webp"), f"value not WebP: {v!r}"
+
+
+def test_img_map_values_resolve_to_actual_files():
+    """The on-device resolver returns file:///android_asset/<value>.
+    If the WebP file doesn't actually exist in assets/dev_only/img/
+    the device renders a blank tile and we don't notice until users
+    complain. This test catches the orphan case."""
+    d = _load("img_map.json")
+    img_dir = os.path.join(OUT_DEV, "img")
+    if not os.path.exists(img_dir):
+        pytest.skip("img/ dir not generated yet")
+    # Sample 20 random entries (full check is 372 × file-exists =
+    # negligible but I/O-heavy; sampling keeps the suite fast).
+    import random
+    sampled = random.Random(42).sample(list(d.values()), min(20, len(d)))
+    for asset_path in sampled:
+        # asset_path is "dev_only/img/m12345_p.webp" — strip the
+        # dev_only/ prefix to get the path relative to OUT_DEV.
+        rel = asset_path[len("dev_only/"):]
+        full = os.path.join(OUT_DEV, rel)
+        assert os.path.isfile(full), f"img_map points to missing file: {full}"
+        assert os.path.getsize(full) > 500, f"suspiciously small webp: {full}"

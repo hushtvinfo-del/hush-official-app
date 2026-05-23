@@ -164,4 +164,56 @@ object DevBundleCache {
         Log.i(TAG, "tmdbTv($tmdbId) → bundle hit (${hit.name})")
         return hit
     }
+
+    // ── Image bundle (Phase 2) ──────────────────────────────────
+    //
+    // Path-based lookup: any TMDB image URL of the form
+    //   https://image.tmdb.org/t/p/{any_size}{path}
+    // resolves to a single bundled WebP. Coil downscales the WebP
+    // on-device to whatever size the layout wants, so we only need
+    // ONE bundled asset per (movie/tv, poster|backdrop) tuple
+    // regardless of how many different sizes the screens request.
+
+    private const val TMDB_IMG_PREFIX = "https://image.tmdb.org/t/p/"
+
+    @Suppress("UNCHECKED_CAST")
+    private val tmdbImageMap: Map<String, String>? by lazy {
+        if (!isActive) return@lazy null
+        val raw = readAsset("img_map.json") ?: return@lazy null
+        runCatching {
+            // Plain Map<String,String> — Moshi can do it via Types.newParameterizedType.
+            val mapType = com.squareup.moshi.Types.newParameterizedType(
+                Map::class.java, String::class.java, String::class.java,
+            )
+            moshi.adapter<Map<String, String>>(mapType).fromJson(raw)
+        }.onFailure {
+            Log.w(TAG, "img_map.json parse failed: ${it.message}")
+        }.getOrNull().also {
+            if (it != null) Log.i(TAG, "loaded ${it.size} bundled image paths")
+        }
+    }
+
+    /**
+     * If [sourceUrl] is a TMDB image URL whose `{path}` portion is
+     * in the bundled image map, returns a `file:///android_asset/...`
+     * URL Coil can load instantly. Returns null on miss — the caller
+     * (HushBundleMapper) falls through to network / cache.
+     *
+     * Single bundled WebP serves every size variant Coil requests
+     * because we key on the path component only, not the full URL.
+     */
+    fun resolveImage(sourceUrl: String): String? {
+        if (!isActive) return null
+        val map = tmdbImageMap ?: return null
+        val idx = sourceUrl.indexOf(TMDB_IMG_PREFIX)
+        if (idx < 0) return null
+        val afterPrefix = sourceUrl.substring(idx + TMDB_IMG_PREFIX.length)
+        val slash = afterPrefix.indexOf('/')
+        if (slash < 0) return null
+        // Keep the leading slash so the map key matches what TMDB
+        // returns as poster_path / backdrop_path (e.g. "/abc.jpg").
+        val path = afterPrefix.substring(slash)
+        val asset = map[path] ?: return null
+        return "file:///android_asset/$asset"
+    }
 }

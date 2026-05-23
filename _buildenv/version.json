@@ -1,19 +1,15 @@
 {
-  "versionCode": 528,
-  "versionName": "1.44.128-debug",
+  "versionCode": 529,
+  "versionName": "1.44.129-debug",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-23",
   "channel": "dev",
   "changelog": [
-    "NEW (DEV-ONLY, experimental): Bake static API data into the APK. The dev flavor no longer hits the network for sports schedules (NHL, NBA, MLB, NFL, UFC, EPL, MLS, NCAAB, NCAAF + PPV), top-100 popular movie/TV metadata, the themes pack, or bundle-override patches. Sports tab opens instantly, popular-movie detail screens render without a TMDB round-trip. Canada/official: zero change.",
-    "PERF: ~12 fewer outbound HTTP calls during cold start on the dev flavor.",
-    "INHERITED from v1.44.127: Auto cache-clear on launch.",
-    "INHERITED from v1.44.125: Fire Stick black-screen-on-play fix.",
-    "INHERITED from v1.44.124: Migration moved off main thread.",
-    "NEW (DEV-ONLY): 'Play next episode' card.",
-    "FIX: Player on-screen options menu D-pad focus.",
-    "FIX: Discovery hero TMDB fallback.",
-    "FIX: Parental Controls hide locked categories everywhere."
+    "NEW (DEV-ONLY, Phase 2): Bake TMDB poster + backdrop images into the APK. Top 100 popular movies + top 100 popular TV shows × (poster + backdrop) = 372 bundled WebP images (~28 MB). Coil mapper short-circuits any TMDB image URL whose path is bundled, so popular-title posters paint instantly with zero TMDB CDN round-trip. APK grows 25 MB → 53 MB (dev only). Canada / official: untouched.",
+    "FIX: Re-wired HushBundleMapper into Coil's ImageLoader components — was previously defined but never registered, which silently bypassed the existing 44-entry streaming/decade/theme bundle. Now both that bundle AND the new Phase 2 image bundle are active.",
+    "INHERITED v1.44.128-debug: Bake static API JSON (sports schedules, TMDB top-popular metadata, themes pack) into the dev APK.",
+    "INHERITED v1.44.127: Auto cache-clear on launch.",
+    "INHERITED v1.44.125: Fire Stick black-screen-on-play fix."
   ]
 }
