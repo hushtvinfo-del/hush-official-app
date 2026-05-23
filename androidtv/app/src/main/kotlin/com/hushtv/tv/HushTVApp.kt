@@ -38,6 +38,15 @@ class HushTVApp : Application(), ImageLoaderFactory {
         installCrashHandler()
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_crashhandler")
 
+        // v1.44.132 — wire the previously-defined-but-never-called
+        // main looper resilience wrapper. Suppresses three documented
+        // Compose / Navigation framework races that otherwise kill
+        // the process. Crash Monitor showed 49 IllegalStateException
+        // (`FocusRequester is not initialized`) on v131 in 24 h —
+        // ALL would have been silently swallowed if this was wired.
+        installMainLooperResilience()
+        com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_main_resilience")
+
         // v1.44.128-dev — initialise the DEV-flavor bundled-asset cache
         // EARLY (cheap, just stores the Context). On canada / official
         // this is a no-op because the bundle files aren't shipped, so
@@ -95,6 +104,16 @@ class HushTVApp : Application(), ImageLoaderFactory {
                 com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_exit_collector")
                 com.hushtv.tv.data.ThemePackLoader.loadBundledSync(this)
                 com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_themepack")
+                // v1.44.132 — pre-warm the DevBundleCache lazy indices
+                // (tmdbImageMap, tmdbMovieIndex, tmdbTvIndex) on this
+                // background thread so the FIRST Coil image-mapper
+                // resolution doesn't block the main thread parsing
+                // 397-entry JSON via Moshi reflection. Narrows the
+                // FocusRequester race window that caused the v131
+                // crash spike. No-op on flavors where the bundle
+                // isn't shipped (isActive returns false fast).
+                com.hushtv.tv.data.DevBundleCache.prewarm()
+                com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_devbundle_prewarm")
                 com.hushtv.tv.data.AnrWatchdog.start(this)
                 com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_anr_watchdog")
             }.onFailure { e ->
@@ -307,12 +326,23 @@ class HushTVApp : Application(), ImageLoaderFactory {
         }
         return builder
             .memoryCache {
+                // v1.44.132 — tightened tier values after seeing OOMs
+                // on AFTKA (Fire TV Stick Lite, 402 MB heap soft cap)
+                // running v131. The bake itself doesn't change decoded
+                // bitmap size (one 780×1170 ARGB poster is 3.6 MB
+                // regardless of source) but the larger APK + 28 MB
+                // asset bundle erodes the headroom available for
+                // Coil's mem cache. Halving the percentages still
+                // gives Coil enough room to cache the visible row of
+                // posters while leaving more breathing space for
+                // SharedPreferences serialisers and JIT compilation.
                 val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
                 val totalRamMb = am.memoryClass
                 val pct = when {
-                    totalRamMb <= 96  -> 0.07
-                    totalRamMb <= 128 -> 0.10
-                    else              -> 0.20
+                    totalRamMb <= 96  -> 0.05
+                    totalRamMb <= 128 -> 0.06
+                    totalRamMb <= 192 -> 0.10
+                    else              -> 0.15
                 }
                 MemoryCache.Builder(this)
                     .maxSizePercent(pct)

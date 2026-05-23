@@ -1,18 +1,16 @@
 {
-  "versionCode": 531,
-  "versionName": "1.44.131",
+  "versionCode": 532,
+  "versionName": "1.44.132",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-05-23",
   "channel": "canada",
   "changelog": [
-    "PERF: Massive cold-start speedup — Canada APK now ships with TMDB metadata, sports schedules, themes pack, and 397 hero/poster images baked in. Discovery rails, Sports tab, Genres, and Collections all paint instantly from local assets instead of waiting on 50+ outbound TMDB/sports HTTP calls. Same architecture that ran clean on the dev channel for several hours.",
-    "FIX: Re-wired HushBundleMapper into Coil's ImageLoader — was previously defined but never registered, which silently bypassed the existing 44-entry streaming logo + decade backdrop bundle on every flavor. Now active.",
-    "NOTE: APK size grew 25 MB → ~56 MB to accommodate the baked images. One-time download hit; subsequent app launches are faster than ever.",
+    "FIX (critical): Wired the previously-defined-but-never-called main-looper resilience handler that suppresses three documented Compose framework races. Crash Monitor showed 49 IllegalStateException (`FocusRequester is not initialized`) on v131 in 24 h — all of those will now be silently survived. Same defined-but-not-registered pattern as the v131 Coil mapper bug.",
+    "FIX: Lowered Coil image-cache memory percentages on Lite-mode Fire Sticks (AFTKA, AFTKM, AFTKRT) to recover ~20 MB heap headroom and reduce OOM kills.",
+    "PERF: Pre-warm the bundled-asset JSON indices off the main thread during deferred init, so first-composition image lookups are O(1) hash hits instead of blocking on a 397-entry Moshi parse. Narrows the framework-race window that triggered v131's IllegalStateException spike.",
+    "INHERITED v1.44.131: API-bake architecture (sports, themes, top-popular TMDB metadata, 397 hero/poster images).",
     "INHERITED v1.44.127: Auto cache-clear on launch.",
-    "INHERITED v1.44.125: Fire Stick black-screen-on-play fix (SurfaceView for Lite mode).",
-    "INHERITED v1.44.124: Migration moved off main thread.",
-    "INHERITED v1.44.123: Fresh-install Fire Stick crash loop fix + 9 granular boot marks.",
-    "INHERITED v1.44.122: Removed AMAZON from premium-brand bypass; one-shot Pro→Lite migration."
+    "INHERITED v1.44.125: Fire Stick black-screen-on-play fix (SurfaceView for Lite mode)."
   ]
 }

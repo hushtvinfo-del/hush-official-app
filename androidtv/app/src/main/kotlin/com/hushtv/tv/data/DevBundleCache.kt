@@ -79,6 +79,38 @@ object DevBundleCache {
         appContext = ctx.applicationContext
     }
 
+    /**
+     * v1.44.132 — Pre-warm all lazy indices on a background thread.
+     *
+     * Why: the first call to [resolveImage], [tmdbMovie] or [tmdbTv]
+     * triggers a Moshi reflection parse of the bundled JSON (≈400 KB
+     * for tmdb_top_tv alone). That can take 50-200 ms on a weak
+     * Fire Stick. If it lands on the main thread (because a grid
+     * screen kicks off hundreds of Coil image loads simultaneously
+     * during first composition), it widens the FocusRequester
+     * framework-race window — manifesting as IllegalStateException
+     * killing the process when the user presses a remote key
+     * before composition is complete. Crash Monitor v131 → 49
+     * crashes in 24 h.
+     *
+     * Calling this once from the deferred-init thread forces all
+     * three lazy properties to resolve OFF the main thread, so
+     * future lookups are O(1) hash lookups against an already-built
+     * Map. Best-effort: any parse failure is logged and the
+     * resolvers fall through to network just like before.
+     */
+    fun prewarm() {
+        if (!isActive) return
+        // Read the lazy properties — Moshi parse runs here.
+        val movie = tmdbMovieIndex
+        val tv = tmdbTvIndex
+        val img = tmdbImageMap
+        Log.i(
+            TAG,
+            "prewarm done: movies=${movie?.size ?: 0} tv=${tv?.size ?: 0} images=${img?.size ?: 0}",
+        )
+    }
+
     // ── Asset loading helpers ───────────────────────────────────
 
     private val moshi by lazy {
