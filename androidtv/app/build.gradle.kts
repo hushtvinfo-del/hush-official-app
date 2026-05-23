@@ -16,8 +16,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 530
-        versionName = "1.44.130"
+        versionCode = 531
+        versionName = "1.44.131"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -195,6 +195,12 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
     sourceSets["main"].java.srcDirs("src/main/kotlin")
+    // v1.44.131 — Canada flavor pulls the dev-flavor `dev_only/`
+    // bundled-assets directory in via srcDirs so we keep a SINGLE
+    // source of truth for the 28 MB of baked TMDB images + sports
+    // JSON. Dev + Canada APKs now both ship the bundle; official
+    // is intentionally excluded (no srcDir merge for that flavor).
+    sourceSets["canada"].assets.srcDirs("src/dev/assets")
 }
 
 // ─── Crash-prevention lint: forbid raw Modifier.focusProperties { … = X } ──

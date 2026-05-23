@@ -1,3 +1,116 @@
+## v1.44.131 (Canada channel) — API-bake architecture promoted from dev — 2026-05-23
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (56 MB — was 25 MB at v527)
+- **Manifest**: https://hushtv.xyz/version-canada.json
+- **versionCode**: 531 / **versionName**: 1.44.131 / mandatory=true
+- **Build variant**: `assembleCanadaDebug`
+
+### Why promote now
+User smoke-tested v1.44.130-debug on NVIDIA Shield for several hours
+without issue. The bake architecture is sound. Now we ship the same
+bundle to Canada users specifically so the Fire Stick / weak-device
+cohort who were crashing pre-v1.44.122 can validate it on their
+actual hardware. The hypothesis: with ~55 fewer outbound HTTP calls
+during cold start + Discover browse, even the slowest Fire Stick
+should land on the home screen faster and without the lazy-load
+overlay flicker.
+
+### Architecture change (one-line gate flip)
+- `DevBundleCache.isActive` gate extended from `channel == "dev"`
+  to `channel in {"dev", "canada"}`. Official flavor still
+  excluded — no srcDir merge AND no isActive eligibility.
+- `app/build.gradle.kts` adds `sourceSets["canada"].assets.srcDirs("src/dev/assets")`
+  so the Canada flavor pulls in the same 397-image bundle without
+  duplicating the 28 MB of WebP files on disk. SINGLE source of
+  truth.
+- `ThemePackLoader.refreshRemote` comment updated: with the bundle
+  active on both dev + canada, the remote refresh is skipped on
+  both flavors. Official still hits hushtv.xyz/themes_pack.json.
+
+### What Canada users get (vs v527)
+Cumulative bake (Phases 1+2+3 from the dev work):
+1. **Phase 1** — static JSON bundled:
+   - sports_home, sports_ppv, sports_league × 9 (NHL, NBA, MLB,
+     NFL, UFC, EPL, MLS, NCAAB, NCAAF)
+   - tmdb_top_movies (top 100 popular), tmdb_top_tv (top 100)
+   - themes_pack
+2. **Phase 2** — TMDB images bundled:
+   - poster + backdrop for top 100 movies + top 100 TV (372 WebP
+     at w780 source, q=80)
+3. **Phase 3** — Genre + collection hero backdrops:
+   - 1 backdrop per movie genre (19) + tv genre (16)
+   - 1 backdrop per curated franchise collection (20)
+   - +25 net-new WebP files after de-duping against Phase 2
+4. **Coil mapper wiring fix** — `HushBundleMapper` now correctly
+   registered in `ImageLoader.Builder.components { }`, which also
+   activates the pre-existing 44-entry `BundledAssets` table
+   (streaming logos, decade backdrops, theme backdrops) that was
+   silently bypassed before.
+
+### Network calls eliminated on Canada cold start + browse
+- `GET hushtv.xyz/api/sports/home` + `/api/sports/ppv` + per-league
+- `GET hushtv.xyz/themes_pack.json` + `/bundle_overrides.json`
+- `GET api.themoviedb.org/3/movie/{id}` for top 100 popular movies
+- `GET api.themoviedb.org/3/tv/{id}` for top 100 popular series
+- `GET api.themoviedb.org/3/discover/movie?with_genres=N` × ~19
+- `GET api.themoviedb.org/3/discover/tv?with_genres=N` × ~16
+- `GET api.themoviedb.org/3/collection/{id}` × 20
+- `GET image.tmdb.org/t/p/.../{path}.jpg` for every bundled image
+
+What stays live (must):
+- All Xtream Codes traffic (channels, movie/series catalog, EPG,
+  stream URLs) — these are user-specific and time-sensitive
+- License + trial endpoint (paywall enforcement)
+- Sync state writes
+- `/api/sports/game/{id}/channels` (needs user's Xtream creds)
+
+### Files touched
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/DevBundleCache.kt`
+  (isActive gate now accepts canada channel)
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/ThemePackLoader.kt`
+  (comment update)
+- MODIFIED `/app/androidtv/app/build.gradle.kts`
+  (canada flavor includes `src/dev/assets` srcDir; versionCode 531 / 1.44.131)
+- MODIFIED `/app/_buildenv/version-canada.json`
+  (manifest bumped to v531 mandatory=true with paying-user copy)
+
+### Verified live
+- `https://hushtv.xyz/version-canada.json` → `1.44.131 (vc=531) mandatory=true`
+- `https://hushtv.xyz/hushtv-canada.apk` → 56 MB, fresh Last-Modified
+- `https://hushtv.xyz/version.json` → STILL `1.44.130-debug (vc=530)` (dev untouched)
+- 18/18 dev-bundle pytests + 59/59 sync_server tests green
+
+### APK size jump (Canada specifically)
+v527 → v531: 25 MB → 56 MB (+31 MB). On a Fire Stick at ~5 MB/s
+home WiFi that's ~6 sec extra OTA download. The trade is "one-time
+~6 sec on the next update" for "every subsequent cold launch is
+significantly faster".
+
+If this turns out to be too much for budget Fire Sticks, the next
+iteration can slim the bundle (drop tv backdrops, drop genres
+nobody clicks, etc.) and re-ship at v532.
+
+### What to watch (24-72 h post-OTA)
+1. **Crash count for AFTKM / AFTKRT / AFTSSS** should drop further.
+   These devices were already saved by v1.44.122 (Lite mode) +
+   v1.44.124 (deferred init) + v1.44.125 (SurfaceView). v1.44.131
+   adds "no lazy TMDB calls during cold start" on top, which
+   should make even the weakest hardware finish boot before any
+   ANR watchdog can trip.
+2. **Time-to-home screen** should drop noticeably on every device.
+3. **`HushBundleMapper` / Coil crashes** — none expected (Shield
+   smoke-test was clean), but watch the Crash Monitor for any
+   `OutOfMemoryError` decoding the bundled WebP. Coil's RGB_565
+   path on Lite-mode devices should handle it.
+4. **OTA download failures** — at 56 MB the download might time
+   out on very slow connections. If the Crash Monitor surfaces
+   any `OTAFailed` reports, may need to revisit the size.
+
+---
+
+
+
 ## v1.44.130-debug (DEV channel ONLY) — Phase 3 API bake: genre + collection backdrops — 2026-05-23
 
 ### Continuation of v128/129 dev-bake

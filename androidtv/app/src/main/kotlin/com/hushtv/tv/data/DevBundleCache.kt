@@ -53,16 +53,23 @@ object DevBundleCache {
     @Volatile
     private var appContext: Context? = null
 
-    /** True only when running the dev flavor AND the bundle is
-     *  present on disk. Cached at first lookup. */
+    /** True only when running the dev OR canada flavor AND the
+     *  bundle is present on disk. Cached at first lookup. Official
+     *  flavor doesn't ship the bundle assets (no srcDir merge), so
+     *  even if isActive somehow returned true the lookup would
+     *  miss and fall through to network. */
     val isActive: Boolean by lazy {
-        if (BuildConfig.UPDATE_CHANNEL != "dev") return@lazy false
+        // v1.44.131 — extended from "dev" to {"dev","canada"} after
+        // Shield smoke-test on dev v530 came back clean.
+        val channelOk = BuildConfig.UPDATE_CHANNEL == "dev" ||
+            BuildConfig.UPDATE_CHANNEL == "canada"
+        if (!channelOk) return@lazy false
         val ctx = appContext ?: return@lazy false
         runCatching {
             ctx.assets.open("$DIR/manifest.json").use { /* presence check */ }
             true
         }.getOrDefault(false).also { active ->
-            Log.i(TAG, "dev-bundle active=$active (channel=${BuildConfig.UPDATE_CHANNEL})")
+            Log.i(TAG, "bundle active=$active (channel=${BuildConfig.UPDATE_CHANNEL})")
         }
     }
 

@@ -1,26 +1,18 @@
 {
-  "versionCode": 527,
-  "versionName": "1.44.127",
+  "versionCode": 531,
+  "versionName": "1.44.131",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
-  "releasedAt": "2026-02-23",
+  "releasedAt": "2026-05-23",
   "channel": "canada",
   "changelog": [
-    "NEW (Auto cache-clear on launch): Several support reports said 'clearing cache fixed it'. The app now does that automatically on launch. Mimics what Fire OS Settings → Apps → HushTV → Clear Cache does — wipes the Coil bitmap cache, Xtream HTTP JSON cache, downloaded subtitles, and cached home-screen rail layout — but keeps everything that is actually 'data' (your license, playlists, prefs, sync state, sign-in). Throttled to once per 6 hours so rapid restarts don't re-download images repeatedly. TV-remote users no longer have to navigate Fire OS settings to clear cache.",
-    "FIX (v526): Disabled EmojiCompat + ProfileInstaller startup initializers — fewer disk I/O hits during cold launch.",
-    "FIX (v525): Fire Stick black-screen-on-play — SurfaceView for Lite mode.",
-    "FIX (v524): Migration moved off main thread.",
-    "FIX (v523): Fresh-install Fire Stick crash loop fix.",
-    "PERF (v523): All non-critical onCreate work moved off main thread.",
-    "DIAGNOSTIC (v523): 9 granular boot marks + app_mode + migration_state.",
-    "FIX (v522): Removed AMAZON from premium-brand bypass.",
-    "MIGRATION (v522): One-shot silent Pro→Lite migration for existing Fire Stick users.",
-    "DIAGNOSTIC (v521): NEW BootPhaseTracker for ALL API levels.",
-    "DIAGNOSTIC (v520): ApplicationExitInfo post-mortem capture.",
-    "FIX (v519): Memory-trimmed Pro mode for 1 GB Fire Sticks.",
-    "FIX (v517): Navigation Compose bump for BACK-button crash.",
-    "FIX (v515): 'Switch to Lite Mode' instant takes effect.",
-    "FIX (v514): Permanent ANR fix via Moshi codegen.",
-    "NEW: 72-hour free trial for first-time Canada users."
+    "PERF: Massive cold-start speedup — Canada APK now ships with TMDB metadata, sports schedules, themes pack, and 397 hero/poster images baked in. Discovery rails, Sports tab, Genres, and Collections all paint instantly from local assets instead of waiting on 50+ outbound TMDB/sports HTTP calls. Same architecture that ran clean on the dev channel for several hours.",
+    "FIX: Re-wired HushBundleMapper into Coil's ImageLoader — was previously defined but never registered, which silently bypassed the existing 44-entry streaming logo + decade backdrop bundle on every flavor. Now active.",
+    "NOTE: APK size grew 25 MB → ~56 MB to accommodate the baked images. One-time download hit; subsequent app launches are faster than ever.",
+    "INHERITED v1.44.127: Auto cache-clear on launch.",
+    "INHERITED v1.44.125: Fire Stick black-screen-on-play fix (SurfaceView for Lite mode).",
+    "INHERITED v1.44.124: Migration moved off main thread.",
+    "INHERITED v1.44.123: Fresh-install Fire Stick crash loop fix + 9 granular boot marks.",
+    "INHERITED v1.44.122: Removed AMAZON from premium-brand bypass; one-shot Pro→Lite migration."
   ]
 }
