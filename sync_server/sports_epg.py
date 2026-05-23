@@ -70,14 +70,43 @@ _CANADIAN_PATTERNS = [
 # ── Helpers ────────────────────────────────────────────────────────
 
 
-def _playlist_key(host: str, username: str) -> str:
-    """Stable cache key — sha1 of host+username. We don't include
-    the password so multiple admins fronting the same Xtream box
-    share the cache. Salt keeps the key from being obviously
-    reversible if someone glances at /var/hushtv-sync/epg_cache/."""
+def _playlist_key(host: str, username: str) -> str:  # noqa: ARG001
+    """Stable cache key — v1.44.126: HOST-ONLY (was host+username).
+
+    Original v1.44.27 keyed by host+username because we assumed each
+    Xtream account had a unique EPG. Reality: ~700 Canada users all
+    sit behind the same hushvipnew.ink panel, all return identical
+    xmltv.php payloads. The per-user keying meant every "Watch on:"
+    click triggered a fresh ~60-sec xmltv fetch + ~80-sec parse per
+    user, even though another user did the same fetch 10 seconds
+    earlier. Cache directory ballooned to 3 GB across 421 files.
+
+    Now keyed by host alone → all users on the same panel share one
+    cache entry. Reduces fetches by ~99% and makes the "Searching
+    your EPG…" picker open in <100 ms after the first user warms
+    the cache.
+
+    The EPG is purely a discovery layer — the client filters the
+    returned channel IDs against their actual Xtream subscription
+    anyway, so a shared EPG is safe regardless of channel-package
+    differences between users on the same panel.
+
+    `username` arg kept for source-compat with the rest of the
+    module but ignored.
+    """
     return hashlib.sha1(
-        f"hushtv-epg|{host.lower().strip()}|{username.strip()}".encode()
+        f"hushtv-epg|{host.lower().strip()}".encode()
     ).hexdigest()
+
+
+# v1.44.126 — in-flight request coalescing. When 50 users click
+# the Sports Guide simultaneously and the cache is cold, all 50
+# requests previously fired their OWN xmltv.php fetch. Now only the
+# first one fetches; the other 49 wait on the same future. Critical
+# during paywall-unlock bursts when hundreds of trial users hit
+# Sports for the first time within a minute of each other.
+_IN_FLIGHT_FETCHES: Dict[str, threading.Event] = {}
+_IN_FLIGHT_LOCK = threading.Lock()
 
 
 def _xmltv_url(host: str, username: str, password: str) -> str:
@@ -198,6 +227,54 @@ def _load_or_fetch(
         if cached and not force and cached["expires"] > now:
             return cached
 
+    # v1.44.126 — request coalescing. If another thread is already
+    # fetching this exact key, wait for it instead of triggering our
+    # own fetch + parse. Without this, a burst of N concurrent users
+    # → N parallel xmltv.php fetches + N parses, each taking 60+90s.
+    # With this, only the first does the work and the rest wait
+    # ~milliseconds.
+    fetch_event: Optional[threading.Event] = None
+    is_leader = False
+    with _IN_FLIGHT_LOCK:
+        existing = _IN_FLIGHT_FETCHES.get(key)
+        if existing is not None and not force:
+            fetch_event = existing
+        else:
+            fetch_event = threading.Event()
+            _IN_FLIGHT_FETCHES[key] = fetch_event
+            is_leader = True
+
+    if not is_leader:
+        # Follower path — wait for the leader to populate the cache,
+        # then re-check. Cap the wait at 90s so a hung Xtream panel
+        # can't block this thread forever.
+        fetch_event.wait(timeout=90.0)
+        with _EPG_LOCK:
+            cached = _EPG_CACHE.get(key)
+            if cached and cached["expires"] > now:
+                return cached
+        return None  # leader's fetch failed; we already logged it
+
+    # Leader path — we own the cache slot until we signal the event.
+    try:
+        return _do_fetch_and_cache(host, username, password, key, now, force)
+    finally:
+        # Wake up any waiters, regardless of success/failure.
+        with _IN_FLIGHT_LOCK:
+            _IN_FLIGHT_FETCHES.pop(key, None)
+        fetch_event.set()
+
+
+def _do_fetch_and_cache(
+    host: str,
+    username: str,
+    password: str,
+    key: str,
+    now: float,
+    force: bool,
+) -> Optional[Dict[str, Any]]:
+    """Inner fetch+parse implementation. Always called by the leader
+    in [_load_or_fetch]'s coalescing protocol. Never invoke directly."""
     # Try disk cache for cold-start.
     disk_path = CACHE_DIR / f"{key}.xml.gz"
     use_disk = (

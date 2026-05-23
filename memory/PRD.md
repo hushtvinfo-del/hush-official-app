@@ -1,3 +1,42 @@
+## Server-side EPG cache fix — Sports Guide 300-450× faster — 2026-02-23
+
+### Root cause
+`sports_epg.py:_playlist_key()` was hashing `host + username` since v1.44.27. The assumption: each Xtream account has a unique EPG. The reality: all ~700 Canada users sit behind the same `hushvipnew.ink` panel and the xmltv.php payload is IDENTICAL for every user. Per-user keying meant:
+- 421 separate 7-MB cache files on disk (3.0 GB total)
+- Every "Watch on:" click for a different user → full xmltv.php fetch (~60 sec) + parse (~80 sec for 128k programmes)
+- No request coalescing → 50 concurrent first-cache-miss users → 50 parallel fetches/parses
+
+### Fix (server only — no APK change)
+- `_playlist_key()` now hashes **host alone** (username ignored). One shared cache per Xtream panel.
+- New `_IN_FLIGHT_FETCHES` dict + leader/follower coalescing in `_load_or_fetch`. When N users hit the same cold cache simultaneously, only the leader fetches + parses; the other N−1 wait on a `threading.Event` for up to 90s.
+- Renamed inner fetch+parse to `_do_fetch_and_cache` for clarity.
+- Cleared the 3.0 GB stale per-user cache directory; first warm fetch now populates the single shared entry.
+- Restarted `hushtv-sync` to flush in-memory cache + load the new code.
+
+### Live verification (against `hushvipnew.ink` game id 2105)
+| Call | Latency |
+|---|---|
+| Cold (cache empty after restart, first user warms it) | **10.0 sec** |
+| Warm — same user | **0.21 sec** |
+| Warm — DIFFERENT user, same panel | **0.19 sec** ← this is the customer-facing case |
+
+The customer-facing case is **300-450× faster** (60-90 sec → 0.2 sec). Disk usage dropped from 3.0 GB / 421 files → 7.1 MB / 1 file.
+
+### Files touched
+- `/app/sync_server/sports_epg.py` — host-only key + request coalescing
+- Server deployed via scp + `systemctl restart hushtv-sync`
+
+### Tests
+- Full sync_server suite: 59/59 still green.
+- Lint: clean.
+- End-to-end smoke test against `game/2105/channels` with two different usernames against same host — both return identical 712B response, second user takes <0.2 sec.
+
+### Safety analysis (host-keyed cache is safe even though users have different channel subscriptions)
+The EPG is purely a discovery layer. `search_channels_for_game` returns matching `channel_id` (tvg_id) values; the **Android client filters those against the channels they actually have in their Xtream account** before showing the picker. A shared EPG returns a superset; user-side filtering narrows to the channels they can actually tune. No risk of showing users channels they don't own.
+
+---
+
+
 ## v1.44.125 (Canada channel) — Fire Stick black-screen-on-play FIX — 2026-02-23
 
 ### Release
