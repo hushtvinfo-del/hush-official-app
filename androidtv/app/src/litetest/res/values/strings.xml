@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v1.44.134 — litetest flavor app label.
+
+  Goals:
+    1. Unmistakably distinct from "HushTV Canada" / "HushTV Dev" /
+       "HushTV Official" so the user's launcher screen and the Fire
+       OS Package Installer's confirmation dialog never confuse the
+       two apps.
+    2. Makes it obvious in the user's test reports which build they
+       were on ("It crashed on LITE TEST" vs "It crashed on canada").
+
+  Together with the .litetest applicationIdSuffix this guarantees
+  Android treats the litetest APK as a brand-new app, not an update
+  to the canada install.
+-->
+<resources>
+    <string name="app_name">HushTV LITE TEST</string>
+</resources>

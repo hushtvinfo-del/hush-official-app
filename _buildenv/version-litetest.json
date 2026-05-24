@@ -1,13 +1,14 @@
 {
-  "versionCode": 534,
-  "versionName": "1.44.134-litetest",
+  "versionCode": 535,
+  "versionName": "1.44.135-litetest",
   "apkUrl": "https://hushtv.xyz/hushtv-litetest.apk",
   "mandatory": false,
   "releasedAt": "2026-05-24",
   "channel": "litetest",
   "changelog": [
-    "DIAGNOSTIC BUILD — no paywall, forced Lite mode. Same applicationId suffix (.litetest) means it COEXISTS with your existing HushTV Canada install. Install both side-by-side and report whether crashes still happen here.",
-    "What's identical to canada v1.44.133: the API-bake architecture (sports + themes + 397 bundled images), the auto cache-clear, the boot refresh Lite screen, the main-looper resilience handler, the tightened Coil mem cache, the TextureView-restricted-to-Sony-and-NVIDIA player path.",
-    "What's different from canada: NO license polling, NO trial countdown, NO paywall lock screen, app behaves as if licensed forever, app-mode is forced to Lite on every cold start (no chance of stale Pro state)."
+    "v135-litetest: Renamed launcher app to 'HushTV LITE TEST' so the Fire OS Package Installer doesn't confuse it with your existing 'HushTV Canada' install. The two will now show as clearly separate apps.",
+    "v135-litetest: Disabled the main-looper resilience wrapper that was added in canada v132. This wrapper re-enters Looper.loop() which AOSP tolerates but some vendor Androids reject. Isolating this out so we can confirm whether it's the actual crash culprit. If LITE TEST runs clean and canada doesn't, this wrapper is the bug.",
+    "Inherits everything else from canada v133: API bake, Lite-mode boot refresh, Coil mem-cache tuning, SurfaceView-restricted-to-Sony-and-NVIDIA player.",
+    "DIAGNOSTIC BUILD — no paywall, forced Lite mode, COEXISTS with your canada install. Use both side by side and report which one crashes."
   ]
 }

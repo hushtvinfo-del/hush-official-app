@@ -44,7 +44,17 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // the process. Crash Monitor showed 49 IllegalStateException
         // (`FocusRequester is not initialized`) on v131 in 24 h —
         // ALL would have been silently swallowed if this was wired.
-        installMainLooperResilience()
+        // v1.44.134 — DISABLED for the litetest flavor. The litetest
+        // build is a diagnostic A/B target — if users see fewer
+        // crashes on litetest than canada, isolating this wrapper
+        // out is the first test variable. The implementation re-
+        // enters Looper.loop() inside a Handler.post, which AOSP
+        // tolerates but some vendor-modified Androids (One UI,
+        // MIUI, some Fire OS builds) refuse — re-throwing as an
+        // unsuppressed crash.
+        if (BuildConfig.UPDATE_CHANNEL != "litetest") {
+            installMainLooperResilience()
+        }
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_main_resilience")
 
         // v1.44.128-dev — initialise the DEV-flavor bundled-asset cache
