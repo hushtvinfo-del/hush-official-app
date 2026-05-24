@@ -31,9 +31,15 @@ interface ProfileGateApi {
     @Composable
     fun Wrap(xtreamUsername: String, content: @Composable () -> Unit)
 
-    /** Called by Settings → "Switch Profile" to force the picker
-     *  on the NEXT navigation. On canada / official: no-op. */
+    /** Called by Settings → "Switch Profile" / the top-right avatar
+     *  click to force the picker on the NEXT navigation. On canada
+     *  / official: no-op. */
     fun requestSwitch(ctx: Context, xtreamUsername: String)
+
+    /** Called by Settings → "Manage Profiles". Like [requestSwitch]
+     *  but routes the picker into edit-mode (tap a tile = edit it).
+     *  On canada / official: no-op. */
+    fun requestManage(ctx: Context, xtreamUsername: String)
 }
 
 /** Default implementation — content renders directly, no profile
@@ -47,6 +53,11 @@ object NoOpProfileGate : ProfileGateApi {
 
     override fun requestSwitch(ctx: Context, xtreamUsername: String) {
         // intentionally nothing
+    }
+
+    override fun requestManage(ctx: Context, xtreamUsername: String) {
+        // intentionally nothing — canada / official has no profile
+        // system, so "manage profiles" can't be invoked there.
     }
 }
 

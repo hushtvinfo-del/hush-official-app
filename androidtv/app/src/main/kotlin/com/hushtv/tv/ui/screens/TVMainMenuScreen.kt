@@ -690,6 +690,43 @@ fun TVMainMenuScreen(nav: NavController, playlistId: String) {
                     onDismiss = { clearAllPromptOpen = false },
                 )
             }
+
+            // ── 2.6. TOP-RIGHT PROFILE AVATAR (Netflix style) ─────
+            // v1.44.139-dev — Pinned to the TopEnd corner of the
+            // home content area. Visible on every home sub-page
+            // (cw / discovery / sports / etc). Click → opens the
+            // "Who's watching?" picker via the profile gate.
+            // D-pad UP from the top content row focuses this; DOWN
+            // from here routes back to the active page's first
+            // focusable item via the per-page focus requesters
+            // already defined above.
+            //
+            // On canada / official: NoOpHomeProfileButton renders
+            // nothing, so the home screen looks identical to v1.44.137.
+            val homeAvatarFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+            val xtreamUsername = remember(playlistId) { playlist?.username.orEmpty() }
+            com.hushtv.tv.ui.profile.HomeProfileButtonRegistry.current.Render(
+                xtreamUsername = xtreamUsername,
+                avatarFocusRequester = homeAvatarFocus,
+                onDownFromAvatar = {
+                    // Route DOWN from avatar back to the active
+                    // page's first content cell — same focus
+                    // requesters the page-jump system uses.
+                    when (currentPage) {
+                        "cw" -> firstCwFocus.requestFocus()
+                        "discovery" -> firstDiscoveryFocus.requestFocus()
+                        "sports" -> firstSportsFocus.requestFocus()
+                        "collections" -> firstCollectionsFocus.requestFocus()
+                        "ss_movies" -> firstSsMoviesFocus.requestFocus()
+                        "ss_series" -> firstSsSeriesFocus.requestFocus()
+                        "genres_movies" -> firstGenresMoviesFocus.requestFocus()
+                        "genres_series" -> firstGenresSeriesFocus.requestFocus()
+                        "themed" -> firstThemedFocus.requestFocus()
+                        "years_movies" -> firstYearsMoviesFocus.requestFocus()
+                    }
+                },
+                modifier = Modifier.align(Alignment.TopEnd),
+            )
         }
 
         // ── 2.5. PAGE INDICATOR ────────────────────────────────────

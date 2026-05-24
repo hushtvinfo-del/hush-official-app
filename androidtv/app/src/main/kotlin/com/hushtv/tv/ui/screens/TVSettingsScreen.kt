@@ -116,17 +116,62 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
             contentPadding = PaddingValues(horizontal = 48.dp, vertical = 0.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // ── PROFILE ─────────────────────────────────────────────
+            // ── PROFILE (Netflix-style — dev channel only, v1.44.139-dev) ──
+            // Shows the viewer-profile switcher entries. The block
+            // below this one renames the old Xtream-account
+            // "PROFILE" section to "ACCOUNT" to avoid a confusing
+            // overlap of terms. On canada / official, the original
+            // "PROFILE" section header is preserved.
+            if (com.hushtv.tv.data.ActiveProfile.isActive) {
+                item {
+                    Text(
+                        "PROFILE",
+                        color = TextSecondary, fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
+                    )
+                }
+                val activeName = com.hushtv.tv.data.ActiveProfile.get()?.name
+                item {
+                    SettingsCard(
+                        title = "Switch Profile",
+                        subtitle = activeName?.let { "Currently watching as $it — pick a different profile" }
+                            ?: "Pick a different profile",
+                        icon = { Icon(Icons.Default.Person, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                        onClick = {
+                            com.hushtv.tv.ui.profile.ProfileGateRegistry.current
+                                .requestSwitch(ctx, playlist?.username.orEmpty())
+                            nav.popBackStack()
+                        },
+                    )
+                }
+                item {
+                    SettingsCard(
+                        title = "Manage Profiles",
+                        subtitle = "Add, rename, change avatar, or delete profiles",
+                        icon = { Icon(Icons.Default.PersonAdd, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
+                        onClick = {
+                            com.hushtv.tv.ui.profile.ProfileGateRegistry.current
+                                .requestManage(ctx, playlist?.username.orEmpty())
+                            nav.popBackStack()
+                        },
+                    )
+                }
+                item { Spacer(Modifier.height(12.dp)) }
+            }
+
+            // ── ACCOUNT (Xtream playlist account; was "PROFILE" pre-v139) ──
             item {
                 Text(
-                    "PROFILE",
+                    if (com.hushtv.tv.data.ActiveProfile.isActive) "ACCOUNT" else "PROFILE",
                     color = TextSecondary, fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold, letterSpacing = 2.5.sp,
                 )
             }
             item {
                 SettingsCard(
-                    title = "Switch Profile",
+                    title = if (com.hushtv.tv.data.ActiveProfile.isActive) {
+                        "Switch Xtream Account"
+                    } else "Switch Profile",
                     subtitle = playlist?.name?.let { "Signed in as $it — switch to another" }
                         ?: "Pick a different profile",
                     icon = { Icon(Icons.Default.Person, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
@@ -135,7 +180,9 @@ fun TVSettingsScreen(nav: NavController, playlistId: String) {
             }
             item {
                 SettingsCard(
-                    title = "Add Another Profile",
+                    title = if (com.hushtv.tv.data.ActiveProfile.isActive) {
+                        "Add Xtream Account"
+                    } else "Add Another Profile",
                     subtitle = "Sign in with a different Xtream account",
                     icon = { Icon(Icons.Default.PersonAdd, null, tint = Cyan, modifier = Modifier.size(24.dp)) },
                     onClick = { nav.navigate("add") },

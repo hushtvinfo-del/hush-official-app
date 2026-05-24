@@ -1,18 +1,13 @@
 {
-  "versionCode": 538,
-  "versionName": "1.44.138-debug",
+  "versionCode": 539,
+  "versionName": "1.44.139-debug",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-24",
   "channel": "dev",
   "changelog": [
-    "NEW (dev only): Netflix-style multi-profile support. Add up to 5 profiles per Xtream account, each with their own Continue Watching / Last Channel / Favorites / Watch Progress / Themed Match cache. Cross-device sync now keys by profile so Mom's basement TV and Mom's kitchen tablet share state, but Mom's data doesn't bleed into the Kids profile on the upstairs Fire Stick.",
-    "NEW (dev only): 36 illustrated avatars baked into the dev APK — 18 diverse human portraits + 18 cartoon animals (~648 KB total). Generated via Gemini Nano Banana with a consistent style brief.",
-    "NEW (dev only): Kids' profile toggle. Hides 18+ categories from Live TV / Movies / Series, and the kid can't exit the profile without entering the master Parental Controls PIN (next iteration).",
-    "INHERITED v1.44.137: In-app updater UX fixes + ACTION_INSTALL_PACKAGE fallback for Fire OS.",
-    "INHERITED v1.44.136: Continue Watching dispatches by content kind. HushXXX subsystem code removed.",
-    "INHERITED v1.44.133: TextureView-restricted-to-Sony-and-NVIDIA player path.",
-    "INHERITED v1.44.132: Lite-mode boot refresh, main-looper resilience handler.",
-    "INHERITED v1.44.131: API-bake architecture."
+    "NEW (dev only): Top-right avatar button on the home screen. D-pad UP from any content row focuses it; press Enter to jump to the 'Who's watching?' picker; D-pad DOWN takes you back to the page's first content card.",
+    "NEW (dev only): Settings → PROFILE section with two clear entries: 'Switch Profile' (currently watching as ___) and 'Manage Profiles' (add/rename/avatar/delete). The original Xtream-account 'Switch Profile' entry is renamed to 'Switch Xtream Account' so the two never get confused.",
+    "INHERITED v1.44.138-debug: Netflix-style multi-profile (5 max, 36 avatars, Kids profile, per-profile sync)."
   ]
 }
