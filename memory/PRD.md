@@ -1,3 +1,83 @@
+## v1.44.142 (Canada channel) — Fire Stick Lite boot-loop FIX — 2026-05-24
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (54 MB)
+- **Manifest**: https://hushtv.xyz/version-canada.json
+- **versionCode**: 542 / **versionName**: 1.44.142 / mandatory=true
+- **Build variant**: `assembleCanadaDebug`
+
+### Root cause (user-traced)
+User report: 91045428 (Amazon AFTKM, 1 GB Fire Stick Lite, paid until
+day +357) — "no channels or categories appear in Live TV / Series /
+Movies." Pulled the user's crash profile via
+`/api/admin/canada/crashes/user/91045428?days=3` and the latest report
+on v1.44.140 was a `boot_died` with this trace:
+
+```
+last_stage = app_oc_post_anr_watchdog
+device     = Amazon-AFTKM (memoryClass=192 MB, totalRam=1669 MB)
+
+app_oc_post_xtream_cache        ms=+57    (cumulative)
+app_oc_post_themepack           ms=+720
+app_oc_post_devbundle_prewarm   ms=+6624  ← SIX-POINT-SIX SECONDS
+app_oc_post_anr_watchdog        ms=+6
+                          [process SIGKILL, never reached app_oncreate_end]
+```
+
+`DevBundleCache.prewarm()` was running on the deferred-init thread and
+Moshi-reflection-parsing ~500 KB of bundled JSON (top-100 movies,
+top-100 TV, 397-entry img_map). On a 1 GB Fire Stick Lite the eMMC +
+Moshi reflection combo took 6.6 sec, holding the deferred-init thread
+past the kernel's launch-budget watchdog → SIGKILL → cold restart →
+repeat. The user sees an empty home because the app dies before the
+catalog finishes populating.
+
+### Fix shipped
+`DevBundleCache.prewarm()` relocated out of the boot-critical path:
+- **Lite-mode devices**: prewarm SKIPPED entirely. They render the flat
+  home (no Ken-Burns hero backdrops), so the bundle benefit is
+  marginal anyway — every Coil URL miss falls through to the network
+  fetch exactly like it did pre-v131.
+- **Pro-mode devices**: prewarm DEFERRED 5 sec past first frame, on
+  its own short-lived `hushtv-prewarm` HandlerThread. By the time it
+  runs, the home rails are visible and the user is browsing — Moshi
+  can take as long as it wants without blocking boot.
+- `AnrWatchdog.start()` is no longer waiting on prewarm; it now fires
+  immediately after `loadBundledSync(themepack)`.
+
+### Files touched
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushTVApp.kt`
+  — prewarm() relocated out of the boot-critical deferred-init chain,
+  gated by `AppMode != LITE`, scheduled via `postDelayed(5000)` on a
+  separate short-lived HandlerThread
+- MODIFIED `/app/androidtv/app/build.gradle.kts` — versionCode 542 / 1.44.142
+- MODIFIED `/app/_buildenv/version-canada.json` — OTA manifest with
+  v142 changelog (mentions the user-traced root cause)
+
+### Live verified
+- `https://hushtv.xyz/version-canada.json` → `542 / 1.44.142 / mandatory=true`
+- `https://hushtv.xyz/hushtv-canada.apk` → 54 MB, fresh Last-Modified 22:22 UTC
+- Build successful: 1m 53s (gradle daemon cache hot from v141 build)
+
+### Next session — what to watch (24-72h post-OTA)
+- **`boot_died` count for v542 specifically** in
+  `/api/admin/canada/crashes/recent?days=1&kind=boot_died`. Should be
+  near-zero for AFTKM / AFTSS / AFTKM Lite class devices.
+- **`/api/admin/canada/crashes/user/91045428?days=2`** specifically —
+  if the user's exit_info + boot_died volume drops, the fix landed.
+- **Boot trace last_stage distribution** for v542 — if any boot_died
+  STILL appears at `app_oc_post_themepack` (the new pre-watchdog
+  mark), the `ThemePackLoader.loadBundledSync` is the next bottleneck
+  to defer.
+- **Pro-mode users**: home backdrops should still paint instantly
+  thanks to the deferred prewarm. If we see a regression in TMDB-image
+  hit-rate on Pro Fire TV Cube etc., the 5-sec defer is too long and
+  we can drop it to 2 sec.
+
+---
+
+
+
 ## v1.44.141 (Canada channel) — #1 Java crash FIX + looper resilience restored — 2026-05-24
 
 ### Release

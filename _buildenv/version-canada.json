@@ -1,13 +1,13 @@
 {
-  "versionCode": 541,
-  "versionName": "1.44.141",
+  "versionCode": 542,
+  "versionName": "1.44.142",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-05-24",
   "channel": "canada",
   "changelog": [
-    "FIX (critical): #1 Java crash — IllegalStateException: 'FocusRequester is not initialized' (125 occurrences in last 7 days, was the top crash signature across multiple versions). Root cause was four declarative `Modifier.focusProperties { dir = X }` call sites whose target FocusRequester could briefly detach during a LazyLayout recycle or auto-hide of player controls — the framework resolves the target synchronously inside dispatchKeyEvent and crashes if it's unattached. Migrated all four call sites in TVPlayerScreen, TVBrowseScreen and TVLiveBrowseScreen to the existing safeFocusTraversal helper, which falls back to Compose's default 2D focus search instead of throwing.",
-    "FIX (critical): Restored installMainLooperResilience() on canada (was disabled in v140). With it disabled, the IllegalStateException above was killing the process within seconds of opening browse/player. Telemetry showed the v140 hypothesis (wrapper causes black-screen) was wrong — the real black-screen cause was the OkHttp xtream_http_cache deletion (also fixed in v140). The wrapper stays disabled only for the litetest control-group flavor.",
+    "FIX (critical): Boot-loop on 1 GB Fire Stick Lite (Amazon AFTKM, AFTKM Lite). A user-traced boot-died report showed the DevBundleCache prewarm — Moshi-parsing 500 KB of bundled TMDB JSON (top-100 movies + top-100 TV + 397-entry image map) on the deferred-init thread — was taking 6.6 sec on AFTKM, pushing the process past the kernel's launch-budget watchdog and triggering a SIGKILL boot loop. Affected users saw the app open to a blank or partially-loaded home with no channels/categories/series/movies because the app died before the catalog finished populating. Fix: skip prewarm entirely on Lite-mode devices (they render the flat home with no big hero backdrops — the bundle benefit is marginal); on Pro-mode devices defer prewarm 5 sec past the first frame so it can't block boot.",
+    "INHERITED v1.44.141: #1 Java crash fix — IllegalStateException: 'FocusRequester is not initialized' (125/7d). Four declarative `Modifier.focusProperties { dir = X }` usages migrated to the safer `safeFocusTraversal` helper. Looper resilience wrapper restored as a defense-in-depth safety net.",
     "INHERITED v1.44.140: Black-screen fix (xtream_http_cache no longer deleted on 6h cache-clear) + Play Protect fix (KidsContentFilter regex stripped of adult brand-name strings).",
     "INHERITED v1.44.137: In-app updater UX rework + ACTION_INSTALL_PACKAGE fallback.",
     "INHERITED v1.44.136: Continue Watching kind dispatch + HushXXX removal."

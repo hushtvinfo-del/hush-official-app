@@ -136,16 +136,47 @@ class HushTVApp : Application(), ImageLoaderFactory {
                 com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_exit_collector")
                 com.hushtv.tv.data.ThemePackLoader.loadBundledSync(this)
                 com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_themepack")
-                // v1.44.132 — pre-warm the DevBundleCache lazy indices
-                // (tmdbImageMap, tmdbMovieIndex, tmdbTvIndex) on this
-                // background thread so the FIRST Coil image-mapper
-                // resolution doesn't block the main thread parsing
-                // 397-entry JSON via Moshi reflection. Narrows the
-                // FocusRequester race window that caused the v131
-                // crash spike. No-op on flavors where the bundle
-                // isn't shipped (isActive returns false fast).
-                com.hushtv.tv.data.DevBundleCache.prewarm()
-                com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_devbundle_prewarm")
+                // v1.44.142 — DevBundleCache.prewarm() relocated out
+                // of the boot-critical path.
+                //
+                // Why: user 91045428 (Amazon AFTKM, 1 GB Fire Stick
+                // Lite) was repeatedly boot-dying at
+                // `app_oc_post_anr_watchdog`. Trace showed the
+                // previous step — `app_oc_post_devbundle_prewarm` —
+                // took **6.6 sec** on that device because Moshi
+                // reflection had to deserialize 500 KB of bundled
+                // TMDB JSON (top-100 movies + top-100 TV + 397-entry
+                // img_map). On a 1 GB Fire Stick, holding the
+                // deferred-init thread that long pushes the process
+                // past the launch-budget watchdog → SIGKILL → cold
+                // restart → repeat. The user reports it as "no
+                // channels or categories appear" because the app
+                // never lives long enough to populate the catalog.
+                //
+                // Fix: skip prewarm entirely on Lite-mode devices
+                // (they render the flat home without big hero
+                // backdrops — the bundle benefit is marginal). For
+                // Pro-mode devices, defer prewarm 5 sec past the
+                // initial frame paint, on its own short-lived
+                // HandlerThread, so the home rails are visible and
+                // the user is browsing by the time Moshi runs. The
+                // ANR watchdog now starts immediately after themepack.
+                val appMode = com.hushtv.tv.data.AppModeStore.load(this)
+                if (appMode != com.hushtv.tv.data.AppMode.LITE) {
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        val prewarmThread = android.os.HandlerThread("hushtv-prewarm").apply {
+                            start()
+                        }
+                        android.os.Handler(prewarmThread.looper).post {
+                            runCatching { com.hushtv.tv.data.DevBundleCache.prewarm() }
+                            com.hushtv.tv.data.BootPhaseTracker.mark(
+                                this,
+                                "app_oc_post_devbundle_prewarm_deferred",
+                            )
+                            prewarmThread.quitSafely()
+                        }
+                    }, 5_000L)
+                }
                 com.hushtv.tv.data.AnrWatchdog.start(this)
                 com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_anr_watchdog")
             }.onFailure { e ->
