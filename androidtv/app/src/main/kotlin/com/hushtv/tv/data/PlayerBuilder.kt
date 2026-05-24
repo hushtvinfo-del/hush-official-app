@@ -336,6 +336,7 @@ object PlayerBuilder {
                 return
             }
             state.recoveryInFlight = true
+            state.recoveryStartedMs = System.currentTimeMillis()
             state.attempts += 1
             val backoff = backoffMsFor(state.attempts)
             // v1.44.65 — Only fire the "Reconnecting…" UI pill from
@@ -391,6 +392,22 @@ object PlayerBuilder {
             override fun onPlayerError(error: PlaybackException) {
                 if (state.disposed) return
                 if (error.errorCode in RECOVERABLE_ERRORS) {
+                    // v1.44.143 — Clear the in-flight flag BEFORE
+                    // scheduling the next retry. The previous retry
+                    // (if any) just failed — THIS error fired during
+                    // its prepare() — so we're free to schedule the
+                    // next attempt. Without this clear, the second-
+                    // and-subsequent retries were silently dropped
+                    // (scheduleRecovery early-returns on
+                    // recoveryInFlight=true) whenever the upstream
+                    // panel stayed down longer than one prepare()
+                    // cycle, leaving the user stuck on a frozen
+                    // frame indefinitely. This was the bug that
+                    // matched user reports of "channel restarts and
+                    // app freezes, has to force-quit" — the
+                    // upstream eventually came back, but our state
+                    // machine had already given up after attempt #1.
+                    state.recoveryInFlight = false
                     scheduleRecovery("err=${error.errorCodeName}")
                 } else {
                     EventLog.log(
@@ -442,6 +459,7 @@ object PlayerBuilder {
                         state.hasBeenReady = true
                         state.bufferingSinceMs = 0L
                         state.recoveryInFlight = false
+                        state.recoveryStartedMs = 0L
                         if (state.pendingSeek) {
                             // Restore VOD position now that the stream
                             // is buffered enough to seek into.
@@ -517,6 +535,32 @@ object PlayerBuilder {
             override fun run() {
                 if (state.disposed) return
                 val now = System.currentTimeMillis()
+
+                // v1.44.143 — Stuck-in-flight safety net. If a
+                // prepare() call hangs (e.g. blocked on a stalled
+                // socket) for longer than [STUCK_IN_FLIGHT_TIMEOUT_MS]
+                // without firing onPlayerError, onPlaybackStateChanged,
+                // or successfully transitioning to STATE_READY, the
+                // recoveryInFlight flag would stay true forever and
+                // every subsequent retry path (error / IDLE / buffer
+                // stall / network restore) would early-exit. Force-
+                // clear so the next signal can re-arm the recovery.
+                if (state.recoveryInFlight &&
+                    state.recoveryStartedMs != 0L &&
+                    now - state.recoveryStartedMs > STUCK_IN_FLIGHT_TIMEOUT_MS
+                ) {
+                    EventLog.log(
+                        "auto-reconnect",
+                        "$channelName recovery-in-flight stuck for " +
+                            "${(now - state.recoveryStartedMs) / 1000}s — force-clearing",
+                    )
+                    state.recoveryInFlight = false
+                    state.recoveryStartedMs = 0L
+                    // Kick a fresh attempt right away so the user
+                    // doesn't sit on a frozen frame waiting for the
+                    // next watchdog tick.
+                    if (player.playWhenReady) scheduleRecovery("stuck-in-flight")
+                }
 
                 // 1. Long-buffer stall
                 // Live streams need quick recovery — a stuck CDN edge
@@ -658,6 +702,12 @@ object PlayerBuilder {
     private class ReconnectState {
         var attempts = 0
         var recoveryInFlight = false
+        /** v1.44.143 — Wall-clock at the moment `recoveryInFlight`
+         *  was set true. Watchdog uses this to force-clear a stuck
+         *  in-flight flag if no state change has fired for
+         *  [STUCK_IN_FLIGHT_TIMEOUT_MS], so a frozen recovery can
+         *  never wedge the loop permanently. */
+        var recoveryStartedMs = 0L
         var disposed = false
         var bufferingSinceMs = 0L
         var lastPosMs = 0L
@@ -716,6 +766,14 @@ object PlayerBuilder {
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
+        // v1.44.143 — DECODING_FAILED added. On live HLS this often
+        // means a codec/resolution change at a programme boundary
+        // (e.g. SD-to-HD upgrade, sidecar audio track flip). A
+        // fresh prepare() rebuilds the decoder and recovers. If a
+        // genuinely-unsupported codec slips through, the
+        // MAX_AUTO_RETRIES cap (~5–8 min) ensures we eventually
+        // surrender and surface the error to the UI.
+        PlaybackException.ERROR_CODE_DECODING_FAILED,
     )
 
     /** Stall thresholds — empirically chosen.
@@ -745,4 +803,12 @@ object PlayerBuilder {
     private const val WATCHDOG_INTERVAL_MS = 1_000L
     private const val MAX_BACKOFF_MS = 10_000L
     private const val MAX_AUTO_RETRIES = 50
+
+    /** v1.44.143 — Maximum time a single recovery attempt is allowed
+     *  to stay "in flight" before the watchdog force-clears the flag
+     *  and retries. Picked at 60 sec so a normally-slow prepare()
+     *  (e.g. behind a slow CDN edge during a panel restart) finishes
+     *  without being interrupted, but a permanently-hung socket
+     *  doesn't wedge the loop forever. */
+    private const val STUCK_IN_FLIGHT_TIMEOUT_MS = 60_000L
 }

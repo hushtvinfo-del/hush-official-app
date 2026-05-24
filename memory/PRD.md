@@ -1,3 +1,105 @@
+## v1.44.143-debug (DEV channel ONLY) — Stream-restart recovery FIX — 2026-05-24
+
+### Release
+- **APK**: https://hushtv.xyz/HushTV.apk (54 MB)
+- **Manifest**: https://hushtv.xyz/version.json
+- **versionCode**: 543 / **versionName**: 1.44.143-debug / mandatory=false
+- **Build variant**: `assembleDevDebug` — canada manifest deliberately kept at
+  v542 / 1.44.142 so paying users don't get this until field-tested
+
+### User report driving this release
+> "When a channel or stream restarts, the whole stream freezes. The frame
+> freezes, and it won't restart. TiVimate, for example, will actually
+> resume the stream after it restarts, but our app is always freezing."
+
+Field telemetry (40-sample audit of v140 `FREEZE::PlayerError` reports)
+matched the report:
+- 28 / 40 = `ERROR_CODE_IO_BAD_HTTP_STATUS` (panel returning 4xx/5xx
+  during a stream restart)
+- 6 / 40 = `ERROR_CODE_IO_UNSPECIFIED`
+- 4 / 40 = `ERROR_CODE_DECODING_FAILED` (codec change at programme boundary)
+- 2 / 40 = `ERROR_CODE_BEHIND_LIVE_WINDOW`
+
+### Root cause (state-machine bug in PlayerBuilder.attachAutoReconnect)
+The auto-reconnect logic existed and *looked* correct — but a missing
+flag reset killed the entire retry loop after the first failed attempt:
+
+1. Panel restarts → ExoPlayer fires `onPlayerError(IO_BAD_HTTP_STATUS)`.
+2. `scheduleRecovery()` sets `state.recoveryInFlight = true`, posts a
+   delayed `prepare()` for 1 s later.
+3. The `prepare()` runs but the panel is still 4xx-ing → ExoPlayer
+   fires a **second** `onPlayerError`.
+4. `scheduleRecovery()` is called again — but the very first line is
+   `if (state.recoveryInFlight) return`. **Early exit. No retry scheduled.**
+5. `recoveryInFlight` is only ever cleared inside `STATE_READY`, which
+   never arrives because the panel is still down. → Player parked
+   IDLE forever, user has to force-quit.
+
+### Fix shipped (three layers)
+1. **Critical** — `onPlayerError` now sets `state.recoveryInFlight = false`
+   BEFORE calling `scheduleRecovery`, so the current attempt is treated
+   as failed and the next one is allowed to schedule. The MAX_AUTO_RETRIES
+   cap of 50 attempts gives us a ~5–8 min retry window before final
+   surrender (matches TiVimate's observed behaviour).
+2. **Safety net** — added `recoveryStartedMs` timestamp + a new
+   `STUCK_IN_FLIGHT_TIMEOUT_MS = 60_000L` check in the watchdog. If
+   `prepare()` ever hangs (stalled socket, no callback at all) for >60s,
+   the watchdog force-clears the in-flight flag and fires a fresh
+   attempt, so the loop can never wedge permanently.
+3. **`ERROR_CODE_DECODING_FAILED`** added to `RECOVERABLE_ERRORS`. On
+   live HLS this often means a codec/resolution change at a programme
+   boundary — a fresh `prepare()` rebuilds the decoder and resumes.
+
+### Files touched
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/data/PlayerBuilder.kt`
+  — `onPlayerError` clears `recoveryInFlight` before scheduling; new
+  `ReconnectState.recoveryStartedMs`; watchdog stuck-in-flight check;
+  `DECODING_FAILED` added to RECOVERABLE_ERRORS; new
+  `STUCK_IN_FLIGHT_TIMEOUT_MS` constant
+- MODIFIED `/app/androidtv/app/build.gradle.kts` — versionCode 543 / 1.44.143
+- MODIFIED `/app/_buildenv/version.json` — dev OTA manifest with v143 changelog
+- UNCHANGED `/app/_buildenv/version-canada.json` — stays at 542 / 1.44.142
+
+### Live verified
+- `https://hushtv.xyz/version.json` → `543 / 1.44.143-debug / mandatory=false`
+- `https://hushtv.xyz/HushTV.apk` → 54 MB, Last-Modified 23:43 UTC
+- `https://hushtv.xyz/version-canada.json` → STILL `542 / 1.44.142` (untouched)
+
+### Testing flow (for user to validate)
+1. Sideload v143 dev APK on a test Fire Stick / Shield.
+2. Tune to a Canada / Sportsnet HD channel that's known to restart at
+   programme boundaries.
+3. Either wait for an organic restart OR ask hushvipnew.ink admin to
+   bounce one channel for 30-60 sec.
+4. Expected behaviour:
+   - Frame holds for ~6-10 sec (ExoPlayer internal LoadErrorHandlingPolicy
+     retries).
+   - Then a subtle "Reconnecting…" pill appears top-left (from attempt #2).
+   - Auto-reconnect keeps trying with 1s → 2s → 4s → 8s → 10s backoff.
+   - Within ~10-60 sec of the panel coming back, the stream resumes
+     and the pill disappears.
+5. Confirm parity with TiVimate side-by-side on the same channel.
+
+### Telemetry to watch (24-72 h)
+- `FREEZE::PlayerError` count on v143 reports should drop sharply
+  (target: ~25% of v140 baseline, since 75% of freezes were the
+  IO_BAD_HTTP_STATUS pattern this fix unblocks).
+- `auto-reconnect` events in freeze breadcrumbs — should now show
+  multiple `retry=N` lines per failure burst, not just `retry=1`.
+- New `auto-reconnect: ... stuck-in-flight` events would indicate
+  the 60-sec safety net is firing — should be rare (<5% of recoveries).
+
+### Promote to canada when
+- Zero new freeze regressions on dev for 48 h
+- User confirms side-by-side parity with TiVimate on a real channel
+  restart event
+- Then bump canada to v544 and the same code path goes live for all
+  paying users
+
+---
+
+
+
 ## v1.44.142 (Canada channel) — Fire Stick Lite boot-loop FIX — 2026-05-24
 
 ### Release

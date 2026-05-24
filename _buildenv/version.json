@@ -1,13 +1,16 @@
 {
-  "versionCode": 539,
-  "versionName": "1.44.139-debug",
+  "versionCode": 543,
+  "versionName": "1.44.143-debug",
   "apkUrl": "https://hushtv.xyz/HushTV.apk",
   "mandatory": false,
   "releasedAt": "2026-05-24",
   "channel": "dev",
   "changelog": [
-    "NEW (dev only): Top-right avatar button on the home screen. D-pad UP from any content row focuses it; press Enter to jump to the 'Who's watching?' picker; D-pad DOWN takes you back to the page's first content card.",
-    "NEW (dev only): Settings → PROFILE section with two clear entries: 'Switch Profile' (currently watching as ___) and 'Manage Profiles' (add/rename/avatar/delete). The original Xtream-account 'Switch Profile' entry is renamed to 'Switch Xtream Account' so the two never get confused.",
-    "INHERITED v1.44.138-debug: Netflix-style multi-profile (5 max, 36 avatars, Kids profile, per-profile sync)."
+    "FIX (critical): Stream-restart recovery. When an Xtream panel restarts a live channel (segments 4xx/5xx for 10–60 sec while the panel respins the encoder), the player was freezing on the last frame and never recovering — user had to back out + re-enter to resume. Root cause: the auto-reconnect state machine set `recoveryInFlight=true` on the first retry attempt and only cleared it on STATE_READY (a successful resume). If the second prepare() call ALSO errored (panel still down), `scheduleRecovery` early-exited and the entire recovery loop silently died. Now the in-flight flag is cleared on every onPlayerError so retries keep going for the full ~5 min window.",
+    "FIX: Added a 60-sec stuck-in-flight safety net to the auto-reconnect watchdog. If a prepare() call ever hangs (e.g. blocked on a stalled socket) for longer than 60 sec without firing onPlayerError or transitioning state, the watchdog force-clears the in-flight flag and schedules a fresh attempt, so the loop can never wedge permanently.",
+    "FIX: Added ERROR_CODE_DECODING_FAILED to the recoverable set. On live HLS this often means a codec/resolution change at a programme boundary (SD-to-HD upgrade, audio track flip) — a fresh prepare() rebuilds the decoder and resumes. Safety cap at 50 retries (~5–8 min) prevents looping on genuinely-unsupported codecs.",
+    "INHERITED v1.44.142: DevBundleCache.prewarm() relocated out of the boot-critical path (skipped on Lite-mode devices, deferred 5 sec post-first-frame on Pro devices) — fixes Fire Stick Lite (AFTKM) 6.6-sec boot stalls.",
+    "INHERITED v1.44.141: #1 Java crash fix — IllegalStateException: 'FocusRequester is not initialized' migrated to safeFocusTraversal helper across TVPlayerScreen / TVBrowseScreen / TVLiveBrowseScreen.",
+    "INHERITED v1.44.140: Black-screen fix + Google Play Protect harmful-app fix."
   ]
 }
