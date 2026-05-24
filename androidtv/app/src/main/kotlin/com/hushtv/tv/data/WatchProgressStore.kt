@@ -59,6 +59,84 @@ object WatchProgressStore {
         "Show", "show", "SHOW",
     )
 
+    /**
+     * v1.44.136 — Heuristic purge for legacy HushXXX-origin entries
+     * and adult-content cross-contamination.
+     *
+     * Why: a user reported clicking a normal-content Continue
+     * Watching tile (Hawaii Five-0) and being taken to a Jack's
+     * Playground detail page. The primary cause was a kind-aware-
+     * navigation bug (series_id mis-routed through the VOD detail
+     * screen) but the on-disk store could ALSO contain stale rows
+     * from the retired HushXXX subsystem (server 216.152.148.117,
+     * removed in v1.43.99 + this version). Belt-and-braces: at
+     * boot we scan once and tombstone:
+     *   • Any entry whose poster URL points at the HushXXX CDN.
+     *   • Any entry whose title matches a known adult-content
+     *     phrase pattern. The list is deliberately narrow so we
+     *     don't false-positive on legitimate library titles.
+     * Tombstones propagate via SyncEngine, so the cleanup hits
+     * every device on the same profile.
+     *
+     * The migration flag (HUSHXXX_PURGE_KEY) ensures this runs
+     * exactly once per device — the user can still manually
+     * resume future watch sessions and they won't be touched.
+     */
+    private const val HUSHXXX_PURGE_KEY = "hushxxx_purge_v1_done"
+    private val HUSHXXX_POSTER_PATTERNS = listOf(
+        "216.152.148.117",   // legacy HushXXX backend
+        "/hushxxx/",         // any CDN path with the segment
+    )
+    private val ADULT_TITLE_PATTERNS = listOf(
+        Regex("""\bjack's playground\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bbig\s+ass\s+show\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bbrazzers\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b(pornhub|reality\s+kings|naughty\s+america)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bxxx\b""", RegexOption.IGNORE_CASE),
+    )
+
+    private fun isLikelyAdultLegacyEntry(e: Entry): Boolean {
+        val poster = e.poster.orEmpty()
+        if (HUSHXXX_POSTER_PATTERNS.any { poster.contains(it, ignoreCase = true) }) {
+            return true
+        }
+        return ADULT_TITLE_PATTERNS.any { it.containsMatchIn(e.title) }
+    }
+
+    /**
+     * Run the one-shot HushXXX purge if it hasn't run yet on this
+     * device. Safe to call repeatedly — guarded by [HUSHXXX_PURGE_KEY].
+     * Should be invoked from [ensureCache] so it executes before any
+     * UI read of Continue Watching.
+     */
+    private fun runHushXxxPurgeIfNeeded(ctx: Context) {
+        val sp = prefs(ctx)
+        if (sp.getBoolean(HUSHXXX_PURGE_KEY, false)) return
+        // Iterate a snapshot — we can't mutate the all() map mid-walk.
+        val snapshot = sp.all.toMap()
+        val now = System.currentTimeMillis()
+        val ed = sp.edit()
+        var purged = 0
+        for ((k, v) in snapshot) {
+            if (k == HUSHXXX_PURGE_KEY) continue
+            val raw = v as? String ?: continue
+            val entry = decode(raw) ?: continue
+            if (entry.deleted) continue
+            if (!isLikelyAdultLegacyEntry(entry)) continue
+            val tomb = entry.copy(lastWatchedAt = now, deleted = true)
+            ed.putString(k, encode(tomb))
+            purged++
+        }
+        ed.putBoolean(HUSHXXX_PURGE_KEY, true)
+        ed.apply()
+        if (purged > 0) {
+            android.util.Log.i(
+                "WatchProgress",
+                "HushXXX purge tombstoned $purged legacy adult-content entries",
+            )
+        }
+    }
+
     data class Entry(
         val streamId: Int,
         val kind: String,          // "movie" | "series"
@@ -98,9 +176,14 @@ object WatchProgressStore {
 
     private fun ensureCache(ctx: Context) {
         if (cacheVersion == lastBuiltVersion) return
+        // v1.44.136 — opportunistic one-shot legacy adult-content
+        // purge BEFORE the read-cache builds, so the tombstones are
+        // visible to the very first continueWatching() caller.
+        runHushXxxPurgeIfNeeded(ctx)
         val all = prefs(ctx).all
         val rebuilt = HashMap<String, Entry>(all.size)
         for ((k, v) in all) {
+            if (k == HUSHXXX_PURGE_KEY) continue
             if (v is String) {
                 decode(v)?.let { rebuilt[k] = it }
             }

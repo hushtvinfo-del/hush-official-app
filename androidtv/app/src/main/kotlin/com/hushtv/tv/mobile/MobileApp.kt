@@ -100,14 +100,9 @@ fun MobileApp() {
             composable("msearch/{playlistId}") { bs ->
                 MobileSearchScreen(nav, bs.arguments?.getString("playlistId") ?: "")
             }
-            // mhushxxx route — DISABLED in v1.43.99 (mobile twin of
-            // the TV-side disable). Anyone who hits this route is
-            // silently popped back to the previous screen.
-            composable("mhushxxx/{playlistId}") {
-                LaunchedEffect(Unit) {
-                    nav.popBackStack()
-                }
-            }
+            // mhushxxx route REMOVED in v1.44.136 alongside the
+            // full HushXXX subsystem strip. Any deep-link to it now
+            // silently fails via the framework-race suppressor.
             composable("mdiag") { MobileDiagnosticsScreen(nav) }
             composable("mspeed") { MobileSpeedTestScreen(nav) }
             composable("canada/license") {

@@ -134,21 +134,13 @@ object HushPlusContent {
             accent = Crimson,
             eyebrow = "INCLUDED",
         ),
-        HushAddon(
-            key = "xxx",
-            name = "HushXXX",
-            tagline = "Adult-only. For 18+ members.",
-            description = "A dedicated adult library — curated scenes, full cast & studio info, and a fast modern interface. Adults only. Included in Hush+.",
-            features = listOf(
-                "Curated scene library with full metadata",
-                "Performer & studio profiles",
-                "Rich categories, search & discovery",
-                "Age-gated — 18+ required",
-            ),
-            heroImageUrl = null,
-            accent = Color(0xFFE91E63),       // Hot pink — distinct from the rest of the suite.
-            eyebrow = "18+ ONLY",
-        ),
+        // v1.44.136 — HushXXX addon removed entirely per user
+        // request. The standalone HushXXX subsystem (server at
+        // 216.152.148.117, dedicated DMCA dialog, scene catalog)
+        // was retired in v1.43.99 and the surface in this
+        // teaser list was the last UI reference. Deleting it
+        // removes any chance of confusion with the user's
+        // Xtream catalog content.
     )
 
     fun findAddon(key: String): HushAddon? = addons.firstOrNull { it.key == key }

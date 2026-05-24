@@ -1,15 +1,16 @@
 {
-  "versionCode": 533,
-  "versionName": "1.44.133",
+  "versionCode": 536,
+  "versionName": "1.44.136",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-05-24",
   "channel": "canada",
   "changelog": [
-    "FIX (critical): Channel goes black with audio only — narrowed the TextureView player path to SONY and NVIDIA brands only. Google TV Streamer, Onn, Xiaomi, Amazon and generic Android TVs now use SurfaceView (the safe HW overlay path) regardless of Pro/Lite mode. Resolves the symptom reported by user 037163638 on Google TV Streamer.",
-    "INHERITED v1.44.132: Lite-mode boot refresh screen, main-looper resilience handler, tightened Coil mem cache, bundle-index prewarm.",
-    "INHERITED v1.44.131: API-bake architecture (sports + themes + 397 bundled images).",
-    "INHERITED v1.44.127: Auto cache-clear on launch.",
-    "INHERITED v1.44.125: Fire Stick black-screen-on-play fix (SurfaceView for Lite mode)."
+    "FIX (critical): Continue Watching for a series no longer opens the wrong content. The click handler was sending series_id values to the VOD/movie detail screen, which then resolved them to whatever movie happened to share that numeric id (in a paying user's report, that surfaced an adult-content title). Now dispatches by content kind — series → series detail, movie → movie detail.",
+    "REMOVED: All HushXXX subsystem code (HushXxxApi, HushXxxAgeGate, HushXxxScreen, HushXxxDmcaDialog, Hush+ HushXXX teaser tile, mobile + TV navigation route stubs). The standalone adult library was retired in v1.43.99; this build deletes the dead code entirely.",
+    "FIX: One-shot defensive purge of any stale legacy adult-content entries in your Continue Watching list — anything pointing at the old HushXXX backend or matching a known adult-title pattern is tombstoned and propagates the deletion to every other device on the same profile via sync.",
+    "INHERITED v1.44.133: TextureView-restricted-to-Sony-and-NVIDIA player path.",
+    "INHERITED v1.44.132: Lite-mode boot refresh, main-looper resilience handler, tightened Coil mem cache, bundle-index prewarm.",
+    "INHERITED v1.44.131: API-bake architecture."
   ]
 }

@@ -1552,10 +1552,30 @@ private fun CwPage(
                     contentStartPadding = 0.dp,
                     onFocusedEntryChange = onFocusedEntryChange,
                     onCardClick = { entry ->
-                        nav.navigate(
-                            "moviedetail/$playlistId/${entry.progress.streamId}" +
-                                "/${Uri.encode(entry.progress.title)}"
-                        )
+                        // v1.44.136 — CRITICAL FIX: dispatch by
+                        // effectiveKind. Previously this navigated to
+                        // moviedetail/{streamId} for EVERY entry,
+                        // including series. Series entries store the
+                        // series_id in `streamId`, but moviedetail
+                        // resolves the value as a VOD stream_id — a
+                        // completely different Xtream namespace. When
+                        // a user's catalog happened to have a VOD with
+                        // the same numeric id as a series they'd
+                        // resumed (e.g. series_id=14589 collides with
+                        // vod stream_id=14589, which the provider
+                        // happens to publish as an adult title), the
+                        // movie detail page would load the wrong
+                        // content — the bug reported on v1.44.133.
+                        val title = entry.effectiveTitle.ifBlank { entry.progress.title }
+                        val sid = entry.progress.streamId
+                        when (entry.effectiveKind) {
+                            "series" -> nav.navigate(
+                                "series/$playlistId/$sid/${Uri.encode(title)}"
+                            )
+                            else -> nav.navigate(
+                                "moviedetail/$playlistId/$sid/${Uri.encode(title)}"
+                            )
+                        }
                     },
                     onLongPressRemove = onLongPressRemove,
                     onClearAll = onClearAll,

@@ -466,18 +466,14 @@ private fun AppContent() {
             )
         }
         // ────────────────────────────────────────────────────────
-        //  HushXXX route — DISABLED in v1.43.99 per user request.
-        //  The Hush+ Coming Soon teaser already removes the user-
-        //  facing entry point, but we ALSO disable the route itself
-        //  as a defense-in-depth so deep-links / back-stack-navigate
-        //  hacks can't reach the addon. Anyone who hits this route
-        //  is silently popped back to the previous screen.
+        //  HushXXX route — REMOVED in v1.44.136. The dead defensive
+        //  pop-stub composable was deleted alongside the entire
+        //  HushXxxScreen / HushXxxApi / HushXxxAgeGate subsystem.
+        //  If a malformed deep-link or stale back-stack reference
+        //  hits "hushxxx/...", Compose Navigation now silently
+        //  fails (caught by installMainLooperResilience as
+        //  "Navigation destination ... cannot be found").
         // ────────────────────────────────────────────────────────
-        composable("hushxxx/{playlistId}") {
-            androidx.compose.runtime.LaunchedEffect(Unit) {
-                nav.popBackStack()
-            }
-        }
         composable("themes/{playlistId}") { bs ->
             com.hushtv.tv.ui.screens.TVThemedCatalogScreen(
                 nav = nav,
