@@ -47,7 +47,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
@@ -593,13 +592,25 @@ fun TVBrowseScreen(
                                                 else Modifier)
                                                 .then(
                                                     if (isTopRow && upTarget != null)
-                                                        // SAFE-FOCUS-PROPERTIES: upTarget
-                                                        // is dropdownFocus, attached to
-                                                        // the always-rendered top BROWSE
-                                                        // dropdown in top-bar mode (only
-                                                        // mode where this branch fires —
-                                                        // upTarget is null in sidebar mode).
-                                                        Modifier.focusProperties { up = upTarget }
+                                                        // v1.44.141 — `safeFocusTraversal`
+                                                        // replaces the declarative
+                                                        // `focusProperties { up = upTarget }`.
+                                                        // The top-row item lives inside a
+                                                        // LazyVerticalGrid, which recycles
+                                                        // and re-attaches its children on
+                                                        // every scroll / layout pass.
+                                                        // Between scrolling and the next
+                                                        // composition the `Modifier.focusRequester`
+                                                        // on the dropdown can briefly detach,
+                                                        // and the framework synchronously
+                                                        // resolves `up = upTarget` on D-pad
+                                                        // key dispatch — throwing
+                                                        // `IllegalStateException: FocusRequester
+                                                        // is not initialized` and killing the
+                                                        // process. The helper wraps the same
+                                                        // logic in `runCatching` and falls
+                                                        // back to 2D focus search instead.
+                                                        Modifier.safeFocusTraversal(onUp = upTarget)
                                                     else Modifier
                                                 ),
                                             onFocus = { focusedIdx = idx },

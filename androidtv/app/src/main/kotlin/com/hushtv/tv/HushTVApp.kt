@@ -43,25 +43,20 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // Compose / Navigation framework races that otherwise kill
         // the process.
         // v1.44.134 — DISABLED for the litetest flavor (diagnostic).
-        // v1.44.140 — DISABLED for canada too. Multiple paying users
-        // (including NVIDIA Shield user benlisto) reported full-
-        // screen player going black on canada while dev v530 (which
-        // did NOT have this wrapper) worked perfectly. The wrapper
-        // re-enters Looper.loop() from inside a Handler.post —
-        // semantically that suspends the OUTER Looper.loop() forever
-        // and runs the INNER loop as the de-facto main dispatcher.
-        // AOSP tolerates this, but evidently some interactions with
-        // ExoPlayer's surface attach + GL composition steps break
-        // when the outer loop never returns. Re-throwing the bare
-        // exceptions is the safer move — `installCrashHandler` will
-        // still upload the trace and the user just gets an app
-        // restart, which is no worse than the current "black screen
-        // until force-stop" outcome.
-        if (BuildConfig.UPDATE_CHANNEL == "dev") {
-            // Only the dev flavor keeps the wrapper. It's the
-            // smallest user surface (you + a handful of testers),
-            // so if the wrapper ever proves useful again we can
-            // observe the effect here without breaking paying users.
+        // v1.44.140 — DISABLED for canada too. Theory: multiple paying
+        // users (including NVIDIA Shield user benlisto) reported full-
+        // screen player going black, and we hypothesized the nested
+        // Looper.loop() call was breaking ExoPlayer's surface attach.
+        // v1.44.141 — RE-ENABLED for canada (and official) after the
+        // telemetry contradicted that hypothesis. With the wrapper
+        // disabled, `IllegalStateException: FocusRequester is not
+        // initialized` immediately became the #1 Java crash signature
+        // (3+ on v140 in the first 30 minutes — the wrapper had been
+        // silently suppressing those framework races since v132).
+        // The real cause of the black-screen was the OkHttp xtream_http_cache
+        // deletion (also fixed in v140), not this wrapper. We keep
+        // the litetest flavor without the wrapper as a control group.
+        if (BuildConfig.UPDATE_CHANNEL != "litetest") {
             installMainLooperResilience()
         }
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_main_resilience")

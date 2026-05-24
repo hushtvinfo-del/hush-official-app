@@ -36,9 +36,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import com.hushtv.tv.ui.util.safeFocusTraversal
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -1485,11 +1485,22 @@ fun TVPlayerScreen(
                                 // primary control first. Compose's 2D
                                 // search can then walk LEFT/RIGHT through
                                 // the button row.
-                                // SAFE-FOCUS-PROPERTIES: scrubber and Play/Pause
-                                // are siblings in the same `if (showControls)`
-                                // block — when scrubber is focusable, playPauseFocus
-                                // is also attached.
-                                .focusProperties { down = playPauseFocus }
+                                // v1.44.141 — `safeFocusTraversal` instead of
+                                // the declarative `focusProperties { down = X }`.
+                                // The declarative form resolves the target
+                                // synchronously inside dispatchKeyEvent via
+                                // `FocusRequester.findFocusTargetNode` — when
+                                // the controls auto-hide the moment a D-pad
+                                // event fires, the matching `.focusRequester(
+                                // playPauseFocus)` has already detached and
+                                // the framework throws `IllegalStateException:
+                                // FocusRequester is not initialized`, killing
+                                // the process. The helper wraps the same
+                                // logic in `runCatching` and falls back to
+                                // Compose's default 2D focus search instead.
+                                // Same behaviour on the happy path, no crash
+                                // on the detach race.
+                                .safeFocusTraversal(onDown = playPauseFocus)
                                 .focusable()
                                 .onPreviewKeyEvent { ev ->
                                     if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -1671,11 +1682,18 @@ fun TVPlayerScreen(
                             Modifier
                                 .fillMaxWidth()
                                 .focusGroup()
-                                // SAFE-FOCUS-PROPERTIES: button row and scrubber
-                                // are siblings in the same `if (showControls)`
-                                // block — scrubberFocus always attached when this
-                                // row is composed.
-                                .focusProperties { up = scrubberFocus },
+                                // v1.44.141 — `safeFocusTraversal` replaces the
+                                // declarative `focusProperties { up = scrubberFocus }`.
+                                // The button row and scrubber are siblings inside
+                                // `if (showControls)`, but the auto-hide can
+                                // detach both within the same recomposition
+                                // frame — and the framework still resolves
+                                // the `up` target on key dispatch, throwing
+                                // `IllegalStateException: FocusRequester is
+                                // not initialized` if the scrubber's
+                                // `Modifier.focusRequester(scrubberFocus)`
+                                // has already torn down.
+                                .safeFocusTraversal(onUp = scrubberFocus),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             OsdCircleButton(

@@ -1,14 +1,14 @@
 {
-  "versionCode": 540,
-  "versionName": "1.44.140",
+  "versionCode": 541,
+  "versionName": "1.44.141",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-05-24",
   "channel": "canada",
   "changelog": [
-    "FIX (critical): Full-screen channel goes black after a while. Disabled the main-looper resilience wrapper that re-entered Looper.loop() — multiple users (including NVIDIA Shield) reported the bug while the equivalent dev build (which didn't have this wrapper) worked perfectly. Re-throwing the bare framework exceptions is the safer move; the crash handler still uploads traces for diagnostics.",
-    "FIX (critical): Stopped deleting OkHttp's xtream_http_cache directory on the 6-hourly auto cache-clear — OkHttp manages its own journal there and our deletion left stale file handles + corrupt cache state, contributing to PlayerError traces. The Coil image cache and subtitle download cache are still cleared on the same schedule.",
-    "FIX: Google Play Protect was flagging the canada APK as 'harmful' because the binary contained adult brand-name strings (Pornhub, Brazzers, Reality Kings, Naughty America, Playboy etc.) as regex literals for the Kids content filter. Replaced with content-rating labels only (XXX, 18+, ADULT, EROTIC, NSFW) — same ~98% category-match coverage with zero brand-name strings in the APK.",
+    "FIX (critical): #1 Java crash — IllegalStateException: 'FocusRequester is not initialized' (125 occurrences in last 7 days, was the top crash signature across multiple versions). Root cause was four declarative `Modifier.focusProperties { dir = X }` call sites whose target FocusRequester could briefly detach during a LazyLayout recycle or auto-hide of player controls — the framework resolves the target synchronously inside dispatchKeyEvent and crashes if it's unattached. Migrated all four call sites in TVPlayerScreen, TVBrowseScreen and TVLiveBrowseScreen to the existing safeFocusTraversal helper, which falls back to Compose's default 2D focus search instead of throwing.",
+    "FIX (critical): Restored installMainLooperResilience() on canada (was disabled in v140). With it disabled, the IllegalStateException above was killing the process within seconds of opening browse/player. Telemetry showed the v140 hypothesis (wrapper causes black-screen) was wrong — the real black-screen cause was the OkHttp xtream_http_cache deletion (also fixed in v140). The wrapper stays disabled only for the litetest control-group flavor.",
+    "INHERITED v1.44.140: Black-screen fix (xtream_http_cache no longer deleted on 6h cache-clear) + Play Protect fix (KidsContentFilter regex stripped of adult brand-name strings).",
     "INHERITED v1.44.137: In-app updater UX rework + ACTION_INSTALL_PACKAGE fallback.",
     "INHERITED v1.44.136: Continue Watching kind dispatch + HushXXX removal."
   ]

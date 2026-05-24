@@ -44,7 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -1875,11 +1874,18 @@ private fun ChannelsPane(
                                 .focusRequester(reqFor(idx))
                                 .let {
                                     if (topRowUpTarget != null)
-                                        // SAFE-FOCUS-PROPERTIES: topRowUpTarget is
-                                        // dropdownFocus (top BROWSE button) in top-bar
-                                        // mode, always attached. In sidebar mode it's
-                                        // null and this branch is skipped.
-                                        it.focusProperties { up = topRowUpTarget } else it
+                                        // v1.44.141 — `safeFocusTraversal` replaces
+                                        // declarative `focusProperties { up = X }`.
+                                        // This row lives at the top of a LazyColumn
+                                        // and the LazyColumn recycles items on
+                                        // scroll — the `Modifier.focusRequester`
+                                        // on the dropdown can briefly detach between
+                                        // layout passes, and the framework
+                                        // synchronously resolves `up = topRowUpTarget`
+                                        // on D-pad dispatch, throwing
+                                        // `IllegalStateException: FocusRequester is
+                                        // not initialized` and killing the process.
+                                        it.safeFocusTraversal(onUp = topRowUpTarget) else it
                                 }
                         } else {
                             Modifier.focusRequester(reqFor(idx))
