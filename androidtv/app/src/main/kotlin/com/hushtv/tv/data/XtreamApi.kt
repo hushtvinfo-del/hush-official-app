@@ -124,7 +124,15 @@ object XtreamApi {
         val body = rawCall(host, username, password, mapOf("action" to action))
         val listType = Types.newParameterizedType(List::class.java, XtreamCategory::class.java)
         val adapter = moshi.adapter<List<XtreamCategory>>(listType)
-        return adapter.fromJson(repairAndParse(body)) ?: emptyList()
+        val raw = adapter.fromJson(repairAndParse(body)) ?: emptyList()
+        // v1.44.138-dev — Kids-profile category filter. Hide any
+        // category whose name matches the adult-pattern list. The
+        // filter runs HERE (at the API surface) so every screen
+        // that calls getCategories — Home, Browse, Live Browse,
+        // Settings, Boot refresh — automatically gets a sanitized
+        // list. Canada / official: ActiveProfile.isKids() is
+        // hardwired false; pass-through.
+        return KidsContentFilter.filterCategories(raw)
     }
 
     suspend fun getStreamsForCategory(
@@ -134,7 +142,7 @@ object XtreamApi {
         kind: String,
         categoryId: String
     ): List<MediaCard> {
-        return when (kind) {
+        val raw = when (kind) {
             "live" -> {
                 val body = rawCall(host, username, password, mapOf(
                     "action" to "get_live_streams", "category_id" to categoryId))
@@ -158,6 +166,12 @@ object XtreamApi {
             }
             else -> emptyList()
         }
+        // v1.44.138-dev — Belt-and-braces Kids filter at the stream
+        // list. Even if a category name slipped past
+        // KidsContentFilter.filterCategories (e.g. provider tagged
+        // a misclassified category), per-title filtering catches
+        // anything with an adult-pattern name.
+        return KidsContentFilter.filterCards(raw)
     }
 
     suspend fun getAllStreams(

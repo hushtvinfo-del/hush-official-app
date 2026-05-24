@@ -25,14 +25,37 @@ import android.content.Context
 object MyListStore {
 
     private const val PREFS = "hushtv_my_list"
-    private fun keyFor(playlistId: String, kind: String) = "ml_${kind}_$playlistId"
+
+    /**
+     * v1.44.138-dev — Profile-scoped key builder.
+     *
+     * On dev flavor with multi-profile active: every read/write goes
+     * through "p:<profileId>:ml_<kind>_<playlistId>", so Mom's My
+     * List is separate from Dad's even though they share the same
+     * Xtream playlist. The sync engine picks up the new keys as-is
+     * — its push/pull logic treats keys opaquely, so cross-device
+     * sync works without any further changes.
+     *
+     * On canada / official: ActiveProfile.isActive is false and we
+     * return the legacy key, behaving exactly like v1.44.137.
+     */
+    private fun keyFor(playlistId: String, kind: String): String {
+        val base = "ml_${kind}_$playlistId"
+        return if (ActiveProfile.isActive) "p:${ActiveProfile.profileIdOrAccount()}:$base" else base
+    }
 
     /** Combined cache key — `playlistId|kind`. Map values are the
      *  parsed integer set the disk string represents. */
     @Volatile
     private var cache: Map<String, Set<Int>> = emptyMap()
 
-    private fun cacheKey(playlistId: String, kind: String) = "$playlistId|$kind"
+    private fun cacheKey(playlistId: String, kind: String): String {
+        val base = "$playlistId|$kind"
+        // v1.44.138-dev — include the active profile id so the
+        // in-memory cache doesn't bleed between profiles after a
+        // mid-session switch (Settings → Switch Profile).
+        return if (ActiveProfile.isActive) "${ActiveProfile.profileIdOrAccount()}|$base" else base
+    }
 
     fun getAll(ctx: Context, playlistId: String, kind: String): Set<Int> {
         val ck = cacheKey(playlistId, kind)

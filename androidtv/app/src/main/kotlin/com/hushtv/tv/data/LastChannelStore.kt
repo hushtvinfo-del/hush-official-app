@@ -12,6 +12,13 @@ object LastChannelStore {
     private const val K_CHANNEL_NAME = "channelName"
     private const val K_TIMESTAMP = "timestamp"
 
+    // v1.44.138-dev — Profile-scoped key builder. When the multi-
+    // profile system is active, each profile gets its own
+    // "last channel" memory ("p:<id>:playlistId" etc). Canada /
+    // official: collapses to the v1.44.137 flat keys.
+    private fun k(suffix: String): String =
+        if (ActiveProfile.isActive) "p:${ActiveProfile.profileIdOrAccount()}:$suffix" else suffix
+
     data class LastChannel(
         val playlistId: String,
         val streamUrl: String,
@@ -21,25 +28,38 @@ object LastChannelStore {
 
     fun save(ctx: Context, playlistId: String, streamUrl: String, channelName: String) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(K_PLAYLIST_ID, playlistId)
-            .putString(K_STREAM_URL, streamUrl)
-            .putString(K_CHANNEL_NAME, channelName)
-            .putLong(K_TIMESTAMP, System.currentTimeMillis())
+            .putString(k(K_PLAYLIST_ID), playlistId)
+            .putString(k(K_STREAM_URL), streamUrl)
+            .putString(k(K_CHANNEL_NAME), channelName)
+            .putLong(k(K_TIMESTAMP), System.currentTimeMillis())
             .apply()
     }
 
     fun load(ctx: Context): LastChannel? {
         val sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val pid = sp.getString(K_PLAYLIST_ID, null) ?: return null
-        val url = sp.getString(K_STREAM_URL, null) ?: return null
-        val name = sp.getString(K_CHANNEL_NAME, null) ?: return null
-        val ts = sp.getLong(K_TIMESTAMP, 0L)
+        val pid = sp.getString(k(K_PLAYLIST_ID), null) ?: return null
+        val url = sp.getString(k(K_STREAM_URL), null) ?: return null
+        val name = sp.getString(k(K_CHANNEL_NAME), null) ?: return null
+        val ts = sp.getLong(k(K_TIMESTAMP), 0L)
         // Only resume if the matching playlist still exists on the device.
         PlaylistStore.find(ctx, pid) ?: return null
         return LastChannel(pid, url, name, ts)
     }
 
     fun clear(ctx: Context) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        // v1.44.138-dev — Profile-aware clear. With multi-profile
+        // active we only clear THIS profile's last channel — other
+        // profiles' "last channel" memories are preserved.
+        val sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (ActiveProfile.isActive) {
+            sp.edit()
+                .remove(k(K_PLAYLIST_ID))
+                .remove(k(K_STREAM_URL))
+                .remove(k(K_CHANNEL_NAME))
+                .remove(k(K_TIMESTAMP))
+                .apply()
+        } else {
+            sp.edit().clear().apply()
+        }
     }
 }

@@ -316,7 +316,21 @@ private fun AppContent() {
             androidx.compose.runtime.CompositionLocalProvider(
                 com.hushtv.tv.data.LocalIsLiteMode provides isLite,
             ) {
-                TVMainMenuScreen(nav, playlistId)
+                // v1.44.138-dev — Multi-profile gate. On dev flavor,
+                // routes the user through "Who's watching?" picker
+                // (or first-time setup) before TVMainMenuScreen
+                // renders. On canada / official this is the
+                // [NoOpProfileGate] which calls content() directly,
+                // so behaviour matches v1.44.137 exactly. The
+                // xtreamUsername is the per-account scoping key —
+                // households with multiple Xtream accounts on the
+                // same device keep their profile lists separate.
+                val xtreamUser = remember(playlistId) {
+                    com.hushtv.tv.data.PlaylistStore.find(ctx, playlistId)?.username.orEmpty()
+                }
+                com.hushtv.tv.ui.profile.ProfileGateRegistry.current.Wrap(xtreamUser) {
+                    TVMainMenuScreen(nav, playlistId)
+                }
             }
         }
         composable(

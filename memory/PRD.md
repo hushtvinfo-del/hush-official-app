@@ -1,3 +1,76 @@
+## v1.44.138-debug (DEV channel ONLY) — Netflix-style multi-profile — 2026-05-24
+
+### What shipped
+- **`https://hushtv.xyz/HushTV.apk`** → 55 MB, v538 / 1.44.138-debug
+- Canada untouched at v537 / 1.44.137 per user's explicit request — multi-profile system is dormant on canada via `ActiveProfile.isActive = (BuildConfig.UPDATE_CHANNEL == "dev")`
+
+### Cap + avatars
+- 5 profiles max per Xtream account (matches Netflix)
+- **36 illustrated avatars baked into the dev APK** — 18 diverse human portraits + 18 cartoon animals, generated via Gemini Nano Banana at 512×512 WebP q=85, ~648 KB total
+- Avatars under `app/src/dev/res/drawable-nodpi/avatar_*.webp` — only present in dev APK; canada / official won't even compile against them
+
+### Architecture
+- **`HushProfile` data class + `ProfileStore`** (`src/main/`) — JSON-backed SharedPreferences, scoped by Xtream username so multi-account households on the same device don't collide
+- **`ActiveProfile` singleton + `scopedKey(suffix)` helper** — every legacy account-scoped store turns `key` into `p:<profileId>:key` when the profile system is active, no-op when not
+- **`ProfileGateApi` interface** (`src/main/`) with `NoOpProfileGate` default. Real `DevProfileGate` lives in `src/dev/` and is installed at `HushTVApp.onCreate` via reflection so canada / official compile cleanly without the dev-only symbols leaking
+- **`AvatarCatalog`** (`src/dev/`) — stable id → R.drawable mapping for the 36 avatars
+- **`ProfileMigration.runOnce`** — first-time-with-v138 returning user gets their existing Continue Watching / My List / Last Channel data forwarded to their first profile keys (so they don't see empty home screens after the update)
+- **`KidsContentFilter`** — adult-pattern regex filter applied at the XtreamApi boundary (`getCategories` + `getStreamsForCategory`) so every consumer surface automatically sanitises when active profile is Kids
+
+### UI flow
+1. **First time on v138** → `ProfileSetupScreen` (forced) → "Set up your profile" headline → name + avatar grid + Kids toggle → migration runs on save
+2. **Subsequent cold starts** → `ProfilePickerScreen` (Netflix "Who's watching?") → grid of avatar tiles + trailing "Add Profile" tile + "Manage Profiles" pencil link
+3. **Add new profile** → same `ProfileSetupScreen`, headline "Add profile"
+4. **Manage Profiles** → re-uses picker grid but tap routes to edit instead of pick. Edit screen has Save / Back / Delete (Delete only enabled when ≥2 profiles exist)
+
+### Per-profile data scoping (live)
+- ✅ **WatchProgressStore** (Continue Watching) — `key("$kind:$streamId")` → `p:<profileId>:<kind>:<streamId>`. List builder filters by key prefix.
+- ✅ **MyListStore** (Favorites) — `keyFor(playlistId, kind)` and `cacheKey` both prefixed
+- ✅ **LastChannelStore** — every key (`playlistId`, `streamUrl`, `channelName`, `timestamp`) prefixed
+- ✅ **KidsContentFilter** wired into `XtreamApi.getCategories` and `XtreamApi.getStreamsForCategory`
+
+### Still account-scoped (correct)
+- License + trial state (one per Xtream account, all profiles share)
+- Profile list itself (so adding Kids on TV-A propagates to TV-B)
+- Master Parental Controls PIN
+- Xtream credentials
+
+### Known gaps for future iterations (not blocking dev test)
+- 🟡 "Switch Profile" link in Settings menu not yet added (you can still cold-restart to switch)
+- 🟡 PIN-required exit from Kids profile not enforced yet (Kids flag visible, filter active, but `requestSwitch` doesn't gate the keypad yet)
+- 🟡 Mobile screens (`MobileApp.kt`) not wrapped in the gate — TV only
+- 🟡 `HomeRailsCache`, `ThemedMatchCache`, `DecadeYearMatchCache` keys still account-scoped (these auto-rebuild from per-profile library anyway, low priority)
+- 🟡 Sync engine push/pull works on the new profile-prefixed keys as-is (opaque key-value sync), but server-side admin tooling doesn't display profile breakdown yet
+
+### Files changed
+- **NEW** `/app/_buildenv/generate-avatars.py` — one-shot Nano Banana batch generator
+- **NEW** `/app/_buildenv/retry-avatars.py` — recovery script for budget-exceeded retries
+- **NEW** 36 webp avatars under `app/src/dev/res/drawable-nodpi/`
+- **NEW** `app/src/main/.../data/HushProfile.kt`
+- **NEW** `app/src/main/.../data/ActiveProfile.kt`
+- **NEW** `app/src/main/.../data/KidsContentFilter.kt`
+- **NEW** `app/src/main/.../data/ProfileMigration.kt`
+- **NEW** `app/src/main/.../ui/profile/ProfileGateApi.kt`
+- **NEW** `app/src/dev/kotlin/.../data/AvatarCatalog.kt`
+- **NEW** `app/src/dev/kotlin/.../ui/profile/dev/ProfilePickerScreen.kt`
+- **NEW** `app/src/dev/kotlin/.../ui/profile/dev/ProfileSetupScreen.kt`
+- **NEW** `app/src/dev/kotlin/.../ui/profile/dev/DevProfileGate.kt`
+- MODIFIED `app/src/main/.../data/WatchProgressStore.kt` — profile-scoped keys, list filter by prefix
+- MODIFIED `app/src/main/.../data/MyListStore.kt` — profile-scoped keys
+- MODIFIED `app/src/main/.../data/LastChannelStore.kt` — profile-scoped keys
+- MODIFIED `app/src/main/.../data/XtreamApi.kt` — KidsContentFilter integration
+- MODIFIED `app/src/main/.../HushTVApp.kt` — DevProfileGate installer via reflection
+- MODIFIED `app/src/main/.../MainActivity.kt` — wraps TVMainMenuScreen with `ProfileGateRegistry.current.Wrap`
+- MODIFIED `app/build.gradle.kts` — sourceSets["dev"].java.srcDirs("src/dev/kotlin"), versionCode 538
+
+### Tester briefing
+For your test users:
+> "Pull the new dev build from `https://hushtv.xyz/HushTV.apk`. On first launch you'll be asked to set up a profile — pick a name and avatar. Your existing watch history, favorites and last channel will carry over to that first profile. After that you can add up to 4 more profiles (Mom, Dad, Kids etc), each with their own state. Mark one as 'kids' and it'll hide all the 18+ categories. Use the back/exit key to cold-restart and see the 'Who's watching?' picker."
+
+---
+
+
+
 ## v1.44.131 (Canada channel) — API-bake architecture promoted from dev — 2026-05-23
 
 ### Release

@@ -16,8 +16,8 @@ android {
         applicationId = "com.hushtv.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 537
-        versionName = "1.44.137"
+        versionCode = 538
+        versionName = "1.44.138"
 
         // Android TV boxes are universally ARM. Dropping x86/x86_64
         // variants saves ~19 MB of Vosk's libvosk.so per-build.
@@ -228,6 +228,14 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
     sourceSets["main"].java.srcDirs("src/main/kotlin")
+    // v1.44.138-dev — dev flavor has its own kotlin source dir for
+    // the multi-profile feature (AvatarCatalog, ProfileGate, picker
+    // UI). The .res references in those files only resolve on the
+    // dev variant because the avatar drawables live under
+    // src/dev/res/drawable-nodpi/. Canada / official builds skip
+    // the file set entirely so the feature is invisible there
+    // until the user gives the green light to promote.
+    sourceSets["dev"].java.srcDirs("src/dev/kotlin")
     // v1.44.131 — Canada flavor pulls the dev-flavor `dev_only/`
     // bundled-assets directory in via srcDirs so we keep a SINGLE
     // source of truth for the 28 MB of baked TMDB images + sports

@@ -64,6 +64,24 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // network. See DevBundleCache.kt for details.
         com.hushtv.tv.data.DevBundleCache.init(this)
 
+        // v1.44.138-dev — install the multi-profile gate
+        // implementation. On the dev flavor this swaps the real
+        // [DevProfileGate] into [ProfileGateRegistry]. On canada /
+        // official the gate stays as [NoOpProfileGate] (every UI
+        // call site renders content directly, no profile picker,
+        // no behaviour change vs v1.44.137). We use reflection so
+        // the dev-only class doesn't leak symbols into other
+        // flavors' compile classpath.
+        if (BuildConfig.UPDATE_CHANNEL == "dev") {
+            runCatching {
+                Class.forName("com.hushtv.tv.ui.profile.dev.DevProfileGate")
+                    .getDeclaredMethod("installIfDevFlavor")
+                    .invoke(null)
+            }.onFailure {
+                android.util.Log.w("HushTVApp", "DevProfileGate install failed: ${it.message}")
+            }
+        }
+
         com.hushtv.tv.data.EventLog.log(
             "app",
             "onCreate v${BuildConfig.VERSION_NAME}#${BuildConfig.VERSION_CODE}",

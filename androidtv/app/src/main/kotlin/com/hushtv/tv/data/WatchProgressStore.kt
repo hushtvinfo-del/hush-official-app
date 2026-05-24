@@ -164,7 +164,14 @@ object WatchProgressStore {
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    private fun key(kind: String, streamId: Int): String = "$kind:$streamId"
+    private fun key(kind: String, streamId: Int): String {
+        val base = "$kind:$streamId"
+        // v1.44.138-dev — Profile-scoped key. Mom's "Hawaii Five-0
+        // watched to episode 4" stays separate from Dad's
+        // "Hawaii Five-0 watched to episode 1" on the same Xtream
+        // playlist. Canada / official: collapses to v1.44.137 form.
+        return if (ActiveProfile.isActive) "p:${ActiveProfile.profileIdOrAccount()}:$base" else base
+    }
 
     // ── In-memory cache ────────────────────────────────────────
     @Volatile
@@ -302,7 +309,17 @@ object WatchProgressStore {
         // prefs scan) and only mutates if something actually expired.
         pruneOld(ctx)
         ensureCache(ctx)
-        return cachedEntries.values
+        // v1.44.138-dev — Profile filter. Cached map carries entries
+        // from EVERY profile on this device. The active profile
+        // owns only entries whose key starts with "p:<id>:" (or
+        // ALL entries on canada / official where keys are flat).
+        val prefix = if (ActiveProfile.isActive) "p:${ActiveProfile.profileIdOrAccount()}:" else null
+        val owned = if (prefix == null) {
+            cachedEntries.entries
+        } else {
+            cachedEntries.entries.filter { it.key.startsWith(prefix) }
+        }
+        return owned.map { it.value }
             .filter { it.isInProgress }
             .filter { it.title.isNotBlank() && it.title.trim() !in KIND_SENTINEL_TITLES }
             .filter { kind == null || it.kind == kind }
