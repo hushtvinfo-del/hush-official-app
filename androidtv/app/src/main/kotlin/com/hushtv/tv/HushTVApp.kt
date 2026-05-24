@@ -41,18 +41,27 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // v1.44.132 — wire the previously-defined-but-never-called
         // main looper resilience wrapper. Suppresses three documented
         // Compose / Navigation framework races that otherwise kill
-        // the process. Crash Monitor showed 49 IllegalStateException
-        // (`FocusRequester is not initialized`) on v131 in 24 h —
-        // ALL would have been silently swallowed if this was wired.
-        // v1.44.134 — DISABLED for the litetest flavor. The litetest
-        // build is a diagnostic A/B target — if users see fewer
-        // crashes on litetest than canada, isolating this wrapper
-        // out is the first test variable. The implementation re-
-        // enters Looper.loop() inside a Handler.post, which AOSP
-        // tolerates but some vendor-modified Androids (One UI,
-        // MIUI, some Fire OS builds) refuse — re-throwing as an
-        // unsuppressed crash.
-        if (BuildConfig.UPDATE_CHANNEL != "litetest") {
+        // the process.
+        // v1.44.134 — DISABLED for the litetest flavor (diagnostic).
+        // v1.44.140 — DISABLED for canada too. Multiple paying users
+        // (including NVIDIA Shield user benlisto) reported full-
+        // screen player going black on canada while dev v530 (which
+        // did NOT have this wrapper) worked perfectly. The wrapper
+        // re-enters Looper.loop() from inside a Handler.post —
+        // semantically that suspends the OUTER Looper.loop() forever
+        // and runs the INNER loop as the de-facto main dispatcher.
+        // AOSP tolerates this, but evidently some interactions with
+        // ExoPlayer's surface attach + GL composition steps break
+        // when the outer loop never returns. Re-throwing the bare
+        // exceptions is the safer move — `installCrashHandler` will
+        // still upload the trace and the user just gets an app
+        // restart, which is no worse than the current "black screen
+        // until force-stop" outcome.
+        if (BuildConfig.UPDATE_CHANNEL == "dev") {
+            // Only the dev flavor keeps the wrapper. It's the
+            // smallest user surface (you + a handful of testers),
+            // so if the wrapper ever proves useful again we can
+            // observe the effect here without breaking paying users.
             installMainLooperResilience()
         }
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_main_resilience")

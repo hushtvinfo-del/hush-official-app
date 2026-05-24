@@ -55,10 +55,21 @@ object AppCacheCleaner {
      * Directories under `cacheDir/` we know we own. Anything else
      * in cacheDir (OTA APK in progress, OS-managed temp files,
      * future libraries) is left alone.
+     *
+     * v1.44.140 — REMOVED `xtream_http_cache` from this list. OkHttp's
+     * Cache class manages its own journal file inside that directory;
+     * deleting it from underneath OkHttp leaves stale file handles
+     * + a corrupt journal, and crashes / IO errors started showing
+     * up in PlayerError traces from canada users on v137. OkHttp
+     * already evicts entries on its own LRU schedule (20 MB cap),
+     * so we don't need to nuke this directory at all — leaving it
+     * alone is both safer and saves users a round-trip on every
+     * boot to re-download Xtream JSON. The remaining two dirs are
+     * managed by OUR code (Coil disk cache + subtitle downloader)
+     * so we own deletion of them.
      */
     private val OWNED_DIRS = listOf(
         "image_cache",
-        "xtream_http_cache",
         "opensubtitles",
     )
 

@@ -87,12 +87,15 @@ object WatchProgressStore {
         "216.152.148.117",   // legacy HushXXX backend
         "/hushxxx/",         // any CDN path with the segment
     )
+    // v1.44.140 — Pattern list trimmed to ratings-only (no brand
+    // names) to avoid Google Play Protect harmful-app flagging.
+    // See KidsContentFilter.ADULT_PATTERNS for full rationale.
+    // The poster URL patterns above are the primary detection
+    // signal anyway (legacy HushXXX backend host); title patterns
+    // are belt-and-braces.
     private val ADULT_TITLE_PATTERNS = listOf(
-        Regex("""\bjack's playground\b""", RegexOption.IGNORE_CASE),
-        Regex("""\bbig\s+ass\s+show\b""", RegexOption.IGNORE_CASE),
-        Regex("""\bbrazzers\b""", RegexOption.IGNORE_CASE),
-        Regex("""\b(pornhub|reality\s+kings|naughty\s+america)\b""", RegexOption.IGNORE_CASE),
         Regex("""\bxxx\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b18\+""", RegexOption.IGNORE_CASE),
     )
 
     private fun isLikelyAdultLegacyEntry(e: Entry): Boolean {

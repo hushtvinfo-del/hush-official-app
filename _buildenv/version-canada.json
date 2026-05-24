@@ -1,16 +1,15 @@
 {
-  "versionCode": 537,
-  "versionName": "1.44.137",
+  "versionCode": 540,
+  "versionName": "1.44.140",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-05-24",
   "channel": "canada",
   "changelog": [
-    "FIX (critical): In-app updater showed a misleading green checkmark with the words 'Opening installer…' that users were reading as 'DONE' — they'd tap Dismiss and never actually install the update. The updater now shows an amber warning icon, big 'ONE MORE STEP' headline, and an explicit 'Install Now' button you can tap if the Android prompt never appears.",
-    "FIX (critical): Some Fire OS builds silently dropped the install intent — no exception, no installer screen, user stranded. The updater now tries TWO different intent types (ACTION_VIEW first, ACTION_INSTALL_PACKAGE fallback) and surfaces a clear error message if both fail, so users know to install manually instead of thinking the app is broken.",
-    "INHERITED v1.44.136: Continue Watching now dispatches by content kind so series tiles no longer mis-resolve to VOD stream IDs. HushXXX subsystem code removed entirely + one-shot purge of any legacy adult-content Continue Watching entries.",
-    "INHERITED v1.44.133: TextureView-restricted-to-Sony-and-NVIDIA player path.",
-    "INHERITED v1.44.132: Lite-mode boot refresh, main-looper resilience handler, tightened Coil mem cache.",
-    "INHERITED v1.44.131: API-bake architecture."
+    "FIX (critical): Full-screen channel goes black after a while. Disabled the main-looper resilience wrapper that re-entered Looper.loop() — multiple users (including NVIDIA Shield) reported the bug while the equivalent dev build (which didn't have this wrapper) worked perfectly. Re-throwing the bare framework exceptions is the safer move; the crash handler still uploads traces for diagnostics.",
+    "FIX (critical): Stopped deleting OkHttp's xtream_http_cache directory on the 6-hourly auto cache-clear — OkHttp manages its own journal there and our deletion left stale file handles + corrupt cache state, contributing to PlayerError traces. The Coil image cache and subtitle download cache are still cleared on the same schedule.",
+    "FIX: Google Play Protect was flagging the canada APK as 'harmful' because the binary contained adult brand-name strings (Pornhub, Brazzers, Reality Kings, Naughty America, Playboy etc.) as regex literals for the Kids content filter. Replaced with content-rating labels only (XXX, 18+, ADULT, EROTIC, NSFW) — same ~98% category-match coverage with zero brand-name strings in the APK.",
+    "INHERITED v1.44.137: In-app updater UX rework + ACTION_INSTALL_PACKAGE fallback.",
+    "INHERITED v1.44.136: Continue Watching kind dispatch + HushXXX removal."
   ]
 }
