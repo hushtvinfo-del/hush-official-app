@@ -92,6 +92,18 @@ fun TVPlayerScreen(
     // TextureView fork in the player factory below. SurfaceView is
     // the only path that reliably renders fullscreen on Fire Sticks.
     val isLite = com.hushtv.tv.data.LocalIsLiteMode.current
+    // v1.44.133 — Google TV Streamer (4 GB / premium GOOGLE brand)
+    // was hitting the same TextureView black-screen-with-audio bug
+    // that Fire OS Lite-mode devices had. The Pro classification
+    // got them past Lite mode, so they hit the TextureView path
+    // and went black with audio only. TextureView's only real
+    // benefit is fixing a 1-2 px cosmetic chroma edge artifact on
+    // Sony BRAVIA + NVIDIA Shield (the original v1.44.36 motivation).
+    // Everywhere else: zero benefit, non-zero risk of black screen.
+    // So we now restrict TextureView to those two specific brands —
+    // SurfaceView is the safe default for everyone else.
+    val brand = (android.os.Build.MANUFACTURER ?: "").uppercase()
+    val brandLikesTextureView = brand.contains("SONY") || brand.contains("NVIDIA")
 
     // Current stream state — can change as user zaps with CH+/-.
     var currentUrl by remember { mutableStateOf(streamUrl) }
@@ -1082,7 +1094,8 @@ fun TVPlayerScreen(
     ) {
         AndroidView(
             factory = { c ->
-                // v1.44.36 / v1.44.125 — TextureView vs SurfaceView selection.
+                // v1.44.36 / v1.44.125 / v1.44.133 — TextureView vs
+                // SurfaceView selection.
                 //
                 // v1.44.36 introduced TextureView via res/layout/player_view_texture.xml
                 // to fix a 1-2 px bright vertical line on the right edge of
@@ -1090,7 +1103,7 @@ fun TVPlayerScreen(
                 // ExoPlayer issue #8394) — observed on Sony Bravia + NVIDIA
                 // Shield.
                 //
-                // v1.44.125 reverts to SurfaceView for low-end devices.
+                // v1.44.125 reverted to SurfaceView for low-end devices.
                 // Fire Sticks (AFTSS / AFTKM / AFTSSS / AFTKRT / AFTMM) and
                 // generic Android TV embedded chips have GPU compositors
                 // that silently FAIL to render TextureView at full-screen
@@ -1103,11 +1116,23 @@ fun TVPlayerScreen(
                 // (which routes to the hardware overlay plane, bypassing
                 // the GPU) so it always works.
                 //
-                // Decision rule:
-                //   • Lite-mode users → SurfaceView (guaranteed to render)
-                //   • Pro-mode users → TextureView (visual polish)
-                // Lite is the safer default for any TV stick / weak chip.
-                val useTextureView = !isLite
+                // v1.44.133 broadens the SurfaceView default. A paid user
+                // on a Google TV Streamer (premium 4 GB / GOOGLE brand,
+                // auto-classified as Pro) hit the exact same black-screen
+                // symptom — TextureView is failing in a much wider band
+                // of devices than just Fire OS sticks. Risk asymmetry:
+                //   • TextureView win: 1-2 px cosmetic edge artifact fix
+                //   • TextureView lose: black screen, full showstopper
+                // So we now invert the rule. TextureView is used ONLY for
+                // SONY (BRAVIA) and NVIDIA (Shield). Everything else —
+                // Google TV Streamer, Onn, Xiaomi, Amazon, generic
+                // Android TVs, tablets, phones — gets SurfaceView.
+                //
+                // Decision rule (v133):
+                //   • Lite-mode users         → SurfaceView (always)
+                //   • Pro on Sony / NVIDIA    → TextureView (edge fix)
+                //   • Pro on anything else    → SurfaceView (safe default)
+                val useTextureView = !isLite && brandLikesTextureView
                 val view = if (useTextureView) {
                     android.view.LayoutInflater.from(c).inflate(
                         com.hushtv.tv.R.layout.player_view_texture,

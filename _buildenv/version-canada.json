@@ -1,16 +1,14 @@
 {
-  "versionCode": 532,
-  "versionName": "1.44.132",
+  "versionCode": 533,
+  "versionName": "1.44.133",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
-  "releasedAt": "2026-05-23",
+  "releasedAt": "2026-05-24",
   "channel": "canada",
   "changelog": [
-    "FIX (critical): Stuck on the boot refresh screen — built a Lite-mode boot refresh that drops the gradient, the pulsing dot, the fade animations, and the progress-bar tween. Same network sequence and timing, ~80% less GPU work per frame. Fixes the Matrix.constructor / Surface.nativeAllocateBuffers ANRs seen on AFTSSS / AFTSS / AFTKM / AFTKRT.",
-    "FIX (critical): Wired the previously-defined-but-never-called main-looper resilience handler. Suppresses three documented Compose framework races (FocusRequester, LazyLayout release-twice, Navigation destination-not-found). Crash Monitor showed 49 IllegalStateException on v131 in 24 h — all now silently survived.",
-    "FIX: Lowered Coil image-cache memory percentages on Lite-mode Fire Sticks (AFTKA, AFTKM, AFTKRT). Recovers ~20 MB heap headroom and reduces background OOM kills.",
-    "PERF: Pre-warm the bundled-asset JSON indices off the main thread during deferred init, so first-composition image lookups are O(1) hash hits instead of blocking on a 397-entry Moshi parse. Narrows the framework-race window further.",
-    "INHERITED v1.44.131: API-bake architecture (sports, themes, top-popular TMDB metadata, 397 hero/poster images).",
+    "FIX (critical): Channel goes black with audio only — narrowed the TextureView player path to SONY and NVIDIA brands only. Google TV Streamer, Onn, Xiaomi, Amazon and generic Android TVs now use SurfaceView (the safe HW overlay path) regardless of Pro/Lite mode. Resolves the symptom reported by user 037163638 on Google TV Streamer.",
+    "INHERITED v1.44.132: Lite-mode boot refresh screen, main-looper resilience handler, tightened Coil mem cache, bundle-index prewarm.",
+    "INHERITED v1.44.131: API-bake architecture (sports + themes + 397 bundled images).",
     "INHERITED v1.44.127: Auto cache-clear on launch.",
     "INHERITED v1.44.125: Fire Stick black-screen-on-play fix (SurfaceView for Lite mode)."
   ]
