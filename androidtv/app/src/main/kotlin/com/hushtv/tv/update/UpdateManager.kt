@@ -291,7 +291,26 @@ object UpdateManager {
             )
         }
 
-        val install = Intent(Intent.ACTION_VIEW).apply {
+        // v1.44.137 — Two-attempt install launcher.
+        //
+        // Attempt 1: legacy ACTION_VIEW with the APK MIME type.
+        //   This is the canonical pre-API-26 path and works on stock
+        //   Android, Sony BRAVIA, NVIDIA Shield, Google TV Streamer.
+        //   It also works on most Fire OS builds — but ~5% of Fire
+        //   OS 8 / Fire OS 7 builds silently swallow this intent
+        //   (no exception, no installer screen, user stranded).
+        //
+        // Attempt 2: ACTION_INSTALL_PACKAGE (deprecated in API 29
+        //   but still wired in every Android up through 14).
+        //   Targets Amazon's PackageInstaller directly. Recovers
+        //   the silent-fail case from Attempt 1.
+        //
+        // We can't predict which path a given device needs, so we
+        // try ACTION_VIEW first via resolveActivity to confirm a
+        // handler exists. If nothing handles it, we skip straight
+        // to Attempt 2.
+        val pm = ctx.packageManager
+        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -299,15 +318,57 @@ object UpdateManager {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
         }
+        val installIntent = @Suppress("DEPRECATION")
+        Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            data = uri
+            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+            putExtra(Intent.EXTRA_RETURN_RESULT, false)
+            putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, ctx.packageName)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+
+        // Confirm at least one of the two intents has a handler
+        // before we try. resolveActivity returns null when nothing
+        // on the device claims the intent — that's the Fire OS
+        // silent-fail case.
+        val viewHandler = viewIntent.resolveActivity(pm)
+        val installHandler = installIntent.resolveActivity(pm)
+        if (viewHandler == null && installHandler == null) {
+            throw IllegalStateException(
+                "This device doesn't have a system installer available. " +
+                    "Open a file manager and install manually from:\n${apk.absolutePath}",
+            )
+        }
+
+        // Try ACTION_VIEW first when a handler exists.
+        val primary = if (viewHandler != null) viewIntent else installIntent
+        val secondary = if (viewHandler != null && installHandler != null) installIntent else null
 
         try {
-            ctx.startActivity(install)
+            ctx.startActivity(primary)
         } catch (e: Exception) {
-            throw IllegalStateException(
-                "The TV refused to launch the installer: ${e.message}. " +
-                    "Install manually: ${apk.absolutePath}",
-                e,
-            )
+            if (secondary != null) {
+                try {
+                    ctx.startActivity(secondary)
+                } catch (e2: Exception) {
+                    throw IllegalStateException(
+                        "The TV refused to launch the installer (${e.message}; " +
+                            "fallback also failed: ${e2.message}). " +
+                            "Install manually: ${apk.absolutePath}",
+                        e2,
+                    )
+                }
+            } else {
+                throw IllegalStateException(
+                    "The TV refused to launch the installer: ${e.message}. " +
+                        "Install manually: ${apk.absolutePath}",
+                    e,
+                )
+            }
         }
         return null
     }

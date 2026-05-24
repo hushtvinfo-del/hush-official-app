@@ -391,51 +391,104 @@ private fun formatBytes(bytes: Long): String {
 
 @Composable
 private fun InstallingBody(onDismiss: () -> Unit) {
-    // Default focus to the Dismiss button so a user who landed here,
-    // hit Cancel on the system installer, and is staring at this
-    // dialog has a one-press way out (Enter on the focused Dismiss).
-    val dismissFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { dismissFocus.requestFocus() } }
+    // v1.44.137 — Reworked completely. The previous design showed a
+    // big cyan CheckCircle icon next to "Opening installer…", which
+    // non-technical users read as "DONE!" — they'd hit Dismiss
+    // immediately without ever interacting with the system installer
+    // that was supposed to be on top. Combined with Fire OS's flaky
+    // ACTION_VIEW handler for APK MIME (intermittently no-ops with
+    // no exception), users ended up back on the home screen still
+    // running the old version.
+    //
+    // The new layout:
+    //   • Replaces the green check with a hourglass / pending icon
+    //     and yellow accent so it visually reads "not done yet".
+    //   • Prominent, large body copy: "ONE MORE STEP".
+    //   • Big primary "Install Now (try again)" button that
+    //     re-triggers UpdateManager.triggerInstall() — handles the
+    //     Fire OS silent-no-op case where the user has the dialog
+    //     up but no system installer ever appeared.
+    //   • Secondary "Cancel" button (instead of "Dismiss") so it
+    //     doesn't suggest the install is complete.
+    val ctx = LocalContext.current
+    val activity = ctx as? Activity
+    val installFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { installFocus.requestFocus() } }
+    var retryError by remember { mutableStateOf<String?>(null) }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.CheckCircle, null, tint = Cyan, modifier = Modifier.size(26.dp))
-        Spacer(Modifier.width(10.dp))
+        Box(
+            Modifier
+                .size(38.dp)
+                .background(Color(0x33FACC15), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.Download,
+                null,
+                tint = Color(0xFFFACC15),
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
         Column {
             Text(
-                "Opening installer…",
+                "One more step",
                 color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Black,
             )
             Text(
-                "Press 'Install' on the system screen that just opened.",
-                color = TextSecondary,
-                fontSize = 12.sp,
+                "Press INSTALL on the Android prompt to finish updating.",
+                color = Color(0xFFFACC15),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 17.sp,
             )
         }
     }
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(14.dp))
     Text(
-        "If you tapped Cancel on the system installer by mistake, " +
-            "use Dismiss below to close this prompt — you can re-launch " +
-            "the update from Settings → About → Check for Updates.",
-        color = Color(0xFF9CA3AF),
-        fontSize = 11.sp,
-        lineHeight = 15.sp,
+        "Android sometimes hides the prompt on Fire TV. " +
+            "If you don't see it within a few seconds, press " +
+            "\"Install Now\" below to try again.",
+        color = Color(0xFFE5E7EB),
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
     )
-    Spacer(Modifier.height(18.dp))
-    // Dismiss button — required because once the system installer
-    // is up, the user might cancel it on the device. Without an
-    // explicit dismiss path our dialog stayed up forever and the only
-    // way out was to force-kill the app.
-    FlatButton(
-        text = "Dismiss",
-        primary = false,
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusRequester(dismissFocus),
-        onClick = onDismiss,
-    )
+    retryError?.let {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Couldn't open the installer: $it",
+            color = Color(0xFFFCA5A5),
+            fontSize = 11.sp,
+        )
+    }
+    Spacer(Modifier.height(20.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        FlatButton(
+            text = "Install Now",
+            primary = true,
+            modifier = Modifier.weight(1f).focusRequester(installFocus),
+            onClick = {
+                retryError = null
+                try {
+                    val permIntent = UpdateManager.triggerInstall(ctx)
+                    if (permIntent != null) {
+                        activity?.startActivity(permIntent)
+                    }
+                } catch (e: Exception) {
+                    retryError = e.message ?: "unknown error"
+                }
+            },
+        )
+        FlatButton(
+            text = "Cancel",
+            primary = false,
+            modifier = Modifier.weight(1f),
+            onClick = onDismiss,
+        )
+    }
 }
 
 @Composable

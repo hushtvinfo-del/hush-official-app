@@ -1,16 +1,16 @@
 {
-  "versionCode": 536,
-  "versionName": "1.44.136",
+  "versionCode": 537,
+  "versionName": "1.44.137",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
   "releasedAt": "2026-05-24",
   "channel": "canada",
   "changelog": [
-    "FIX (critical): Continue Watching for a series no longer opens the wrong content. The click handler was sending series_id values to the VOD/movie detail screen, which then resolved them to whatever movie happened to share that numeric id (in a paying user's report, that surfaced an adult-content title). Now dispatches by content kind — series → series detail, movie → movie detail.",
-    "REMOVED: All HushXXX subsystem code (HushXxxApi, HushXxxAgeGate, HushXxxScreen, HushXxxDmcaDialog, Hush+ HushXXX teaser tile, mobile + TV navigation route stubs). The standalone adult library was retired in v1.43.99; this build deletes the dead code entirely.",
-    "FIX: One-shot defensive purge of any stale legacy adult-content entries in your Continue Watching list — anything pointing at the old HushXXX backend or matching a known adult-title pattern is tombstoned and propagates the deletion to every other device on the same profile via sync.",
+    "FIX (critical): In-app updater showed a misleading green checkmark with the words 'Opening installer…' that users were reading as 'DONE' — they'd tap Dismiss and never actually install the update. The updater now shows an amber warning icon, big 'ONE MORE STEP' headline, and an explicit 'Install Now' button you can tap if the Android prompt never appears.",
+    "FIX (critical): Some Fire OS builds silently dropped the install intent — no exception, no installer screen, user stranded. The updater now tries TWO different intent types (ACTION_VIEW first, ACTION_INSTALL_PACKAGE fallback) and surfaces a clear error message if both fail, so users know to install manually instead of thinking the app is broken.",
+    "INHERITED v1.44.136: Continue Watching now dispatches by content kind so series tiles no longer mis-resolve to VOD stream IDs. HushXXX subsystem code removed entirely + one-shot purge of any legacy adult-content Continue Watching entries.",
     "INHERITED v1.44.133: TextureView-restricted-to-Sony-and-NVIDIA player path.",
-    "INHERITED v1.44.132: Lite-mode boot refresh, main-looper resilience handler, tightened Coil mem cache, bundle-index prewarm.",
+    "INHERITED v1.44.132: Lite-mode boot refresh, main-looper resilience handler, tightened Coil mem cache.",
     "INHERITED v1.44.131: API-bake architecture."
   ]
 }
