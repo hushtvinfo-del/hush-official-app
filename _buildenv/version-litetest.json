@@ -1,0 +1,13 @@
+{
+  "versionCode": 534,
+  "versionName": "1.44.134-litetest",
+  "apkUrl": "https://hushtv.xyz/hushtv-litetest.apk",
+  "mandatory": false,
+  "releasedAt": "2026-05-24",
+  "channel": "litetest",
+  "changelog": [
+    "DIAGNOSTIC BUILD — no paywall, forced Lite mode. Same applicationId suffix (.litetest) means it COEXISTS with your existing HushTV Canada install. Install both side-by-side and report whether crashes still happen here.",
+    "What's identical to canada v1.44.133: the API-bake architecture (sports + themes + 397 bundled images), the auto cache-clear, the boot refresh Lite screen, the main-looper resilience handler, the tightened Coil mem cache, the TextureView-restricted-to-Sony-and-NVIDIA player path.",
+    "What's different from canada: NO license polling, NO trial countdown, NO paywall lock screen, app behaves as if licensed forever, app-mode is forced to Lite on every cold start (no chance of stale Pro state)."
+  ]
+}

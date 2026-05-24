@@ -98,6 +98,15 @@ object AppModeStore {
         flowFor(ctx)
 
     fun load(ctx: Context): AppMode {
+        // v1.44.134 — litetest channel ALWAYS reports LITE, regardless
+        // of what (if anything) is in SharedPreferences. This is the
+        // diagnostic flavor for paying canada users hitting recurring
+        // crashes — we want the universal "safest UI tree" experience
+        // every cold start, with no chance of a stale Pro state
+        // re-surfacing the bug we're investigating.
+        if (com.hushtv.tv.BuildConfig.UPDATE_CHANNEL == "litetest") {
+            return AppMode.LITE
+        }
         val raw = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_MODE, null)
         return AppMode.fromString(raw)

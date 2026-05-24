@@ -53,16 +53,20 @@ object DevBundleCache {
     @Volatile
     private var appContext: Context? = null
 
-    /** True only when running the dev OR canada flavor AND the
-     *  bundle is present on disk. Cached at first lookup. Official
+    /** True only when running the dev / canada / litetest flavor AND
+     *  the bundle is present on disk. Cached at first lookup. Official
      *  flavor doesn't ship the bundle assets (no srcDir merge), so
      *  even if isActive somehow returned true the lookup would
      *  miss and fall through to network. */
     val isActive: Boolean by lazy {
         // v1.44.131 — extended from "dev" to {"dev","canada"} after
         // Shield smoke-test on dev v530 came back clean.
+        // v1.44.134 — extended again to include "litetest" so the
+        // diagnostic flavor benefits from the same offline-first
+        // perf wins canada users get.
         val channelOk = BuildConfig.UPDATE_CHANNEL == "dev" ||
-            BuildConfig.UPDATE_CHANNEL == "canada"
+            BuildConfig.UPDATE_CHANNEL == "canada" ||
+            BuildConfig.UPDATE_CHANNEL == "litetest"
         if (!channelOk) return@lazy false
         val ctx = appContext ?: return@lazy false
         runCatching {

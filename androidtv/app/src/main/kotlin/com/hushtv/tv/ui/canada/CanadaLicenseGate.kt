@@ -64,6 +64,12 @@ private fun deviceModel(): String =
 @Composable
 fun CanadaLicenseGate(content: @Composable () -> Unit) {
     if (BuildConfig.UPDATE_CHANNEL != "canada") {
+        // v1.44.134 — dev, official, and litetest all bypass the
+        // paywall. Litetest specifically exists as a diagnostic
+        // build for paying canada users who hit recurring crashes
+        // we suspect are caused by the license-polling loop +
+        // lock screen rendering. Skipping the entire path lets us
+        // confirm whether that's the actual culprit.
         content()
         return
     }

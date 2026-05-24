@@ -162,6 +162,39 @@ android {
             buildConfigField("String", "DEMO_UPLOAD_URL", "\"\"")
             buildConfigField("String", "DEMO_UPLOAD_TOKEN", "\"\"")
         }
+        // v1.44.134 — LITETEST flavor. Diagnostic build for troubleshooting
+        // paying users who hit recurring crashes / black screens / freezes
+        // we suspect are caused by the trial+license polling path. This
+        // APK has:
+        //   • Separate applicationId (.litetest) so it COEXISTS with the
+        //     user's canada install — they can install both and A/B
+        //     compare without losing their existing paywall state.
+        //   • UPDATE_CHANNEL=="litetest" — CanadaLicenseGate becomes a
+        //     pass-through (no /api/canada/license polling, no lock
+        //     screen). The app behaves as if licensed.
+        //   • Forced LITE app-mode on first launch — every device gets
+        //     the conservative UI tree so weak Fire Sticks don't OOM.
+        //   • Pulls update manifest from /version-litetest.json so
+        //     this APK only ever updates from explicit deploys (it's a
+        //     test channel — we don't auto-push to it).
+        // Same APK signature as the other channels so we don't break
+        // OTA chains.
+        create("litetest") {
+            dimension = "channel"
+            applicationIdSuffix = ".litetest"
+            buildConfigField(
+                "String",
+                "UPDATE_MANIFEST_URL",
+                "\"https://hushtv.xyz/version-litetest.json\"",
+            )
+            buildConfigField(
+                "String",
+                "UPDATE_CHANNEL",
+                "\"litetest\"",
+            )
+            buildConfigField("String", "DEMO_UPLOAD_URL", "\"\"")
+            buildConfigField("String", "DEMO_UPLOAD_TOKEN", "\"\"")
+        }
     }
     buildFeatures {
         compose = true
@@ -201,6 +234,10 @@ android {
     // JSON. Dev + Canada APKs now both ship the bundle; official
     // is intentionally excluded (no srcDir merge for that flavor).
     sourceSets["canada"].assets.srcDirs("src/dev/assets")
+    // v1.44.134 — litetest flavor also ships the bundle so the
+    // diagnostic APK behaves identically to canada for everything
+    // except the paywall + forced-Lite-mode behaviour.
+    sourceSets["litetest"].assets.srcDirs("src/dev/assets")
 }
 
 // ─── Crash-prevention lint: forbid raw Modifier.focusProperties { … = X } ──
