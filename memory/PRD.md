@@ -1,3 +1,130 @@
+## v1.44.144 (Canada channel) — EMERGENCY: revert v141's looper-wrapper re-enable — 2026-05-25
+
+### Release
+- **APK**: https://hushtv.xyz/hushtv-canada.apk (54 MB)
+- **Manifest**: https://hushtv.xyz/version-canada.json
+- **versionCode**: 544 / **versionName**: 1.44.144 / mandatory=true
+- **Build variant**: `assembleCanadaDebug`
+
+### User report driving emergency release
+> "So many customers now saying the app was working and now constant
+> crashes same as everyone else hangs on main screen and kicks them
+> out. Everyone hates the app now and says its just all bugs and full
+> of crashes."
+
+### Root cause — a wrong call I made in v141
+v1.44.140 (previous agent) deliberately DISABLED
+`installMainLooperResilience()` for canada because Shield + Fire TV
+users were reporting full-screen black screens. The release notes
+named the exact theory: the wrapper's nested `Looper.loop()` breaks
+ExoPlayer's surface attach + GL composition on Android TV.
+
+In v1.44.141 I re-enabled it. My hypothesis: v140's OkHttp cache
+deletion fix was the real cause of the black screens, and the wrapper
+was needed to suppress framework `FocusRequester` race exceptions.
+**This was wrong.** v141's `safeFocusTraversal` migration ALREADY
+eliminated those exceptions at the source — the wrapper was redundant
+defense-in-depth that came with a fatal side effect.
+
+v1.44.144 field telemetry confirmed it within 6 hours:
+
+| version  | reports/6h | BOOT::app_oc_post_main_resilience |
+|----------|------------|------------------------------------|
+| v137     | 18         | 0                                  |
+| v140     | 37         | 0                                  |
+| v141     | 3 (~1 h live) | not yet visible                 |
+| **v142** | **392**    | **3 (climbing)**                   |
+
+That `BOOT::app_oc_post_main_resilience` signature is the exact
+boot-loop pattern v140 was meant to permanently fix. With the
+wrapper re-enabled, every device that booted into the nested-loop
+path was vulnerable again. Paying users on Shield / Fire TV started
+hanging on the main screen and getting kicked out.
+
+### Troubleshoot agent confirmed RCA before ship
+Called `troubleshoot_agent` for independent code review with the
+telemetry attached. It returned the same conclusion:
+- ✅ wrapper is causal — nested `Looper.loop()` is fundamentally
+  incompatible with Android TV framework timing
+- ✅ surgical fix (gate to dev only) is sufficient
+- ✅ keep v141's `safeFocusTraversal` migration — it prevents the
+  FocusRequester crashes the wrapper was meant to catch, so the
+  wrapper is no longer needed
+- ✅ keep v142's prewarm defer — the troubleshoot agent ruled out
+  any subtle interaction with the wrapper
+- 📊 10× event spike on v142 explained almost entirely by re-enabled
+  wrapper + v142 being mandatory (so more users on it than v140)
+
+### Fix shipped (single-line revert + version bump)
+Gate flipped back from `channel != "litetest"` to `channel == "dev"`:
+
+```kotlin
+// v1.44.144 — Re-disabled for canada + official, permanently
+//   gated to dev only. The wrapper re-enters `Looper.loop()`
+//   from a posted Handler runnable, which on some Android TV
+//   builds breaks ExoPlayer's surface attach + GL composition
+//   step. Re-throwing bare framework exceptions is the safer
+//   move — installCrashHandler still uploads the trace and
+//   the user just gets an app restart.
+if (BuildConfig.UPDATE_CHANNEL == "dev") {
+    installMainLooperResilience()
+}
+```
+
+### What we KEPT (validated by both telemetry and troubleshoot agent)
+- ✅ v141 `safeFocusTraversal` migration in TVPlayerScreen,
+  TVBrowseScreen, TVLiveBrowseScreen — prevents the
+  `IllegalStateException: FocusRequester is not initialized` crash
+  at the source. Without the wrapper as a safety net we NEED these.
+- ✅ v142 `DevBundleCache.prewarm()` defer — fixes the 6.6-sec
+  Fire Stick Lite (AFTKM) boot stall. Reverting it would
+  re-introduce that boot-death loop.
+- ✅ v140 OkHttp `xtream_http_cache` no longer deleted on 6h
+  auto-clear — fixes the IPTV player error cluster.
+- ✅ v140 KidsContentFilter regex stripped of brand-name string
+  literals — fixes Google Play Protect "Harmful App" warning.
+
+### Files touched
+- MODIFIED `/app/androidtv/app/src/main/kotlin/com/hushtv/tv/HushTVApp.kt`
+  — gate flipped back to dev-only (with a full historical comment so
+  the next agent doesn't repeat this mistake)
+- MODIFIED `/app/androidtv/app/build.gradle.kts` — versionCode 544 / 1.44.144
+- MODIFIED `/app/_buildenv/version-canada.json` — OTA manifest v144 mandatory
+
+### Live verified
+- `https://hushtv.xyz/version-canada.json` → `544 / 1.44.144 / mandatory=true`
+- `https://hushtv.xyz/hushtv-canada.apk` → 54 MB, Last-Modified 13:34 UTC
+- Build successful: 6m 50s (fresh pod, gradle daemon cold)
+
+### Next session — verification
+- Watch `/api/admin/canada/crashes/recent?days=1` over the next 6 h
+- **Target**: `BOOT::app_oc_post_main_resilience` signature for v544
+  drops to ZERO. If any appear, the regression isn't fully fixed.
+- **Target**: total reports / 6 h on v544 returns to v140 baseline
+  (~37/6h) once the install base shifts over via mandatory OTA.
+- **Target**: NO new `IllegalStateException` reports for v544 — the
+  `safeFocusTraversal` migration should prevent them without the
+  wrapper.
+
+### Lessons for future agents
+- **Don't change two safety-related gates in one release.** v141
+  changed BOTH the wrapper gate AND the focusProperties usages. With
+  one variable at a time it would have been obvious within a few
+  hours that the wrapper was the regression.
+- **Trust prior release-note warnings.** v140's release notes
+  explicitly said "Re-throwing bare framework exceptions is the
+  safer move" and named the exact symptom (NVIDIA Shield black
+  screen). The previous agent's evidence was stronger than my
+  hypothesis. I should have left it as a control variable.
+- **When telemetry contradicts your hypothesis, revert FAST.** The
+  v142 6-h window of `BOOT::app_oc_post_main_resilience` reappearing
+  was the unambiguous signal. The cost of a wrong revert is one
+  rebuild; the cost of a wrong re-enable is paying customers leaving.
+
+---
+
+
+
 ## v1.44.143-debug (DEV channel ONLY) — Stream-restart recovery FIX — 2026-05-24
 
 ### Release
