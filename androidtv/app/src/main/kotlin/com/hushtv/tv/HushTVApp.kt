@@ -43,20 +43,22 @@ class HushTVApp : Application(), ImageLoaderFactory {
         // Compose / Navigation framework races that otherwise kill
         // the process.
         // v1.44.134 — DISABLED for the litetest flavor (diagnostic).
-        // v1.44.140 — DISABLED for canada too. Theory: multiple paying
-        // users (including NVIDIA Shield user benlisto) reported full-
-        // screen player going black, and we hypothesized the nested
-        // Looper.loop() call was breaking ExoPlayer's surface attach.
-        // v1.44.141 — RE-ENABLED for canada (and official) after the
-        // telemetry contradicted that hypothesis. With the wrapper
-        // disabled, `IllegalStateException: FocusRequester is not
-        // initialized` immediately became the #1 Java crash signature
-        // (3+ on v140 in the first 30 minutes — the wrapper had been
-        // silently suppressing those framework races since v132).
-        // The real cause of the black-screen was the OkHttp xtream_http_cache
-        // deletion (also fixed in v140), not this wrapper. We keep
-        // the litetest flavor without the wrapper as a control group.
-        if (BuildConfig.UPDATE_CHANNEL != "litetest") {
+        // v1.44.140 — DISABLED for canada too after Shield user reports.
+        // v1.44.141 — RE-ENABLED for canada based on a hypothesis that
+        //   v140's OkHttp cache deletion fix was the real culprit. THIS
+        //   WAS WRONG. v142 field telemetry showed `BOOT::app_oc_post_main_resilience`
+        //   signature reappearing (3+ hits in 6 hours) — the exact boot-loop
+        //   pattern v140's disable was meant to fix. Real users were
+        //   "hanging on main screen and getting kicked out" again.
+        // v1.44.144 — Re-disabled for canada + official, permanently
+        //   gated to dev only. The wrapper re-enters `Looper.loop()`
+        //   from a posted Handler runnable, which on some Android TV
+        //   builds breaks ExoPlayer's surface attach + GL composition
+        //   step. Re-throwing bare framework exceptions is the safer
+        //   move — installCrashHandler still uploads the trace and
+        //   the user just gets an app restart, no worse than the
+        //   "frozen until force-stop" alternative.
+        if (BuildConfig.UPDATE_CHANNEL == "dev") {
             installMainLooperResilience()
         }
         com.hushtv.tv.data.BootPhaseTracker.mark(this, "app_oc_post_main_resilience")

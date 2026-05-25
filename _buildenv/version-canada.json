@@ -1,15 +1,14 @@
 {
-  "versionCode": 542,
-  "versionName": "1.44.142",
+  "versionCode": 544,
+  "versionName": "1.44.144",
   "apkUrl": "https://hushtv.xyz/hushtv-canada.apk",
   "mandatory": true,
-  "releasedAt": "2026-05-24",
+  "releasedAt": "2026-05-25",
   "channel": "canada",
   "changelog": [
-    "FIX (critical): Boot-loop on 1 GB Fire Stick Lite (Amazon AFTKM, AFTKM Lite). A user-traced boot-died report showed the DevBundleCache prewarm — Moshi-parsing 500 KB of bundled TMDB JSON (top-100 movies + top-100 TV + 397-entry image map) on the deferred-init thread — was taking 6.6 sec on AFTKM, pushing the process past the kernel's launch-budget watchdog and triggering a SIGKILL boot loop. Affected users saw the app open to a blank or partially-loaded home with no channels/categories/series/movies because the app died before the catalog finished populating. Fix: skip prewarm entirely on Lite-mode devices (they render the flat home with no big hero backdrops — the bundle benefit is marginal); on Pro-mode devices defer prewarm 5 sec past the first frame so it can't block boot.",
-    "INHERITED v1.44.141: #1 Java crash fix — IllegalStateException: 'FocusRequester is not initialized' (125/7d). Four declarative `Modifier.focusProperties { dir = X }` usages migrated to the safer `safeFocusTraversal` helper. Looper resilience wrapper restored as a defense-in-depth safety net.",
-    "INHERITED v1.44.140: Black-screen fix (xtream_http_cache no longer deleted on 6h cache-clear) + Play Protect fix (KidsContentFilter regex stripped of adult brand-name strings).",
-    "INHERITED v1.44.137: In-app updater UX rework + ACTION_INSTALL_PACKAGE fallback.",
-    "INHERITED v1.44.136: Continue Watching kind dispatch + HushXXX removal."
+    "EMERGENCY FIX: 'Hangs on main screen, gets kicked out' boot loop. Field telemetry on v142 showed BOOT::app_oc_post_main_resilience reports climbing (the exact boot-loop signature v140 was meant to permanently fix). The looper resilience wrapper that was re-enabled in v141 has been re-disabled for canada and official permanently — it's now gated dev-only. The wrapper re-enters Looper.loop() from a Handler.post(), which evidently breaks something subtle in the Android TV boot path on certain devices. Re-throwing bare framework exceptions is the safer call; the crash handler still uploads traces for diagnosis. KEEPING all the genuinely-helpful fixes: v141's safeFocusTraversal migration (fixes the #1 Java crash) and v142's deferred prewarm (fixes the 6.6-sec boot stall on 1 GB Fire Stick Lites).",
+    "INHERITED v1.44.142: DevBundleCache.prewarm() relocated out of the boot-critical path (skipped on Lite-mode devices, deferred 5 sec post-first-frame on Pro devices).",
+    "INHERITED v1.44.141: FocusRequester crash fix via safeFocusTraversal across player + browse screens.",
+    "INHERITED v1.44.140: OkHttp xtream_http_cache no longer deleted on 6h auto cache-clear + KidsContentFilter regex stripped of adult brand-name string literals (Play Protect harmful-app fix)."
   ]
 }
