@@ -1,0 +1,68 @@
+{
+  "name": "UserSession",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "Unique session identifier"
+    },
+    "account_name": {
+      "type": "string",
+      "description": "The playlist/account label"
+    },
+    "username": {
+      "type": "string",
+      "description": "Xtream username"
+    },
+    "ip_address": {
+      "type": "string"
+    },
+    "user_agent": {
+      "type": "string"
+    },
+    "device_type": {
+      "type": "string",
+      "enum": [
+        "desktop",
+        "mobile",
+        "tablet",
+        "tv",
+        "unknown"
+      ]
+    },
+    "current_content": {
+      "type": "string",
+      "description": "What they are currently watching"
+    },
+    "content_type": {
+      "type": "string",
+      "enum": [
+        "live",
+        "movie",
+        "series",
+        "idle"
+      ]
+    },
+    "playlist_host": {
+      "type": "string"
+    },
+    "last_seen": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "account_expiry": {
+      "type": "string",
+      "description": "Expiry date from Xtream account info"
+    },
+    "max_connections": {
+      "type": "string"
+    },
+    "active_connections": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "last_seen"
+  ]
+}

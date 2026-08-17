@@ -1,0 +1,51 @@
+{
+  "name": "BroadcastMessage",
+  "type": "object",
+  "properties": {
+    "message": {
+      "type": "string",
+      "description": "The broadcast message text"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "alert",
+        "maintenance"
+      ],
+      "default": "info"
+    },
+    "title": {
+      "type": "string",
+      "description": "Optional title for the message"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this message is currently active"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional expiry time"
+    },
+    "sent_by": {
+      "type": "string",
+      "description": "Admin who sent it"
+    },
+    "target": {
+      "type": "string",
+      "enum": [
+        "all",
+        "specific"
+      ],
+      "default": "all"
+    }
+  },
+  "required": [
+    "message",
+    "type",
+    "is_active"
+  ]
+}

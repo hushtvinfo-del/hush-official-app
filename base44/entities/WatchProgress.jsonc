@@ -1,0 +1,61 @@
+{
+  "name": "WatchProgress",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string"
+    },
+    "content_id": {
+      "type": "string",
+      "description": "The stream_id of the movie or episode"
+    },
+    "content_type": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "episode"
+      ]
+    },
+    "playlist_id": {
+      "type": "string"
+    },
+    "progress": {
+      "type": "number",
+      "description": "Playback time in seconds"
+    },
+    "duration": {
+      "type": "number",
+      "description": "Total duration in seconds"
+    },
+    "content_info": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cover_image": {
+          "type": "string"
+        },
+        "series_id": {
+          "type": "string"
+        },
+        "container_extension": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "cover_image"
+      ]
+    }
+  },
+  "required": [
+    "user_email",
+    "content_id",
+    "content_type",
+    "playlist_id",
+    "progress",
+    "duration",
+    "content_info"
+  ]
+}

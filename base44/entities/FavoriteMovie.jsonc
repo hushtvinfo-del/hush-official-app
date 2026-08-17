@@ -1,0 +1,45 @@
+{
+  "name": "FavoriteMovie",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string"
+    },
+    "movie_id": {
+      "type": "string",
+      "description": "The stream_id of the movie"
+    },
+    "playlist_id": {
+      "type": "string"
+    },
+    "movie_info": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cover": {
+          "type": "string"
+        },
+        "category_id": {
+          "type": "string"
+        },
+        "category_name": {
+          "type": "string"
+        },
+        "container_extension": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    }
+  },
+  "required": [
+    "user_email",
+    "movie_id",
+    "playlist_id",
+    "movie_info"
+  ]
+}

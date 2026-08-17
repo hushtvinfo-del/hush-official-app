@@ -1,0 +1,45 @@
+{
+  "name": "FavoriteChannel",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string"
+    },
+    "channel_id": {
+      "type": "string",
+      "description": "The stream_id of the live channel"
+    },
+    "playlist_id": {
+      "type": "string"
+    },
+    "channel_info": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "category_id": {
+          "type": "string"
+        },
+        "category_name": {
+          "type": "string"
+        },
+        "epg_channel_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    }
+  },
+  "required": [
+    "user_email",
+    "channel_id",
+    "playlist_id",
+    "channel_info"
+  ]
+}

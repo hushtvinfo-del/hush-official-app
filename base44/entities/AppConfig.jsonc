@@ -1,0 +1,22 @@
+{
+  "name": "AppConfig",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Config key (e.g. 'host_override', 'category_rename_map')"
+    },
+    "value": {
+      "type": "string",
+      "description": "Config value (JSON string for complex values)"
+    },
+    "label": {
+      "type": "string",
+      "description": "Human-readable label"
+    }
+  },
+  "required": [
+    "key",
+    "value"
+  ]
+}

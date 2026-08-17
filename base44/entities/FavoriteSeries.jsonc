@@ -1,0 +1,42 @@
+{
+  "name": "FavoriteSeries",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string"
+    },
+    "series_id": {
+      "type": "string",
+      "description": "The series_id"
+    },
+    "playlist_id": {
+      "type": "string"
+    },
+    "series_info": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cover": {
+          "type": "string"
+        },
+        "category_id": {
+          "type": "string"
+        },
+        "category_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    }
+  },
+  "required": [
+    "user_email",
+    "series_id",
+    "playlist_id",
+    "series_info"
+  ]
+}
