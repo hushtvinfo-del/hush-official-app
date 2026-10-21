@@ -18,16 +18,17 @@ const getPlaylistFromLocal = (playlistId) => {
 
 const getCategoryGroup = (name) => {
     const upperName = name.toUpperCase();
+    if (upperName.includes('ADULT')) return 'ADULT';
     if (upperName.includes('PPV')) return 'PPV';
     if (upperName.includes('SPORTS')) return 'SPORTS';
     if (upperName.includes(' US') || upperName.startsWith('US ') || upperName.includes('(US)')) return 'US';
     if (upperName.includes(' UK') || upperName.startsWith('UK ') || upperName.includes('(UK)')) return 'UK';
     if (upperName.includes(' CA') || upperName.startsWith('CA ') || upperName.includes('(CA)')) return 'CA';
-    return 'INT';
+    return 'OTHER';
 };
 
 const groupNames = {
-  SPORTS: 'Sports', PPV: 'PPV & Events', US: 'USA', UK: 'United Kingdom', CA: 'Canada', INT: 'International'
+  SPORTS: 'Sports', PPV: 'PPV & Events', US: 'USA', UK: 'United Kingdom', CA: 'Canada', ADULT: '🔞 Adult'
 };
 
 const fetchCategories = async (playlistId) => {

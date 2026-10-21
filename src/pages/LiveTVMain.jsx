@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Globe, Medal, Ticket, WifiOff } from 'lucide-react';
+import { ArrowLeft, Medal, Ticket, WifiOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const getPlaylistFromLocal = (playlistId) => {
@@ -25,11 +25,11 @@ const mainCategoryConfig = {
   US: { name: 'USA', icon: () => <span className="text-5xl">🇺🇸</span> },
   UK: { name: 'United Kingdom', icon: () => <span className="text-5xl">🇬🇧</span> },
   CA: { name: 'Canada', icon: () => <span className="text-5xl">🇨🇦</span> },
-  INT: { name: 'International', icon: Globe },
+  ADULT: { name: 'Adult', icon: () => <span className="text-5xl">🔞</span> },
 };
 
 // Define the display order
-const orderedCategoryKeys = ['PPV', 'SPORTS', 'CA', 'US', 'UK', 'INT'];
+const orderedCategoryKeys = ['PPV', 'SPORTS', 'CA', 'US', 'UK', 'ADULT'];
 
 export default function LiveTVMain() {
   const navigate = useNavigate();
@@ -92,7 +92,7 @@ export default function LiveTVMain() {
                                 <CardContent className="p-8 xl:p-14 2xl:p-20 flex flex-col items-center justify-center flex-grow">
                                     <motion.div whileHover={{ scale: 1.05 }} className="flex flex-col items-center">
                                         {typeof config.icon === 'function'
-                                            ? <span className="text-5xl xl:text-8xl 2xl:text-9xl">{key === 'US' ? '🇺🇸' : key === 'UK' ? '🇬🇧' : '🇨🇦'}</span>
+                                            ? <span className="text-5xl xl:text-8xl 2xl:text-9xl">{key === 'US' ? '🇺🇸' : key === 'UK' ? '🇬🇧' : key === 'ADULT' ? '🔞' : '🇨🇦'}</span>
                                             : <config.icon className="w-20 h-20 xl:w-32 xl:h-32 2xl:w-40 2xl:h-40 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
                                         }
                                         <h2 className="text-3xl xl:text-5xl 2xl:text-6xl font-bold text-white mt-6 mb-2">{config.name}</h2>
