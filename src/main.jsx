@@ -3,6 +3,19 @@ import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
 import '@/index.css'
 
+// Migrate accounts saved with the old provider host to the new one
+try {
+  const saved = JSON.parse(localStorage.getItem('playlists') || '[]');
+  if (saved.some((p) => p.host && p.host.includes('hushvipnew.ink'))) {
+    const migrated = saved.map((p) =>
+      p.host && p.host.includes('hushvipnew.ink') ? { ...p, host: 'https://ottipdns.com/' } : p
+    );
+    localStorage.setItem('playlists', JSON.stringify(migrated));
+  }
+} catch (e) {
+  console.error('Playlist host migration failed', e);
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   // <React.StrictMode>
   <App />
@@ -17,6 +30,3 @@ if (import.meta.hot) {
     window.parent?.postMessage({ type: 'sandbox:afterUpdate' }, '*');
   });
 }
-
-
-
