@@ -12,6 +12,9 @@ const HushTVLogo = ({ className = "" }) => (
   </div>
 );
 
+// Set to true to show the "Sign Up To HushTV" card again
+const SHOW_SIGN_UP = false;
+
 export default function Welcome() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-black">
@@ -25,11 +28,11 @@ export default function Welcome() {
           <div className="w-full max-w-md mx-auto mb-6 flex items-center justify-center">
             <HushTVLogo className="text-6xl md:text-7xl" />
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Official App</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Web Player App</h2>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-          <motion.div
+        <div className={SHOW_SIGN_UP ? "grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8" : "max-w-md mx-auto"}>
+          {SHOW_SIGN_UP && <motion.div
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
@@ -47,7 +50,7 @@ export default function Welcome() {
                 </CardContent>
               </Card>
             </a>
-          </motion.div>
+          </motion.div>}
 
           <motion.div
             initial={{ opacity: 0, x: 50 }}
