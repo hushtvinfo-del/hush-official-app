@@ -19,7 +19,7 @@ const getPlaylistFromLocal = (playlistId) => {
 const getCategoryGroup = (name) => {
     const upperName = name.toUpperCase();
     if (upperName.includes('PPV')) return 'PPV';
-    if (upperName.startsWith('SPORTS')) return 'SPORTS';
+    if (upperName.includes('SPORTS')) return 'SPORTS';
     if (upperName.includes(' US') || upperName.startsWith('US ') || upperName.includes('(US)')) return 'US';
     if (upperName.includes(' UK') || upperName.startsWith('UK ') || upperName.includes('(UK)')) return 'UK';
     if (upperName.includes(' CA') || upperName.startsWith('CA ') || upperName.includes('(CA)')) return 'CA';
