@@ -8,7 +8,7 @@ try {
   const saved = JSON.parse(localStorage.getItem('playlists') || '[]');
   if (saved.some((p) => p.host && p.host.includes('hushvipnew.ink'))) {
     const migrated = saved.map((p) =>
-      p.host && p.host.includes('hushvipnew.ink') ? { ...p, host: 'https://ottipdns.com/' } : p
+      p.host && (p.host.includes('hushvipnew.ink') || p.host.includes('ottipdns.com')) ? { ...p, host: 'https://accesshsh.online/' } : p
     );
     localStorage.setItem('playlists', JSON.stringify(migrated));
   }
