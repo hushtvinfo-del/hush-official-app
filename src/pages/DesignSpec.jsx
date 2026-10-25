@@ -605,7 +605,7 @@ const LoginScreenMockup = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ display: 'block', color: '#64748B', fontSize: 12, fontWeight: 500, marginBottom: 6, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Server URL</label>
-                <input value={host} onChange={e => setHost(e.target.value)} placeholder="https://accesshsh.online/" style={inputStyle(false)} />
+                <input value={host} onChange={e => setHost(e.target.value)} placeholder="https://accesshsh.online:443" style={inputStyle(false)} />
               </div>
               <div>
                 <label style={{ display: 'block', color: '#64748B', fontSize: 12, fontWeight: 500, marginBottom: 6, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Username</label>
@@ -1344,7 +1344,7 @@ Placeholder:      #334155
 
 // FIELDS
 Field 1 — Server / Host URL:
-  Placeholder:    "https://accesshsh.online/"
+  Placeholder:    "https://accesshsh.online:443"
   InputType:      TYPE_TEXT_VARIATION_URI
   Validate:       must start with http:// or https://
 

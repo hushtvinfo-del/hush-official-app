@@ -19,7 +19,7 @@ export default function AddAccount() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Hardcoded host
-  const HUSH_HOST = "https://accesshsh.online/";
+  const HUSH_HOST = "https://accesshsh.online:443";
 
   // Check if user has any existing accounts
   const hasExistingAccounts = () => {

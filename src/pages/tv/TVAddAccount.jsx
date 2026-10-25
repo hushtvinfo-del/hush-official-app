@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { HushTVLogo } from './TVApp';
 import { Loader2, AlertCircle, UserPlus } from 'lucide-react';
 
-const HUSH_HOST = "https://accesshsh.online/";
+const HUSH_HOST = "https://accesshsh.online:443";
 
 export default function TVAddAccount() {
   const navigate = useNavigate();
